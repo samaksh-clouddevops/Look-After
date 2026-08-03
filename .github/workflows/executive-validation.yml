@@ -8,7 +8,7 @@ on:
 
 jobs:
   evp:
-    runs-on: macos-14
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -16,11 +16,21 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
       - name: Generate Xcode project
         run: xcodegen generate
 
       - name: Build app and tests
-        run: xcodebuild -scheme LookAfter-iOS -destination 'platform=iOS Simulator,name=iPhone 17' build-for-testing
+        run: |
+          DEST="$(xcodebuild -scheme LookAfter-iOS -showdestinations 2>/dev/null | grep 'platform:iOS Simulator' | grep 'iPhone' | head -1 | sed -n 's/.*id:\([^,]*\),.*/\1/p')"
+          if [ -z "$DEST" ]; then
+            echo "No iPhone simulator found; using generic iOS Simulator destination"
+            xcodebuild -scheme LookAfter-iOS -destination 'generic/platform=iOS Simulator' build-for-testing
+          else
+            xcodebuild -scheme LookAfter-iOS -destination "platform=iOS Simulator,id=$DEST" build-for-testing
+          fi
 
       - name: Build EVP
         run: swift build --package-path Tools/ExecutiveValidationPlatform -c release
