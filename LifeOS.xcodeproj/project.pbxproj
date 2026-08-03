@@ -1,0 +1,1654 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		010EB5BE061676ADC2A295C1 /* LifeOSMasterCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F979F12681567D5E4684FEC /* LifeOSMasterCanvas.swift */; };
+		01979511F7F2664856061850 /* ExecutiveCaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2F269930E776BBE786D4DC /* ExecutiveCaptureSheet.swift */; };
+		01A3F1733D6BE64D69EAB887 /* HeroObjectiveResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E27FE23BFBAD22798703C01 /* HeroObjectiveResolverTests.swift */; };
+		01BD41DE2FCC9AC25F8DD9B5 /* DailyBriefingCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8056D53734DBE198CF44676F /* DailyBriefingCustomizationView.swift */; };
+		04444842879EC028FFA99F93 /* ExecutiveAssistantSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8F30E8EE90DF672A6BDA4A1 /* ExecutiveAssistantSheet.swift */; };
+		06C8F4C54AA08F540959FFBC /* AllModulesGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FBDCCDE941819F9DA51AA67 /* AllModulesGridView.swift */; };
+		0779EF03943F7A413870D70E /* ReschedulePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE079AD9EE3E7D50F6C3C878 /* ReschedulePreviewSheet.swift */; };
+		07E29D5F5A4B33C0B4C8ED23 /* ExecutiveCapacityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA58C5CCB2A4D0BAABD667C8 /* ExecutiveCapacityCard.swift */; };
+		08604B2C85A4A8157D546382 /* ContinueSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA78AD7224CE686BD48977E3 /* ContinueSessionView.swift */; };
+		08EDA0CA65CA8D7978D534FD /* AppShellState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35AF290E4D8E887553D5A3E /* AppShellState.swift */; };
+		096424594A2B000496AE3301 /* TodayCompactMetricsStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DEE642BA01C16B019672C01 /* TodayCompactMetricsStrip.swift */; };
+		096CBF11F2AE60D06A639AF0 /* CycleEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64489C6E0BC99A64B1D85B3F /* CycleEngineTests.swift */; };
+		0C7B900E2633B60C7FF2AD63 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A2FFB179D05783C5BE4A978 /* TaskListView.swift */; };
+		0DBFDFB6C5E93AD8828FDACE /* LifeOSBottomNav.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BABADB43487D26E4447EC4 /* LifeOSBottomNav.swift */; };
+		0E516B6D7F1EA8F3577B2E7F /* MultiDayTaskPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0376764907F954E81EB7D77 /* MultiDayTaskPlannerTests.swift */; };
+		0E7E7516D0A4505E29BEB106 /* VoiceCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CD4BA61038FA38FA1DA093 /* VoiceCaptureView.swift */; };
+		0E9CA419868D860B2B7A7C28 /* FlowConfidenceEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326224CEB956C504836DDFFF /* FlowConfidenceEngineTests.swift */; };
+		0FB809C70645D823592F0292 /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1E7519730546D49ED9D307 /* InboxView.swift */; };
+		10A6B72FF4CA366F14BC395C /* AIExecutiveCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4845E2A76C040820B1EDE7E1 /* AIExecutiveCanvas.swift */; };
+		1203B399C455976CC9EB4A6E /* ProductivityTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 379E5728B9CBB3F75726FBFF /* ProductivityTracker.swift */; };
+		12217968E5C198358B2CC4AE /* FlowDirectorFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1437AF38B2C4DE92BF373CFD /* FlowDirectorFactory.swift */; };
+		1276772EBCFF49043820D57E /* LifeOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8639D019715A1E48595F1B84 /* LifeOSCore */; };
+		161FFAF0F588CABF39F64D0E /* LifeOSData in Frameworks */ = {isa = PBXBuildFile; productRef = 4D5B28E217A7714C9EEAED97 /* LifeOSData */; };
+		180142C479CF556A726DA3B7 /* LifeOSAI in Frameworks */ = {isa = PBXBuildFile; productRef = CB1B46842D6DAF67F3520A06 /* LifeOSAI */; };
+		194BBE77F0ED05743CA4ACE9 /* HealthSummaryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6956E79E589EC9D61AC090 /* HealthSummaryRepositoryTests.swift */; };
+		1B85A55FBB0D34FF6CCE941C /* LifeTimelinePresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9B3275F1DF827BBA870AC6 /* LifeTimelinePresenterTests.swift */; };
+		1C6E89A8AAA58614B123B507 /* LifeOSHealth in Frameworks */ = {isa = PBXBuildFile; productRef = 877EBC98D8A53D667931C487 /* LifeOSHealth */; };
+		1CD1B505986BAD2D58C2D31F /* DailyBriefingCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40E021B36FDDC7DFA7615DAF /* DailyBriefingCards.swift */; };
+		1D0D9BE3FF8F5EA8704747A3 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8CD3F70371555C9CFE94E4E /* AuthView.swift */; };
+		1E623D9DFE2741789A31937F /* LifeOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A0586C8DA3A7A29AE4432D /* LifeOSApp.swift */; };
+		1F04A479BF1E01E9F086D973 /* AICoachView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EABDD04B16D48F1B0B4F7049 /* AICoachView.swift */; };
+		221AFE7ED3663ED23B676427 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A2FFB179D05783C5BE4A978 /* TaskListView.swift */; };
+		22C1F928273F17E5EDEF41BE /* HealthSyncLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19921326F30E79AE31966E2E /* HealthSyncLogger.swift */; };
+		23171B095CDF075AA3A661EF /* MedicationReasoningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC10B57EA24D14B6AFF5938B /* MedicationReasoningTests.swift */; };
+		234765EE989F1167D222AB6E /* FocusLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A924CE586F19C7512F3A409B /* FocusLiveActivity.swift */; };
+		243FFBE35E6E219599B08FB0 /* ReschedulePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE079AD9EE3E7D50F6C3C878 /* ReschedulePreviewSheet.swift */; };
+		26BDEFC5AF90B704AD11E603 /* GLMConfigurationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4221D98E10C8A18C068B4D84 /* GLMConfigurationSettingsView.swift */; };
+		26F1EDDC6E305C2A60660AB1 /* TaskHeroEligibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F54832C15AEE78B13146DB7B /* TaskHeroEligibilityTests.swift */; };
+		29F25B1181E95570541BEE2B /* TestCalendarFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2CE93EA3F81FAC5AE89FF39 /* TestCalendarFixtures.swift */; };
+		2A45D1FF56D1F5EA0E7DC39C /* ModuleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC644FD16EB5CB22932D6100 /* ModuleViews.swift */; };
+		2B631285FF631762BCB90305 /* GLMConfigurationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4221D98E10C8A18C068B4D84 /* GLMConfigurationSettingsView.swift */; };
+		2C0603A1BB8D5190835F5992 /* ContextEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA46F6E8ADA2C57030F46D8 /* ContextEngineTests.swift */; };
+		2CC600C0BBD720F9E6F630B7 /* SimulatedUserFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA9D3A5C874460C9CC384FA /* SimulatedUserFlowTests.swift */; };
+		2E5160410694497CD12A8976 /* ExecutivePlanningConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA4F599B8AFF79C0780A2A70 /* ExecutivePlanningConversationView.swift */; };
+		2F934A64CA6E1C80488E32AE /* TaskCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A8DF1785C5BD91EC95F3DDF /* TaskCardView.swift */; };
+		30091B39DA07B7E4637582D2 /* FullAppIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81157C1D6C495EA45626EAA3 /* FullAppIntegrationTests.swift */; };
+		34EBA6F8CA7269958FD7448D /* LifeOSAI in Frameworks */ = {isa = PBXBuildFile; productRef = 1D89158AF7A790F3B8FE9266 /* LifeOSAI */; };
+		365380EFB445F98746A32899 /* TaskActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEAC2E97EFFB63A315EC2E6 /* TaskActionButton.swift */; };
+		383F7E91AA3DD8BBFEF97E13 /* ShoppingListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F2C0F83D691608A6EB10A6F /* ShoppingListViewModelTests.swift */; };
+		3895FF78F34B4FA5A970228B /* AnalyticsCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35191D6A6DDED425CE3C7C2 /* AnalyticsCacheTests.swift */; };
+		3AB7F0AC6760FEFA9F0343FC /* LifeOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = E599DBBAE8A408579D163E72 /* LifeOSCore */; };
+		3B2FDB504FB7778103590044 /* LifeOSWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0943D191B0553344627991F5 /* LifeOSWidgetBundle.swift */; };
+		3B3AED5BE6F9CD42BE2415C0 /* MacContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBE4D95D1C31B3CADB4900E3 /* MacContentView.swift */; };
+		3B4BDF478D8D96C067175DC6 /* ExecutiveTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E38A37CBF40E58609556F84 /* ExecutiveTimelineView.swift */; };
+		3B5D31811A22E10AB2521A35 /* StructuredLifeProfileEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEC99FE51E3B5113FF306B6 /* StructuredLifeProfileEditor.swift */; };
+		3BB716FC509828AA11C7943B /* TaskRepositoryMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 489EEAE2C29395CC78CBCEC0 /* TaskRepositoryMergeTests.swift */; };
+		3C00A6AFB8A2C828D7CB4663 /* TaskCardStackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F08E8232492AB932226101BB /* TaskCardStackView.swift */; };
+		3C97F2EEF490DA1D86CCA90F /* FlowSchedulingRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5227B0284E7FF85A1D6071B6 /* FlowSchedulingRuleTests.swift */; };
+		3E304E589252DEB703E102C3 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1185FCBF5DEE7482D2AB5E81 /* OnboardingView.swift */; };
+		3E546F8B0CE276FF151B25A8 /* ADHDFloatingDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC510F63E0CDE596AC873F3 /* ADHDFloatingDockView.swift */; };
+		422CC7268EB8719D2932FD82 /* LifeOSHealthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0610E56B530CBD8F9463A350 /* LifeOSHealthTests.swift */; };
+		440CB84E8F92D42753C28000 /* TaskActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEAC2E97EFFB63A315EC2E6 /* TaskActionButton.swift */; };
+		4644D60FAB025709D19B2D34 /* ADHDViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E7BC1D09F43CB83C0647E91 /* ADHDViews.swift */; };
+		46B57BF3F6AA148AF49AECF7 /* BrainDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E0FDA5619A623387204EDC /* BrainDashboardView.swift */; };
+		47D01A93E9CF2586F3BB3B9C /* TaskCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A8DF1785C5BD91EC95F3DDF /* TaskCardView.swift */; };
+		48DA485DF128D599E0FB2A1C /* DayScheduleReconcilerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EBE27B52717B24648F71A /* DayScheduleReconcilerTests.swift */; };
+		4DACE70543BF104B8718282B /* StructuredLifeProfileEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEC99FE51E3B5113FF306B6 /* StructuredLifeProfileEditor.swift */; };
+		4F15932B42F8FBA88F9FB5AE /* ExecutiveRecommendationEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006FD9E431FE831729031650 /* ExecutiveRecommendationEngineTests.swift */; };
+		506C87CC7B26A13945FA6EF5 /* LifeOSHealth in Frameworks */ = {isa = PBXBuildFile; productRef = 3E81C5C18ACDF9F377387437 /* LifeOSHealth */; };
+		50804E1F7273556C3813E401 /* LifeProfileImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3009A54975C12BFDA2DE515 /* LifeProfileImportView.swift */; };
+		5108C9BBD7C1AA696C0894B2 /* PostWakeDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4F376CC2A50811E036E61F3 /* PostWakeDetectorTests.swift */; };
+		52D780AAFD44564C190D021A /* WidgetSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E4A0BF5057BA3FA0A07409 /* WidgetSyncService.swift */; };
+		53C11381A3D722C957806ADD /* AuthenticationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA85611363EAA0803F9F0561 /* AuthenticationTests.swift */; };
+		55254E869A887A96E7D94F3B /* FlowActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F878288D9E1C590E5E86BE /* FlowActivityAttributes.swift */; };
+		5819B85C457F602844762EF7 /* InsightsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2505AD1E8B0DA222C1D992 /* InsightsViewModelTests.swift */; };
+		59C4BC50848F953CB56DC8C6 /* GLMKeyManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92EAFE8E3A275E26D575ACBE /* GLMKeyManagerTests.swift */; };
+		59C952591E9A6357E67617C0 /* DaySlotAllocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A89130D2F3CFE199213A55CF /* DaySlotAllocatorTests.swift */; };
+		5A91FCC3DBA970C5DB8CAC8F /* HealthSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 357D37D6F8D25D5B926C7B40 /* HealthSyncService.swift */; };
+		5DB87798B9BD4DE2530EB80C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4620D9F9FCE83CF36452C1 /* ContentView.swift */; };
+		60E967DBE2A5B8DF3840B30E /* FlowSchedulingEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBF409BDE64711D65A1C62E /* FlowSchedulingEngineTests.swift */; };
+		61EC5D0D2ABD69D08E52FA6F /* PhysiologicalResetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A1A1ED0B4A998CD1FEA09B /* PhysiologicalResetView.swift */; };
+		6443D606368119C446FEEF6A /* DailyPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125AA7E8399944AF062D581A /* DailyPlanView.swift */; };
+		64B54FB2884B00A6B7B8851F /* DecideForMeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF0BFE10D3116C7A9665497 /* DecideForMeView.swift */; };
+		6619483418799F226BE5A98F /* IntentBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44F38A21C8DC371C668CD09 /* IntentBuilderTests.swift */; };
+		662B8C83A5782335E5685A6E /* IdealSleepPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFE17FA1B68810D82C4B35AF /* IdealSleepPlannerTests.swift */; };
+		66A1CF92AA09D953F5B27316 /* APIKeysSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5078DB82B72727CF8D0DF825 /* APIKeysSettingsView.swift */; };
+		672CE6C3F4590EA322C5D0FB /* TodaysStoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E18B779398F5B8DEC24E50 /* TodaysStoryView.swift */; };
+		69BF2C906352B75AF1DB49EC /* SpeechRecognitionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45478D0746917A7966AE4FF2 /* SpeechRecognitionManager.swift */; };
+		6F34295438ACD67F0E74F399 /* FlowDirectorAppIntegrationScenarioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A62CCEDD822E4A788B28C /* FlowDirectorAppIntegrationScenarioTests.swift */; };
+		7195A200E0217A2A836B82B9 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0201CC77E56CE92D6529D5F8 /* TodayView.swift */; };
+		7205EC425F45AD135D248E36 /* LifeOSFeaturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3718BD4C29F82CAB2F7DED3B /* LifeOSFeaturesTests.swift */; };
+		7245C319684A77787FB1D34D /* ExecutiveProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA7F0AE1D204434A0C5A8DA /* ExecutiveProfileView.swift */; };
+		72E53F59F1C4BADDB520F9CB /* TaskSemanticProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEEAEF8E12122EC7C47E918A /* TaskSemanticProfileTests.swift */; };
+		76D01AFE19309B154C59634A /* ExecutiveLiveTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E017DC556742B388A0174A54 /* ExecutiveLiveTimelineView.swift */; };
+		7AA4C4988358C01F9C5E734F /* BrainDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E0FDA5619A623387204EDC /* BrainDashboardView.swift */; };
+		7B99B9F6C79AF73E4198533F /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 292E63770D95333DEF0DF154 /* GoogleService-Info.plist */; };
+		7FEFB4A36278C1394173D503 /* ExperienceModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE1968D3E702105BAD7759F /* ExperienceModeTests.swift */; };
+		806AEDCD757979477E3AEA46 /* DecideForMeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF0BFE10D3116C7A9665497 /* DecideForMeView.swift */; };
+		8107E64640021339E4EA04E6 /* LifeOSWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6F48D2F70B8554C96F6ACC6B /* LifeOSWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8480CCAF58CAA193C41B1CD3 /* FlowSchedulingTestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = B461AFF921073E68DF86B0DE /* FlowSchedulingTestFixtures.swift */; };
+		88BD1521C968447C4E3C0D09 /* CycleDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9059A4637AE653749FE3EA10 /* CycleDashboardView.swift */; };
+		88E6BF6AF72EB2F06E68D49C /* HealthDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40089838B11215A5CDFD7D72 /* HealthDetailView.swift */; };
+		8B25683457A680F8B964F27E /* LifeModelValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835A00B06CB9F4D0011FC33A /* LifeModelValidatorTests.swift */; };
+		8D2BCF9FE9C2E40070C645A5 /* FlowActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F878288D9E1C590E5E86BE /* FlowActivityAttributes.swift */; };
+		8F4D43B176601AE54C42D97B /* TaskCardUIContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB21AB75BCE47B5BE5CBA1A0 /* TaskCardUIContractTests.swift */; };
+		94564AFC222D21930D3A11C9 /* CoreDomainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B5B732A850CDA3E6E3FC6A5 /* CoreDomainTests.swift */; };
+		9501F51262FCDD655FB6ED10 /* FlowDirectorContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD719157F376581E7074337 /* FlowDirectorContractsTests.swift */; };
+		97697F11CF20DD6FDCEB3DFD /* DayAssemblerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38872F249AE0DC366D603B7B /* DayAssemblerTests.swift */; };
+		984D605142C30D56803D32A2 /* ADHDViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E7BC1D09F43CB83C0647E91 /* ADHDViews.swift */; };
+		98711E5477019F866FC26228 /* MacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A84E19AB694AEBCA3B43BF0 /* MacSettingsView.swift */; };
+		98873A5742807477482AA50B /* ExperienceModeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39CD26D6E977C22EB0C394FB /* ExperienceModeController.swift */; };
+		9912E8C603C0EB311DE61E91 /* MultiDayTaskDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4A7C64F37EB2AB23C0C738 /* MultiDayTaskDetectorTests.swift */; };
+		9AD44E13223C86F137A16C78 /* EnergyRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6396D444E43E496D071BC139 /* EnergyRingView.swift */; };
+		9B23F85BDE55935FC991F00D /* HealthSyncProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96E63B584922D81AAA2D68DC /* HealthSyncProgressView.swift */; };
+		9D28F2568A2263422985C909 /* LifeOSData in Frameworks */ = {isa = PBXBuildFile; productRef = 757BB0AECDA756EFDB1C27AF /* LifeOSData */; };
+		9E4054392D41241DF5111947 /* BriefingCardContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA54D7D5C759574FCBF06D8 /* BriefingCardContainer.swift */; };
+		A00C39657BF42EC283B4EEB1 /* BrainInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD96967E54207D5E4401B492 /* BrainInspectorView.swift */; };
+		A14BD2C9E08069BFEA8250CA /* LifeOSFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = FF257ACB01D1BC10ED7EDBDB /* LifeOSFeatures */; };
+		A74EA7E017C310C2F074D75A /* ExecutiveBrain in Frameworks */ = {isa = PBXBuildFile; productRef = CCDC61B4CA3F3357DAE8C579 /* ExecutiveBrain */; };
+		A7E6881D219676C869F88668 /* TaskImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F0A7AD5A1C257772003BC36 /* TaskImportSheet.swift */; };
+		ACE8DB0A6C3CAC0DE38EDF2E /* APIKeysSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5078DB82B72727CF8D0DF825 /* APIKeysSettingsView.swift */; };
+		AF5B3765E3F8334BCCCA227C /* CognitiveAITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A92A66ECAC8EFFF28C276B /* CognitiveAITests.swift */; };
+		B3765CA85E7E6D0EBB5E8B4D /* WeatherDisplayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1423C6B2C0248D2C5AE117 /* WeatherDisplayService.swift */; };
+		B37F8D3DEC36C1D7AA2F4DD5 /* CompanionEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F117EC47A5FBEE6226D3F35 /* CompanionEngineTests.swift */; };
+		B51202BFD8E0E361B0D03998 /* DailyBriefingViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96FC3616FB54580B3895C75 /* DailyBriefingViewModelTests.swift */; };
+		BA19ED8A08CCE8306DFD5E01 /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1E7519730546D49ED9D307 /* InboxView.swift */; };
+		BAAA15B3942C1616D811EA06 /* ExecutiveTodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB57CAB453571A62614AC57 /* ExecutiveTodayView.swift */; };
+		BABFCCA23F8BBBFE61ED378D /* TodayEndOfDayJournalCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3755C0D891DB1B4B9D8F808 /* TodayEndOfDayJournalCard.swift */; };
+		BB5E896E935893FEB7ECA697 /* SemanticDecisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30EDB85E202CA90ECD4CE62 /* SemanticDecisionTests.swift */; };
+		BDE37AB588257487259B2A19 /* LifeOSData in Frameworks */ = {isa = PBXBuildFile; productRef = C261AE95F3ED63A61D26C8D2 /* LifeOSData */; };
+		C07F6DB22ED0469C10739F4D /* TaskCardStackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F08E8232492AB932226101BB /* TaskCardStackView.swift */; };
+		C28B76790BADAD2297E2F9DA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9B176DC9A76BC977AED03D74 /* Assets.xcassets */; };
+		C68A9413A1320C31941F7E51 /* LifeOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = AC9BB3845E8BE15976B11CA5 /* LifeOSCore */; };
+		C8F2FEC0624194C5AB9547EC /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE8A151F5837874FAB25662 /* ToastView.swift */; };
+		CBCBF647079D931D408A7400 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9869493BDC1D436C365E87 /* LiveActivityManager.swift */; };
+		CBD956BB2E228F299B04581C /* LifeOSAI in Frameworks */ = {isa = PBXBuildFile; productRef = 4694BCDC915E92B3E60A4519 /* LifeOSAI */; };
+		D0A7D727E4DB9797452C9D3B /* TaskListRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06E87A69C1E3D98DBD7BC10 /* TaskListRowView.swift */; };
+		D2BD77BFB56A2E8190079A6E /* AICoachView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EABDD04B16D48F1B0B4F7049 /* AICoachView.swift */; };
+		D6E8C684B302E76B59C9C2C9 /* LifeOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0DFB965E1E7DCF5D63823E01 /* LifeOSCore */; };
+		D777A05CD86A1E1BA695B68A /* FlowDirectorIntegrationLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39245384BAF2C57A8CBDB9BB /* FlowDirectorIntegrationLog.swift */; };
+		D807F041CE521876B6C84DC3 /* InsightsDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9E5783CF0D0DF568ACDEA0A /* InsightsDashboardView.swift */; };
+		D8EBB407C403B9DB107C38FC /* ExecutiveBrainEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97214E6C6597234CC23E330 /* ExecutiveBrainEngineTests.swift */; };
+		DA15EA0A51CD148F528CCE76 /* DataPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DFA123775570464E5EB9B3D /* DataPersistenceTests.swift */; };
+		DAA18318AE5A1902AAE03AA9 /* LifeProfileNameExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84035592D3ABAC261C2B8652 /* LifeProfileNameExtractorTests.swift */; };
+		DC69289D7A12E251151A4E42 /* BackgroundAnalyticsScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D983B73409908D43CB1CE5 /* BackgroundAnalyticsScheduler.swift */; };
+		DD90E50B085F0ACDCC3F79B7 /* TasksViewModelInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7436857847BD5869982149E /* TasksViewModelInteractionTests.swift */; };
+		DDABD95F8E7292A42E6185B0 /* EnergyRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6396D444E43E496D071BC139 /* EnergyRingView.swift */; };
+		DE73DDE2348727D1F9DA628D /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 292E63770D95333DEF0DF154 /* GoogleService-Info.plist */; };
+		E057FA6A23479A70EBCC659F /* LifeOSCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1733FCAC73474ABB5B3AF6C0 /* LifeOSCoreTests.swift */; };
+		E075D12A371F55D58965C20A /* PhysiologicalResetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A1A1ED0B4A998CD1FEA09B /* PhysiologicalResetView.swift */; };
+		E21AAF68735EEF049F9C4311 /* ExperienceRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D7D137C91EAB8216361B88 /* ExperienceRootView.swift */; };
+		E2E0BA76CA0A1745D74F9327 /* TaskListRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06E87A69C1E3D98DBD7BC10 /* TaskListRowView.swift */; };
+		E3744DC6EC5A8D51B5BDCABB /* CycleQuickLogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420A0AD62238B59B0FC305B1 /* CycleQuickLogSheet.swift */; };
+		E418DA27CE29F8153C5C54CF /* LifeOSFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = 84F312B7DFE5BEE1EA57DFF5 /* LifeOSFeatures */; };
+		E5041E7908F63232321295C8 /* TaskImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F0A7AD5A1C257772003BC36 /* TaskImportSheet.swift */; };
+		E568D9DCF9E3A85D0DDAD085 /* LifeOSFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = 5768A338515C07B9753FF663 /* LifeOSFeatures */; };
+		E5BDB4599B8F0FAC9DF5BDEE /* LifeGapsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9716753332506F4A36A7AF4 /* LifeGapsCard.swift */; };
+		E64B49728206FB34DEE981C8 /* AsyncTimeoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07AE65336F3FA891134FF107 /* AsyncTimeoutTests.swift */; };
+		E79797765F0A17B972E8B3E7 /* FlowDirectorOrchestrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B51C9470EEAD1A7C08D6C62A /* FlowDirectorOrchestrationTests.swift */; };
+		E9777B4E33086021C0F7BF51 /* TestCalendarFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88995B46D51E008D3259622 /* TestCalendarFixtures.swift */; };
+		E991F4C53BCED37B95351994 /* LifeOSHealth in Frameworks */ = {isa = PBXBuildFile; productRef = 2974AAA392063CCFCEA3D99F /* LifeOSHealth */; };
+		EB2657F5347955B4EFDC05DF /* BehaviorMemoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD93B90482D119FC52A039 /* BehaviorMemoryStoreTests.swift */; };
+		EC07F57111400DACDE9468B6 /* OnboardingTaskSeederTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 809E8FA4488A3A1686E719A3 /* OnboardingTaskSeederTests.swift */; };
+		F2CADB74AE43C6C015C512C0 /* DailyBriefingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78F71B7B07ABA567FAD4D612 /* DailyBriefingView.swift */; };
+		F2D257E0BF44EDFCB5E52286 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04965AD91ADA2B6AA6292EDA /* SettingsView.swift */; };
+		F2D8F7B02F98280757E344BC /* PlanningSpeechSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED97B974F67F5631A0ED5B65 /* PlanningSpeechSynthesizer.swift */; };
+		F3F3918DB8E55FC8E30571AB /* LifeOSMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D9D51BA840D88145EF4F1F4 /* LifeOSMacApp.swift */; };
+		F6B0A1AA521E4634D3B00CCD /* PersonalAnalyticsEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA45FD536540B2B34155A49 /* PersonalAnalyticsEngineTests.swift */; };
+		F718E97BA22502955C595C60 /* ADHDFloatingDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC510F63E0CDE596AC873F3 /* ADHDFloatingDockView.swift */; };
+		F8EE3E4EA983FCCE3512EE35 /* MockGLM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778A2A15E36AEFE8ECF45C07 /* MockGLM.swift */; };
+		FC7A196129AD24E9D5F4C778 /* TaskRecurrenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31ED45F8C44D35DCB1620AEA /* TaskRecurrenceTests.swift */; };
+		FC8B198DC8F7FE71000D28E6 /* EnvironmentContextProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49419E2F7ABA1FC9E1DA5522 /* EnvironmentContextProviderTests.swift */; };
+		FCF28236BF073A45D8D9DE1C /* CycleInsightBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD37513CA8FD4B47D9305B14 /* CycleInsightBuilderTests.swift */; };
+		FD3181D2561E6D33A1554FD2 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE8A151F5837874FAB25662 /* ToastView.swift */; };
+		FDF6C16D020DA9359B5905E8 /* CalmHeroContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13692D9BF7EC12E04816BDA3 /* CalmHeroContentTests.swift */; };
+		FFD41825ED161D1BFD200C12 /* example-life-profile.md in Resources */ = {isa = PBXBuildFile; fileRef = CFC3B48DD9EB35A03223CCE5 /* example-life-profile.md */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		EC6C5E8DCBFEDFD1B38415B4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98645262B9197BD6057E1C1C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E58A333F8DF1A794FCC029A3;
+			remoteInfo = LifeOSWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BA3DE3537E64A11BE6E3A8F9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				8107E64640021339E4EA04E6 /* LifeOSWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		006FD9E431FE831729031650 /* ExecutiveRecommendationEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveRecommendationEngineTests.swift; sourceTree = "<group>"; };
+		0201CC77E56CE92D6529D5F8 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		04965AD91ADA2B6AA6292EDA /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		0610E56B530CBD8F9463A350 /* LifeOSHealthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSHealthTests.swift; sourceTree = "<group>"; };
+		07AE65336F3FA891134FF107 /* AsyncTimeoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncTimeoutTests.swift; sourceTree = "<group>"; };
+		07CD4BA61038FA38FA1DA093 /* VoiceCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCaptureView.swift; sourceTree = "<group>"; };
+		0943D191B0553344627991F5 /* LifeOSWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSWidgetBundle.swift; sourceTree = "<group>"; };
+		0B5B732A850CDA3E6E3FC6A5 /* CoreDomainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDomainTests.swift; sourceTree = "<group>"; };
+		0DF3116C766FEC307CFC2B1A /* LifeOS-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "LifeOS-macOS.entitlements"; sourceTree = "<group>"; };
+		0FCC7E2F9940C91B6A77DAF1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		1185FCBF5DEE7482D2AB5E81 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		125AA7E8399944AF062D581A /* DailyPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyPlanView.swift; sourceTree = "<group>"; };
+		13692D9BF7EC12E04816BDA3 /* CalmHeroContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalmHeroContentTests.swift; sourceTree = "<group>"; };
+		139ECA083B0FF73F66569D80 /* ExecutiveBrain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ExecutiveBrain; path = Packages/ExecutiveBrain; sourceTree = SOURCE_ROOT; };
+		1437AF38B2C4DE92BF373CFD /* FlowDirectorFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDirectorFactory.swift; sourceTree = "<group>"; };
+		1733FCAC73474ABB5B3AF6C0 /* LifeOSCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSCoreTests.swift; sourceTree = "<group>"; };
+		19921326F30E79AE31966E2E /* HealthSyncLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncLogger.swift; sourceTree = "<group>"; };
+		1BD719157F376581E7074337 /* FlowDirectorContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDirectorContractsTests.swift; sourceTree = "<group>"; };
+		230F965100CE75D213CA1480 /* LifeOSAI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LifeOSAI; path = Packages/LifeOSAI; sourceTree = SOURCE_ROOT; };
+		292E63770D95333DEF0DF154 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		29A1A1ED0B4A998CD1FEA09B /* PhysiologicalResetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhysiologicalResetView.swift; sourceTree = "<group>"; };
+		2D6A62CCEDD822E4A788B28C /* FlowDirectorAppIntegrationScenarioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDirectorAppIntegrationScenarioTests.swift; sourceTree = "<group>"; };
+		2E7BC1D09F43CB83C0647E91 /* ADHDViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADHDViews.swift; sourceTree = "<group>"; };
+		2F1E7519730546D49ED9D307 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
+		2F979F12681567D5E4684FEC /* LifeOSMasterCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSMasterCanvas.swift; sourceTree = "<group>"; };
+		31ED45F8C44D35DCB1620AEA /* TaskRecurrenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRecurrenceTests.swift; sourceTree = "<group>"; };
+		326224CEB956C504836DDFFF /* FlowConfidenceEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowConfidenceEngineTests.swift; sourceTree = "<group>"; };
+		32D7D137C91EAB8216361B88 /* ExperienceRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperienceRootView.swift; sourceTree = "<group>"; };
+		357D37D6F8D25D5B926C7B40 /* HealthSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncService.swift; sourceTree = "<group>"; };
+		3718BD4C29F82CAB2F7DED3B /* LifeOSFeaturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSFeaturesTests.swift; sourceTree = "<group>"; };
+		379E5728B9CBB3F75726FBFF /* ProductivityTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductivityTracker.swift; sourceTree = "<group>"; };
+		38872F249AE0DC366D603B7B /* DayAssemblerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayAssemblerTests.swift; sourceTree = "<group>"; };
+		39245384BAF2C57A8CBDB9BB /* FlowDirectorIntegrationLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDirectorIntegrationLog.swift; sourceTree = "<group>"; };
+		39CD26D6E977C22EB0C394FB /* ExperienceModeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperienceModeController.swift; sourceTree = "<group>"; };
+		3CA45FD536540B2B34155A49 /* PersonalAnalyticsEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAnalyticsEngineTests.swift; sourceTree = "<group>"; };
+		3E38A37CBF40E58609556F84 /* ExecutiveTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveTimelineView.swift; sourceTree = "<group>"; };
+		3F117EC47A5FBEE6226D3F35 /* CompanionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionEngineTests.swift; sourceTree = "<group>"; };
+		3FC510F63E0CDE596AC873F3 /* ADHDFloatingDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADHDFloatingDockView.swift; sourceTree = "<group>"; };
+		40089838B11215A5CDFD7D72 /* HealthDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthDetailView.swift; sourceTree = "<group>"; };
+		40E021B36FDDC7DFA7615DAF /* DailyBriefingCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefingCards.swift; sourceTree = "<group>"; };
+		420A0AD62238B59B0FC305B1 /* CycleQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleQuickLogSheet.swift; sourceTree = "<group>"; };
+		4221D98E10C8A18C068B4D84 /* GLMConfigurationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLMConfigurationSettingsView.swift; sourceTree = "<group>"; };
+		45478D0746917A7966AE4FF2 /* SpeechRecognitionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionManager.swift; sourceTree = "<group>"; };
+		4845E2A76C040820B1EDE7E1 /* AIExecutiveCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIExecutiveCanvas.swift; sourceTree = "<group>"; };
+		489EEAE2C29395CC78CBCEC0 /* TaskRepositoryMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRepositoryMergeTests.swift; sourceTree = "<group>"; };
+		48C0BCB1FD89823ABFEB3B2A /* LifeOSHealth */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LifeOSHealth; path = Packages/LifeOSHealth; sourceTree = SOURCE_ROOT; };
+		49419E2F7ABA1FC9E1DA5522 /* EnvironmentContextProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentContextProviderTests.swift; sourceTree = "<group>"; };
+		4F0A7AD5A1C257772003BC36 /* TaskImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskImportSheet.swift; sourceTree = "<group>"; };
+		4F2C0F83D691608A6EB10A6F /* ShoppingListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListViewModelTests.swift; sourceTree = "<group>"; };
+		4FBF409BDE64711D65A1C62E /* FlowSchedulingEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSchedulingEngineTests.swift; sourceTree = "<group>"; };
+		4FEAC2E97EFFB63A315EC2E6 /* TaskActionButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskActionButton.swift; sourceTree = "<group>"; };
+		5078DB82B72727CF8D0DF825 /* APIKeysSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeysSettingsView.swift; sourceTree = "<group>"; };
+		5227B0284E7FF85A1D6071B6 /* FlowSchedulingRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSchedulingRuleTests.swift; sourceTree = "<group>"; };
+		57CD93B90482D119FC52A039 /* BehaviorMemoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BehaviorMemoryStoreTests.swift; sourceTree = "<group>"; };
+		5B4A7C64F37EB2AB23C0C738 /* MultiDayTaskDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiDayTaskDetectorTests.swift; sourceTree = "<group>"; };
+		5BA54D7D5C759574FCBF06D8 /* BriefingCardContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingCardContainer.swift; sourceTree = "<group>"; };
+		5CA46F6E8ADA2C57030F46D8 /* ContextEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextEngineTests.swift; sourceTree = "<group>"; };
+		5D9D51BA840D88145EF4F1F4 /* LifeOSMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSMacApp.swift; sourceTree = "<group>"; };
+		5DC0F1173224ABE037D944BA /* LifeOS-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "LifeOS-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DE1968D3E702105BAD7759F /* ExperienceModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperienceModeTests.swift; sourceTree = "<group>"; };
+		6396D444E43E496D071BC139 /* EnergyRingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnergyRingView.swift; sourceTree = "<group>"; };
+		64489C6E0BC99A64B1D85B3F /* CycleEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleEngineTests.swift; sourceTree = "<group>"; };
+		66E4A0BF5057BA3FA0A07409 /* WidgetSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSyncService.swift; sourceTree = "<group>"; };
+		6A2FFB179D05783C5BE4A978 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
+		6A8DF1785C5BD91EC95F3DDF /* TaskCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCardView.swift; sourceTree = "<group>"; };
+		6DFA123775570464E5EB9B3D /* DataPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPersistenceTests.swift; sourceTree = "<group>"; };
+		6F48D2F70B8554C96F6ACC6B /* LifeOSWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LifeOSWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		73E18B779398F5B8DEC24E50 /* TodaysStoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodaysStoryView.swift; sourceTree = "<group>"; };
+		75F878288D9E1C590E5E86BE /* FlowActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowActivityAttributes.swift; sourceTree = "<group>"; };
+		778A2A15E36AEFE8ECF45C07 /* MockGLM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGLM.swift; sourceTree = "<group>"; };
+		78F71B7B07ABA567FAD4D612 /* DailyBriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefingView.swift; sourceTree = "<group>"; };
+		7A9869493BDC1D436C365E87 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		7DEE642BA01C16B019672C01 /* TodayCompactMetricsStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayCompactMetricsStrip.swift; sourceTree = "<group>"; };
+		7E27FE23BFBAD22798703C01 /* HeroObjectiveResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroObjectiveResolverTests.swift; sourceTree = "<group>"; };
+		8056D53734DBE198CF44676F /* DailyBriefingCustomizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefingCustomizationView.swift; sourceTree = "<group>"; };
+		809E8FA4488A3A1686E719A3 /* OnboardingTaskSeederTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingTaskSeederTests.swift; sourceTree = "<group>"; };
+		80A92A66ECAC8EFFF28C276B /* CognitiveAITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitiveAITests.swift; sourceTree = "<group>"; };
+		81157C1D6C495EA45626EAA3 /* FullAppIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullAppIntegrationTests.swift; sourceTree = "<group>"; };
+		835A00B06CB9F4D0011FC33A /* LifeModelValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeModelValidatorTests.swift; sourceTree = "<group>"; };
+		84035592D3ABAC261C2B8652 /* LifeProfileNameExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeProfileNameExtractorTests.swift; sourceTree = "<group>"; };
+		8A6956E79E589EC9D61AC090 /* HealthSummaryRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSummaryRepositoryTests.swift; sourceTree = "<group>"; };
+		8A84E19AB694AEBCA3B43BF0 /* MacSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsView.swift; sourceTree = "<group>"; };
+		9059A4637AE653749FE3EA10 /* CycleDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleDashboardView.swift; sourceTree = "<group>"; };
+		92EAFE8E3A275E26D575ACBE /* GLMKeyManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLMKeyManagerTests.swift; sourceTree = "<group>"; };
+		94723372E1E4A8247D38F308 /* LifeOSData */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LifeOSData; path = Packages/LifeOSData; sourceTree = SOURCE_ROOT; };
+		94BABADB43487D26E4447EC4 /* LifeOSBottomNav.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSBottomNav.swift; sourceTree = "<group>"; };
+		96E63B584922D81AAA2D68DC /* HealthSyncProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncProgressView.swift; sourceTree = "<group>"; };
+		9B176DC9A76BC977AED03D74 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9CE8A151F5837874FAB25662 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
+		9FBDCCDE941819F9DA51AA67 /* AllModulesGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllModulesGridView.swift; sourceTree = "<group>"; };
+		A2CE93EA3F81FAC5AE89FF39 /* TestCalendarFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCalendarFixtures.swift; sourceTree = "<group>"; };
+		A4042EFEAEF091BA18D56273 /* LifeOSCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LifeOSCore; path = Packages/LifeOSCore; sourceTree = SOURCE_ROOT; };
+		A7B67B4E5EECE53252F9B882 /* LifeOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LifeOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A88995B46D51E008D3259622 /* TestCalendarFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCalendarFixtures.swift; sourceTree = "<group>"; };
+		A89130D2F3CFE199213A55CF /* DaySlotAllocatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaySlotAllocatorTests.swift; sourceTree = "<group>"; };
+		A924CE586F19C7512F3A409B /* FocusLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusLiveActivity.swift; sourceTree = "<group>"; };
+		A96FC3616FB54580B3895C75 /* DailyBriefingViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefingViewModelTests.swift; sourceTree = "<group>"; };
+		AB1423C6B2C0248D2C5AE117 /* WeatherDisplayService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherDisplayService.swift; sourceTree = "<group>"; };
+		AC644FD16EB5CB22932D6100 /* ModuleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuleViews.swift; sourceTree = "<group>"; };
+		ADEC99FE51E3B5113FF306B6 /* StructuredLifeProfileEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StructuredLifeProfileEditor.swift; sourceTree = "<group>"; };
+		AE603A9A36F9F747FD2B8665 /* LifeOS-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "LifeOS-iOS.entitlements"; sourceTree = "<group>"; };
+		B461AFF921073E68DF86B0DE /* FlowSchedulingTestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSchedulingTestFixtures.swift; sourceTree = "<group>"; };
+		B4E0FDA5619A623387204EDC /* BrainDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDashboardView.swift; sourceTree = "<group>"; };
+		B4F376CC2A50811E036E61F3 /* PostWakeDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostWakeDetectorTests.swift; sourceTree = "<group>"; };
+		B51C9470EEAD1A7C08D6C62A /* FlowDirectorOrchestrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDirectorOrchestrationTests.swift; sourceTree = "<group>"; };
+		B9716753332506F4A36A7AF4 /* LifeGapsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeGapsCard.swift; sourceTree = "<group>"; };
+		B97214E6C6597234CC23E330 /* ExecutiveBrainEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveBrainEngineTests.swift; sourceTree = "<group>"; };
+		BA78AD7224CE686BD48977E3 /* ContinueSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueSessionView.swift; sourceTree = "<group>"; };
+		BAA7F0AE1D204434A0C5A8DA /* ExecutiveProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveProfileView.swift; sourceTree = "<group>"; };
+		BD96967E54207D5E4401B492 /* BrainInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainInspectorView.swift; sourceTree = "<group>"; };
+		C05882AB57D4B94ED7E8A29D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C30EDB85E202CA90ECD4CE62 /* SemanticDecisionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticDecisionTests.swift; sourceTree = "<group>"; };
+		C35191D6A6DDED425CE3C7C2 /* AnalyticsCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsCacheTests.swift; sourceTree = "<group>"; };
+		C3755C0D891DB1B4B9D8F808 /* TodayEndOfDayJournalCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayEndOfDayJournalCard.swift; sourceTree = "<group>"; };
+		C44F38A21C8DC371C668CD09 /* IntentBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentBuilderTests.swift; sourceTree = "<group>"; };
+		C8F30E8EE90DF672A6BDA4A1 /* ExecutiveAssistantSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveAssistantSheet.swift; sourceTree = "<group>"; };
+		C9F729A42F12283843B76C25 /* LifeOS-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LifeOS-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB21AB75BCE47B5BE5CBA1A0 /* TaskCardUIContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCardUIContractTests.swift; sourceTree = "<group>"; };
+		CD37513CA8FD4B47D9305B14 /* CycleInsightBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleInsightBuilderTests.swift; sourceTree = "<group>"; };
+		CDA9D3A5C874460C9CC384FA /* SimulatedUserFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatedUserFlowTests.swift; sourceTree = "<group>"; };
+		CE079AD9EE3E7D50F6C3C878 /* ReschedulePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReschedulePreviewSheet.swift; sourceTree = "<group>"; };
+		CFC3B48DD9EB35A03223CCE5 /* example-life-profile.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "example-life-profile.md"; sourceTree = "<group>"; };
+		CFE17FA1B68810D82C4B35AF /* IdealSleepPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdealSleepPlannerTests.swift; sourceTree = "<group>"; };
+		D39EBE27B52717B24648F71A /* DayScheduleReconcilerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayScheduleReconcilerTests.swift; sourceTree = "<group>"; };
+		D9E5783CF0D0DF568ACDEA0A /* InsightsDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsDashboardView.swift; sourceTree = "<group>"; };
+		DA2F269930E776BBE786D4DC /* ExecutiveCaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveCaptureSheet.swift; sourceTree = "<group>"; };
+		DC9B3275F1DF827BBA870AC6 /* LifeTimelinePresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeTimelinePresenterTests.swift; sourceTree = "<group>"; };
+		E017DC556742B388A0174A54 /* ExecutiveLiveTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveLiveTimelineView.swift; sourceTree = "<group>"; };
+		E06E87A69C1E3D98DBD7BC10 /* TaskListRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListRowView.swift; sourceTree = "<group>"; };
+		E35AF290E4D8E887553D5A3E /* AppShellState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellState.swift; sourceTree = "<group>"; };
+		E6BDDBD420FAB2201792107D /* LifeOSFeatures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LifeOSFeatures; path = Packages/LifeOSFeatures; sourceTree = SOURCE_ROOT; };
+		E7436857847BD5869982149E /* TasksViewModelInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksViewModelInteractionTests.swift; sourceTree = "<group>"; };
+		E7A0586C8DA3A7A29AE4432D /* LifeOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeOSApp.swift; sourceTree = "<group>"; };
+		E9D983B73409908D43CB1CE5 /* BackgroundAnalyticsScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAnalyticsScheduler.swift; sourceTree = "<group>"; };
+		EA58C5CCB2A4D0BAABD667C8 /* ExecutiveCapacityCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveCapacityCard.swift; sourceTree = "<group>"; };
+		EABDD04B16D48F1B0B4F7049 /* AICoachView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICoachView.swift; sourceTree = "<group>"; };
+		EBE4D95D1C31B3CADB4900E3 /* MacContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacContentView.swift; sourceTree = "<group>"; };
+		EC10B57EA24D14B6AFF5938B /* MedicationReasoningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationReasoningTests.swift; sourceTree = "<group>"; };
+		EC4620D9F9FCE83CF36452C1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		ED97B974F67F5631A0ED5B65 /* PlanningSpeechSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningSpeechSynthesizer.swift; sourceTree = "<group>"; };
+		EEEAEF8E12122EC7C47E918A /* TaskSemanticProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskSemanticProfileTests.swift; sourceTree = "<group>"; };
+		EF55BBB8102A771BADD8121B /* LifeOSWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LifeOSWidget.entitlements; sourceTree = "<group>"; };
+		F0376764907F954E81EB7D77 /* MultiDayTaskPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiDayTaskPlannerTests.swift; sourceTree = "<group>"; };
+		F08E8232492AB932226101BB /* TaskCardStackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCardStackView.swift; sourceTree = "<group>"; };
+		F3009A54975C12BFDA2DE515 /* LifeProfileImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeProfileImportView.swift; sourceTree = "<group>"; };
+		F54832C15AEE78B13146DB7B /* TaskHeroEligibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskHeroEligibilityTests.swift; sourceTree = "<group>"; };
+		F8CD3F70371555C9CFE94E4E /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		FA2505AD1E8B0DA222C1D992 /* InsightsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsViewModelTests.swift; sourceTree = "<group>"; };
+		FA4F599B8AFF79C0780A2A70 /* ExecutivePlanningConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutivePlanningConversationView.swift; sourceTree = "<group>"; };
+		FA85611363EAA0803F9F0561 /* AuthenticationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationTests.swift; sourceTree = "<group>"; };
+		FAB57CAB453571A62614AC57 /* ExecutiveTodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveTodayView.swift; sourceTree = "<group>"; };
+		FAF0BFE10D3116C7A9665497 /* DecideForMeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecideForMeView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		800770BC9DDBA0CC653F9F7A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3AB7F0AC6760FEFA9F0343FC /* LifeOSCore in Frameworks */,
+				CBD956BB2E228F299B04581C /* LifeOSAI in Frameworks */,
+				161FFAF0F588CABF39F64D0E /* LifeOSData in Frameworks */,
+				506C87CC7B26A13945FA6EF5 /* LifeOSHealth in Frameworks */,
+				E418DA27CE29F8153C5C54CF /* LifeOSFeatures in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C5C4019A89C6A8FCD90CA1FE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9D28F2568A2263422985C909 /* LifeOSData in Frameworks */,
+				C68A9413A1320C31941F7E51 /* LifeOSCore in Frameworks */,
+				34EBA6F8CA7269958FD7448D /* LifeOSAI in Frameworks */,
+				E568D9DCF9E3A85D0DDAD085 /* LifeOSFeatures in Frameworks */,
+				A74EA7E017C310C2F074D75A /* ExecutiveBrain in Frameworks */,
+				E991F4C53BCED37B95351994 /* LifeOSHealth in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DFF6799F30B73ED513424D0B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1276772EBCFF49043820D57E /* LifeOSCore in Frameworks */,
+				180142C479CF556A726DA3B7 /* LifeOSAI in Frameworks */,
+				BDE37AB588257487259B2A19 /* LifeOSData in Frameworks */,
+				A14BD2C9E08069BFEA8250CA /* LifeOSFeatures in Frameworks */,
+				1C6E89A8AAA58614B123B507 /* LifeOSHealth in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F295BE71BB29496835D981E1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D6E8C684B302E76B59C9C2C9 /* LifeOSCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		101D7E385E59787085537895 /* FlowDirectorTests */ = {
+			isa = PBXGroup;
+			children = (
+				2D6A62CCEDD822E4A788B28C /* FlowDirectorAppIntegrationScenarioTests.swift */,
+				B51C9470EEAD1A7C08D6C62A /* FlowDirectorOrchestrationTests.swift */,
+			);
+			name = FlowDirectorTests;
+			path = Packages/LifeOSAI/Tests/FlowDirectorTests;
+			sourceTree = "<group>";
+		};
+		117B5491668274E2F1C37805 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				139ECA083B0FF73F66569D80 /* ExecutiveBrain */,
+				230F965100CE75D213CA1480 /* LifeOSAI */,
+				A4042EFEAEF091BA18D56273 /* LifeOSCore */,
+				94723372E1E4A8247D38F308 /* LifeOSData */,
+				E6BDDBD420FAB2201792107D /* LifeOSFeatures */,
+				48C0BCB1FD89823ABFEB3B2A /* LifeOSHealth */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		2581D241F732D8FEB49DA600 /* LifeOSDataTests */ = {
+			isa = PBXGroup;
+			children = (
+				C35191D6A6DDED425CE3C7C2 /* AnalyticsCacheTests.swift */,
+				07AE65336F3FA891134FF107 /* AsyncTimeoutTests.swift */,
+				FA85611363EAA0803F9F0561 /* AuthenticationTests.swift */,
+				6DFA123775570464E5EB9B3D /* DataPersistenceTests.swift */,
+				81157C1D6C495EA45626EAA3 /* FullAppIntegrationTests.swift */,
+				8A6956E79E589EC9D61AC090 /* HealthSummaryRepositoryTests.swift */,
+				3CA45FD536540B2B34155A49 /* PersonalAnalyticsEngineTests.swift */,
+				CDA9D3A5C874460C9CC384FA /* SimulatedUserFlowTests.swift */,
+				489EEAE2C29395CC78CBCEC0 /* TaskRepositoryMergeTests.swift */,
+			);
+			name = LifeOSDataTests;
+			path = Packages/LifeOSData/Tests/LifeOSDataTests;
+			sourceTree = "<group>";
+		};
+		31360883FF75122293A51744 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				F8CD3F70371555C9CFE94E4E /* AuthView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		32B6B76EB3D344BE212F0570 /* Insights */ = {
+			isa = PBXGroup;
+			children = (
+				D9E5783CF0D0DF568ACDEA0A /* InsightsDashboardView.swift */,
+			);
+			path = Insights;
+			sourceTree = "<group>";
+		};
+		373D461BF00F823F5B856015 /* LifeOSAITests */ = {
+			isa = PBXGroup;
+			children = (
+				80A92A66ECAC8EFFF28C276B /* CognitiveAITests.swift */,
+				92EAFE8E3A275E26D575ACBE /* GLMKeyManagerTests.swift */,
+				778A2A15E36AEFE8ECF45C07 /* MockGLM.swift */,
+			);
+			name = LifeOSAITests;
+			path = Packages/LifeOSAI/Tests/LifeOSAITests;
+			sourceTree = "<group>";
+		};
+		463EE8BC6E1D1C75A4F1A612 /* Health */ = {
+			isa = PBXGroup;
+			children = (
+				9059A4637AE653749FE3EA10 /* CycleDashboardView.swift */,
+				420A0AD62238B59B0FC305B1 /* CycleQuickLogSheet.swift */,
+			);
+			path = Health;
+			sourceTree = "<group>";
+		};
+		4AB014CD0A04D7EB07A4D49B /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				3FC510F63E0CDE596AC873F3 /* ADHDFloatingDockView.swift */,
+				6396D444E43E496D071BC139 /* EnergyRingView.swift */,
+				96E63B584922D81AAA2D68DC /* HealthSyncProgressView.swift */,
+				F3009A54975C12BFDA2DE515 /* LifeProfileImportView.swift */,
+				ADEC99FE51E3B5113FF306B6 /* StructuredLifeProfileEditor.swift */,
+				4FEAC2E97EFFB63A315EC2E6 /* TaskActionButton.swift */,
+				6A8DF1785C5BD91EC95F3DDF /* TaskCardView.swift */,
+				9CE8A151F5837874FAB25662 /* ToastView.swift */,
+				07CD4BA61038FA38FA1DA093 /* VoiceCaptureView.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		4C23513271C2B8BB6606D157 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				E9D983B73409908D43CB1CE5 /* BackgroundAnalyticsScheduler.swift */,
+				1437AF38B2C4DE92BF373CFD /* FlowDirectorFactory.swift */,
+				39245384BAF2C57A8CBDB9BB /* FlowDirectorIntegrationLog.swift */,
+				19921326F30E79AE31966E2E /* HealthSyncLogger.swift */,
+				357D37D6F8D25D5B926C7B40 /* HealthSyncService.swift */,
+				7A9869493BDC1D436C365E87 /* LiveActivityManager.swift */,
+				ED97B974F67F5631A0ED5B65 /* PlanningSpeechSynthesizer.swift */,
+				45478D0746917A7966AE4FF2 /* SpeechRecognitionManager.swift */,
+				AB1423C6B2C0248D2C5AE117 /* WeatherDisplayService.swift */,
+				66E4A0BF5057BA3FA0A07409 /* WidgetSyncService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		503765C78BCD80A9FE23AA90 /* LifeOS-iOS */ = {
+			isa = PBXGroup;
+			children = (
+				9B176DC9A76BC977AED03D74 /* Assets.xcassets */,
+				EC4620D9F9FCE83CF36452C1 /* ContentView.swift */,
+				C05882AB57D4B94ED7E8A29D /* Info.plist */,
+				E7A0586C8DA3A7A29AE4432D /* LifeOSApp.swift */,
+				B7CBE2B0A6D0C1C3718F3A5F /* Experience */,
+				B44E6CCB9528DE8387352C82 /* Resources */,
+				4C23513271C2B8BB6606D157 /* Services */,
+				F02400952829BBB012BC762C /* Views */,
+			);
+			path = "LifeOS-iOS";
+			sourceTree = "<group>";
+		};
+		5BB644F47EC3F4A73DECF29E /* LifeOSWidget */ = {
+			isa = PBXGroup;
+			children = (
+				A924CE586F19C7512F3A409B /* FocusLiveActivity.swift */,
+				0FCC7E2F9940C91B6A77DAF1 /* Info.plist */,
+				EF55BBB8102A771BADD8121B /* LifeOSWidget.entitlements */,
+				0943D191B0553344627991F5 /* LifeOSWidgetBundle.swift */,
+			);
+			path = LifeOSWidget;
+			sourceTree = "<group>";
+		};
+		6770F099161D5022AFBDE8F6 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				5078DB82B72727CF8D0DF825 /* APIKeysSettingsView.swift */,
+				4221D98E10C8A18C068B4D84 /* GLMConfigurationSettingsView.swift */,
+				04965AD91ADA2B6AA6292EDA /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		68AE97A2C8DC427500B83A26 /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				94BABADB43487D26E4447EC4 /* LifeOSBottomNav.swift */,
+			);
+			path = Navigation;
+			sourceTree = "<group>";
+		};
+		6BBD885734BE07D038423D8A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5DC0F1173224ABE037D944BA /* LifeOS-iOS.app */,
+				C9F729A42F12283843B76C25 /* LifeOS-macOS.app */,
+				A7B67B4E5EECE53252F9B882 /* LifeOSTests.xctest */,
+				6F48D2F70B8554C96F6ACC6B /* LifeOSWidget.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6DD7137A3F24C1B0A6181D2F /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				75F878288D9E1C590E5E86BE /* FlowActivityAttributes.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		7AEDD1184E63A46753342FBD /* Tasks */ = {
+			isa = PBXGroup;
+			children = (
+				125AA7E8399944AF062D581A /* DailyPlanView.swift */,
+				CE079AD9EE3E7D50F6C3C878 /* ReschedulePreviewSheet.swift */,
+				F08E8232492AB932226101BB /* TaskCardStackView.swift */,
+				4F0A7AD5A1C257772003BC36 /* TaskImportSheet.swift */,
+				E06E87A69C1E3D98DBD7BC10 /* TaskListRowView.swift */,
+				6A2FFB179D05783C5BE4A978 /* TaskListView.swift */,
+			);
+			path = Tasks;
+			sourceTree = "<group>";
+		};
+		815F9D897AC124EC43801465 /* AIExecutive */ = {
+			isa = PBXGroup;
+			children = (
+				4845E2A76C040820B1EDE7E1 /* AIExecutiveCanvas.swift */,
+				BD96967E54207D5E4401B492 /* BrainInspectorView.swift */,
+				BA78AD7224CE686BD48977E3 /* ContinueSessionView.swift */,
+				DA2F269930E776BBE786D4DC /* ExecutiveCaptureSheet.swift */,
+				BAA7F0AE1D204434A0C5A8DA /* ExecutiveProfileView.swift */,
+				3E38A37CBF40E58609556F84 /* ExecutiveTimelineView.swift */,
+				FAB57CAB453571A62614AC57 /* ExecutiveTodayView.swift */,
+				40089838B11215A5CDFD7D72 /* HealthDetailView.swift */,
+				73E18B779398F5B8DEC24E50 /* TodaysStoryView.swift */,
+			);
+			path = AIExecutive;
+			sourceTree = "<group>";
+		};
+		82A34C79CD97B437D8E5999C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				EBE4D95D1C31B3CADB4900E3 /* MacContentView.swift */,
+				8A84E19AB694AEBCA3B43BF0 /* MacSettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		882D7425E9E1D1E7861CF3F3 /* LifeOS-macOS */ = {
+			isa = PBXGroup;
+			children = (
+				5D9D51BA840D88145EF4F1F4 /* LifeOSMacApp.swift */,
+				379E5728B9CBB3F75726FBFF /* ProductivityTracker.swift */,
+				82A34C79CD97B437D8E5999C /* Views */,
+			);
+			path = "LifeOS-macOS";
+			sourceTree = "<group>";
+		};
+		8D66201999AFF35DFA598CD6 /* EnvironmentContextProviderTests */ = {
+			isa = PBXGroup;
+			children = (
+				49419E2F7ABA1FC9E1DA5522 /* EnvironmentContextProviderTests.swift */,
+			);
+			name = EnvironmentContextProviderTests;
+			path = Packages/LifeOSData/Tests/EnvironmentContextProviderTests;
+			sourceTree = "<group>";
+		};
+		909F55494BFE068515F093E7 /* LifeOSHealthTests */ = {
+			isa = PBXGroup;
+			children = (
+				0610E56B530CBD8F9463A350 /* LifeOSHealthTests.swift */,
+			);
+			name = LifeOSHealthTests;
+			path = Packages/LifeOSHealth/Tests/LifeOSHealthTests;
+			sourceTree = "<group>";
+		};
+		9831B33A5D2629B8B96EAA05 /* Briefing */ = {
+			isa = PBXGroup;
+			children = (
+				5BA54D7D5C759574FCBF06D8 /* BriefingCardContainer.swift */,
+				40E021B36FDDC7DFA7615DAF /* DailyBriefingCards.swift */,
+				8056D53734DBE198CF44676F /* DailyBriefingCustomizationView.swift */,
+				78F71B7B07ABA567FAD4D612 /* DailyBriefingView.swift */,
+				C8F30E8EE90DF672A6BDA4A1 /* ExecutiveAssistantSheet.swift */,
+				EA58C5CCB2A4D0BAABD667C8 /* ExecutiveCapacityCard.swift */,
+				E017DC556742B388A0174A54 /* ExecutiveLiveTimelineView.swift */,
+				FA4F599B8AFF79C0780A2A70 /* ExecutivePlanningConversationView.swift */,
+				B9716753332506F4A36A7AF4 /* LifeGapsCard.swift */,
+				7DEE642BA01C16B019672C01 /* TodayCompactMetricsStrip.swift */,
+				C3755C0D891DB1B4B9D8F808 /* TodayEndOfDayJournalCard.swift */,
+				0201CC77E56CE92D6529D5F8 /* TodayView.swift */,
+			);
+			path = Briefing;
+			sourceTree = "<group>";
+		};
+		9B408279B38919E430BEEF09 /* Brain */ = {
+			isa = PBXGroup;
+			children = (
+				B4E0FDA5619A623387204EDC /* BrainDashboardView.swift */,
+			);
+			path = Brain;
+			sourceTree = "<group>";
+		};
+		A1859D2C17BA74B3F470E0CB /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				1185FCBF5DEE7482D2AB5E81 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		A4BB1DA761869BE42262D284 /* ADHD */ = {
+			isa = PBXGroup;
+			children = (
+				2E7BC1D09F43CB83C0647E91 /* ADHDViews.swift */,
+				FAF0BFE10D3116C7A9665497 /* DecideForMeView.swift */,
+				29A1A1ED0B4A998CD1FEA09B /* PhysiologicalResetView.swift */,
+			);
+			path = ADHD;
+			sourceTree = "<group>";
+		};
+		B44E6CCB9528DE8387352C82 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				CFC3B48DD9EB35A03223CCE5 /* example-life-profile.md */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		B7CBE2B0A6D0C1C3718F3A5F /* Experience */ = {
+			isa = PBXGroup;
+			children = (
+				E35AF290E4D8E887553D5A3E /* AppShellState.swift */,
+				39CD26D6E977C22EB0C394FB /* ExperienceModeController.swift */,
+				32D7D137C91EAB8216361B88 /* ExperienceRootView.swift */,
+				815F9D897AC124EC43801465 /* AIExecutive */,
+			);
+			path = Experience;
+			sourceTree = "<group>";
+		};
+		BF3E9429453DB097056CC0E3 /* ExecutiveBrainTests */ = {
+			isa = PBXGroup;
+			children = (
+				B97214E6C6597234CC23E330 /* ExecutiveBrainEngineTests.swift */,
+				C44F38A21C8DC371C668CD09 /* IntentBuilderTests.swift */,
+				EC10B57EA24D14B6AFF5938B /* MedicationReasoningTests.swift */,
+			);
+			name = ExecutiveBrainTests;
+			path = Packages/ExecutiveBrain/Tests/ExecutiveBrainTests;
+			sourceTree = "<group>";
+		};
+		C3B3D87558E63B6EC8E03FF8 /* Modules */ = {
+			isa = PBXGroup;
+			children = (
+				9FBDCCDE941819F9DA51AA67 /* AllModulesGridView.swift */,
+				AC644FD16EB5CB22932D6100 /* ModuleViews.swift */,
+			);
+			path = Modules;
+			sourceTree = "<group>";
+		};
+		C4A656A59815D6DF4A1E042E /* Inbox */ = {
+			isa = PBXGroup;
+			children = (
+				2F1E7519730546D49ED9D307 /* InboxView.swift */,
+			);
+			path = Inbox;
+			sourceTree = "<group>";
+		};
+		D121EE2F5460FBAD16844AA0 /* LifeOSCoreTests */ = {
+			isa = PBXGroup;
+			children = (
+				13692D9BF7EC12E04816BDA3 /* CalmHeroContentTests.swift */,
+				3F117EC47A5FBEE6226D3F35 /* CompanionEngineTests.swift */,
+				5CA46F6E8ADA2C57030F46D8 /* ContextEngineTests.swift */,
+				0B5B732A850CDA3E6E3FC6A5 /* CoreDomainTests.swift */,
+				64489C6E0BC99A64B1D85B3F /* CycleEngineTests.swift */,
+				CD37513CA8FD4B47D9305B14 /* CycleInsightBuilderTests.swift */,
+				D39EBE27B52717B24648F71A /* DayScheduleReconcilerTests.swift */,
+				A89130D2F3CFE199213A55CF /* DaySlotAllocatorTests.swift */,
+				006FD9E431FE831729031650 /* ExecutiveRecommendationEngineTests.swift */,
+				5DE1968D3E702105BAD7759F /* ExperienceModeTests.swift */,
+				1BD719157F376581E7074337 /* FlowDirectorContractsTests.swift */,
+				7E27FE23BFBAD22798703C01 /* HeroObjectiveResolverTests.swift */,
+				CFE17FA1B68810D82C4B35AF /* IdealSleepPlannerTests.swift */,
+				835A00B06CB9F4D0011FC33A /* LifeModelValidatorTests.swift */,
+				1733FCAC73474ABB5B3AF6C0 /* LifeOSCoreTests.swift */,
+				84035592D3ABAC261C2B8652 /* LifeProfileNameExtractorTests.swift */,
+				DC9B3275F1DF827BBA870AC6 /* LifeTimelinePresenterTests.swift */,
+				809E8FA4488A3A1686E719A3 /* OnboardingTaskSeederTests.swift */,
+				B4F376CC2A50811E036E61F3 /* PostWakeDetectorTests.swift */,
+				C30EDB85E202CA90ECD4CE62 /* SemanticDecisionTests.swift */,
+				F54832C15AEE78B13146DB7B /* TaskHeroEligibilityTests.swift */,
+				31ED45F8C44D35DCB1620AEA /* TaskRecurrenceTests.swift */,
+				EEEAEF8E12122EC7C47E918A /* TaskSemanticProfileTests.swift */,
+				A2CE93EA3F81FAC5AE89FF39 /* TestCalendarFixtures.swift */,
+			);
+			name = LifeOSCoreTests;
+			path = Packages/LifeOSCore/Tests/LifeOSCoreTests;
+			sourceTree = "<group>";
+		};
+		DA4B404FCE7C332CE497B9DA /* BehaviorMemoryStoreTests */ = {
+			isa = PBXGroup;
+			children = (
+				57CD93B90482D119FC52A039 /* BehaviorMemoryStoreTests.swift */,
+			);
+			name = BehaviorMemoryStoreTests;
+			path = Packages/LifeOSData/Tests/BehaviorMemoryStoreTests;
+			sourceTree = "<group>";
+		};
+		DCD444BED66D34CEA79300C6 /* LifeOSFeaturesTests */ = {
+			isa = PBXGroup;
+			children = (
+				A96FC3616FB54580B3895C75 /* DailyBriefingViewModelTests.swift */,
+				38872F249AE0DC366D603B7B /* DayAssemblerTests.swift */,
+				FA2505AD1E8B0DA222C1D992 /* InsightsViewModelTests.swift */,
+				3718BD4C29F82CAB2F7DED3B /* LifeOSFeaturesTests.swift */,
+				5B4A7C64F37EB2AB23C0C738 /* MultiDayTaskDetectorTests.swift */,
+				F0376764907F954E81EB7D77 /* MultiDayTaskPlannerTests.swift */,
+				4F2C0F83D691608A6EB10A6F /* ShoppingListViewModelTests.swift */,
+				CB21AB75BCE47B5BE5CBA1A0 /* TaskCardUIContractTests.swift */,
+				E7436857847BD5869982149E /* TasksViewModelInteractionTests.swift */,
+				A88995B46D51E008D3259622 /* TestCalendarFixtures.swift */,
+			);
+			name = LifeOSFeaturesTests;
+			path = Packages/LifeOSFeatures/Tests/LifeOSFeaturesTests;
+			sourceTree = "<group>";
+		};
+		E3E864CA5403ADA09E1B3C4A = {
+			isa = PBXGroup;
+			children = (
+				292E63770D95333DEF0DF154 /* GoogleService-Info.plist */,
+				AE603A9A36F9F747FD2B8665 /* LifeOS-iOS.entitlements */,
+				0DF3116C766FEC307CFC2B1A /* LifeOS-macOS.entitlements */,
+				DA4B404FCE7C332CE497B9DA /* BehaviorMemoryStoreTests */,
+				8D66201999AFF35DFA598CD6 /* EnvironmentContextProviderTests */,
+				BF3E9429453DB097056CC0E3 /* ExecutiveBrainTests */,
+				101D7E385E59787085537895 /* FlowDirectorTests */,
+				EA6B79F6C84EF411F4B36357 /* FlowSchedulingTests */,
+				503765C78BCD80A9FE23AA90 /* LifeOS-iOS */,
+				882D7425E9E1D1E7861CF3F3 /* LifeOS-macOS */,
+				373D461BF00F823F5B856015 /* LifeOSAITests */,
+				D121EE2F5460FBAD16844AA0 /* LifeOSCoreTests */,
+				2581D241F732D8FEB49DA600 /* LifeOSDataTests */,
+				DCD444BED66D34CEA79300C6 /* LifeOSFeaturesTests */,
+				909F55494BFE068515F093E7 /* LifeOSHealthTests */,
+				5BB644F47EC3F4A73DECF29E /* LifeOSWidget */,
+				117B5491668274E2F1C37805 /* Packages */,
+				6DD7137A3F24C1B0A6181D2F /* Shared */,
+				6BBD885734BE07D038423D8A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		EA6B79F6C84EF411F4B36357 /* FlowSchedulingTests */ = {
+			isa = PBXGroup;
+			children = (
+				326224CEB956C504836DDFFF /* FlowConfidenceEngineTests.swift */,
+				4FBF409BDE64711D65A1C62E /* FlowSchedulingEngineTests.swift */,
+				5227B0284E7FF85A1D6071B6 /* FlowSchedulingRuleTests.swift */,
+				B461AFF921073E68DF86B0DE /* FlowSchedulingTestFixtures.swift */,
+			);
+			name = FlowSchedulingTests;
+			path = Packages/LifeOSCore/Tests/FlowSchedulingTests;
+			sourceTree = "<group>";
+		};
+		EF3E2DA4DF223927F517576B /* Coach */ = {
+			isa = PBXGroup;
+			children = (
+				EABDD04B16D48F1B0B4F7049 /* AICoachView.swift */,
+			);
+			path = Coach;
+			sourceTree = "<group>";
+		};
+		F02400952829BBB012BC762C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2F979F12681567D5E4684FEC /* LifeOSMasterCanvas.swift */,
+				A4BB1DA761869BE42262D284 /* ADHD */,
+				31360883FF75122293A51744 /* Auth */,
+				9B408279B38919E430BEEF09 /* Brain */,
+				9831B33A5D2629B8B96EAA05 /* Briefing */,
+				EF3E2DA4DF223927F517576B /* Coach */,
+				463EE8BC6E1D1C75A4F1A612 /* Health */,
+				C4A656A59815D6DF4A1E042E /* Inbox */,
+				32B6B76EB3D344BE212F0570 /* Insights */,
+				C3B3D87558E63B6EC8E03FF8 /* Modules */,
+				68AE97A2C8DC427500B83A26 /* Navigation */,
+				A1859D2C17BA74B3F470E0CB /* Onboarding */,
+				6770F099161D5022AFBDE8F6 /* Settings */,
+				4AB014CD0A04D7EB07A4D49B /* Shared */,
+				7AEDD1184E63A46753342FBD /* Tasks */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9C6AC5B55B2963072916112E /* LifeOS-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E7A44B1CDBB3FB40AFD96812 /* Build configuration list for PBXNativeTarget "LifeOS-iOS" */;
+			buildPhases = (
+				C334B5A6017EA7155FE65537 /* Sources */,
+				07D3F136A2807001E962D6AB /* Resources */,
+				800770BC9DDBA0CC653F9F7A /* Frameworks */,
+				BA3DE3537E64A11BE6E3A8F9 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6F471AE1B2CF3DA69768F7B2 /* PBXTargetDependency */,
+			);
+			name = "LifeOS-iOS";
+			packageProductDependencies = (
+				E599DBBAE8A408579D163E72 /* LifeOSCore */,
+				4694BCDC915E92B3E60A4519 /* LifeOSAI */,
+				4D5B28E217A7714C9EEAED97 /* LifeOSData */,
+				3E81C5C18ACDF9F377387437 /* LifeOSHealth */,
+				84F312B7DFE5BEE1EA57DFF5 /* LifeOSFeatures */,
+			);
+			productName = "LifeOS-iOS";
+			productReference = 5DC0F1173224ABE037D944BA /* LifeOS-iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B6DC0030DCD7D810745068F6 /* LifeOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 247914A072CBD281CD338E5E /* Build configuration list for PBXNativeTarget "LifeOSTests" */;
+			buildPhases = (
+				D03757CBEFA78CB7E3BD7900 /* Sources */,
+				C5C4019A89C6A8FCD90CA1FE /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LifeOSTests;
+			packageProductDependencies = (
+				757BB0AECDA756EFDB1C27AF /* LifeOSData */,
+				AC9BB3845E8BE15976B11CA5 /* LifeOSCore */,
+				1D89158AF7A790F3B8FE9266 /* LifeOSAI */,
+				5768A338515C07B9753FF663 /* LifeOSFeatures */,
+				CCDC61B4CA3F3357DAE8C579 /* ExecutiveBrain */,
+				2974AAA392063CCFCEA3D99F /* LifeOSHealth */,
+			);
+			productName = LifeOSTests;
+			productReference = A7B67B4E5EECE53252F9B882 /* LifeOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		E179CC5CD2B05B9FCBF0EDBF /* LifeOS-macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 00C5C537E2E0863217E17D1C /* Build configuration list for PBXNativeTarget "LifeOS-macOS" */;
+			buildPhases = (
+				161E0F8A111367F5D42BF118 /* Sources */,
+				7E9A5EC52B5E8473377C596D /* Resources */,
+				DFF6799F30B73ED513424D0B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "LifeOS-macOS";
+			packageProductDependencies = (
+				8639D019715A1E48595F1B84 /* LifeOSCore */,
+				CB1B46842D6DAF67F3520A06 /* LifeOSAI */,
+				C261AE95F3ED63A61D26C8D2 /* LifeOSData */,
+				FF257ACB01D1BC10ED7EDBDB /* LifeOSFeatures */,
+				877EBC98D8A53D667931C487 /* LifeOSHealth */,
+			);
+			productName = "LifeOS-macOS";
+			productReference = C9F729A42F12283843B76C25 /* LifeOS-macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E58A333F8DF1A794FCC029A3 /* LifeOSWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 04FE1FE3CD8530251CDEF8FB /* Build configuration list for PBXNativeTarget "LifeOSWidget" */;
+			buildPhases = (
+				4D8E94E2147109AC31403165 /* Sources */,
+				F295BE71BB29496835D981E1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LifeOSWidget;
+			packageProductDependencies = (
+				0DFB965E1E7DCF5D63823E01 /* LifeOSCore */,
+			);
+			productName = LifeOSWidget;
+			productReference = 6F48D2F70B8554C96F6ACC6B /* LifeOSWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98645262B9197BD6057E1C1C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					9C6AC5B55B2963072916112E = {
+						ProvisioningStyle = Automatic;
+					};
+					E58A333F8DF1A794FCC029A3 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 24DF66001BD257C948B118A1 /* Build configuration list for PBXProject "LifeOS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E3E864CA5403ADA09E1B3C4A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7D1C87D53B8504C97A0ED84B /* XCLocalSwiftPackageReference "Packages/ExecutiveBrain" */,
+				4EF06677E075F059691DCCF8 /* XCLocalSwiftPackageReference "Packages/LifeOSAI" */,
+				0186EECE9972D7CBC022F9E3 /* XCLocalSwiftPackageReference "Packages/LifeOSCore" */,
+				D8F338CD17227EE4E0E1D523 /* XCLocalSwiftPackageReference "Packages/LifeOSData" */,
+				8164FA412760C18190937B9F /* XCLocalSwiftPackageReference "Packages/LifeOSFeatures" */,
+				EBF7552AC495336B8CD2BFBC /* XCLocalSwiftPackageReference "Packages/LifeOSHealth" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 6BBD885734BE07D038423D8A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9C6AC5B55B2963072916112E /* LifeOS-iOS */,
+				E58A333F8DF1A794FCC029A3 /* LifeOSWidget */,
+				E179CC5CD2B05B9FCBF0EDBF /* LifeOS-macOS */,
+				B6DC0030DCD7D810745068F6 /* LifeOSTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		07D3F136A2807001E962D6AB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C28B76790BADAD2297E2F9DA /* Assets.xcassets in Resources */,
+				7B99B9F6C79AF73E4198533F /* GoogleService-Info.plist in Resources */,
+				FFD41825ED161D1BFD200C12 /* example-life-profile.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7E9A5EC52B5E8473377C596D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DE73DDE2348727D1F9DA628D /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		161E0F8A111367F5D42BF118 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F718E97BA22502955C595C60 /* ADHDFloatingDockView.swift in Sources */,
+				4644D60FAB025709D19B2D34 /* ADHDViews.swift in Sources */,
+				1F04A479BF1E01E9F086D973 /* AICoachView.swift in Sources */,
+				ACE8DB0A6C3CAC0DE38EDF2E /* APIKeysSettingsView.swift in Sources */,
+				46B57BF3F6AA148AF49AECF7 /* BrainDashboardView.swift in Sources */,
+				806AEDCD757979477E3AEA46 /* DecideForMeView.swift in Sources */,
+				DDABD95F8E7292A42E6185B0 /* EnergyRingView.swift in Sources */,
+				2B631285FF631762BCB90305 /* GLMConfigurationSettingsView.swift in Sources */,
+				0FB809C70645D823592F0292 /* InboxView.swift in Sources */,
+				F3F3918DB8E55FC8E30571AB /* LifeOSMacApp.swift in Sources */,
+				3B3AED5BE6F9CD42BE2415C0 /* MacContentView.swift in Sources */,
+				98711E5477019F866FC26228 /* MacSettingsView.swift in Sources */,
+				61EC5D0D2ABD69D08E52FA6F /* PhysiologicalResetView.swift in Sources */,
+				1203B399C455976CC9EB4A6E /* ProductivityTracker.swift in Sources */,
+				243FFBE35E6E219599B08FB0 /* ReschedulePreviewSheet.swift in Sources */,
+				4DACE70543BF104B8718282B /* StructuredLifeProfileEditor.swift in Sources */,
+				440CB84E8F92D42753C28000 /* TaskActionButton.swift in Sources */,
+				C07F6DB22ED0469C10739F4D /* TaskCardStackView.swift in Sources */,
+				2F934A64CA6E1C80488E32AE /* TaskCardView.swift in Sources */,
+				E5041E7908F63232321295C8 /* TaskImportSheet.swift in Sources */,
+				D0A7D727E4DB9797452C9D3B /* TaskListRowView.swift in Sources */,
+				221AFE7ED3663ED23B676427 /* TaskListView.swift in Sources */,
+				FD3181D2561E6D33A1554FD2 /* ToastView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4D8E94E2147109AC31403165 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D2BCF9FE9C2E40070C645A5 /* FlowActivityAttributes.swift in Sources */,
+				234765EE989F1167D222AB6E /* FocusLiveActivity.swift in Sources */,
+				3B2FDB504FB7778103590044 /* LifeOSWidgetBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C334B5A6017EA7155FE65537 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3E546F8B0CE276FF151B25A8 /* ADHDFloatingDockView.swift in Sources */,
+				984D605142C30D56803D32A2 /* ADHDViews.swift in Sources */,
+				D2BD77BFB56A2E8190079A6E /* AICoachView.swift in Sources */,
+				10A6B72FF4CA366F14BC395C /* AIExecutiveCanvas.swift in Sources */,
+				66A1CF92AA09D953F5B27316 /* APIKeysSettingsView.swift in Sources */,
+				06C8F4C54AA08F540959FFBC /* AllModulesGridView.swift in Sources */,
+				08EDA0CA65CA8D7978D534FD /* AppShellState.swift in Sources */,
+				1D0D9BE3FF8F5EA8704747A3 /* AuthView.swift in Sources */,
+				DC69289D7A12E251151A4E42 /* BackgroundAnalyticsScheduler.swift in Sources */,
+				7AA4C4988358C01F9C5E734F /* BrainDashboardView.swift in Sources */,
+				A00C39657BF42EC283B4EEB1 /* BrainInspectorView.swift in Sources */,
+				9E4054392D41241DF5111947 /* BriefingCardContainer.swift in Sources */,
+				5DB87798B9BD4DE2530EB80C /* ContentView.swift in Sources */,
+				08604B2C85A4A8157D546382 /* ContinueSessionView.swift in Sources */,
+				88BD1521C968447C4E3C0D09 /* CycleDashboardView.swift in Sources */,
+				E3744DC6EC5A8D51B5BDCABB /* CycleQuickLogSheet.swift in Sources */,
+				1CD1B505986BAD2D58C2D31F /* DailyBriefingCards.swift in Sources */,
+				01BD41DE2FCC9AC25F8DD9B5 /* DailyBriefingCustomizationView.swift in Sources */,
+				F2CADB74AE43C6C015C512C0 /* DailyBriefingView.swift in Sources */,
+				6443D606368119C446FEEF6A /* DailyPlanView.swift in Sources */,
+				64B54FB2884B00A6B7B8851F /* DecideForMeView.swift in Sources */,
+				9AD44E13223C86F137A16C78 /* EnergyRingView.swift in Sources */,
+				04444842879EC028FFA99F93 /* ExecutiveAssistantSheet.swift in Sources */,
+				07E29D5F5A4B33C0B4C8ED23 /* ExecutiveCapacityCard.swift in Sources */,
+				01979511F7F2664856061850 /* ExecutiveCaptureSheet.swift in Sources */,
+				76D01AFE19309B154C59634A /* ExecutiveLiveTimelineView.swift in Sources */,
+				2E5160410694497CD12A8976 /* ExecutivePlanningConversationView.swift in Sources */,
+				7245C319684A77787FB1D34D /* ExecutiveProfileView.swift in Sources */,
+				3B4BDF478D8D96C067175DC6 /* ExecutiveTimelineView.swift in Sources */,
+				BAAA15B3942C1616D811EA06 /* ExecutiveTodayView.swift in Sources */,
+				98873A5742807477482AA50B /* ExperienceModeController.swift in Sources */,
+				E21AAF68735EEF049F9C4311 /* ExperienceRootView.swift in Sources */,
+				55254E869A887A96E7D94F3B /* FlowActivityAttributes.swift in Sources */,
+				12217968E5C198358B2CC4AE /* FlowDirectorFactory.swift in Sources */,
+				D777A05CD86A1E1BA695B68A /* FlowDirectorIntegrationLog.swift in Sources */,
+				26BDEFC5AF90B704AD11E603 /* GLMConfigurationSettingsView.swift in Sources */,
+				88E6BF6AF72EB2F06E68D49C /* HealthDetailView.swift in Sources */,
+				22C1F928273F17E5EDEF41BE /* HealthSyncLogger.swift in Sources */,
+				9B23F85BDE55935FC991F00D /* HealthSyncProgressView.swift in Sources */,
+				5A91FCC3DBA970C5DB8CAC8F /* HealthSyncService.swift in Sources */,
+				BA19ED8A08CCE8306DFD5E01 /* InboxView.swift in Sources */,
+				D807F041CE521876B6C84DC3 /* InsightsDashboardView.swift in Sources */,
+				E5BDB4599B8F0FAC9DF5BDEE /* LifeGapsCard.swift in Sources */,
+				1E623D9DFE2741789A31937F /* LifeOSApp.swift in Sources */,
+				0DBFDFB6C5E93AD8828FDACE /* LifeOSBottomNav.swift in Sources */,
+				010EB5BE061676ADC2A295C1 /* LifeOSMasterCanvas.swift in Sources */,
+				50804E1F7273556C3813E401 /* LifeProfileImportView.swift in Sources */,
+				CBCBF647079D931D408A7400 /* LiveActivityManager.swift in Sources */,
+				2A45D1FF56D1F5EA0E7DC39C /* ModuleViews.swift in Sources */,
+				3E304E589252DEB703E102C3 /* OnboardingView.swift in Sources */,
+				E075D12A371F55D58965C20A /* PhysiologicalResetView.swift in Sources */,
+				F2D8F7B02F98280757E344BC /* PlanningSpeechSynthesizer.swift in Sources */,
+				0779EF03943F7A413870D70E /* ReschedulePreviewSheet.swift in Sources */,
+				F2D257E0BF44EDFCB5E52286 /* SettingsView.swift in Sources */,
+				69BF2C906352B75AF1DB49EC /* SpeechRecognitionManager.swift in Sources */,
+				3B5D31811A22E10AB2521A35 /* StructuredLifeProfileEditor.swift in Sources */,
+				365380EFB445F98746A32899 /* TaskActionButton.swift in Sources */,
+				3C00A6AFB8A2C828D7CB4663 /* TaskCardStackView.swift in Sources */,
+				47D01A93E9CF2586F3BB3B9C /* TaskCardView.swift in Sources */,
+				A7E6881D219676C869F88668 /* TaskImportSheet.swift in Sources */,
+				E2E0BA76CA0A1745D74F9327 /* TaskListRowView.swift in Sources */,
+				0C7B900E2633B60C7FF2AD63 /* TaskListView.swift in Sources */,
+				C8F2FEC0624194C5AB9547EC /* ToastView.swift in Sources */,
+				096424594A2B000496AE3301 /* TodayCompactMetricsStrip.swift in Sources */,
+				BABFCCA23F8BBBFE61ED378D /* TodayEndOfDayJournalCard.swift in Sources */,
+				7195A200E0217A2A836B82B9 /* TodayView.swift in Sources */,
+				672CE6C3F4590EA322C5D0FB /* TodaysStoryView.swift in Sources */,
+				0E7E7516D0A4505E29BEB106 /* VoiceCaptureView.swift in Sources */,
+				B3765CA85E7E6D0EBB5E8B4D /* WeatherDisplayService.swift in Sources */,
+				52D780AAFD44564C190D021A /* WidgetSyncService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D03757CBEFA78CB7E3BD7900 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3895FF78F34B4FA5A970228B /* AnalyticsCacheTests.swift in Sources */,
+				E64B49728206FB34DEE981C8 /* AsyncTimeoutTests.swift in Sources */,
+				53C11381A3D722C957806ADD /* AuthenticationTests.swift in Sources */,
+				EB2657F5347955B4EFDC05DF /* BehaviorMemoryStoreTests.swift in Sources */,
+				FDF6C16D020DA9359B5905E8 /* CalmHeroContentTests.swift in Sources */,
+				AF5B3765E3F8334BCCCA227C /* CognitiveAITests.swift in Sources */,
+				B37F8D3DEC36C1D7AA2F4DD5 /* CompanionEngineTests.swift in Sources */,
+				2C0603A1BB8D5190835F5992 /* ContextEngineTests.swift in Sources */,
+				94564AFC222D21930D3A11C9 /* CoreDomainTests.swift in Sources */,
+				096CBF11F2AE60D06A639AF0 /* CycleEngineTests.swift in Sources */,
+				FCF28236BF073A45D8D9DE1C /* CycleInsightBuilderTests.swift in Sources */,
+				B51202BFD8E0E361B0D03998 /* DailyBriefingViewModelTests.swift in Sources */,
+				DA15EA0A51CD148F528CCE76 /* DataPersistenceTests.swift in Sources */,
+				97697F11CF20DD6FDCEB3DFD /* DayAssemblerTests.swift in Sources */,
+				48DA485DF128D599E0FB2A1C /* DayScheduleReconcilerTests.swift in Sources */,
+				59C952591E9A6357E67617C0 /* DaySlotAllocatorTests.swift in Sources */,
+				FC8B198DC8F7FE71000D28E6 /* EnvironmentContextProviderTests.swift in Sources */,
+				D8EBB407C403B9DB107C38FC /* ExecutiveBrainEngineTests.swift in Sources */,
+				4F15932B42F8FBA88F9FB5AE /* ExecutiveRecommendationEngineTests.swift in Sources */,
+				7FEFB4A36278C1394173D503 /* ExperienceModeTests.swift in Sources */,
+				0E9CA419868D860B2B7A7C28 /* FlowConfidenceEngineTests.swift in Sources */,
+				6F34295438ACD67F0E74F399 /* FlowDirectorAppIntegrationScenarioTests.swift in Sources */,
+				9501F51262FCDD655FB6ED10 /* FlowDirectorContractsTests.swift in Sources */,
+				E79797765F0A17B972E8B3E7 /* FlowDirectorOrchestrationTests.swift in Sources */,
+				60E967DBE2A5B8DF3840B30E /* FlowSchedulingEngineTests.swift in Sources */,
+				3C97F2EEF490DA1D86CCA90F /* FlowSchedulingRuleTests.swift in Sources */,
+				8480CCAF58CAA193C41B1CD3 /* FlowSchedulingTestFixtures.swift in Sources */,
+				30091B39DA07B7E4637582D2 /* FullAppIntegrationTests.swift in Sources */,
+				59C4BC50848F953CB56DC8C6 /* GLMKeyManagerTests.swift in Sources */,
+				194BBE77F0ED05743CA4ACE9 /* HealthSummaryRepositoryTests.swift in Sources */,
+				01A3F1733D6BE64D69EAB887 /* HeroObjectiveResolverTests.swift in Sources */,
+				662B8C83A5782335E5685A6E /* IdealSleepPlannerTests.swift in Sources */,
+				5819B85C457F602844762EF7 /* InsightsViewModelTests.swift in Sources */,
+				6619483418799F226BE5A98F /* IntentBuilderTests.swift in Sources */,
+				8B25683457A680F8B964F27E /* LifeModelValidatorTests.swift in Sources */,
+				E057FA6A23479A70EBCC659F /* LifeOSCoreTests.swift in Sources */,
+				7205EC425F45AD135D248E36 /* LifeOSFeaturesTests.swift in Sources */,
+				422CC7268EB8719D2932FD82 /* LifeOSHealthTests.swift in Sources */,
+				DAA18318AE5A1902AAE03AA9 /* LifeProfileNameExtractorTests.swift in Sources */,
+				1B85A55FBB0D34FF6CCE941C /* LifeTimelinePresenterTests.swift in Sources */,
+				23171B095CDF075AA3A661EF /* MedicationReasoningTests.swift in Sources */,
+				F8EE3E4EA983FCCE3512EE35 /* MockGLM.swift in Sources */,
+				9912E8C603C0EB311DE61E91 /* MultiDayTaskDetectorTests.swift in Sources */,
+				0E516B6D7F1EA8F3577B2E7F /* MultiDayTaskPlannerTests.swift in Sources */,
+				EC07F57111400DACDE9468B6 /* OnboardingTaskSeederTests.swift in Sources */,
+				F6B0A1AA521E4634D3B00CCD /* PersonalAnalyticsEngineTests.swift in Sources */,
+				5108C9BBD7C1AA696C0894B2 /* PostWakeDetectorTests.swift in Sources */,
+				BB5E896E935893FEB7ECA697 /* SemanticDecisionTests.swift in Sources */,
+				383F7E91AA3DD8BBFEF97E13 /* ShoppingListViewModelTests.swift in Sources */,
+				2CC600C0BBD720F9E6F630B7 /* SimulatedUserFlowTests.swift in Sources */,
+				8F4D43B176601AE54C42D97B /* TaskCardUIContractTests.swift in Sources */,
+				26F1EDDC6E305C2A60660AB1 /* TaskHeroEligibilityTests.swift in Sources */,
+				FC7A196129AD24E9D5F4C778 /* TaskRecurrenceTests.swift in Sources */,
+				3BB716FC509828AA11C7943B /* TaskRepositoryMergeTests.swift in Sources */,
+				72E53F59F1C4BADDB520F9CB /* TaskSemanticProfileTests.swift in Sources */,
+				DD90E50B085F0ACDCC3F79B7 /* TasksViewModelInteractionTests.swift in Sources */,
+				29F25B1181E95570541BEE2B /* TestCalendarFixtures.swift in Sources */,
+				E9777B4E33086021C0F7BF51 /* TestCalendarFixtures.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6F471AE1B2CF3DA69768F7B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E58A333F8DF1A794FCC029A3 /* LifeOSWidget */;
+			targetProxy = EC6C5E8DCBFEDFD1B38415B4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0D4AA9B8D4F0440CD7C2AD03 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LifeOSWidget/LifeOSWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = LifeOSWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app.widget;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2D6C7AE8906F75939D97F93C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LifeOSWidget/LifeOSWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = LifeOSWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app.widget;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		3D6BC4B61F459CAAAB312A74 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "LifeOS-iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = "LifeOS-iOS/Info.plist";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "LifeOS analyzes your sleep, HRV, and heart rate to estimate energy levels.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlowOS uses the microphone for voice capture and speech-to-text transcription.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlowOS transcribes your spoken thoughts into tasks, journal entries, and notes.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		49E7EF6CDE5B6DC3A977134A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "LifeOS-macOS.entitlements";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.lifeos.mac;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		64FE656AAB2D633C7DA1C24C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.LifeOSTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8E6851B8565962AE9DC5E2F1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "LifeOS-macOS.entitlements";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.lifeos.mac;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		C61B578950EC2ABCE012D94B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_BITCODE = NO;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		D82250F72DA7A5A6BB14E9FF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_BITCODE = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		F2D755F679F1F908E8173A39 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.LifeOSTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		F40BFAECCF46814F327C73A2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "LifeOS-iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = "LifeOS-iOS/Info.plist";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "LifeOS analyzes your sleep, HRV, and heart rate to estimate energy levels.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlowOS uses the microphone for voice capture and speech-to-text transcription.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlowOS transcribes your spoken thoughts into tasks, journal entries, and notes.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		00C5C537E2E0863217E17D1C /* Build configuration list for PBXNativeTarget "LifeOS-macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				49E7EF6CDE5B6DC3A977134A /* Debug */,
+				8E6851B8565962AE9DC5E2F1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		04FE1FE3CD8530251CDEF8FB /* Build configuration list for PBXNativeTarget "LifeOSWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0D4AA9B8D4F0440CD7C2AD03 /* Debug */,
+				2D6C7AE8906F75939D97F93C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		247914A072CBD281CD338E5E /* Build configuration list for PBXNativeTarget "LifeOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				64FE656AAB2D633C7DA1C24C /* Debug */,
+				F2D755F679F1F908E8173A39 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		24DF66001BD257C948B118A1 /* Build configuration list for PBXProject "LifeOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D82250F72DA7A5A6BB14E9FF /* Debug */,
+				C61B578950EC2ABCE012D94B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E7A44B1CDBB3FB40AFD96812 /* Build configuration list for PBXNativeTarget "LifeOS-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3D6BC4B61F459CAAAB312A74 /* Debug */,
+				F40BFAECCF46814F327C73A2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0186EECE9972D7CBC022F9E3 /* XCLocalSwiftPackageReference "Packages/LifeOSCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LifeOSCore;
+		};
+		4EF06677E075F059691DCCF8 /* XCLocalSwiftPackageReference "Packages/LifeOSAI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LifeOSAI;
+		};
+		7D1C87D53B8504C97A0ED84B /* XCLocalSwiftPackageReference "Packages/ExecutiveBrain" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ExecutiveBrain;
+		};
+		8164FA412760C18190937B9F /* XCLocalSwiftPackageReference "Packages/LifeOSFeatures" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LifeOSFeatures;
+		};
+		D8F338CD17227EE4E0E1D523 /* XCLocalSwiftPackageReference "Packages/LifeOSData" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LifeOSData;
+		};
+		EBF7552AC495336B8CD2BFBC /* XCLocalSwiftPackageReference "Packages/LifeOSHealth" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LifeOSHealth;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0DFB965E1E7DCF5D63823E01 /* LifeOSCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSCore;
+		};
+		1D89158AF7A790F3B8FE9266 /* LifeOSAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSAI;
+		};
+		2974AAA392063CCFCEA3D99F /* LifeOSHealth */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSHealth;
+		};
+		3E81C5C18ACDF9F377387437 /* LifeOSHealth */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSHealth;
+		};
+		4694BCDC915E92B3E60A4519 /* LifeOSAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSAI;
+		};
+		4D5B28E217A7714C9EEAED97 /* LifeOSData */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSData;
+		};
+		5768A338515C07B9753FF663 /* LifeOSFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSFeatures;
+		};
+		757BB0AECDA756EFDB1C27AF /* LifeOSData */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSData;
+		};
+		84F312B7DFE5BEE1EA57DFF5 /* LifeOSFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSFeatures;
+		};
+		8639D019715A1E48595F1B84 /* LifeOSCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSCore;
+		};
+		877EBC98D8A53D667931C487 /* LifeOSHealth */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSHealth;
+		};
+		AC9BB3845E8BE15976B11CA5 /* LifeOSCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSCore;
+		};
+		C261AE95F3ED63A61D26C8D2 /* LifeOSData */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSData;
+		};
+		CB1B46842D6DAF67F3520A06 /* LifeOSAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSAI;
+		};
+		CCDC61B4CA3F3357DAE8C579 /* ExecutiveBrain */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ExecutiveBrain;
+		};
+		E599DBBAE8A408579D163E72 /* LifeOSCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSCore;
+		};
+		FF257ACB01D1BC10ED7EDBDB /* LifeOSFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LifeOSFeatures;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 98645262B9197BD6057E1C1C /* Project object */;
+}

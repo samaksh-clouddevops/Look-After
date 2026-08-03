@@ -1,0 +1,26 @@
+# Swift / Xcode
+.build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+build/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+
+# SPM
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Local IDE
+buildServer.json
+
+# Secrets (verify not committed)
+GoogleService-Info.plist
+
+# Archives
+*.zip

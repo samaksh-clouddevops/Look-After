@@ -1,0 +1,14 @@
+{
+  "folders": [
+    {
+      "name": "LifeOS",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.build": true,
+      "**/DerivedData": true
+    }
+  }
+}

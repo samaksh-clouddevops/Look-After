@@ -1,0 +1,177 @@
+name: LifeOS
+options:
+  bundleIdPrefix: com.samaksh.flowos
+  deploymentTarget:
+    iOS: 17.0
+    macOS: 14.0
+  xcodeVersion: "15.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    ENABLE_BITCODE: false
+
+targets:
+  LifeOS-iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: LifeOS-iOS
+      - path: Shared
+      - path: GoogleService-Info.plist
+      - path: LifeOS-iOS.entitlements
+    entitlements:
+      path: LifeOS-iOS.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.security.application-groups:
+          - group.com.samaksh.flowos
+    info:
+      path: LifeOS-iOS/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSSupportsLiveActivities: true
+        NSHealthShareUsageDescription: "FlowOS reads sleep, heart rate, HRV, steps, and workout data from Apple Health (including Apple Watch) to estimate your energy levels and personalize task recommendations."
+        NSCalendarsFullAccessUsageDescription: "FlowOS reads your calendar to find free blocks and meeting-aware scheduling windows for Flow Director."
+        NSCalendarsWriteOnlyAccessUsageDescription: "FlowOS needs access to your calendar to add scheduled tasks and sync events."
+        NSMicrophoneUsageDescription: "FlowOS uses the microphone for voice capture and speech-to-text transcription."
+        NSSpeechRecognitionUsageDescription: "FlowOS transcribes your spoken thoughts into tasks, journal entries, and notes."
+    dependencies:
+      - target: LifeOSWidget
+        embed: true
+      - package: LifeOSCore
+      - package: LifeOSAI
+      - package: LifeOSData
+      - package: LifeOSHealth
+      - package: LifeOSFeatures
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: LifeOS-iOS.entitlements
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      INFOPLIST_KEY_NSHealthShareUsageDescription: "LifeOS analyzes your sleep, HRV, and heart rate to estimate energy levels."
+      INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "FlowOS reads your calendar for Flow Director scheduling."
+      INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription: "LifeOS needs access to your calendar to add scheduled tasks."
+      INFOPLIST_KEY_NSMicrophoneUsageDescription: "FlowOS uses the microphone for voice capture and speech-to-text transcription."
+      INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "FlowOS transcribes your spoken thoughts into tasks, journal entries, and notes."
+      INFOPLIST_KEY_NSSupportsLiveActivities: true
+
+  LifeOSWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: LifeOSWidget
+      - path: Shared
+    entitlements:
+      path: LifeOSWidget/LifeOSWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.samaksh.flowos
+    dependencies:
+      - package: LifeOSCore
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app.widget
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: LifeOSWidget/LifeOSWidget.entitlements
+      INFOPLIST_FILE: LifeOSWidget/Info.plist
+      SKIP_INSTALL: true
+      LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+
+  LifeOS-macOS:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: LifeOS-macOS
+      - path: GoogleService-Info.plist
+      - path: LifeOS-macOS.entitlements
+      # These SwiftUI screens are shared by the macOS dashboard. The iOS-only
+      # master canvas and Daily Plan timer intentionally remain excluded.
+      - path: LifeOS-iOS/Views/ADHD
+      - path: LifeOS-iOS/Views/Brain
+      - path: LifeOS-iOS/Views/Coach
+      - path: LifeOS-iOS/Views/Inbox
+      - path: LifeOS-iOS/Views/Settings
+        excludes:
+          - SettingsView.swift
+      - path: LifeOS-iOS/Views/Shared
+        excludes:
+          - HealthSyncProgressView.swift
+          - LifeProfileImportView.swift
+          - VoiceCaptureView.swift
+      - path: LifeOS-iOS/Views/Tasks
+        excludes:
+          - DailyPlanView.swift
+    dependencies:
+      - package: LifeOSCore
+      - package: LifeOSAI
+      - package: LifeOSData
+      - package: LifeOSFeatures
+      - package: LifeOSHealth
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.lifeos.mac
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+      INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "FlowOS reads your calendar for Flow Director scheduling."
+      INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription: "LifeOS needs access to your calendar to add scheduled tasks."
+      CODE_SIGN_ENTITLEMENTS: LifeOS-macOS.entitlements
+
+  LifeOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Packages/LifeOSData/Tests/LifeOSDataTests
+      - path: Packages/LifeOSData/Tests/BehaviorMemoryStoreTests
+      - path: Packages/LifeOSData/Tests/EnvironmentContextProviderTests
+      - path: Packages/LifeOSCore/Tests/LifeOSCoreTests
+      - path: Packages/LifeOSCore/Tests/FlowSchedulingTests
+      - path: Packages/LifeOSAI/Tests/LifeOSAITests
+      - path: Packages/LifeOSAI/Tests/FlowDirectorTests
+      - path: Packages/LifeOSFeatures/Tests/LifeOSFeaturesTests
+      - path: Packages/ExecutiveBrain/Tests/ExecutiveBrainTests
+      - path: Packages/LifeOSHealth/Tests/LifeOSHealthTests
+    dependencies:
+      - package: LifeOSData
+      - package: LifeOSCore
+      - package: LifeOSAI
+      - package: LifeOSFeatures
+      - package: ExecutiveBrain
+      - package: LifeOSHealth
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+
+packages:
+  LifeOSCore:
+    path: Packages/LifeOSCore
+  LifeOSAI:
+    path: Packages/LifeOSAI
+  LifeOSData:
+    path: Packages/LifeOSData
+  LifeOSHealth:
+    path: Packages/LifeOSHealth
+  LifeOSFeatures:
+    path: Packages/LifeOSFeatures
+  ExecutiveBrain:
+    path: Packages/ExecutiveBrain
+
+schemes:
+  LifeOS-iOS:
+    build:
+      targets:
+        LifeOS-iOS: all
+        LifeOSWidget: all
+        LifeOSTests: [test]
+    test:
+      targets:
+        - name: LifeOSTests
+    run:
+      config: Debug
+  LifeOS-macOS:
+    build:
+      targets:
+        LifeOS-macOS: all
+    run:
+      config: Debug

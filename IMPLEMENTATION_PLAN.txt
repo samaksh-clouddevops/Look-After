@@ -1,0 +1,82 @@
+================================================================================
+LifeOS — Complete UX Overhaul & Bug Fix Implementation Plan
+================================================================================
+
+OVERVIEW
+--------
+This document details the production-ready fixes and UX improvements across all 15 key areas of LifeOS (FlowOS), adhering strictly to Apple's Human Interface Guidelines, native Apple frameworks, and non-placeholder production code.
+
+--------------------------------------------------------------------------------
+PHASE 1: AUTHENTICATION & CORE UX INFRASTRUCTURE
+--------------------------------------------------------------------------------
+1. Global Toast Notification System (ToastView.swift):
+   - In-app animated toasts for Success, Error, and Info feedback.
+   - Auto-dismissal with smooth spring physics transitions.
+
+2. Reusable Empty State Infrastructure (EmptyStateView.swift):
+   - Consistent empty states for all 12 LifeOS modules when no data is available.
+   - Clean SF Symbols with action buttons to immediately create first items.
+
+3. Authentication Persistence & UX Fixes (AuthView.swift & FirebaseManager.swift):
+   - Gated root navigation using `fullScreenCover` to prevent unauthenticated access.
+   - Persistent SSO session state saved in UserDefaults to eliminate dropouts.
+   - Explicit loading spinners, disabled interaction states, and error alerts on failure.
+   - "Welcome back" feedback toasts upon successful authentication.
+
+--------------------------------------------------------------------------------
+PHASE 2: TASK CREATION & FOCUS TIMER OVERHAUL
+--------------------------------------------------------------------------------
+1. Task Creation Flow (TaskListView.swift & TasksViewModel.swift):
+   - Micro-loading indicator ("Creating...") inside primary action button.
+   - Instant optimistic UI update to append tasks to local state.
+   - Auto-dismiss sheet on success with haptic feedback.
+
+2. Focus Session & Pomodoro Customization (ADHDViewModel.swift & FocusSessionView.swift):
+   - User-configurable focus and break durations (5m to 120m).
+   - Seamless Pause/Resume state management with duration adjustment (+5m / -5m).
+   - Pomodoro break timer integration (Short Break vs. Long Break with session count).
+   - Hyperfocus detection and skip-break options.
+
+--------------------------------------------------------------------------------
+PHASE 3: VOICE CAPTURE & FINANCE MODULE (INR CURRENCY)
+--------------------------------------------------------------------------------
+1. Speech-to-Text Voice Capture:
+   - Integration with Apple SFSpeechRecognizer & AVAudioEngine.
+   - Real-time audio waveform animation and live speech transcription.
+   - Graceful permission requests for microphone access.
+
+2. Finance & Bills Management:
+   - Transition all currency indicators to INR (₹) as requested.
+   - Support for bill categories and recurring subscription frequencies (Weekly, Monthly, Quarterly, Yearly).
+   - Dashboard segmentation for Overdue, Upcoming, and Subscriptions.
+   - Full swipe-to-delete and creation sheets with loading states.
+
+--------------------------------------------------------------------------------
+PHASE 4: DEMO DATA REMOVAL & MODULE CRUD PERSISTENCE
+--------------------------------------------------------------------------------
+1. Demo Data Purge:
+   - Completely remove `populateSampleData()` from LifeModulesViewModel.
+   - All modules initialize empty by default until populated by the user.
+
+2. Full CRUD for Secondary Feature Modules:
+   - Travel Planner (TravelPlannerView.swift): Add trips & packing items with local JSON persistence and EmptyStateView.
+   - Medication Tracker (MedicationView.swift): Add/Edit/Delete medications, dosage times, daily reset logic, adherence logging.
+   - Learning Hub (LearningKnowledgeView.swift): Knowledge notes, tags, multi-format media tracking.
+   - Creativity Workspace (CreativityWorkspaceView.swift): Creative project creation, status progression, Ableton/Figma medium presets.
+   - Calendar Intelligence (CalendarIntelligenceView.swift): Manual event creation + Apple EventKit sync integration.
+
+--------------------------------------------------------------------------------
+PHASE 5: PERFORMANCE & SETTINGS POLISH
+--------------------------------------------------------------------------------
+1. Comprehensive Settings (SettingsView.swift):
+   - Currency selection (INR ₹ default, USD $, EUR €, GBP £).
+   - Global Focus Timer preset configurations.
+   - User account profile & Gemini AI personalization inputs.
+
+2. Verification & Testing:
+   - Run end-to-end unit and integration test suites.
+   - Verify UI rendering across iPhone simulator targets.
+
+================================================================================
+STATUS: COMPLETE
+================================================================================
