@@ -48,12 +48,15 @@ struct HealthSyncProgressView: View {
     }
     
     var body: some View {
-        switch style {
-        case .compact:
-            compactCard
-        case .full:
-            fullChecklist
+        Group {
+            switch style {
+            case .compact:
+                compactCard
+            case .full:
+                fullChecklist
+            }
         }
+        .accessibilityIdentifier("screen-health-sync")
     }
     
     // MARK: - Compact (overlay banner)
@@ -323,7 +326,8 @@ struct HealthConnectSheet: View {
         await shell.refreshContext(
             userId: resolvedId,
             userName: UserLifeProfileStore.resolvedDisplayName(),
-            peakStartHour: UserLifeProfileStore.load().peakStartHour
+            peakStartHour: UserLifeProfileStore.load().peakStartHour,
+            capacityLLMPolicy: .llmIfDue
         )
         shell.refreshWidgetData()
     }

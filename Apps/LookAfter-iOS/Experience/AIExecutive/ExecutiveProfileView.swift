@@ -69,6 +69,7 @@ struct ExecutiveProfileView: View {
                 Text("\(UserFacingCopy.productName) is starting fresh. Health and calendar will re-import automatically.")
             }
         }
+        .accessibilityIdentifier("screen-executive-profile")
     }
 
     private var developerResetSection: some View {
@@ -163,6 +164,7 @@ struct ExecutiveProfileView: View {
             } label: {
                 Label("Settings & API Keys", systemImage: "gearshape.fill")
             }
+            .accessibilityIdentifier("nav-open-settings")
             .listRowBackground(Color.white.opacity(0.05))
 
             Button { showInsights = true } label: {
@@ -185,6 +187,7 @@ struct ExecutiveProfileView: View {
             Button { showModules = true } label: {
                 Label("Everything else", systemImage: "square.grid.2x2")
             }
+            .accessibilityIdentifier("nav-open-modules")
             .listRowBackground(Color.white.opacity(0.05))
         } footer: {
             Text("Finance, shopping, relationships, and other areas are still here.")

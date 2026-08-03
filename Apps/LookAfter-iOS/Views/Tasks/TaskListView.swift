@@ -166,6 +166,7 @@ struct TaskListView: View {
         .onChange(of: plannerVM.rescheduleProposal?.id) { _, newID in
             showReschedulePreview = newID != nil
         }
+        .accessibilityIdentifier("screen-task-list")
     }
 
     @ViewBuilder

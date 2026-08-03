@@ -58,6 +58,7 @@ struct ExecutiveCapacityCard: View {
         .sheet(isPresented: $showWhyDetails) {
             whyDetailSheet
         }
+        .accessibilityIdentifier("screen-executive-capacity")
     }
 
     // MARK: - Compact (Briefing)

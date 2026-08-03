@@ -125,6 +125,7 @@ struct DailyPlanView: View {
         .task {
             await viewModel.loadToday(userId: userId)
         }
+        .accessibilityIdentifier("screen-daily-plan")
     }
 
     private var hero: some View {

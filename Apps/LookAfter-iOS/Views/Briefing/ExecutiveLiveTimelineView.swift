@@ -78,6 +78,7 @@ struct ExecutiveLiveTimelineView: View {
             }
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.82), value: rows.map(\.id))
+        .accessibilityIdentifier("screen-live-timeline")
     }
 
     // MARK: - Header

@@ -1,0 +1,9 @@
+{
+  "id": "LEARN-001",
+  "sourceDocument": "Documentation/qa/16-learning-validation.md",
+  "events": [
+    {"day": "Tuesday", "action": "defer", "task": "Gym"},
+    {"day": "Tuesday", "action": "defer", "task": "Gym"},
+    {"day": "Wednesday", "action": "complete", "task": "Gym"}
+  ]
+}

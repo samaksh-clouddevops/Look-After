@@ -96,6 +96,7 @@ struct DailyBriefingView: View {
             guard phase == .complete else { return }
             Task { await reload() }
         }
+        .accessibilityIdentifier("screen-daily-briefing")
     }
 
     // MARK: - First viewport

@@ -2,25 +2,55 @@ import Foundation
 import LookAfterCore
 import LookAfterAI
 
+/// Controls when executive-capacity inference may call the LLM.
+public enum ExecutiveCapacityLLMPolicy: Sendable {
+    /// Local rules only — no API usage (default for UI refreshes and the context loop).
+    case deterministicOnly
+    /// LLM enrichment at most once per `ExecutiveCapacityEngine.minimumLLMInterval` (health sync).
+    case llmIfDue
+}
+
 /// Infers Executive Capacity from LifeState — interpretive, not a HealthKit dashboard.
 public final class ExecutiveCapacityEngine {
+    /// Minimum spacing between automatic capacity LLM calls (~20 minutes).
+    public static let minimumLLMInterval: TimeInterval = 20 * 60
+
     private let glm: GLMService?
     private let calendar = Calendar.current
+    private let throttleLock = NSLock()
+    private var lastLLMEnrichmentAt: Date?
 
     public init(glmService: GLMService? = nil) {
         self.glm = glmService
     }
 
-    public func evaluate(_ input: ExecutiveCapacityInput) async -> ExecutiveCapacityState {
+    public func evaluate(
+        _ input: ExecutiveCapacityInput,
+        llmPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
+    ) async -> ExecutiveCapacityState {
         let deterministic = inferDeterministic(input)
-        guard let glm else { return deterministic }
+        guard llmPolicy == .llmIfDue, let glm, isLLMDue() else { return deterministic }
 
         do {
             let enriched = try await enrichViaLLM(input: input, baseline: deterministic, glm: glm)
+            markLLMEnrichment()
             return enriched
         } catch {
             return deterministic
         }
+    }
+
+    private func isLLMDue() -> Bool {
+        throttleLock.lock()
+        defer { throttleLock.unlock() }
+        guard let lastLLMEnrichmentAt else { return true }
+        return Date().timeIntervalSince(lastLLMEnrichmentAt) >= Self.minimumLLMInterval
+    }
+
+    private func markLLMEnrichment() {
+        throttleLock.lock()
+        lastLLMEnrichmentAt = Date()
+        throttleLock.unlock()
     }
 
     /// Synchronous deterministic inference — used when AI unavailable.

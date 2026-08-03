@@ -45,6 +45,7 @@ struct BrainDashboardView: View {
                 .padding(.top, DesignSystem.spacingSM)
             }
         }
+        .accessibilityIdentifier("screen-brain-dashboard")
         .task {
             await brainVM.refresh(userId: userId)
             await onRefresh()

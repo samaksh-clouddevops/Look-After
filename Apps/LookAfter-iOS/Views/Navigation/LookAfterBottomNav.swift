@@ -70,9 +70,11 @@ struct LookAfterBottomNav: View {
 
         return Button {
             HapticManager.impact(.light)
+            let signpost = PerformanceSignposts.beginTabTransition()
             withAnimation(.easeInOut(duration: 0.2)) {
                 selection = tab
             }
+            PerformanceSignposts.endTabTransition(signpost)
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: isSelected ? tab.selectedIcon : tab.icon)
@@ -87,6 +89,7 @@ struct LookAfterBottomNav: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("tab-\(tab.title.lowercased())")
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

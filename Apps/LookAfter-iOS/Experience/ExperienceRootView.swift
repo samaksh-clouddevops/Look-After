@@ -59,6 +59,7 @@ struct ExperienceRootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: showOnboarding)
+        .accessibilityIdentifier("screen-root")
         .onChange(of: healthSync.syncPhase) { _, phase in
             guard phase == .complete, firebase.isAuthenticated else { return }
             let userId = firebase.resolvedUserId
@@ -67,7 +68,8 @@ struct ExperienceRootView: View {
                 await shell.refreshContext(
                     userId: userId,
                     userName: UserLifeProfileStore.resolvedDisplayName(),
-                    peakStartHour: UserLifeProfileStore.load().peakStartHour
+                    peakStartHour: UserLifeProfileStore.load().peakStartHour,
+                    capacityLLMPolicy: .llmIfDue
                 )
             }
         }
@@ -80,7 +82,8 @@ struct ExperienceRootView: View {
                 await shell.refreshContext(
                     userId: userId,
                     userName: UserLifeProfileStore.resolvedDisplayName(),
-                    peakStartHour: UserLifeProfileStore.load().peakStartHour
+                    peakStartHour: UserLifeProfileStore.load().peakStartHour,
+                    capacityLLMPolicy: .llmIfDue
                 )
             }
         }

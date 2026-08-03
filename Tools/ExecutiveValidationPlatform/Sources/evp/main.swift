@@ -45,6 +45,7 @@ struct EVPCLI {
         var fixture: String?
         var failScenario: String?
         var compareVersions: (String, String)?
+        var skipUI = false
 
         var i = 0
         while i < args.count {
@@ -63,6 +64,8 @@ struct EVPCLI {
                 fixture = "REPLAY-001"
             case "--fail":
                 if i + 1 < args.count { failScenario = args[i + 1]; i += 1 }
+            case "--skip-ui":
+                skipUI = true
             case "--compare":
                 if i + 2 < args.count {
                     compareVersions = (args[i + 1], args[i + 2])
@@ -84,7 +87,8 @@ struct EVPCLI {
             scenario: scenario,
             fixture: fixture,
             compareVersions: compareVersions,
-            failScenario: failScenario
+            failScenario: failScenario,
+            skipUI: skipUI
         )
     }
 
@@ -105,8 +109,12 @@ struct EVPCLI {
 
         Commands:
           index              Parse docs → RTM
-          run [--tier N]     Static + functional (default tier 2)
-          decisions          Decision regression (CI-blocking)
+          run [--tier N] [--skip-ui]   Full Phase 2 pipeline
+          flows                UI flow automation (22 flows)
+          visual               Visual regression snapshots
+          perf                 Performance benchmarks
+          a11y                 Accessibility audit
+          decisions            Decision regression (CI-blocking)
           replay [--fixture ID] [--compare v1 v2]
           simulate [--days N] [--scenario ID] [--fail FAIL-001]
           counterfactual [CF-001]

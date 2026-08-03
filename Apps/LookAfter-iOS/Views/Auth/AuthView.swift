@@ -30,8 +30,6 @@ public struct AuthView: View {
     
     public var body: some View {
         ZStack {
-            PremiumBackground()
-            
             ScrollView {
                 VStack(spacing: DesignSystem.spacingLG) {
                     
@@ -272,6 +270,7 @@ public struct AuthView: View {
             Text("Enter your Apple ID email to sign in and sync your \(UserFacingCopy.productName) profile.")
         }
         .interactiveDismissDisabled(isLoading)
+        .accessibilityIdentifier("screen-auth")
     }
     
     // MARK: - SSO Sign In

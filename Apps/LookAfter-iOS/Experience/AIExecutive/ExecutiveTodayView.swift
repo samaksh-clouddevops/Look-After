@@ -59,6 +59,7 @@ struct ExecutiveTodayView: View {
             let resolvedName = UserLifeProfileStore.resolvedDisplayName()
             await shell.refreshContext(userId: userId, userName: resolvedName, peakStartHour: peakStartHour)
         }
+        .accessibilityIdentifier("screen-executive-today")
     }
 
     private var refreshToken: String {

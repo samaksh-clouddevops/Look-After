@@ -44,6 +44,7 @@ struct TodaysStoryView: View {
                 Spacer()
             }
         }
+        .accessibilityIdentifier("screen-todays-story")
     }
 
     private var narrativeOpening: some View {

@@ -149,6 +149,32 @@ targets:
     settings:
       GENERATE_INFOPLIST_FILE: YES
 
+  LookAfterUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Apps/LookAfterTestSupport
+      - path: Apps/LookAfterUITests
+    dependencies:
+      - target: LookAfter-iOS
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      TEST_TARGET_NAME: LookAfter-iOS
+
+  LookAfterSnapshotTests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Apps/LookAfterTestSupport
+      - path: Apps/LookAfterSnapshotTests
+    dependencies:
+      - target: LookAfter-iOS
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      TEST_TARGET_NAME: LookAfter-iOS
+
 packages:
   LookAfterCore:
     path: Packages/LookAfterCore
@@ -170,9 +196,13 @@ schemes:
         LookAfter-iOS: all
         LookAfterWidget: all
         LookAfterTests: [test]
+        LookAfterUITests: [test]
+        LookAfterSnapshotTests: [test]
     test:
       targets:
         - name: LookAfterTests
+        - name: LookAfterUITests
+        - name: LookAfterSnapshotTests
     run:
       config: Debug
   LookAfter-macOS:

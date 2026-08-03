@@ -33,6 +33,7 @@ struct ContinueSessionView: View {
             startRestorationAnimation()
         }
         .id(restorationToken)
+        .accessibilityIdentifier("screen-continue-session")
     }
 
     private func restoringWorld(_ context: ContinueSessionContext) -> some View {

@@ -48,6 +48,7 @@ struct BrainInspectorView: View {
                 }
             }
         }
+        .accessibilityIdentifier("screen-brain-inspector")
     }
 
     private var sectionPicker: some View {

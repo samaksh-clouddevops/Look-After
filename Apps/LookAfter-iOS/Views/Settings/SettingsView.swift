@@ -534,6 +534,7 @@ struct SettingsView: View {
             .onChange(of: lifeProfile.fixedScheduleNotes) { _, _ in persistLifeProfile() }
             .keyboardDismissToolbar()
             .scrollDismissesKeyboard(.interactively)
+            .accessibilityIdentifier("screen-settings")
         }
     }
 

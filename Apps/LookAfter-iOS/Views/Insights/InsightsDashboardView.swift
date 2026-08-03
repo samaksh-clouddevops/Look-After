@@ -83,6 +83,7 @@ public struct InsightsDashboardView: View {
                 syncPersonalizationContext()
             }
         }
+        .accessibilityIdentifier("screen-insights")
     }
 
     private var cacheStatusBanner: some View {

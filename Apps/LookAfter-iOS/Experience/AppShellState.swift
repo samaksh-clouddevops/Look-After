@@ -232,6 +232,7 @@ final class AppShellState: ObservableObject {
 
     private var contextLoopTask: Task<Void, Never>?
 
+    /// Keeps brain/timeline fresh while the app is open. Capacity stays deterministic — no LLM polling.
     func startContextLoop(userId: String) {
         contextLoopTask?.cancel()
         contextLoopTask = Task { [weak self] in
@@ -242,7 +243,8 @@ final class AppShellState: ObservableObject {
                 await self.refreshContext(
                     userId: userId,
                     userName: userName,
-                    peakStartHour: UserLifeProfileStore.load().peakStartHour
+                    peakStartHour: UserLifeProfileStore.load().peakStartHour,
+                    capacityLLMPolicy: .deterministicOnly
                 )
             }
         }
@@ -253,6 +255,8 @@ final class AppShellState: ObservableObject {
     }
 
     func orchestrateBrain(userId: String) async {
+        let signpost = PerformanceSignposts.beginOrchestrateBrain()
+        defer { PerformanceSignposts.endOrchestrateBrain(signpost) }
         let uid = resolvedUserId(userId)
         guard !uid.isEmpty else { return }
         await ensureFlowDirector()
@@ -265,7 +269,12 @@ final class AppShellState: ObservableObject {
         }
     }
 
-    func refreshContext(userId: String, userName: String = "", peakStartHour: Int = 9) async {
+    func refreshContext(
+        userId: String,
+        userName: String = "",
+        peakStartHour: Int = 9,
+        capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
+    ) async {
         guard !isPerformingFactoryReset else { return }
         let uid = resolvedUserId(userId)
         guard !uid.isEmpty else { return }
@@ -316,7 +325,8 @@ final class AppShellState: ObservableObject {
             peakStartHour: peakStartHour,
             allTasks: tasksVM.tasks,
             completedTaskIDs: Set(tasksVM.completedToday.map(\.id)),
-            flowConfidenceScore: brainVM.flowSurface?.confidence
+            flowConfidenceScore: brainVM.flowSurface?.confidence,
+            capacityLLMPolicy: capacityLLMPolicy
         )
         briefingVM.updateGreeting(
             userName: resolvedName,

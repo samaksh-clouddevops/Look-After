@@ -11,6 +11,7 @@ struct LookAfterApp: App {
         options.projectID = "lifeos-mock"
         options.apiKey = "mock-api-key"
         FirebaseApp.configure(options: options)
+        UITestLaunchConfiguration.applyIfNeeded()
     }
     
     var body: some Scene {

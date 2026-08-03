@@ -70,6 +70,7 @@ struct OnboardingView: View {
         .preferredColorScheme(.dark)
         .keyboardDismissToolbar()
         .scrollDismissesKeyboard(.interactively)
+        .accessibilityIdentifier("screen-onboarding")
         .onAppear(perform: prefillFromExisting)
     }
 

@@ -118,6 +118,7 @@ public struct TaskCardStackView: View {
             onUndo: { Task { await tasksVM.performUndo() } },
             onDismiss: { tasksVM.clearPendingUndo() }
         )
+        .accessibilityIdentifier("screen-task-card-stack")
     }
 
     @ViewBuilder

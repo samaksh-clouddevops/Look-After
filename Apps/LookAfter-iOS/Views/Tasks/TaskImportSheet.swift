@@ -280,5 +280,6 @@ private struct ImportTaskRowView: View {
             .layoutPriority(0)
         }
         .padding(.vertical, DesignSystem.spacingXS)
+        .accessibilityIdentifier("screen-task-import")
     }
 }

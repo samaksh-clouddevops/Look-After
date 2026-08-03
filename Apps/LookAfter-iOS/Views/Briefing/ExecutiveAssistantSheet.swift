@@ -58,6 +58,7 @@ struct ExecutiveAssistantSheet: View {
         .onChange(of: planningVM.draftText) { _, text in
             if !text.isEmpty, !isExpanded { expand() }
         }
+        .accessibilityIdentifier("screen-assistant-sheet")
     }
 
     // MARK: - Sheet body

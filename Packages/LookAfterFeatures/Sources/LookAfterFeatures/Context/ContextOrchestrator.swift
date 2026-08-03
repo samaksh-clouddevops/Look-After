@@ -54,7 +54,8 @@ public final class ContextOrchestrator: ObservableObject {
         locationOverride: LocationContext? = nil,
         allTasks: [LifeTask] = [],
         completedTaskIDs: Set<String> = [],
-        flowConfidenceScore: Double? = nil
+        flowConfidenceScore: Double? = nil,
+        capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
     ) async {
         self.userId = userId
         resumeSnapshot = resumeEngine.load(userId: userId)
@@ -121,7 +122,7 @@ public final class ContextOrchestrator: ObservableObject {
             isInFlowSession: activeFlowSession?.isActive == true,
             now: Date()
         )
-        executiveCapacity = await capacityEngine.evaluate(capacityInput)
+        executiveCapacity = await capacityEngine.evaluate(capacityInput, llmPolicy: capacityLLMPolicy)
     }
 
     /// Clears orchestrator output so UI cannot show stale brain/timeline state.

@@ -29,6 +29,7 @@ struct CycleDashboardView: View {
             CycleQuickLogSheet(viewModel: viewModel)
         }
         .onAppear { viewModel.refresh() }
+        .accessibilityIdentifier("screen-cycle")
     }
 
     private var disabledState: some View {

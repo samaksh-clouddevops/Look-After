@@ -48,5 +48,6 @@ public struct ADHDFloatingDockView: View {
         )
         .shadow(color: DesignSystem.shadowElevated.opacity(0.5), radius: 12, x: 0, y: 6)
         .padding(.horizontal, DesignSystem.screenHorizontal)
+        .accessibilityIdentifier("screen-adhd-dock")
     }
 }

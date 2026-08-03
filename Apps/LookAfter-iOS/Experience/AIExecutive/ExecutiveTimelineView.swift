@@ -70,6 +70,7 @@ struct ExecutiveTimelineView: View {
         .task {
             await reloadTimeline(userId: userId)
         }
+        .accessibilityIdentifier("screen-executive-timeline")
     }
 
     private func reloadTimeline(userId: String) async {

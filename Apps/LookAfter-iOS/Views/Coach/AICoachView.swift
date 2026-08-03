@@ -71,6 +71,7 @@ struct AICoachView: View {
             }
         }
         .keyboardDismissToolbar(label: "Send", onDone: sendMessage)
+        .accessibilityIdentifier("screen-coach")
     }
     
     // MARK: - Welcome Section

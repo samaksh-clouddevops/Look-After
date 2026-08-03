@@ -346,6 +346,7 @@ public struct LookAfterMasterCanvas: View {
         .onChange(of: shell.factoryResetGeneration) { _, _ in
             planningVM.factoryReset()
         }
+        .accessibilityIdentifier("screen-briefing")
     }
 
     // MARK: - Tabs

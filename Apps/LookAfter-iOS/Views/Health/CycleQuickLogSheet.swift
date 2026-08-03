@@ -57,6 +57,7 @@ struct CycleQuickLogSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("screen-cycle-log")
     }
 
     private var flowSection: some View {

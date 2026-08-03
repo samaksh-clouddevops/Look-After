@@ -115,6 +115,7 @@ struct APIKeysSettingsView: View {
             }
         }
         .onAppear { viewModel.refresh() }
+        .accessibilityIdentifier("screen-api-keys")
     }
 
     @ViewBuilder

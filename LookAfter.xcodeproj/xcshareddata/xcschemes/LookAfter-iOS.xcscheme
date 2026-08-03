@@ -29,9 +29,37 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "044ED3BBBB793813DE05FFEA"
+               BuildableName = "LookAfterSnapshotTests.xctest"
+               BlueprintName = "LookAfterSnapshotTests"
+               ReferencedContainer = "container:LookAfter.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "3A9550E62B7FB14ACAF4F139"
                BuildableName = "LookAfterTests.xctest"
                BlueprintName = "LookAfterTests"
+               ReferencedContainer = "container:LookAfter.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "39F5B0DE0698ABA68C6C9072"
+               BuildableName = "LookAfterUITests.xctest"
+               BlueprintName = "LookAfterUITests"
                ReferencedContainer = "container:LookAfter.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -75,6 +103,28 @@
                BlueprintIdentifier = "3A9550E62B7FB14ACAF4F139"
                BuildableName = "LookAfterTests.xctest"
                BlueprintName = "LookAfterTests"
+               ReferencedContainer = "container:LookAfter.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "39F5B0DE0698ABA68C6C9072"
+               BuildableName = "LookAfterUITests.xctest"
+               BlueprintName = "LookAfterUITests"
+               ReferencedContainer = "container:LookAfter.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "044ED3BBBB793813DE05FFEA"
+               BuildableName = "LookAfterSnapshotTests.xctest"
+               BlueprintName = "LookAfterSnapshotTests"
                ReferencedContainer = "container:LookAfter.xcodeproj">
             </BuildableReference>
          </TestableReference>

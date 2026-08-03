@@ -104,6 +104,7 @@ struct EmergencyModeView: View {
                 pulseAnimation = true
             }
         }
+        .accessibilityIdentifier("screen-emergency")
     }
 }
 
@@ -306,6 +307,7 @@ struct FocusSessionView: View {
             }
             .presentationDetents([.medium])
         }
+        .accessibilityIdentifier("screen-focus-session")
     }
 }
 

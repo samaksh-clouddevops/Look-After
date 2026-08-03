@@ -58,6 +58,7 @@ struct ExecutivePlanningConversationView: View {
         .padding(.horizontal, DesignSystem.screenHorizontal)
         .padding(.bottom, DesignSystem.spacingSM)
         .keyboardDismissToolbar(label: "Send", onDone: submitText)
+        .accessibilityIdentifier("screen-planning-conversation")
     }
 
     // MARK: - Header

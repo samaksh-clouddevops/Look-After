@@ -73,6 +73,7 @@ struct ReschedulePreviewSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("screen-reschedule-preview")
     }
 
     @ViewBuilder

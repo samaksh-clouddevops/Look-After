@@ -51,5 +51,6 @@ public struct DecideForMeView: View {
             }
             .padding(.top, DesignSystem.spacingMD)
         }
+        .accessibilityIdentifier("screen-decide-for-me")
     }
 }

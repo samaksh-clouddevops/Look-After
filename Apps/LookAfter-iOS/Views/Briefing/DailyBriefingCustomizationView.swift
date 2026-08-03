@@ -91,5 +91,6 @@ struct DailyBriefingCustomizationView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("screen-daily-briefing-customization")
     }
 }

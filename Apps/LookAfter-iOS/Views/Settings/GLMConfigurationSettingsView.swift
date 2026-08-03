@@ -75,6 +75,7 @@ struct GLMConfigurationSettingsView: View {
         #endif
         .onAppear { viewModel.refresh() }
         .keyboardDismissToolbar(label: "Save", onDone: { viewModel.save() })
+        .accessibilityIdentifier("screen-glm-config")
     }
 }
 

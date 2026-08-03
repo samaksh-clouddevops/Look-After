@@ -55,6 +55,7 @@ struct HealthDetailView: View {
                 Spacer()
             }
         }
+        .accessibilityIdentifier("screen-health-detail")
     }
 
     private func sleepWhisper(_ label: String, _ value: String) -> some View {

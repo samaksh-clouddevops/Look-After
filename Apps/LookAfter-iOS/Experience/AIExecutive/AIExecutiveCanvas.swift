@@ -14,6 +14,7 @@ struct AIExecutiveCanvas: View {
             shell: shell,
             continueSession: shell.continueSession
         )
+        .accessibilityIdentifier("screen-ai-executive")
     }
 }
 

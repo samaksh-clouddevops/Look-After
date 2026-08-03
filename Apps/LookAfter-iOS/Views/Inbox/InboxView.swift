@@ -107,6 +107,7 @@ struct InboxView: View {
             await inboxVM.loadItems(userId: userId)
         }
         .keyboardDismissToolbar(label: "Done")
+        .accessibilityIdentifier("screen-inbox")
     }
     
     private var emptyState: some View {

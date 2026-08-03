@@ -71,6 +71,7 @@ struct TodayView: View {
                 weatherSnapshot: weatherSnapshot
             )
         }
+        .accessibilityIdentifier("screen-today")
     }
 
     private var metricsInput: TodayMetricsInput {

@@ -86,6 +86,7 @@ public struct PhysiologicalResetView: View {
                 dismiss()
             }
         }
+        .accessibilityIdentifier("screen-physiological-reset")
     }
 
     private func startBreathingAnimation() {

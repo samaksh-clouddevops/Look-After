@@ -113,6 +113,7 @@ struct AllModulesGridView: View {
         .task {
             await modulesVM.loadAllData(userId: "user")
         }
+        .accessibilityIdentifier("screen-modules")
     }
 
     @ViewBuilder

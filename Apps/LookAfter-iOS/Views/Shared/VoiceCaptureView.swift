@@ -79,5 +79,6 @@ struct VoiceCaptureView: View {
                 )
             }
         }
+        .accessibilityIdentifier("screen-voice-capture")
     }
 }
