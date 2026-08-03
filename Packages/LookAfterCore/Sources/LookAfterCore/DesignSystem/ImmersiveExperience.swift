@@ -11,51 +11,13 @@ public struct ScrollOffsetKey: PreferenceKey {
 
 // MARK: - Backgrounds
 
-/// Continuous cinematic field — no section breaks.
+/// V4 flat canvas — calm, no decorative glows.
 public struct CinematicBackground: View {
-    var accentIntensity: Double
-
-    public init(accentIntensity: Double = 0.35) {
-        self.accentIntensity = accentIntensity
-    }
+    public init(accentIntensity: Double = 0) {}
 
     public var body: some View {
-        ZStack {
-            DesignSystem.backgroundPrimary.ignoresSafeArea()
-
-            RadialGradient(
-                colors: [
-                    Color.white.opacity(0.04),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 0.5, y: 0.15),
-                startRadius: 0,
-                endRadius: 500
-            )
+        DesignSystem.backgroundPrimary
             .ignoresSafeArea()
-
-            RadialGradient(
-                colors: [
-                    DesignSystem.accentPrimary.opacity(0.04 * accentIntensity),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 0.5, y: 0.22),
-                startRadius: 10,
-                endRadius: 380
-            )
-            .ignoresSafeArea()
-
-            LinearGradient(
-                colors: [
-                    Color.clear,
-                    DesignSystem.backgroundPrimary.opacity(0.3),
-                    DesignSystem.backgroundPrimary
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-        }
     }
 }
 

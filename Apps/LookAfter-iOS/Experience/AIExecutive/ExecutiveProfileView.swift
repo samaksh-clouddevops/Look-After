@@ -6,7 +6,6 @@ import LookAfterHealth
 /// Profile, settings, integrations, and feature flags.
 struct ExecutiveProfileView: View {
     @EnvironmentObject private var shell: AppShellState
-    @EnvironmentObject private var experience: ExperienceModeController
 
     let userId: String
 
@@ -27,7 +26,7 @@ struct ExecutiveProfileView: View {
                 PremiumBackground()
 
                 List {
-                    experienceSection
+                    lifeStateSection
                     integrationsSection
                     statsSection
                     classicModulesSection
@@ -36,6 +35,7 @@ struct ExecutiveProfileView: View {
                     #endif
                     developerResetSection
                 }
+                .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     Color.clear.frame(height: bottomNavClearance)
@@ -95,7 +95,7 @@ struct ExecutiveProfileView: View {
                 .disabled(isResetting)
             }
             .padding(.vertical, 4)
-            .listRowBackground(Color.white.opacity(0.05))
+            .listRowBackground(DesignSystem.backgroundSecondary)
         } header: {
             Text("Developer")
         }
@@ -120,7 +120,7 @@ struct ExecutiveProfileView: View {
             } label: {
                 Label("Brain Inspector", systemImage: "ladybug.fill")
             }
-            .listRowBackground(Color.white.opacity(0.05))
+            .listRowBackground(DesignSystem.backgroundSecondary)
         } header: {
             Text("Debug Tools")
         } footer: {
@@ -129,30 +129,20 @@ struct ExecutiveProfileView: View {
     }
     #endif
 
-    private var experienceSection: some View {
+    private var lifeStateSection: some View {
         Section {
-            Picker("Experience", selection: Binding(
-                get: { experience.mode },
-                set: { experience.setMode($0) }
-            )) {
-                ForEach(ExperienceMode.allCases) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
-            }
-            .listRowBackground(Color.white.opacity(0.05))
-
-            Toggle(isOn: Binding(
-                get: { experience.isAIExecutive },
-                set: { experience.setMode($0 ? .aiExecutive : .classic) }
-            )) {
-                Label("Companion layout", systemImage: "sparkles.rectangle.stack")
-            }
-            .tint(DesignSystem.accentPrimary)
-            .listRowBackground(Color.white.opacity(0.05))
+            LifeStateMetricsGrid(
+                energy: shell.briefingVM.executiveCapacity.band.displayLabel,
+                recovery: shell.briefingVM.sleep.isAvailable ? String(format: "%.1fh", shell.briefingVM.sleep.totalHours ?? 0) : "—",
+                habits: "\(shell.briefingVM.habits.filter(\.isCompletedToday).count)/\(max(shell.briefingVM.habits.count, 1))",
+                goals: "\(shell.tasksVM.completedToday.count) done"
+            )
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
         } header: {
-            Text("Experience")
+            Text("Life State")
         } footer: {
-            Text("Switch instantly — your tasks, health, and modules stay the same.")
+            Text("Energy, recovery, habits, and goals at a glance.")
         }
     }
 
@@ -165,12 +155,12 @@ struct ExecutiveProfileView: View {
                 Label("Settings & API Keys", systemImage: "gearshape.fill")
             }
             .accessibilityIdentifier("nav-open-settings")
-            .listRowBackground(Color.white.opacity(0.05))
+            .listRowBackground(DesignSystem.backgroundSecondary)
 
             Button { showInsights = true } label: {
                 Label("Statistics & Insights", systemImage: "chart.xyaxis.line")
             }
-            .listRowBackground(Color.white.opacity(0.05))
+            .listRowBackground(DesignSystem.backgroundSecondary)
         }
     }
 
@@ -188,7 +178,7 @@ struct ExecutiveProfileView: View {
                 Label("Everything else", systemImage: "square.grid.2x2")
             }
             .accessibilityIdentifier("nav-open-modules")
-            .listRowBackground(Color.white.opacity(0.05))
+            .listRowBackground(DesignSystem.backgroundSecondary)
         } footer: {
             Text("Finance, shopping, relationships, and other areas are still here.")
         }
@@ -201,6 +191,60 @@ struct ExecutiveProfileView: View {
             Text(value)
                 .foregroundColor(DesignSystem.textSecondary)
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(DesignSystem.backgroundSecondary)
+    }
+}
+
+private struct LifeStateMetricsGrid: View {
+    let energy: String
+    let recovery: String
+    let habits: String
+    let goals: String
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.spacingMD) {
+            LifeStateMetricRing(title: "Energy", value: energy, color: DesignSystem.health)
+            LifeStateMetricRing(title: "Recovery", value: recovery, color: DesignSystem.focus)
+            LifeStateMetricRing(title: "Habits", value: habits, color: DesignSystem.reflection)
+            LifeStateMetricRing(title: "Goals", value: goals, color: DesignSystem.learning)
+        }
+        .padding(DesignSystem.cardPaddingMin)
+    }
+}
+
+private struct LifeStateMetricRing: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: DesignSystem.spacingSM) {
+            ZStack {
+                Circle()
+                    .stroke(DesignSystem.divider, lineWidth: 6)
+                    .frame(width: 72, height: 72)
+                Circle()
+                    .trim(from: 0, to: 0.72)
+                    .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .frame(width: 72, height: 72)
+                    .rotationEffect(.degrees(-90))
+                Text(value)
+                    .font(.dsCaption(weight: .bold))
+                    .foregroundColor(DesignSystem.textPrimary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+            }
+            Text(title)
+                .font(.dsMetadata(weight: .semibold))
+                .foregroundColor(DesignSystem.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DesignSystem.spacingSM)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                .fill(DesignSystem.backgroundSecondary)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 }

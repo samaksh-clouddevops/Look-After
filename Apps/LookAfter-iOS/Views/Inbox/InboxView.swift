@@ -54,10 +54,10 @@ struct InboxView: View {
                             .padding(12)
                             .background(
                                 RoundedRectangle(cornerRadius: DesignSystem.radiusMD)
-                                    .fill(Color.white.opacity(0.06))
+                                    .fill(DesignSystem.backgroundSecondary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: DesignSystem.radiusMD)
-                                            .stroke(DesignSystem.accentPrimary.opacity(0.3), lineWidth: 1)
+                                            .stroke(DesignSystem.border, lineWidth: 1)
                                     )
                             )
                             .onSubmit { capture() }
@@ -67,8 +67,8 @@ struct InboxView: View {
                                 .font(.system(size: 28))
                                 .foregroundStyle(
                                     captureText.isEmpty
-                                        ? AnyShapeStyle(Color.white.opacity(0.2))
-                                        : AnyShapeStyle(DesignSystem.accentGradient)
+                                        ? AnyShapeStyle(DesignSystem.textMuted)
+                                        : AnyShapeStyle(DesignSystem.accentPrimary)
                                 )
                         }
                         .disabled(captureText.isEmpty)
@@ -217,7 +217,7 @@ struct InboxItemCard: View {
                     .padding(.vertical, 4)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(0.06))
+                            .fill(DesignSystem.backgroundElevated)
                     )
             }
             

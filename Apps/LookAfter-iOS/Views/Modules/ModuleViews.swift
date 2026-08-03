@@ -37,7 +37,7 @@ struct AIMemoryView: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.radiusMD)
-                        .fill(Color.white.opacity(0.06))
+                        .fill(DesignSystem.backgroundElevated)
                         .overlay(
                             RoundedRectangle(cornerRadius: DesignSystem.radiusMD)
                                 .stroke(DesignSystem.accentPrimary.opacity(0.3), lineWidth: 1)
@@ -507,7 +507,7 @@ struct ShoppingInventoryView: View {
                         .font(.system(size: 15, design: .default))
                         .foregroundColor(DesignSystem.textPrimary)
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: DesignSystem.radiusMD).fill(Color.white.opacity(0.06)))
+                        .background(RoundedRectangle(cornerRadius: DesignSystem.radiusMD).fill(DesignSystem.backgroundElevated))
                         .focused($isQuickAddFocused)
                         .submitLabel(.done)
                         .onSubmit { submitQuickAdd() }
@@ -767,7 +767,7 @@ struct RelationshipsView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.white.opacity(0.12)))
+                        .background(Capsule().fill(DesignSystem.backgroundElevated))
                     }
                     
                     Spacer()
@@ -866,7 +866,7 @@ struct RelationshipsView: View {
                         Text(draftedMessage ?? "Hey \(contact.name)! Thinking of you today, hope all is well!")
                             .font(.system(size: 14, design: .default))
                             .padding(14)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.08)))
+                            .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.backgroundElevated))
                     }
                     
                     // Action Buttons (WhatsApp, Text, Call)
@@ -987,7 +987,8 @@ struct RelationshipsView: View {
                 Task {
                     if let draft = try? await glm.complete(
                         prompt: prompt,
-                        systemPrompt: LookAfterPrompts.socialCheckInSystem
+                        systemPrompt: LookAfterPrompts.socialCheckInSystem,
+                        tier: .economy
                     ) {
                         draftedMessage = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                     } else {
@@ -1063,214 +1064,182 @@ struct ReflectionJournalView: View {
     var body: some View {
         ZStack {
             PremiumBackground()
-            
-            ScrollView {
-                VStack(spacing: DesignSystem.spacingMD) {
-                    // Today's Tasks Review Card
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(DesignSystem.textMuted)
-                            Text("TODAY'S TASKS BREAKDOWN")
-                                .font(.dsMetadata(weight: .bold))
-                                .foregroundColor(DesignSystem.textSecondary)
-                        }
-                        
-                        if completedToday.isEmpty && inProgressToday.isEmpty && unstartedToday.isEmpty {
-                            Text("No tasks scheduled for today yet.")
-                                .font(.system(size: 13, design: .default))
-                                .foregroundColor(DesignSystem.textMuted)
-                        } else {
-                            if !completedToday.isEmpty {
-                                Text("COMPLETED TODAY:")
-                                    .font(.system(size: 10, weight: .bold, design: .default))
-                                    .foregroundColor(DesignSystem.textMuted)
-                                ForEach(completedToday) { task in
-                                    HStack {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(DesignSystem.textMuted)
-                                        Text(task.title)
-                                            .font(.system(size: 13, weight: .medium, design: .default))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                            }
-                            
-                            if !inProgressToday.isEmpty {
-                                Text("IN PROGRESS / STARTED:")
-                                    .font(.system(size: 10, weight: .bold, design: .default))
-                                    .foregroundColor(DesignSystem.textSecondary)
-                                ForEach(inProgressToday) { task in
-                                    HStack {
-                                        Image(systemName: "play.circle.fill")
-                                            .foregroundColor(DesignSystem.textSecondary)
-                                        Text(task.title)
-                                            .font(.system(size: 13, weight: .medium, design: .default))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                            }
-                            
-                            if !unstartedToday.isEmpty {
-                                Text("SCHEDULED / NOT STARTED:")
-                                    .font(.system(size: 10, weight: .bold, design: .default))
-                                    .foregroundColor(DesignSystem.accentPrimary)
-                                ForEach(unstartedToday) { task in
-                                    HStack {
-                                        Image(systemName: "circle")
-                                            .foregroundColor(DesignSystem.textMuted)
-                                        Text(task.title)
-                                            .font(.system(size: 13, weight: .regular, design: .default))
-                                            .foregroundColor(DesignSystem.textMuted)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(16)
-                    .elevatedSurface()
-                    .padding(.horizontal)
-                    
-                    // Journaling & Voice Input Form
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Nightly Reflection & Feedback")
-                                .font(.system(size: 16, weight: .bold, design: .default))
-                                .foregroundColor(DesignSystem.textPrimary)
-                            Spacer()
-                            if isProcessingAI {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                        }
-                        
-                        Text("Tell the AI what went right, what went wrong, and why (e.g., 'Task initiation was hard on Report, finished Workout in 15 mins').")
-                            .font(.system(size: 12, design: .default))
-                            .foregroundColor(DesignSystem.textMuted)
-                        
-                        ZStack(alignment: .bottomTrailing) {
-                            TextField("Speak or type your reflection here...", text: $entryText, axis: .vertical)
-                                .lineLimit(4...8)
-                                .font(.system(size: 14, design: .default))
-                                .foregroundColor(DesignSystem.textPrimary)
-                                .padding(12)
-                                .background(RoundedRectangle(cornerRadius: DesignSystem.radiusMD).fill(Color.white.opacity(0.06)))
-                            
-                            VoiceCaptureView(speechManager: speechManager, text: $entryText)
-                                .padding(8)
-                        }
-                        
-                        if let calibration = calibrationBadge {
-                            HStack(spacing: 6) {
-                                Image(systemName: "brain.head.profile")
-                                    .foregroundColor(DesignSystem.textMuted)
-                                Text("AI Calibrated: \(calibration)")
-                                    .font(.system(size: 12, weight: .semibold, design: .default))
-                                    .foregroundColor(DesignSystem.textMuted)
-                            }
-                            .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(DesignSystem.textMuted.opacity(0.12)))
-                        }
-                        
-                        Button(action: {
-                            guard !entryText.isEmpty else { return }
-                            let text = entryText
-                            entryText = ""
-                            KeyboardDismiss.dismiss()
-                            isProcessingAI = true
-                            
-                            Task {
-                                await modulesVM.addJournalEntry(content: text, mood: "Reflective", gratitudes: [])
-                                
-                                let glm = GLMService.shared
-                                
-                                let taskSummaryContext = """
-                                TODAY'S TASKS CONTEXT:
-                                Completed: \(completedToday.map(\.title).joined(separator: ", "))
-                                In-Progress: \(inProgressToday.map(\.title).joined(separator: ", "))
-                                Unstarted: \(unstartedToday.map(\.title).joined(separator: ", "))
-                                
-                                USER REFLECTION:
-                                \(text)
-                                """
-                                
-                                let prompt = LookAfterPrompts.journalFeedbackAnalysisPrompt(journalText: taskSummaryContext)
 
-                                if let calibration = try? await glm.complete(
-                                    prompt: prompt,
-                                    systemPrompt: LookAfterPrompts.structuredOutputSystem
-                                ) {
-                                    let trimmed = calibration.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    UserCalibrationStore.append(
-                                        summary: trimmed,
-                                        source: .journal,
-                                        rawInput: text
-                                    )
-                                    calibrationBadge = trimmed
-                                    HapticManager.notification(.success)
-                                }
-                                isProcessingAI = false
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "sparkles")
-                                Text("Save & Calibrate AI Personalization")
-                            }
-                        }
-                        .buttonStyle(PremiumPrimaryButtonStyle())
+            ScrollView {
+                VStack(spacing: DesignSystem.spacingLG) {
+                    journalWritingSection
+
+                    DisclosureGroup("Today's tasks") {
+                        todaysTasksBreakdown
+                            .padding(.top, DesignSystem.spacingSM)
                     }
-                    .elevatedSurface()
-                    .padding(.horizontal)
-                    
-                    // Past Entries
-                    VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-                        Text("PAST REFLECTIONS")
-                            .font(.system(size: 11, weight: .bold, design: .default))
-                            .foregroundColor(DesignSystem.textMuted)
-                            .padding(.horizontal)
-                        
-                        ForEach(modulesVM.journalEntries) { entry in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
+                    .font(.dsCaption(weight: .semibold))
+                    .foregroundColor(DesignSystem.textSecondary)
+                    .tint(DesignSystem.accentPrimary)
+                    .padding(.horizontal, DesignSystem.screenHorizontal)
+
+                    if !modulesVM.journalEntries.isEmpty {
+                        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+                            Text("Past reflections")
+                                .font(.dsCaption(weight: .semibold))
+                                .foregroundColor(DesignSystem.textMuted)
+                                .padding(.horizontal, DesignSystem.screenHorizontal)
+                            ForEach(modulesVM.journalEntries.prefix(5)) { entry in
+                                VStack(alignment: .leading, spacing: 4) {
                                     Text(entry.createdAt.shortDateString)
-                                        .font(.system(size: 11, weight: .bold, design: .default))
+                                        .font(.dsMetadata(weight: .semibold))
                                         .foregroundColor(DesignSystem.accentPrimary)
-                                    Spacer()
-                                    Button(action: {
-                                        HapticManager.notification(.warning)
-                                        Task { await modulesVM.deleteJournalEntry(entry) }
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundColor(DesignSystem.error)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Remove reflection")
+                                    Text(entry.content)
+                                        .font(.dsSecondary())
+                                        .foregroundColor(DesignSystem.textPrimary)
+                                        .lineLimit(4)
                                 }
-                                
-                                Text(entry.content)
-                                    .font(.system(size: 14, weight: .regular, design: .default))
-                                    .foregroundColor(DesignSystem.textPrimary)
-                            }
-                            .elevatedSurface()
-                            .padding(.horizontal)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    Task { await modulesVM.deleteJournalEntry(entry); HapticManager.notification(.warning) }
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
+                                .padding(DesignSystem.spacingMD)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                                        .fill(DesignSystem.backgroundSecondary)
+                                )
+                                .padding(.horizontal, DesignSystem.screenHorizontal)
                             }
                         }
                     }
                 }
-                .padding(.vertical)
+                .padding(.top, DesignSystem.spacingMD)
+                .padding(.bottom, DesignSystem.spacingXL)
             }
-            .navigationTitle("Reflection & AI Feedback Loop")
-            .task {
-                await tasksVM.loadTasks(userId: "user")
+        }
+        .task {
+            await tasksVM.loadTasks(userId: FirebaseManager.shared.resolvedUserId)
+        }
+        .keyboardDismissToolbar(label: "Done")
+    }
+
+    private var journalWritingSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+            Text("Reflection")
+                .font(.dsLargeTitle())
+                .foregroundColor(DesignSystem.textPrimary)
+                .padding(.horizontal, DesignSystem.screenHorizontal)
+
+            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+                Text("What went well? What was hard? The AI uses this to calibrate tomorrow.")
+                    .font(.dsSecondary())
+                    .foregroundColor(DesignSystem.textSecondary)
+
+                ZStack(alignment: .bottomTrailing) {
+                    TextField("Write freely…", text: $entryText, axis: .vertical)
+                        .lineLimit(6...14)
+                        .font(.dsBody())
+                        .foregroundColor(DesignSystem.textPrimary)
+                        .padding(DesignSystem.spacingMD)
+                        .background(
+                            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                                .fill(DesignSystem.backgroundSecondary)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                                .stroke(DesignSystem.border, lineWidth: 1)
+                        )
+
+                    VoiceCaptureView(speechManager: speechManager, text: $entryText)
+                        .padding(DesignSystem.spacingSM)
+                }
+
+                if let calibration = calibrationBadge {
+                    Text("AI calibrated: \(calibration)")
+                        .font(.dsCaption())
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+
+                PremiumPrimaryButton("Save reflection") {
+                    submitReflection()
+                }
+                .disabled(entryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessingAI)
             }
-            .keyboardDismissToolbar(label: "Done")
+            .padding(DesignSystem.cardPaddingMin)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                    .fill(DesignSystem.backgroundSecondary.opacity(0.5))
+            )
+            .padding(.horizontal, DesignSystem.screenHorizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var todaysTasksBreakdown: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if completedToday.isEmpty && inProgressToday.isEmpty && unstartedToday.isEmpty {
+                Text("No tasks scheduled for today yet.")
+                    .font(.dsCaption())
+                    .foregroundColor(DesignSystem.textMuted)
+            } else {
+                taskGroup(title: "Completed", tasks: completedToday, icon: "checkmark.circle.fill", color: DesignSystem.success)
+                taskGroup(title: "In progress", tasks: inProgressToday, icon: "play.circle.fill", color: DesignSystem.textSecondary)
+                taskGroup(title: "Not started", tasks: unstartedToday, icon: "circle", color: DesignSystem.textMuted)
+            }
+        }
+    }
+
+    private func taskGroup(title: String, tasks: [LifeTask], icon: String, color: Color) -> some View {
+        Group {
+            if !tasks.isEmpty {
+                Text(title.uppercased())
+                    .font(.dsMetadata(weight: .bold))
+                    .foregroundColor(DesignSystem.textMuted)
+                ForEach(tasks) { task in
+                    HStack {
+                        Image(systemName: icon)
+                            .foregroundColor(color)
+                        Text(task.title)
+                            .font(.dsSecondary())
+                            .foregroundColor(DesignSystem.textPrimary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func submitReflection() {
+        guard !entryText.isEmpty else { return }
+        let text = entryText
+        entryText = ""
+        KeyboardDismiss.dismiss()
+        isProcessingAI = true
+
+        Task {
+            await modulesVM.addJournalEntry(content: text, mood: "Reflective", gratitudes: [])
+
+            let glm = GLMService.shared
+            let taskSummaryContext = """
+            TODAY'S TASKS CONTEXT:
+            Completed: \(completedToday.map(\.title).joined(separator: ", "))
+            In-Progress: \(inProgressToday.map(\.title).joined(separator: ", "))
+            Unstarted: \(unstartedToday.map(\.title).joined(separator: ", "))
+
+            USER REFLECTION:
+            \(text)
+            """
+            let prompt = LookAfterPrompts.journalFeedbackAnalysisPrompt(journalText: taskSummaryContext)
+
+            if let calibration = try? await glm.complete(
+                prompt: prompt,
+                systemPrompt: LookAfterPrompts.structuredOutputSystem,
+                tier: .economy
+            ) {
+                await MainActor.run {
+                    calibrationBadge = calibration.trimmingCharacters(in: .whitespacesAndNewlines)
+                    UserCalibrationStore.append(
+                        summary: calibrationBadge ?? "",
+                        source: .journal,
+                        rawInput: text
+                    )
+                    isProcessingAI = false
+                    HapticManager.notification(.success)
+                }
+            } else {
+                await MainActor.run { isProcessingAI = false }
+            }
         }
     }
 }

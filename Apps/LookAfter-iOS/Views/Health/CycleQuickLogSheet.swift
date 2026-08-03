@@ -27,13 +27,13 @@ struct CycleQuickLogSheet: View {
                     TextField("Mood (optional)", text: $mood)
                         .textFieldStyle(.plain)
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
 
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(2...4)
                         .textFieldStyle(.plain)
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
 
                     Text(UserFacingCopy.medicalDisclaimerWithProvider)
                         .font(.system(size: 11))
@@ -56,7 +56,6 @@ struct CycleQuickLogSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .accessibilityIdentifier("screen-cycle-log")
     }
 
@@ -75,7 +74,7 @@ struct CycleQuickLogSheet: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(
-                                Capsule().fill(flow == level ? DesignSystem.accentPrimary.opacity(0.25) : Color.white.opacity(0.06))
+                                Capsule().fill(flow == level ? DesignSystem.accentPrimary.opacity(0.25) : DesignSystem.backgroundElevated)
                             )
                     }
                     .buttonStyle(.plain)
@@ -103,7 +102,7 @@ struct CycleQuickLogSheet: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(
-                                Capsule().fill(selectedSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : Color.white.opacity(0.06))
+                                Capsule().fill(selectedSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.backgroundElevated)
                             )
                     }
                     .buttonStyle(.plain)

@@ -56,7 +56,7 @@ final class SimulatedUserFlowTests: XCTestCase {
             secretStore: InMemorySecretStore(),
             metadataKey: "simulation.test.\(UUID().uuidString)"
         ))
-        glm.debugCompleteHandler = { _ in """
+        glm.debugCompleteHandler = { _, _ in """
         {
             "detectedRecurrence": "none",
             "steps": [

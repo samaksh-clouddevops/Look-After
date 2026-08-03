@@ -76,10 +76,10 @@ struct EmergencyModeView: View {
                             .padding(DesignSystem.spacingMD)
                             .background(
                                 RoundedRectangle(cornerRadius: DesignSystem.radiusLG)
-                                    .fill(Color.white.opacity(0.08))
+                                    .fill(DesignSystem.backgroundElevated)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: DesignSystem.radiusLG)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                            .stroke(DesignSystem.border, lineWidth: 1)
                                     )
                             )
                         }
@@ -148,7 +148,7 @@ struct FocusSessionView: View {
                 // Timer ring
                 ZStack {
                     Circle()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 8)
+                        .stroke(DesignSystem.border, lineWidth: 8)
                         .frame(width: 220, height: 220)
                     
                     Circle()
@@ -185,7 +185,7 @@ struct FocusSessionView: View {
                             .foregroundColor(DesignSystem.textMuted)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(Capsule().fill(Color.white.opacity(0.08)))
+                            .background(Capsule().fill(DesignSystem.backgroundElevated))
                     }
                     
                     Button(action: { showingDurationPicker = true }) {
@@ -193,7 +193,7 @@ struct FocusSessionView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(DesignSystem.accentPrimary)
                             .padding(10)
-                            .background(Circle().fill(Color.white.opacity(0.08)))
+                            .background(Circle().fill(DesignSystem.backgroundElevated))
                     }
                     
                     Button(action: { adhdVM.addTime(minutes: 5) }) {
@@ -202,7 +202,7 @@ struct FocusSessionView: View {
                             .foregroundColor(DesignSystem.textMuted)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(Capsule().fill(Color.white.opacity(0.08)))
+                            .background(Capsule().fill(DesignSystem.backgroundElevated))
                     }
                 }
                 
@@ -238,7 +238,7 @@ struct FocusSessionView: View {
                             .frame(width: 56, height: 56)
                             .background(
                                 Circle()
-                                    .fill(Color.white.opacity(0.12))
+                                    .fill(DesignSystem.backgroundElevated)
                             )
                     }
 
@@ -253,7 +253,7 @@ struct FocusSessionView: View {
                                 .frame(width: 56, height: 56)
                                 .background(
                                     Circle()
-                                        .fill(Color.white.opacity(0.08))
+                                        .fill(DesignSystem.backgroundElevated)
                                 )
                         }
                     }
@@ -268,7 +268,7 @@ struct FocusSessionView: View {
                             .frame(width: 56, height: 56)
                             .background(
                                 Circle()
-                                    .fill(Color.white.opacity(0.08))
+                                    .fill(DesignSystem.backgroundElevated)
                             )
                     }
                 }
@@ -385,7 +385,7 @@ struct BodyDoublingView: View {
                         .padding(.vertical, 14)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.15))
+                                .fill(DesignSystem.backgroundElevated)
                         )
                 }
                 .padding(.bottom, DesignSystem.spacingXL)

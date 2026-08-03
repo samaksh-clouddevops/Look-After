@@ -3,8 +3,7 @@ import LookAfterCore
 
 enum LookAfterTab: Int, CaseIterable, Identifiable {
     case briefing
-    case timeline
-    case work
+    case today
     case brain
     case you
 
@@ -13,8 +12,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .briefing: return "Briefing"
-        case .timeline: return "Timeline"
-        case .work: return "Work"
+        case .today: return "Today"
         case .brain: return "Brain"
         case .you: return "You"
         }
@@ -23,8 +21,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .briefing: return "house"
-        case .timeline: return "calendar"
-        case .work: return "rectangle.stack"
+        case .today: return "calendar"
         case .brain: return "sparkles"
         case .you: return "person"
         }
@@ -33,8 +30,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
     var selectedIcon: String {
         switch self {
         case .briefing: return "house.fill"
-        case .timeline: return "calendar"
-        case .work: return "rectangle.stack.fill"
+        case .today: return "calendar"
         case .brain: return "sparkles"
         case .you: return "person.fill"
         }
@@ -43,12 +39,15 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
 
 struct LookAfterBottomNav: View {
     @Binding var selection: LookAfterTab
+    var onCapture: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(LookAfterTab.allCases) { tab in
-                tabButton(tab)
-            }
+            tabButton(.briefing)
+            tabButton(.today)
+            captureButton
+            tabButton(.brain)
+            tabButton(.you)
         }
         .padding(.horizontal, DesignSystem.spacingSM)
         .padding(.top, 10)
@@ -63,6 +62,23 @@ struct LookAfterBottomNav: View {
                 }
         )
         .accessibilityElement(children: .contain)
+    }
+
+    private var captureButton: some View {
+        Button {
+            HapticManager.impact(.medium)
+            onCapture()
+        } label: {
+            Image(systemName: "plus.circle.fill")
+                .font(.system(size: 44, weight: .regular))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(DesignSystem.accentOnPrimary, DesignSystem.accentPrimary)
+                .frame(maxWidth: .infinity)
+                .offset(y: -8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tab-capture")
+        .accessibilityLabel("Capture")
     }
 
     private func tabButton(_ tab: LookAfterTab) -> some View {

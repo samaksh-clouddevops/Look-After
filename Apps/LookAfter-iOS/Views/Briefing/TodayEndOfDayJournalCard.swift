@@ -147,7 +147,7 @@ struct TodayEndOfDayJournalCard: View {
                         .padding(10)
                         .background(
                             RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
-                                .fill(Color.white.opacity(0.05))
+                                .fill(DesignSystem.backgroundElevated)
                         )
                 }
             }
@@ -254,7 +254,8 @@ struct TodayEndOfDayJournalCard: View {
 
             if let calibration = try? await GLMService.shared.complete(
                 prompt: prompt,
-                systemPrompt: LookAfterPrompts.structuredOutputSystem
+                systemPrompt: LookAfterPrompts.structuredOutputSystem,
+                tier: .economy
             ) {
                 let trimmed = calibration.trimmingCharacters(in: .whitespacesAndNewlines)
                 UserCalibrationStore.append(summary: trimmed, source: .journal, rawInput: text)
@@ -301,7 +302,6 @@ struct TodayEndOfDayJournalCard: View {
         }
         .padding()
     }
-    .background(Color.black)
-    .preferredColorScheme(.dark)
+    .background(DesignSystem.backgroundPrimary)
 }
 #endif

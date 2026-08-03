@@ -4,10 +4,9 @@ import LookAfterData
 import LookAfterFeatures
 import LookAfterHealth
 
-/// Root switcher — Classic and AI Executive share `AppShellState` (same data).
+/// Root shell — V4 single canvas (Classic + Companion retired).
 struct ExperienceRootView: View {
     @EnvironmentObject private var shell: AppShellState
-    @EnvironmentObject private var experience: ExperienceModeController
     @StateObject private var firebase = FirebaseManager.shared
     @StateObject private var healthSync = HealthSyncService.shared
     @ObservedObject private var analytics = BackgroundAnalyticsService.shared
@@ -19,20 +18,11 @@ struct ExperienceRootView: View {
             PremiumBackground()
 
             Group {
-                switch experience.mode {
-                case .classic:
-                    LookAfterMasterCanvas()
-                case .aiExecutive:
-                    AIExecutiveCanvas()
-                }
+                LookAfterMasterCanvas()
             }
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.98)),
-                removal: .opacity.combined(with: .scale(scale: 1.02))
-            ))
+            .transition(.opacity)
         }
-        .animation(.spring(response: 0.45, dampingFraction: 0.86), value: experience.mode)
-        .environment(\.experienceMode, experience.mode)
+        .animation(.easeInOut(duration: 0.25), value: showOnboarding)
         .overlay {
             if firebase.isAuthenticated && showOnboarding {
                 OnboardingView(
@@ -58,7 +48,6 @@ struct ExperienceRootView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: showOnboarding)
         .accessibilityIdentifier("screen-root")
         .onChange(of: healthSync.syncPhase) { _, phase in
             guard phase == .complete, firebase.isAuthenticated else { return }
@@ -125,8 +114,8 @@ struct ExperienceRootView: View {
                 PostWakeSessionStore.recordBackground()
                 shell.persistResume(
                     userId: userId,
-                    screen: experience.mode == .aiExecutive ? "today" : "classic",
-                    experienceMode: experience.mode,
+                    screen: "briefing",
+                    experienceMode: nil,
                     aiPreview: shell.brain.chatHistory.last?.content
                 )
             } else if phase == .active {

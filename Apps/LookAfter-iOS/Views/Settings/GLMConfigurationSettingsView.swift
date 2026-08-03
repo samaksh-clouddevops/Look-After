@@ -21,13 +21,35 @@ struct GLMConfigurationSettingsView: View {
                         .onSubmit { viewModel.save() }
                         .listRowBackground(Color.white.opacity(0.05))
 
-                    TextField("Model", text: $viewModel.defaultModel)
+                    TextField("Premium model", text: $viewModel.defaultModel)
                         .font(.system(size: 13, design: .monospaced))
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
                         .onSubmit { viewModel.save() }
+                        .listRowBackground(Color.white.opacity(0.05))
+
+                    TextField("Standard model", text: $viewModel.standardModel)
+                        .font(.system(size: 13, design: .monospaced))
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .autocorrectionDisabled()
+                        .onSubmit { viewModel.save() }
+                        .listRowBackground(Color.white.opacity(0.05))
+
+                    TextField("Economy model", text: $viewModel.economyModel)
+                        .font(.system(size: 13, design: .monospaced))
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .autocorrectionDisabled()
+                        .onSubmit { viewModel.save() }
+                        .listRowBackground(Color.white.opacity(0.05))
+
+                    Toggle("Tiered routing", isOn: $viewModel.tieredRoutingEnabled)
+                        .onChange(of: viewModel.tieredRoutingEnabled) { _, _ in viewModel.save() }
                         .listRowBackground(Color.white.opacity(0.05))
 
                     Stepper(
@@ -43,9 +65,9 @@ struct GLMConfigurationSettingsView: View {
                         .onChange(of: viewModel.streamingEnabled) { _, _ in viewModel.save() }
                         .listRowBackground(Color.white.opacity(0.05))
                 } header: {
-                    Text("GLM 5.2")
+                    Text("Model tiers")
                 } footer: {
-                    Text("Official API: \(GLMConfiguration.defaultBaseURL). Set \(GLMConfiguration.apiKeyEnvVar) in the environment or add a key in Settings.")
+                    Text("Premium: coach and day planning. Standard: scheduling and inbox. Economy: task analysis and auto-fill. Failed economy/standard calls automatically retry on stronger tiers.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 }
@@ -83,6 +105,9 @@ struct GLMConfigurationSettingsView: View {
 final class GLMConfigurationSettingsViewModel: ObservableObject {
     @Published var baseURL: String = GLMConfiguration.defaultBaseURL
     @Published var defaultModel: String = GLMConfiguration.defaultModel
+    @Published var standardModel: String = GLMConfiguration.defaultStandardModel
+    @Published var economyModel: String = GLMConfiguration.defaultEconomyModel
+    @Published var tieredRoutingEnabled: Bool = true
     @Published var timeoutSeconds: Double = 90
     @Published var streamingEnabled: Bool = true
 
@@ -92,6 +117,9 @@ final class GLMConfigurationSettingsViewModel: ObservableObject {
         let config = glm.configuration
         baseURL = config.baseURL
         defaultModel = config.defaultModel
+        standardModel = config.standardModel
+        economyModel = config.economyModel
+        tieredRoutingEnabled = config.tieredRoutingEnabled
         timeoutSeconds = config.requestTimeoutSeconds
         streamingEnabled = config.streamingEnabled
     }
@@ -100,6 +128,9 @@ final class GLMConfigurationSettingsViewModel: ObservableObject {
         var config = glm.configuration
         config.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         config.defaultModel = defaultModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.standardModel = standardModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.economyModel = economyModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.tieredRoutingEnabled = tieredRoutingEnabled
         config.requestTimeoutSeconds = timeoutSeconds
         config.streamingEnabled = streamingEnabled
         glm.updateConfiguration(config)
@@ -120,6 +151,18 @@ struct GLMUsageSettingsView: View {
 
             List {
                 Section {
+                    tokenStatRow(
+                        title: "Today",
+                        tokens: summary.dailyTotalTokens,
+                        promptTokens: summary.dailyPromptTokens,
+                        completionTokens: summary.dailyCompletionTokens
+                    )
+                    tokenStatRow(
+                        title: "This month",
+                        tokens: summary.monthlyTotalTokens,
+                        promptTokens: summary.monthlyPromptTokens,
+                        completionTokens: summary.monthlyCompletionTokens
+                    )
                     statRow("Today", value: "\(summary.dailyRequestCount) requests", detail: String(format: "$%.4f", summary.dailyTotalUSD))
                     statRow("This month", value: "\(summary.monthlyRequestCount) requests", detail: String(format: "$%.4f", summary.monthlyTotalUSD))
                 } header: {
@@ -181,6 +224,28 @@ struct GLMUsageSettingsView: View {
             }
             Spacer()
             Text(value)
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundColor(DesignSystem.textSecondary)
+        }
+        .listRowBackground(Color.white.opacity(0.05))
+    }
+
+    private func tokenStatRow(
+        title: String,
+        tokens: Int,
+        promptTokens: Int,
+        completionTokens: Int
+    ) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                Text("\(GLMUsageSummary.formatTokenCount(promptTokens)) in · \(GLMUsageSummary.formatTokenCount(completionTokens)) out")
+                    .font(.system(size: 11))
+                    .foregroundColor(DesignSystem.textMuted)
+            }
+            Spacer()
+            Text("\(GLMUsageSummary.formatTokenCount(tokens)) tokens")
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(DesignSystem.textSecondary)
         }

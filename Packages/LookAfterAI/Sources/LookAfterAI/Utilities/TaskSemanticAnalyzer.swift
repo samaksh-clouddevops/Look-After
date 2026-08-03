@@ -16,7 +16,8 @@ public final class TaskSemanticAnalyzer: @unchecked Sendable {
         let prompt = LookAfterPrompts.taskSemanticPrompt(task: task)
         let response = try await glm.complete(
             prompt: prompt,
-            systemPrompt: LookAfterPrompts.structuredOutputSystem
+            systemPrompt: LookAfterPrompts.structuredOutputSystem,
+            tier: .economy
         )
 
         let cleaned = response

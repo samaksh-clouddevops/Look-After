@@ -44,7 +44,7 @@ struct TaskListView: View {
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(isCardStackMode ? DesignSystem.accentPrimary : DesignSystem.textMuted)
                             .padding(DesignSystem.spacingSM)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+                            .background(Circle().fill(DesignSystem.backgroundElevated))
                     }
                     .minTouchTarget()
                     
@@ -53,7 +53,7 @@ struct TaskListView: View {
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(DesignSystem.accentPrimary)
                             .padding(DesignSystem.spacingSM)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+                            .background(Circle().fill(DesignSystem.backgroundElevated))
                     }
                     .minTouchTarget()
                     .accessibilityLabel("Import tasks from file")
@@ -133,7 +133,7 @@ struct TaskListView: View {
                             )
                         }
                     }
-                    .listStyle(.plain)
+                    .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: filteredTasks.map(\.id))
                 }

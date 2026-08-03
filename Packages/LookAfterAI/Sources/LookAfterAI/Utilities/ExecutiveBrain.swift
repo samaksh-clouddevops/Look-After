@@ -135,7 +135,8 @@ public final class ExecutiveBrain: ObservableObject {
             let response = try await glm.sendMessage(
                 message,
                 systemPrompt: systemPrompt,
-                history: previousHistory
+                history: previousHistory,
+                tier: .premium
             )
 
             let assistantMessage = ChatMessage(role: .assistant, content: response)

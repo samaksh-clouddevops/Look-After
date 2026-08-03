@@ -45,7 +45,7 @@ final class FullAppIntegrationTests: XCTestCase {
             secretStore: InMemorySecretStore(),
             metadataKey: "integration.test.\(UUID().uuidString)"
         ))
-        glm.debugCompleteHandler = { _ in """
+        glm.debugCompleteHandler = { _, _ in """
         {
             "detectedRecurrence": "none",
             "steps": [

@@ -22,7 +22,7 @@ struct DailyBriefingCustomizationView: View {
                                 Text(mode.label).tag(mode)
                             }
                         }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
                     } header: {
                         Text("Display")
                     }
@@ -48,7 +48,7 @@ struct DailyBriefingCustomizationView: View {
                                 .labelsHidden()
                                 .tint(DesignSystem.accentPrimary)
                             }
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.backgroundSecondary)
                             .swipeActions(edge: .leading) {
                                 Button {
                                     briefingVM.togglePin(kind)
@@ -90,7 +90,6 @@ struct DailyBriefingCustomizationView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .accessibilityIdentifier("screen-daily-briefing-customization")
     }
 }

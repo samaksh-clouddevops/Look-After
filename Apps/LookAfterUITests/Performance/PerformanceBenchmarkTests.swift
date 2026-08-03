@@ -28,7 +28,8 @@ final class PerformanceBenchmarkTests: FlowTestBase {
         launch()
         waitForBriefing()
         let start = Date()
-        tapTab("work")
+        tapTab("today")
+        if app.buttons["nav-all-tasks"].exists { app.buttons["nav-all-tasks"].tap() }
         _ = app.otherElements["screen-task-list"].waitForExistence(timeout: 3)
         let ms = Int(Date().timeIntervalSince(start) * 1000)
         EvidenceWriter.write(source: source, status: ms < 500 ? "pass" : "fail", durationMs: ms, metrics: ["tabTransitionMs": Double(ms)])

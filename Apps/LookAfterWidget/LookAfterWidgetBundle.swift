@@ -170,7 +170,7 @@ struct NowWidgetView: View {
     private var energyBadge: some View {
         Text("\(entry.snapshot.energyScore)%")
             .font(.dsMetadata(weight: .bold))
-            .foregroundColor(DesignSystem.backgroundPrimary)
+            .foregroundColor(DesignSystem.accentOnPrimary)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Capsule().fill(WidgetStyle.accent))
@@ -179,7 +179,7 @@ struct NowWidgetView: View {
     private var energyRing: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.08), lineWidth: 5)
+                .stroke(DesignSystem.divider, lineWidth: 5)
                 .frame(width: 52, height: 52)
             Circle()
                 .trim(from: 0, to: Double(entry.snapshot.energyScore) / 100)
@@ -306,7 +306,7 @@ struct TasksWidgetView: View {
                 ForEach(entry.snapshot.tasks.prefix(3)) { task in
                     HStack(spacing: 8) {
                         Circle()
-                            .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                            .stroke(DesignSystem.border, lineWidth: 1.5)
                             .frame(width: 14, height: 14)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(task.title)

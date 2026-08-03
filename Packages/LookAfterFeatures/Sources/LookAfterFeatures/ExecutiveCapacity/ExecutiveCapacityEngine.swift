@@ -326,7 +326,7 @@ public final class ExecutiveCapacityEngine {
             isInFlow: input.isInFlowSession
         )
 
-        let raw = try await glm.sendMessage(prompt, systemPrompt: LookAfterPrompts.executiveCapacitySystem, history: [])
+        let raw = try await glm.sendMessage(prompt, systemPrompt: LookAfterPrompts.executiveCapacitySystem, history: [], tier: .economy)
         guard let data = extractJSON(from: raw)?.data(using: .utf8),
               let decoded = try? JSONDecoder().decode(LLMCapacityResponse.self, from: data) else {
             return baseline

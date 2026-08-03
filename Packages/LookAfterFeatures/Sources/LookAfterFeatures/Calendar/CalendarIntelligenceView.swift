@@ -206,9 +206,13 @@ public struct CalendarIntelligenceView: View {
                                     .accessibilityLabel("Remove event")
                                 }
                                 .padding()
-                                .background(Color.white.opacity(0.05))
-                                .cornerRadius(16)
-                                .padding(.horizontal)
+                                .background(DesignSystem.backgroundSecondary)
+                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                                        .stroke(DesignSystem.border, lineWidth: 1)
+                                )
+                                .padding(.horizontal, DesignSystem.screenHorizontal)
                                 .contextMenu {
                                     Button(role: .destructive) {
                                         HapticManager.notification(.warning)

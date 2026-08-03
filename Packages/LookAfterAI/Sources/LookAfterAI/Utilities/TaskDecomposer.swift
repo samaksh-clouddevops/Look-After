@@ -13,7 +13,8 @@ public final class TaskDecomposer: @unchecked Sendable {
         let prompt = LookAfterPrompts.taskDecompositionPrompt(task: task)
         let response = try await glm.complete(
             prompt: prompt,
-            systemPrompt: LookAfterPrompts.structuredOutputSystem
+            systemPrompt: LookAfterPrompts.structuredOutputSystem,
+            tier: .economy
         )
 
         let cleaned = response

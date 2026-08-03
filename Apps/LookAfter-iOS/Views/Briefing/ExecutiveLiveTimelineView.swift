@@ -119,74 +119,75 @@ struct ExecutiveLiveTimelineView: View {
             .padding(.vertical, DesignSystem.spacingLG)
     }
 
-    // MARK: - Continuous timeline
+    // MARK: - Continuous timeline (V4 — Apple Calendar rows)
 
     private var continuousTimeline: some View {
         let phases = rowPhases(rows)
-        let progressY = progressLineEndY(phases: phases)
 
-        return ZStack(alignment: .topLeading) {
-            ContinuousTimelineTrack(
-                height: railHeight,
-                progressY: progressY
+        return VStack(spacing: DesignSystem.spacingSM) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                timelineRowView(row: row, phase: phases[index])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func timelineRowView(row: ExecutivePlanningTimelineRow, phase: TimelineEventPhase) -> some View {
+        let isCompleting = row.taskId.map { completingTaskIds.contains($0) } ?? false
+        let isRescheduling = row.taskId.map { reschedulingTaskIds.contains($0) } ?? false
+
+        VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+            LATimelineRow(
+                timeLabel: row.scheduleRangeLabel.isEmpty ? row.timeLabel : row.scheduleRangeLabel,
+                title: row.title,
+                subtitle: timelineSubtitle(for: row, phase: phase),
+                icon: row.icon,
+                isCurrent: phase == .current && !row.isCompleted,
+                isCompleted: row.isCompleted
             )
-            .frame(width: ExecutiveTimelineVisuals.gutterWidth)
-            .allowsHitTesting(false)
-
-            VStack(alignment: .leading, spacing: ExecutiveTimelineVisuals.rowSpacing) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    HStack(alignment: .top, spacing: ExecutiveTimelineVisuals.cardLeadingInset) {
-                        TimelineDotView(phase: phases[index])
-                            .frame(width: ExecutiveTimelineVisuals.gutterWidth)
-                            .background(
-                                GeometryReader { geo in
-                                    Color.clear.preference(
-                                        key: TimelineDotCenterKey.self,
-                                        value: [row.id: geo.frame(in: .named("executiveTimeline")).midY]
-                                    )
-                                }
-                            )
-
-                        EventTimelineCard(
-                            row: row,
-                            phase: phases[index],
-                            isCompleting: row.taskId.map { completingTaskIds.contains($0) } ?? false,
-                            isRescheduling: row.taskId.map { reschedulingTaskIds.contains($0) } ?? false,
-                            onDoubleTapComplete: row.taskId.flatMap { taskId in
-                                guard !row.isCompleted else { return nil }
-                                return {
-                                    completingTaskIds.insert(taskId)
-                                    onCompleteTask?(taskId)
-                                    Task {
-                                        try? await Task.sleep(nanoseconds: 600_000_000)
-                                        completingTaskIds.remove(taskId)
-                                    }
-                                }
-                            },
-                            onReschedule: row.canReschedule ? row.taskId.flatMap { taskId in
-                                {
-                                    reschedulingTaskIds.insert(taskId)
-                                    onRescheduleTask?(taskId)
-                                    Task {
-                                        try? await Task.sleep(nanoseconds: 800_000_000)
-                                        reschedulingTaskIds.remove(taskId)
-                                    }
-                                }
-                            } : nil
-                        )
-                    }
+            .opacity(row.isCompleted ? 0.72 : ((isCompleting || isRescheduling) ? 0.55 : 1))
+            .scaleEffect((isCompleting || isRescheduling) ? 0.98 : 1)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                guard !row.isCompleted, let taskId = row.taskId else { return }
+                completingTaskIds.insert(taskId)
+                onCompleteTask?(taskId)
+                Task {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    completingTaskIds.remove(taskId)
                 }
             }
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { railHeight = proxy.size.height }
-                        .onChange(of: proxy.size.height) { _, h in railHeight = h }
+            .accessibilityAction(named: "Mark complete") {
+                guard !row.isCompleted, let taskId = row.taskId else { return }
+                onCompleteTask?(taskId)
+            }
+
+            if row.canReschedule, let taskId = row.taskId, let onRescheduleTask {
+                Button {
+                    reschedulingTaskIds.insert(taskId)
+                    onRescheduleTask(taskId)
+                    Task {
+                        try? await Task.sleep(nanoseconds: 800_000_000)
+                        reschedulingTaskIds.remove(taskId)
+                    }
+                } label: {
+                    Text(row.isPast ? "Reschedule to next open slot" : "Reschedule")
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundColor(DesignSystem.accentPrimary)
                 }
-            )
+                .buttonStyle(.plain)
+                .disabled(isRescheduling)
+                .padding(.leading, 72)
+            }
         }
-        .coordinateSpace(name: "executiveTimeline")
-        .onPreferenceChange(TimelineDotCenterKey.self) { dotCenters = $0 }
+    }
+
+    private func timelineSubtitle(for row: ExecutivePlanningTimelineRow, phase: TimelineEventPhase) -> String? {
+        if row.isCompleted { return "Done" }
+        if phase == .current { return "Now" }
+        if !row.subtitle.isEmpty { return row.subtitle }
+        if row.isPast { return "Earlier today" }
+        return row.kind.sectionLabel
     }
 
     // MARK: - Phase logic
@@ -499,7 +500,7 @@ private struct EventTimelineCard: View {
     private var categoryIcon: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(row.isCompleted ? ExecutiveTimelineVisuals.lime.opacity(0.2) : Color.white.opacity(0.08))
+                .fill(row.isCompleted ? ExecutiveTimelineVisuals.lime.opacity(0.2) : DesignSystem.backgroundElevated)
                 .frame(width: 26, height: 26)
             Image(systemName: row.icon)
                 .font(.system(size: 12, weight: .semibold))

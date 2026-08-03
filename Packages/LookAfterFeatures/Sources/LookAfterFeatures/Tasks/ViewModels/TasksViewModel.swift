@@ -1188,7 +1188,8 @@ public final class InboxViewModel: ObservableObject {
         do {
             let response = try await glm.complete(
                 prompt: prompt,
-                systemPrompt: LookAfterPrompts.inboxProcessingSystem
+                systemPrompt: LookAfterPrompts.inboxProcessingSystem,
+                tier: .standard
             )
             
             let cleaned = response

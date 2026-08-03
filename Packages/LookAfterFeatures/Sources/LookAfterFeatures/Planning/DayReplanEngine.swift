@@ -87,7 +87,7 @@ public final class DayReplanEngine {
 
         let raw: String
         do {
-            raw = try await glm.sendMessage(prompt, systemPrompt: system, history: [])
+            raw = try await glm.sendMessage(prompt, systemPrompt: system, history: [], tier: .premium)
         } catch {
             print("[DayReplan] AI unavailable: \(error.localizedDescription)")
             return localFallback(context: context)

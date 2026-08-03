@@ -30,18 +30,14 @@ struct BrainDashboardView: View {
             PremiumBackground()
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: DesignSystem.spacingLG) {
+                VStack(spacing: DesignSystem.spacingXL) {
                     headerSection
-                    resumeSection
+                    askBrainSection
                     heroSection
-                    capacitySection
-                    scaffoldingSection
-                    headsUpSection
-                    backupSection
-                    capturePill
+                    secondarySections
                     Spacer(minLength: 100)
                 }
-                .padding(.horizontal, DesignSystem.spacingMD)
+                .padding(.horizontal, DesignSystem.screenHorizontal)
                 .padding(.top, DesignSystem.spacingSM)
             }
         }
@@ -53,6 +49,65 @@ struct BrainDashboardView: View {
         .sheet(isPresented: $showEnergyLog) {
             BrainEnergyLogSheet(brainVM: brainVM, userId: userId)
         }
+    }
+
+    // MARK: - Ask Brain (primary path)
+
+    private var askBrainSection: some View {
+        Button(action: onNavigateToCoach) {
+            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+                HStack {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(DesignSystem.accentPrimary)
+                    Text("Ask Brain")
+                        .font(.dsHeadline())
+                        .foregroundColor(DesignSystem.textPrimary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+
+                Text("What's on your mind? I can help you plan, prioritize, or untangle the day.")
+                    .font(.dsSecondary())
+                    .foregroundColor(DesignSystem.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(DesignSystem.cardPaddingMin)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                    .fill(DesignSystem.backgroundSecondary)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                    .stroke(DesignSystem.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("brain-ask-entry")
+        .accessibilityLabel("Ask Brain")
+    }
+
+    @ViewBuilder
+    private var secondarySections: some View {
+        resumeSection
+        capacitySection
+
+        DisclosureGroup("Tools & shortcuts") {
+            VStack(spacing: DesignSystem.spacingMD) {
+                scaffoldingSection
+                headsUpSection
+                backupSection
+                capturePill
+            }
+            .padding(.top, DesignSystem.spacingSM)
+        }
+        .font(.dsCaption(weight: .semibold))
+        .foregroundColor(DesignSystem.textSecondary)
+        .tint(DesignSystem.accentPrimary)
     }
 
     // MARK: - Header

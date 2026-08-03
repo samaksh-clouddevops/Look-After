@@ -93,7 +93,8 @@ public final class DailyPlannerViewModel: ObservableObject {
         do {
             let response = try await glm.complete(
                 prompt: schedulingPrompt(healthContext: healthContext, dayLabel: dayLabel),
-                systemPrompt: LookAfterPrompts.dailySchedulerSystem
+                systemPrompt: LookAfterPrompts.dailySchedulerSystem,
+                tier: .standard
             )
             let suggestions = try decodeSuggestions(from: response)
             let summary = dayLabel == "tomorrow"

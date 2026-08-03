@@ -1,7 +1,7 @@
 import Foundation
 import LookAfterCore
 
-/// The only AI networking layer — communicates directly with the official GLM 5.2 API.
+/// The only AI networking layer — communicates directly with the official z.ai GLM API.
 public final class GLMService: @unchecked Sendable {
     public static let shared = GLMService()
 
@@ -46,8 +46,8 @@ public final class GLMService: @unchecked Sendable {
 
 #if DEBUG
     /// Test override — returns stubbed text without network.
-    public var debugCompleteHandler: (@Sendable (String) async throws -> String)?
-    public var debugSendMessageHandler: (@Sendable (String, String?, [ChatMessage]) async throws -> String)?
+    public var debugCompleteHandler: (@Sendable (String, AIModelTier) async throws -> String)?
+    public var debugSendMessageHandler: (@Sendable (String, String?, [ChatMessage], AIModelTier) async throws -> String)?
 #endif
 
     // MARK: - Public API
@@ -56,64 +56,107 @@ public final class GLMService: @unchecked Sendable {
     public func sendMessage(
         _ message: String,
         systemPrompt: String? = nil,
-        history: [ChatMessage] = []
+        history: [ChatMessage] = [],
+        tier: AIModelTier = .premium
     ) async throws -> String {
 #if DEBUG
         if let debugSendMessageHandler {
-            return try await debugSendMessageHandler(message, systemPrompt, history)
+            return try await debugSendMessageHandler(message, systemPrompt, history, tier)
         }
 #endif
-        let response = try await chatCompletion(
-            messages: buildMessages(message: message, systemPrompt: systemPrompt, history: history),
-            temperature: 0.7,
-            maxTokens: 4096
-        )
-        return response.content
+        let config = configurationStore.load()
+        var lastError: Error?
+
+        for attemptTier in config.fallbackTiers(startingAt: tier) {
+            do {
+                let response = try await chatCompletion(
+                    messages: buildMessages(message: message, systemPrompt: systemPrompt, history: history),
+                    temperature: 0.7,
+                    maxTokens: 4096,
+                    tier: attemptTier
+                )
+                guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    continue
+                }
+                return response.content
+            } catch {
+                lastError = error
+            }
+        }
+
+        throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 
     /// Single-turn structured prompt (JSON extraction, task decomposition, etc.).
-    public func complete(prompt: String, systemPrompt: String? = nil) async throws -> String {
+    public func complete(
+        prompt: String,
+        systemPrompt: String? = nil,
+        tier: AIModelTier = .premium
+    ) async throws -> String {
 #if DEBUG
         if let debugCompleteHandler {
-            return try await debugCompleteHandler(prompt)
+            return try await debugCompleteHandler(prompt, tier)
         }
 #endif
         let system = systemPrompt ?? LookAfterPrompts.structuredOutputSystem
-        let response = try await chatCompletion(
-            messages: buildMessages(message: prompt, systemPrompt: system, history: []),
-            temperature: 0.3,
-            maxTokens: 8192
-        )
-        return response.content
+        let config = configurationStore.load()
+        var lastError: Error?
+
+        for attemptTier in config.fallbackTiers(startingAt: tier) {
+            do {
+                let response = try await chatCompletion(
+                    messages: buildMessages(message: prompt, systemPrompt: system, history: []),
+                    temperature: 0.3,
+                    maxTokens: 8192,
+                    tier: attemptTier
+                )
+                guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    continue
+                }
+                return response.content
+            } catch {
+                lastError = error
+            }
+        }
+
+        throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 
     /// Stream tokens for conversational UI.
     public func stream(
         message: String,
         systemPrompt: String? = nil,
-        history: [ChatMessage] = []
+        history: [ChatMessage] = [],
+        tier: AIModelTier = .premium
     ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
                     let config = self.configurationStore.load()
                     guard config.streamingEnabled else {
-                        let text = try await self.sendMessage(message, systemPrompt: systemPrompt, history: history)
+                        let text = try await self.sendMessage(
+                            message,
+                            systemPrompt: systemPrompt,
+                            history: history,
+                            tier: tier
+                        )
                         continuation.yield(text)
                         continuation.finish()
                         return
                     }
 
                     let messages = self.buildMessages(message: message, systemPrompt: systemPrompt, history: history)
+                    let model = config.model(for: tier)
                     try await self.executeWithRotation { apiKey, keyId in
                         let started = Date()
                         var promptTokens = 0
                         var completionTokens = 0
-                        var model = config.defaultModel
+                        var resolvedModel = model
 
                         for try await chunk in self.streamCompletion(
                             apiKey: apiKey,
                             configuration: config,
+                            model: model,
                             messages: messages,
                             temperature: 0.7,
                             maxTokens: 4096
@@ -121,7 +164,7 @@ public final class GLMService: @unchecked Sendable {
                             if let token = chunk.content, !token.isEmpty {
                                 continuation.yield(token)
                             }
-                            if let m = chunk.model { model = m }
+                            if let m = chunk.model { resolvedModel = m }
                             promptTokens = chunk.promptTokens ?? promptTokens
                             completionTokens = chunk.completionTokens ?? completionTokens
                         }
@@ -129,10 +172,11 @@ public final class GLMService: @unchecked Sendable {
                         let latency = Int(Date().timeIntervalSince(started) * 1000)
                         self.keyManager.recordSuccess(keyId: keyId)
                         self.usageLogger.log(GLMUsageRecord(
-                            model: model,
+                            model: resolvedModel,
                             promptTokens: promptTokens,
                             completionTokens: completionTokens,
                             estimatedCostUSD: GLMUsageLogger.estimateCostUSD(
+                                model: resolvedModel,
                                 promptTokens: promptTokens,
                                 completionTokens: completionTokens
                             ),
@@ -196,16 +240,18 @@ public final class GLMService: @unchecked Sendable {
     private func chatCompletion(
         messages: [[String: Any]],
         temperature: Double,
-        maxTokens: Int
+        maxTokens: Int,
+        tier: AIModelTier
     ) async throws -> ChatResult {
         let config = configurationStore.load()
+        let model = config.model(for: tier)
         let started = Date()
 
         return try await executeWithRotation { apiKey, keyId in
             let client = makeClient(apiKey: apiKey, configuration: config)
             do {
                 let result = try await client.chatCompletion(
-                    model: config.defaultModel,
+                    model: model,
                     messages: messages,
                     temperature: temperature,
                     maxTokens: maxTokens
@@ -217,6 +263,7 @@ public final class GLMService: @unchecked Sendable {
                     promptTokens: result.promptTokens,
                     completionTokens: result.completionTokens,
                     estimatedCostUSD: GLMUsageLogger.estimateCostUSD(
+                        model: result.model,
                         promptTokens: result.promptTokens,
                         completionTokens: result.completionTokens
                     ),
@@ -261,6 +308,7 @@ public final class GLMService: @unchecked Sendable {
     private func streamCompletion(
         apiKey: String,
         configuration: GLMConfiguration,
+        model: String,
         messages: [[String: Any]],
         temperature: Double,
         maxTokens: Int
@@ -276,7 +324,7 @@ public final class GLMService: @unchecked Sendable {
                     request.setValue("en-US,en", forHTTPHeaderField: "Accept-Language")
 
                     let body: [String: Any] = [
-                        "model": configuration.defaultModel,
+                        "model": model,
                         "messages": messages,
                         "temperature": temperature,
                         "max_tokens": maxTokens,

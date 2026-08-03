@@ -57,6 +57,7 @@ public struct PremiumForm<Content: View>: View {
         Form {
             content
         }
+        .listStyle(.insetGrouped)
         .premiumFormStyle()
     }
 }
@@ -71,6 +72,6 @@ public extension View {
     }
 
     func premiumListRowBackground() -> some View {
-        listRowBackground(DesignSystem.backgroundSecondary.opacity(0.5))
+        listRowBackground(DesignSystem.backgroundSecondary)
     }
 }

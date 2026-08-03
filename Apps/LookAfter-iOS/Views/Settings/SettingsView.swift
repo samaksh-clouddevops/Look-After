@@ -6,7 +6,6 @@ import LookAfterHealth
 
 /// Settings View — configure GLM API key, health tracking, ADHD features, and profile.
 struct SettingsView: View {
-    @EnvironmentObject private var experience: ExperienceModeController
     @EnvironmentObject private var shell: AppShellState
     
     @AppStorage("enableHealth") private var enableHealth: Bool = true
@@ -30,6 +29,7 @@ struct SettingsView: View {
     
     @StateObject private var healthSync = HealthSyncService.shared
     @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
+    @State private var aiUsageSummary = GLMUsageSummary()
     
     private let focusChallenges = [
         "Task Initiation",
@@ -46,10 +46,7 @@ struct SettingsView: View {
     ]
     
     var body: some View {
-        ZStack {
-            PremiumBackground()
-            
-            PremiumForm {
+        PremiumForm {
                 // Account & Cloud Sync
                 Section {
                     HStack {
@@ -77,14 +74,14 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.backgroundSecondary)
                     
                     Button(role: .destructive, action: {
                         try? FirebaseManager.shared.signOut()
                     }) {
                         Label("Sign Out", systemImage: "arrow.right.square")
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.backgroundSecondary)
                 } header: {
                     Text("Account & Cloud Sync")
                 } footer: {
@@ -109,7 +106,7 @@ struct SettingsView: View {
                             Text(gender.label).tag(gender)
                         }
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.backgroundSecondary)
                 } header: {
                     Text("Profile")
                 } footer: {
@@ -118,49 +115,6 @@ struct SettingsView: View {
                         .foregroundColor(DesignSystem.textMuted)
                 }
 
-                Section {
-                    Picker("Experience", selection: Binding(
-                        get: { experience.mode },
-                        set: { experience.setMode($0) }
-                    )) {
-                        ForEach(ExperienceMode.allCases) { mode in
-                            VStack(alignment: .leading) {
-                                Text(mode.displayName)
-                            }
-                            .tag(mode)
-                        }
-                    }
-                    .listRowBackground(Color.white.opacity(0.05))
-
-                    Text(experience.mode.subtitle)
-                        .font(.system(size: 12, design: .default))
-                        .foregroundColor(DesignSystem.textMuted)
-                        .listRowBackground(Color.white.opacity(0.05))
-                } header: {
-                    Text("Experience")
-                } footer: {
-                    Text("Switch between Classic module navigation and AI Executive mode instantly. Your data stays the same.")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.textMuted)
-                }
-
-                Section {
-                    Toggle(isOn: Binding(
-                        get: { experience.isAIExecutive },
-                        set: { experience.setMode($0 ? .aiExecutive : .classic) }
-                    )) {
-                        Label("Companion layout", systemImage: "sparkles.rectangle.stack")
-                    }
-                    .tint(DesignSystem.accentPrimary)
-                    .listRowBackground(Color.white.opacity(0.05))
-                } header: {
-                    Text("Experimental Features")
-                } footer: {
-                    Text("When enabled, the app loads the AI-first Today · Brain · Timeline · Profile experience.")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.textMuted)
-                }
-                
                 // AI Executive Profile & Personalization
                 Section {
                     Picker("Primary Focus Challenge", selection: $adhdFocusChallenge) {
@@ -206,7 +160,7 @@ struct SettingsView: View {
                         Image(systemName: "sparkles")
                             .foregroundColor(DesignSystem.accentPrimary)
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.backgroundSecondary)
 
                     if let active = apiKeysVM.activeKey {
                         HStack {
@@ -221,27 +175,40 @@ struct SettingsView: View {
                             Image(systemName: active.status.iconName)
                                 .foregroundColor(active.status == .active ? DesignSystem.success : DesignSystem.warning)
                         }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
                     }
+
+                    NavigationLink {
+                        GLMUsageSettingsView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("AI Usage", systemImage: "chart.bar.doc.horizontal")
+                            Text(aiUsagePreviewText)
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textSecondary)
+                        }
+                    }
+                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .accessibilityIdentifier("settings-ai-usage")
 
                     NavigationLink {
                         GLMConfigurationSettingsView()
                     } label: {
                         Label("GLM Configuration", systemImage: "cpu")
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.backgroundSecondary)
 
                     NavigationLink {
                         APIKeysSettingsView()
                     } label: {
                         Label("Manage API Keys", systemImage: "key.fill")
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.backgroundSecondary)
 
                     Text("\(UserFacingCopy.productName) includes a default GLM key for first-run AI. Add your own key in API Keys to replace it, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
                         .font(.system(size: 12, design: .default))
                         .foregroundColor(DesignSystem.textMuted)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
                 } header: {
                     Text("AI Engine")
                 } footer: {
@@ -314,7 +281,7 @@ struct SettingsView: View {
                                     .foregroundColor(DesignSystem.textMuted)
                             }
                         }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
                         
                         if let lastSync = healthSync.lastSyncDate {
                             HStack {
@@ -323,17 +290,17 @@ struct SettingsView: View {
                                 Text(lastSync.formatted(date: .abbreviated, time: .shortened))
                                     .foregroundColor(DesignSystem.textSecondary)
                             }
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.backgroundSecondary)
                         }
                         
                         if healthSync.isSyncing || !healthSync.syncSteps.isEmpty || healthSync.syncPhase == .failed {
                             HealthSyncProgressView(healthSync: healthSync, style: .full)
-                                .listRowBackground(Color.white.opacity(0.05))
+                                .listRowBackground(DesignSystem.backgroundSecondary)
                         } else if let message = healthSync.syncMessage {
                             Text(message)
                                 .font(.system(size: 12, design: .default))
                                 .foregroundColor(DesignSystem.textSecondary)
-                                .listRowBackground(Color.white.opacity(0.05))
+                                .listRowBackground(DesignSystem.backgroundSecondary)
                         }
                         
                         Button(action: {
@@ -356,7 +323,7 @@ struct SettingsView: View {
                             }
                         }
                         .disabled(healthSync.isSyncing)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
                     } header: {
                         Text("Health Data Sync")
                     } footer: {
@@ -385,7 +352,7 @@ struct SettingsView: View {
                         } label: {
                             Label("Cycle dashboard", systemImage: "calendar.circle")
                         }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
 
                         Stepper("Cycle length: \(cyclePreferences.averageCycleLengthDays) days", value: Binding(
                             get: { cyclePreferences.averageCycleLengthDays },
@@ -394,7 +361,7 @@ struct SettingsView: View {
                                 CyclePreferencesStore.save(cyclePreferences)
                             }
                         ), in: 21...40)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
 
                         Stepper("Period length: \(cyclePreferences.averagePeriodLengthDays) days", value: Binding(
                             get: { cyclePreferences.averagePeriodLengthDays },
@@ -403,7 +370,7 @@ struct SettingsView: View {
                                 CyclePreferencesStore.save(cyclePreferences)
                             }
                         ), in: 2...10)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
 
                         DatePicker("Last period start", selection: Binding(
                             get: { cyclePreferences.lastPeriodStart ?? Date() },
@@ -412,7 +379,7 @@ struct SettingsView: View {
                                 CyclePreferencesStore.save(cyclePreferences)
                             }
                         ), displayedComponents: .date)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.backgroundSecondary)
                     }
                 } header: {
                     Text("Cycle tracking")
@@ -444,7 +411,7 @@ struct SettingsView: View {
                                 .foregroundColor(DesignSystem.textMuted)
                         }
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.backgroundSecondary)
                 } header: {
                     Text("Widgets & Lock Screen")
                 } footer: {
@@ -514,6 +481,7 @@ struct SettingsView: View {
             #endif
             .onAppear {
                 apiKeysVM.refresh()
+                refreshAIUsageSummary()
                 lifeProfile = UserLifeProfileStore.load()
                 structuredProfileSections = LifeProfileComposer.parse(lifeProfile.profileText)
                 UserLifeProfileStore.syncUserNameFromProfileIfNeeded()
@@ -535,12 +503,22 @@ struct SettingsView: View {
             .keyboardDismissToolbar()
             .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("screen-settings")
-        }
     }
 
     private func syncStructuredProfileToStore() {
         lifeProfile.profileText = LifeProfileComposer.compile(structuredProfileSections)
         persistLifeProfile()
+    }
+
+    private var aiUsagePreviewText: String {
+        if aiUsageSummary.dailyTotalTokens == 0, aiUsageSummary.dailyRequestCount == 0 {
+            return "No AI usage logged today"
+        }
+        return "Today: \(GLMUsageSummary.formatTokenCount(aiUsageSummary.dailyTotalTokens)) tokens · \(String(format: "$%.4f", aiUsageSummary.dailyTotalUSD))"
+    }
+
+    private func refreshAIUsageSummary() {
+        aiUsageSummary = GLMService.shared.usageSummary()
     }
 
     private func organizeLifeProfileInSettings() async {
@@ -549,7 +527,8 @@ struct SettingsView: View {
         do {
             let polished = try await GLMService.shared.complete(
                 prompt: prompt,
-                systemPrompt: LookAfterPrompts.profileOrganizeSystem
+                systemPrompt: LookAfterPrompts.profileOrganizeSystem,
+                tier: .economy
             )
             let trimmed = polished.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }

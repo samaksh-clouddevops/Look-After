@@ -32,7 +32,8 @@ public final class LLMPlanningEngine {
             let raw = try await glm.sendMessage(
                 prompt,
                 systemPrompt: system,
-                history: chatHistory
+                history: chatHistory,
+                tier: .premium
             )
 
             var response = try decodeResponse(from: raw, fallbackMessage: message, context: context, analysis: analysis)

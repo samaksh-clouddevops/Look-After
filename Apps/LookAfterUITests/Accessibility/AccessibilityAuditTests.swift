@@ -4,7 +4,7 @@ final class AccessibilityAuditTests: FlowTestBase {
     func testP0ScreensHaveLabels() throws {
         launch()
         waitForBriefing()
-        let tabs = ["briefing", "timeline", "work", "brain", "you"]
+        let tabs = ["briefing", "today", "capture", "brain", "you"]
         var failures: [String] = []
         var checks = 0
         var passed = 0
@@ -74,7 +74,7 @@ final class AccessibilityAuditTests: FlowTestBase {
         var automatedPassed = 0
 
         // Label presence on tab bar
-        for tab in ["briefing", "timeline", "work", "brain", "you"] {
+        for tab in ["briefing", "today", "capture", "brain", "you"] {
             automatedChecks += 1
             let btn = app.buttons["tab-\(tab)"]
             if btn.exists && !btn.label.isEmpty { automatedPassed += 1 }
@@ -83,7 +83,10 @@ final class AccessibilityAuditTests: FlowTestBase {
         // Primary screens expose identifiers
         for screen in ["screen-briefing", "screen-task-list", "screen-brain-dashboard"] {
             automatedChecks += 1
-            tapTab(screen == "screen-briefing" ? "briefing" : (screen == "screen-task-list" ? "work" : "brain"))
+            tapTab(screen == "screen-briefing" ? "briefing" : (screen == "screen-task-list" ? "today" : "brain"))
+            if screen == "screen-task-list", app.buttons["nav-all-tasks"].exists {
+                app.buttons["nav-all-tasks"].tap()
+            }
             sleep(1)
             if app.otherElements[screen].exists || app.buttons[screen.replacingOccurrences(of: "screen-", with: "tab-")].exists {
                 automatedPassed += 1

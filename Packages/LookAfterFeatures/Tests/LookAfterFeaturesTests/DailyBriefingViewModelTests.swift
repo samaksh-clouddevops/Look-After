@@ -121,7 +121,7 @@ private func mockGLMService(stub: String = "") -> GLMService {
         secretStore: InMemorySecretStore(),
         metadataKey: "briefing.test.\(UUID().uuidString)"
     ))
-    glm.debugCompleteHandler = { _ in stub }
-    glm.debugSendMessageHandler = { _, _, _ in stub }
+    glm.debugCompleteHandler = { _, _ in stub }
+    glm.debugSendMessageHandler = { _, _, _, _ in stub }
     return glm
 }

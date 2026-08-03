@@ -127,12 +127,15 @@ public struct CardContainerView<Content: View>: View {
     }
 
     public var body: some View {
-        ElevatedSurface(padding: compact ? DesignSystem.spacingMD : DesignSystem.spacingLG) {
-            VStack(alignment: .leading, spacing: compact ? DesignSystem.spacingSM : DesignSystem.spacingMD) {
-                SectionHeaderView(title: title, icon: icon, iconGradient: iconGradient)
-                content
-            }
+        VStack(alignment: .leading, spacing: compact ? DesignSystem.spacingSM : DesignSystem.spacingMD) {
+            SectionHeaderView(title: title, icon: icon, iconGradient: iconGradient)
+            content
         }
+        .elevatedSurface(
+            padding: compact ? DesignSystem.spacingMD : DesignSystem.cardPaddingMin,
+            emphasis: .standard,
+            cornerRadius: DesignSystem.radiusLG
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }

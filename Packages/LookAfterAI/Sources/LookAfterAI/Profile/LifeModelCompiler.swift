@@ -16,16 +16,19 @@ public final class LifeModelCompiler {
         }
 
         if preferAI, glm.hasConfiguredAPIKey {
-            do {
-                let raw = try await glm.complete(
-                    prompt: LookAfterPrompts.lifeModelCompilePrompt(markdown: trimmed),
-                    systemPrompt: LookAfterPrompts.lifeModelCompileSystem
-                )
-                if let decoded = decodeModel(from: raw) {
-                    return LifeModelValidator.validateAndMerge(decoded, markdown: trimmed)
+            for tier: AIModelTier in [.standard, .premium] {
+                do {
+                    let raw = try await glm.complete(
+                        prompt: LookAfterPrompts.lifeModelCompilePrompt(markdown: trimmed),
+                        systemPrompt: LookAfterPrompts.lifeModelCompileSystem,
+                        tier: tier
+                    )
+                    if let decoded = decodeModel(from: raw) {
+                        return LifeModelValidator.validateAndMerge(decoded, markdown: trimmed)
+                    }
+                } catch {
+                    print("[LifeModelCompiler] AI compile failed (\(tier.rawValue)): \(error.localizedDescription)")
                 }
-            } catch {
-                print("[LifeModelCompiler] AI compile failed: \(error.localizedDescription)")
             }
         }
 

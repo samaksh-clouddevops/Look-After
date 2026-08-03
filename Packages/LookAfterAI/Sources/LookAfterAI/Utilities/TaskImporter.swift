@@ -40,7 +40,8 @@ public final class TaskImporter: @unchecked Sendable {
         let prompt = LookAfterPrompts.taskImportPrompt(fileName: fileName, fileContent: text)
         let response = try await glm.complete(
             prompt: prompt,
-            systemPrompt: LookAfterPrompts.structuredOutputSystem
+            systemPrompt: LookAfterPrompts.structuredOutputSystem,
+            tier: .economy
         )
         return try parseResponse(response, fileName: fileName)
     }

@@ -13,7 +13,7 @@ struct LookAfterMacApp: App {
     var body: some Scene {
         WindowGroup {
             MacContentView()
-                .preferredColorScheme(.dark)
+                .lookAfterThemed()
                 .frame(minWidth: 900, minHeight: 600)
         }
         .windowStyle(.titleBar)

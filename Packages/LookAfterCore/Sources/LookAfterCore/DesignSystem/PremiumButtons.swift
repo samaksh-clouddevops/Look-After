@@ -64,11 +64,11 @@ public struct PremiumPrimaryButton: View {
 
     public var body: some View {
         Button(action: action) {
-            PremiumButtonLabel(title: title, icon: icon, foreground: DesignSystem.backgroundPrimary, allowsWrap: true)
+            PremiumButtonLabel(title: title, icon: icon, foreground: DesignSystem.accentOnPrimary, allowsWrap: true)
                 .frame(maxWidth: fillsWidth ? .infinity : nil)
                 .background(
-                    RoundedRectangle(cornerRadius: PremiumButtonMetrics.cornerRadius, style: .continuous)
-                        .fill(DesignSystem.accentPrimary)
+                RoundedRectangle(cornerRadius: DesignSystem.radiusFloating, style: .continuous)
+                    .fill(DesignSystem.accentPrimary)
                 )
         }
         .buttonStyle(PremiumPressStyle())
@@ -78,21 +78,23 @@ public struct PremiumPrimaryButton: View {
 // MARK: - Primary button style (for custom Button labels)
 
 public struct PremiumPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public init() {}
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.dsHeadline())
-            .foregroundColor(DesignSystem.backgroundPrimary)
+            .foregroundColor(DesignSystem.accentOnPrimary)
             .padding(.horizontal, PremiumButtonMetrics.horizontalPadding)
             .padding(.vertical, PremiumButtonMetrics.verticalPadding)
             .frame(minHeight: PremiumButtonMetrics.minHeight)
             .background(
-                RoundedRectangle(cornerRadius: PremiumButtonMetrics.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignSystem.radiusFloating, style: .continuous)
                     .fill(configuration.isPressed ? DesignSystem.accentPressed : DesignSystem.accentPrimary)
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(PremiumMotion.pressSpring, value: configuration.isPressed)
+            .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: configuration.isPressed)
     }
 }
 
@@ -133,7 +135,7 @@ public struct PremiumGhostButton: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: PremiumButtonMetrics.cornerRadius, style: .continuous)
-                    .stroke(DesignSystem.divider, lineWidth: 1)
+                    .stroke(DesignSystem.border, lineWidth: 1)
             )
         }
         .buttonStyle(PremiumPressStyle())
@@ -186,7 +188,7 @@ public struct PremiumCompactButton: View {
 
     private var foreground: Color {
         switch role {
-        case .primary: return DesignSystem.backgroundPrimary
+        case .primary: return DesignSystem.accentOnPrimary
         case .secondary: return DesignSystem.textPrimary
         case .tertiary: return DesignSystem.textSecondary
         }
@@ -196,7 +198,7 @@ public struct PremiumCompactButton: View {
         switch role {
         case .primary: return DesignSystem.accentPrimary
         case .secondary: return DesignSystem.backgroundSecondary
-        case .tertiary: return Color.white.opacity(0.06)
+        case .tertiary: return DesignSystem.backgroundElevated
         }
     }
 }
@@ -274,7 +276,7 @@ public struct PremiumToolbarCluster: View {
             )
             .overlay(
                 Capsule(style: .continuous)
-                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                    .stroke(DesignSystem.border, lineWidth: 1)
             )
         }
         .padding(.horizontal, DesignSystem.screenHorizontal)

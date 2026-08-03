@@ -32,7 +32,7 @@ public struct ElevatedSurfaceModifier: ViewModifier {
             .background(surfaceBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(strokeOpacity), lineWidth: 1)
+                    .stroke(DesignSystem.border.opacity(strokeOpacity), lineWidth: 1)
             )
             .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowY)
     }
@@ -42,11 +42,11 @@ public struct ElevatedSurfaceModifier: ViewModifier {
     }
 
     private var strokeOpacity: Double {
-        emphasis == .prominent ? 0.06 : 0.04
+        emphasis == .prominent ? 1 : 1
     }
 
     private var shadowColor: Color {
-        emphasis == .subtle ? .clear : DesignSystem.shadowElevated.opacity(emphasis == .prominent ? 1 : 0.6)
+        emphasis == .subtle ? .clear : DesignSystem.shadowElevated
     }
 
     private var shadowRadius: CGFloat {
@@ -60,18 +60,14 @@ public struct ElevatedSurfaceModifier: ViewModifier {
     @ViewBuilder
     private var surfaceBackground: some View {
         RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .background(
-                RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                    .fill(fillColor)
-            )
+            .fill(fillColor)
     }
 
     private var fillColor: Color {
         switch emphasis {
-        case .prominent: return DesignSystem.backgroundElevated.opacity(0.72)
-        case .standard: return DesignSystem.backgroundElevated.opacity(0.5)
-        case .subtle: return DesignSystem.backgroundSecondary.opacity(0.35)
+        case .prominent: return DesignSystem.backgroundSecondary
+        case .standard: return DesignSystem.backgroundSecondary
+        case .subtle: return DesignSystem.backgroundSecondary.opacity(0.6)
         }
     }
 }

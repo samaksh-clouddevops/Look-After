@@ -67,7 +67,6 @@ struct OnboardingView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .keyboardDismissToolbar()
         .scrollDismissesKeyboard(.interactively)
         .accessibilityIdentifier("screen-onboarding")
@@ -81,7 +80,7 @@ struct OnboardingView: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(DesignSystem.backgroundElevated)
                         .frame(height: 4)
                     Capsule()
                         .fill(DesignSystem.accentPrimary)
@@ -157,7 +156,7 @@ struct OnboardingView: View {
                 .textContentType(.givenName)
                 .autocorrectionDisabled()
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
                 .foregroundColor(DesignSystem.textPrimary)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -179,7 +178,7 @@ struct OnboardingView: View {
                     .foregroundColor(DesignSystem.textSecondary)
                 TextField("e.g. Finish project proposal", text: $userKeyGoals)
                     .padding(14)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
                     .foregroundColor(DesignSystem.textPrimary)
             }
         }
@@ -214,7 +213,7 @@ struct OnboardingView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(selectedGender == gender
                                       ? DesignSystem.accentPrimary.opacity(0.15)
-                                      : Color.white.opacity(0.06))
+                                      : DesignSystem.backgroundElevated)
                         )
                     }
                     .buttonStyle(.plain)
@@ -269,7 +268,7 @@ struct OnboardingView: View {
             TextField("Daily standup 10:00 AM, Gym 7 PM", text: $fixedScheduleNotes, axis: .vertical)
                 .lineLimit(3...6)
                 .padding(12)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
                 .foregroundColor(DesignSystem.textPrimary)
 
             Text("One per line or separated by commas. We’ll turn these into tasks when you finish.")
@@ -329,7 +328,7 @@ struct OnboardingView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
                     }
                     .buttonStyle(.plain)
 
@@ -413,7 +412,7 @@ struct OnboardingView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 7)
                                 .background(
-                                    Capsule().fill(selectedCycleSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : Color.white.opacity(0.06))
+                                    Capsule().fill(selectedCycleSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.backgroundElevated)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -466,7 +465,7 @@ struct OnboardingView: View {
                 .foregroundColor(DesignSystem.textMuted)
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.backgroundElevated))
     }
 
     // MARK: - Footer
@@ -618,7 +617,8 @@ struct OnboardingView: View {
         do {
             let polished = try await GLMService.shared.complete(
                 prompt: prompt,
-                systemPrompt: LookAfterPrompts.profileOrganizeSystem
+                systemPrompt: LookAfterPrompts.profileOrganizeSystem,
+                tier: .economy
             )
             let trimmed = polished.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {

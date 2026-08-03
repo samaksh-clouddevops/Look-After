@@ -8,37 +8,22 @@ struct HealthDetailView: View {
 
     var body: some View {
         ZStack {
-            SleepAtmosphereBackground()
+            DesignSystem.backgroundPrimary.ignoresSafeArea()
 
-            if let summary = shell.brainVM.healthSummary {
-                VStack(spacing: 0) {
-                    Spacer()
-
-                    Text("Last night")
-                        .font(.system(size: 17, weight: .regular))
-                        .foregroundColor(DesignSystem.textSecondary.opacity(0.7))
-                        .padding(.bottom, 24)
-
-                    Text(formatMinutes(summary.totalSleepMinutes))
-                        .font(.system(size: 56, weight: .light))
-                        .foregroundColor(DesignSystem.textPrimary.opacity(0.85))
-                        .tracking(-1)
-
-                    Spacer().frame(height: 64)
-
-                    VStack(spacing: 36) {
-                        sleepWhisper("Deep", formatMinutes(summary.deepSleepMinutes))
-                        sleepWhisper("REM", formatMinutes(summary.remSleepMinutes))
+            ScrollView {
+                VStack(spacing: DesignSystem.spacingLG) {
+                    if let summary = shell.brainVM.healthSummary {
+                        sleepHeroCard(summary)
+                        metricsGrid(summary)
+                    } else {
+                        Text("Connect Apple Health to see recovery metrics.")
+                            .font(.dsSecondary())
+                            .foregroundColor(DesignSystem.textSecondary)
+                            .padding(.top, DesignSystem.spacingHero)
                     }
-                    .padding(.horizontal, 48)
-
-                    Spacer()
-                    Spacer()
                 }
-            } else {
-                Text("—")
-                    .font(.system(size: 48, weight: .light))
-                    .foregroundColor(DesignSystem.textMuted.opacity(0.4))
+                .padding(DesignSystem.screenHorizontal)
+                .padding(.top, DesignSystem.spacingXL)
             }
 
             VStack {
@@ -47,27 +32,78 @@ struct HealthDetailView: View {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(DesignSystem.textMuted.opacity(0.5))
+                            .foregroundColor(DesignSystem.textMuted)
                             .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel("Close health detail")
                 }
-                .padding(.horizontal, 20)
                 Spacer()
             }
+            .padding(.horizontal, DesignSystem.spacingMD)
         }
         .accessibilityIdentifier("screen-health-detail")
     }
 
-    private func sleepWhisper(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(DesignSystem.textMuted.opacity(0.45))
-            Spacer()
-            Text(value)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(DesignSystem.textSecondary.opacity(0.6))
+    private func sleepHeroCard(_ summary: HealthSummary) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            Text("Last night")
+                .font(.dsCaption(weight: .semibold))
+                .foregroundColor(DesignSystem.textMuted)
+                .textCase(.uppercase)
+
+            Text(formatMinutes(summary.totalSleepMinutes))
+                .font(.dsDisplay())
+                .foregroundColor(DesignSystem.textPrimary)
+
+            Text("Sleep duration")
+                .font(.dsSecondary())
+                .foregroundColor(DesignSystem.textSecondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignSystem.cardPaddingMin)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                .fill(DesignSystem.backgroundSecondary)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                .stroke(DesignSystem.border, lineWidth: 1)
+        )
+    }
+
+    private func metricsGrid(_ summary: HealthSummary) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.spacingMD) {
+            metricCard(title: "Deep", value: formatMinutes(summary.deepSleepMinutes), icon: "moon.zzz.fill")
+            metricCard(title: "REM", value: formatMinutes(summary.remSleepMinutes), icon: "brain.head.profile")
+            if let hrv = summary.hrvAverage {
+                metricCard(title: "HRV", value: "\(Int(hrv)) ms", icon: "waveform.path.ecg")
+            }
+            if let steps = summary.stepCount {
+                metricCard(title: "Steps", value: "\(steps)", icon: "figure.walk")
+            }
+        }
+    }
+
+    private func metricCard(title: String, value: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            Label(title, systemImage: icon)
+                .font(.dsCaption(weight: .semibold))
+                .foregroundColor(DesignSystem.textMuted)
+            Text(value)
+                .font(.dsHeadline())
+                .foregroundColor(DesignSystem.textPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignSystem.spacingMD)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                .fill(DesignSystem.backgroundSecondary)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                .stroke(DesignSystem.border, lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private func formatMinutes(_ minutes: Double?) -> String {

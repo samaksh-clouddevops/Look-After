@@ -28,7 +28,11 @@ public final class DecideForMePicker: @unchecked Sendable {
 
         let prompt = LookAfterPrompts.decideForMePrompt(snapshot: snapshot, tasks: candidates)
         do {
-            let raw = try await glm.complete(prompt: prompt, systemPrompt: LookAfterPrompts.structuredOutputSystem)
+            let raw = try await glm.complete(
+                prompt: prompt,
+                systemPrompt: LookAfterPrompts.structuredOutputSystem,
+                tier: .economy
+            )
             if let parsed = parseResponse(raw, candidates: candidates) {
                 return parsed
             }

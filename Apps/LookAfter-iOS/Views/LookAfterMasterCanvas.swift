@@ -159,7 +159,7 @@ public struct LookAfterMasterCanvas: View {
             tabContent
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if showsBottomNav {
-                        LookAfterBottomNav(selection: $selectedTab)
+                        LookAfterBottomNav(selection: $selectedTab, onCapture: { showBrainCapture = true })
                     }
                 }
 
@@ -329,7 +329,7 @@ public struct LookAfterMasterCanvas: View {
             }
         }
         .onChange(of: selectedTab) { _, tab in
-            if tab == .timeline {
+            if tab == .today {
                 Task { await weatherService.refresh() }
             }
         }
@@ -361,8 +361,8 @@ public struct LookAfterMasterCanvas: View {
                 tasksVM: shell.tasksVM,
                 healthSync: healthSync,
                 userId: firebase.resolvedUserId,
-                onOpenToday: { selectedTab = .timeline },
-                onOpenTasks: { selectedTab = .work },
+                onOpenToday: { selectedTab = .today },
+                onOpenTasks: { showTasks = true },
                 onOpenCoach: { showCoach = true },
                 onOpenDailyPlan: { showDailyPlan = true },
                 onOpenSettings: { showSettings = true },
@@ -370,7 +370,7 @@ public struct LookAfterMasterCanvas: View {
                 onStartTask: { task in startBrainHeroTask(task) },
                 onReplanDay: { showDailyPlan = true }
             )
-        case .timeline:
+        case .today:
             TodayView(
                 briefingVM: shell.briefingVM,
                 planningVM: planningVM,
@@ -384,6 +384,7 @@ public struct LookAfterMasterCanvas: View {
                 onSettings: {
                     if firebase.isAuthenticated { showSettings = true } else { showAuth = true }
                 },
+                onOpenTasks: { showTasks = true },
                 onViewTimeline: { showFullTimeline = true },
                 onReplanDay: { Task { await triggerReplanDay() } },
                 onPlanTomorrow: { Task { await triggerPlanTomorrow(userId: firebase.resolvedUserId) } },
@@ -406,13 +407,6 @@ public struct LookAfterMasterCanvas: View {
                 },
                 isPlanningTomorrow: tomorrowPlannerVM.isScheduling
             )
-        case .work:
-            TaskListView(
-                tasksVM: shell.tasksVM,
-                adhdVM: shell.adhdVM,
-                brainVM: shell.brainVM,
-                userId: firebase.resolvedUserId
-            )
         case .brain:
             BrainDashboardView(
                 brainVM: shell.brainVM,
@@ -426,7 +420,7 @@ public struct LookAfterMasterCanvas: View {
                 onCapture: { showBrainCapture = true },
                 onResume: { taskID in resumeBrainSession(taskID: taskID) },
                 onMarkMedicationTaken: { medID in markBrainMedicationTaken(medID) },
-                onNavigateToTasks: { selectedTab = .work },
+                onNavigateToTasks: { showTasks = true },
                 onNavigateToCoach: { showCoach = true },
                 onRefresh: {
                     let userId = firebase.resolvedUserId

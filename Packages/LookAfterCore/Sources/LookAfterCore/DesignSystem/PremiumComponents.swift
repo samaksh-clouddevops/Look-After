@@ -68,13 +68,15 @@ public struct HeroZone<Content: View>: View {
 // MARK: - Press style
 
 public struct PremiumPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public init() {}
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(PremiumMotion.pressSpring, value: configuration.isPressed)
+            .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: configuration.isPressed)
     }
 }
 

@@ -23,6 +23,7 @@ struct TodayView: View {
     let weatherSnapshot: WeatherDisplayService.Snapshot
 
     var onSettings: () -> Void
+    var onOpenTasks: () -> Void = {}
     var onViewTimeline: () -> Void
     var onReplanDay: () -> Void
     var onPlanTomorrow: () -> Void
@@ -125,17 +126,17 @@ struct TodayView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
                     headerBar
-                    TodayGreetingHeader(greeting: briefingVM.greeting)
-                    TodayCompactMetricsStrip(
-                        metrics: compactMetrics,
-                        capacity: briefingVM.executiveCapacity,
-                        onMetricTap: handleMetricTap
-                    )
                     timelineDayPicker
                     multiDayBanner
                     activeTimelineSection
 
                     if selectedDay == .today {
+                        TodayCompactMetricsStrip(
+                            metrics: compactMetrics,
+                            capacity: briefingVM.executiveCapacity,
+                            onMetricTap: handleMetricTap
+                        )
+
                         TodayEndOfDayJournalCard(
                             modulesVM: modulesVM,
                             tasksVM: tasksVM,
@@ -263,6 +264,19 @@ struct TodayView: View {
                 .foregroundColor(DesignSystem.textPrimary)
 
             Spacer()
+
+            if selectedDay == .today {
+                Button(action: onOpenTasks) {
+                    Label("All tasks", systemImage: "checklist")
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundColor(DesignSystem.textSecondary)
+                        .padding(.horizontal, DesignSystem.spacingSM)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(DesignSystem.backgroundElevated))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("nav-all-tasks")
+            }
 
             if selectedDay == .today {
                 Button(action: onReplanDay) {

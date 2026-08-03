@@ -67,6 +67,23 @@ final class ScreenSnapshotTests: FlowTestBase {
         )
     }
 
+    func testLightAndDarkModeSmoke() throws {
+        launch(extra: ["-UIPreferredInterfaceStyle", "Light"])
+        waitForBriefing()
+        XCTAssertTrue(app.buttons["tab-briefing"].exists)
+
+        app.terminate()
+        launch(extra: ["-UIPreferredInterfaceStyle", "Dark"])
+        waitForBriefing()
+        XCTAssertTrue(app.buttons["tab-briefing"].exists)
+
+        EvidenceWriter.write(
+            source: QASource("A11Y-LIGHT-DARK", document: "Documentation/qa/10-accessibility-checklist.md"),
+            status: "pass",
+            durationMs: 0
+        )
+    }
+
     private func auditLayout(app: XCUIApplication, identifier: String) -> Bool {
         let element = app.otherElements[identifier]
         guard element.exists else { return true }

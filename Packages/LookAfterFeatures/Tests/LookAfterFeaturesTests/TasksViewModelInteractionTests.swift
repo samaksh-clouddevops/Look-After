@@ -248,7 +248,7 @@ private func mockGLMService() -> GLMService {
     let stub = """
     {"steps":[{"title":"Step 1","estimatedMinutes":5}],"detectedRecurrence":"none"}
     """
-    glm.debugCompleteHandler = { _ in stub }
-    glm.debugSendMessageHandler = { _, _, _ in stub }
+    glm.debugCompleteHandler = { _, _ in stub }
+    glm.debugSendMessageHandler = { _, _, _, _ in stub }
     return glm
 }

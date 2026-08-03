@@ -23,7 +23,7 @@ struct BrainInspectorView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "0D1117").ignoresSafeArea()
+                DesignSystem.backgroundPrimary.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     sectionPicker
@@ -65,12 +65,12 @@ struct BrainInspectorView: View {
                             .background(
                                 Capsule().fill(
                                     selectedSection == section
-                                        ? Color(hex: "3FB950").opacity(0.25)
-                                        : Color.white.opacity(0.06)
+                                        ? DesignSystem.success.opacity(0.25)
+                                        : DesignSystem.backgroundElevated
                                 )
                             )
                             .foregroundColor(
-                                selectedSection == section ? Color(hex: "3FB950") : Color.white.opacity(0.6)
+                                selectedSection == section ? DesignSystem.success : DesignSystem.textSecondary
                             )
                     }
                     .buttonStyle(.plain)
@@ -86,7 +86,7 @@ struct BrainInspectorView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Tick")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "8B949E"))
+                    .foregroundColor(DesignSystem.textMuted)
                 if let at = shell.contextOrchestrator.brainState?.generatedAt {
                     Text(at.formatted(date: .omitted, time: .standard))
                         .font(.system(size: 12, design: .monospaced))
@@ -102,15 +102,15 @@ struct BrainInspectorView: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("Confidence")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(hex: "8B949E"))
+                        .foregroundColor(DesignSystem.textMuted)
                     Text(String(format: "%.0f%%", confidence * 100))
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(hex: "58A6FF"))
+                        .foregroundColor(DesignSystem.focus)
                 }
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.04)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(DesignSystem.backgroundElevated))
     }
 
     @ViewBuilder
@@ -176,7 +176,7 @@ struct BrainInspectorView: View {
                 divider
                 Text("Hero render preview")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "8B949E"))
+                    .foregroundColor(DesignSystem.textMuted)
                 let hero = IntentRenderer.hero(from: intent, snapshot: shell.contextOrchestrator.snapshot)
                 kv("Title", hero.title)
                 kv("Subtitle", hero.subtitle)
@@ -193,11 +193,11 @@ struct BrainInspectorView: View {
             if let intent = shell.contextOrchestrator.brainState?.decision.intent {
                 Text("Expected reduction if intent succeeds")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(Color(hex: "8B949E"))
+                    .foregroundColor(DesignSystem.textMuted)
                 ForEach(intent.expectedCostReduction.summaryLines, id: \.self) { line in
                     Text(line)
                         .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(Color(hex: "3FB950"))
+                        .foregroundColor(DesignSystem.success)
                 }
                 if intent.expectedCostReduction.summaryLines.isEmpty {
                     Text("No cost delta modeled yet")
@@ -216,7 +216,7 @@ struct BrainInspectorView: View {
                         if sim.wasChosen {
                             Text("✓ CHOSEN")
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(hex: "3FB950"))
+                                .foregroundColor(DesignSystem.success)
                         }
                         kv("Score", String(format: "%.2f", sim.score))
                         kv("Future", sim.intent.futureState)
@@ -242,7 +242,7 @@ struct BrainInspectorView: View {
                     if let r = block.reasoning {
                         Text(r)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(Color(hex: "8B949E"))
+                            .foregroundColor(DesignSystem.textMuted)
                     }
                 }
             } else {
@@ -256,7 +256,7 @@ struct BrainInspectorView: View {
             if let trace = shell.contextOrchestrator.brainState?.decision.reasoning {
                 Text("Factors (\(trace.factors.count))")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "8B949E"))
+                    .foregroundColor(DesignSystem.textMuted)
                 ForEach(trace.factors) { factor in
                     HStack(alignment: .top, spacing: 8) {
                         Text(factor.impact.rawValue)
@@ -266,7 +266,7 @@ struct BrainInspectorView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("[\(factor.domain.rawValue)]")
                                 .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(Color(hex: "8B949E"))
+                                .foregroundColor(DesignSystem.textMuted)
                             Text(factor.observation)
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.85))
@@ -278,11 +278,11 @@ struct BrainInspectorView: View {
                     divider
                     Text("Conclusions")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(hex: "8B949E"))
+                        .foregroundColor(DesignSystem.textMuted)
                     ForEach(trace.conclusions, id: \.self) { c in
                         Text("→ \(c)")
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(Color(hex: "58A6FF"))
+                            .foregroundColor(DesignSystem.focus)
                     }
                 }
             }
@@ -310,7 +310,7 @@ struct BrainInspectorView: View {
                             divider
                             Text(lesson.policy)
                                 .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(Color(hex: "D29922"))
+                                .foregroundColor(DesignSystem.warning)
                         }
                     }
                 }
@@ -322,7 +322,7 @@ struct BrainInspectorView: View {
                 Button("Mark done (16m)") { shell.contextOrchestrator.recordDecisionCompleted(actualMinutes: 16) }
             }
             .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .foregroundColor(Color(hex: "58A6FF"))
+            .foregroundColor(DesignSystem.focus)
             .padding(.top, 8)
         }
     }
@@ -333,15 +333,15 @@ struct BrainInspectorView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title.uppercased())
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(hex: "3FB950"))
+                .foregroundColor(DesignSystem.success)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(hex: "30363D"), lineWidth: 1)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "161B22")))
+                .stroke(DesignSystem.border, lineWidth: 1)
+                .background(RoundedRectangle(cornerRadius: 8).fill(DesignSystem.backgroundSecondary))
         )
     }
 
@@ -349,7 +349,7 @@ struct BrainInspectorView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(key)
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundColor(Color(hex: "8B949E"))
+                .foregroundColor(DesignSystem.textMuted)
             Text(value)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.white.opacity(0.9))
@@ -358,7 +358,7 @@ struct BrainInspectorView: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(Color(hex: "30363D")).frame(height: 1).padding(.vertical, 4)
+        Rectangle().fill(DesignSystem.border).frame(height: 1).padding(.vertical, 4)
     }
 
     private func emptyHint(_ text: String) -> some View {
@@ -369,10 +369,10 @@ struct BrainInspectorView: View {
 
     private func impactColor(_ impact: ReasoningImpact) -> Color {
         switch impact {
-        case .supports: return Color(hex: "3FB950")
-        case .opposes: return Color(hex: "F85149")
-        case .constrains: return Color(hex: "D29922")
-        case .neutral: return Color(hex: "8B949E")
+        case .supports: return DesignSystem.success
+        case .opposes: return DesignSystem.error
+        case .constrains: return DesignSystem.warning
+        case .neutral: return DesignSystem.textMuted
         }
     }
 }
