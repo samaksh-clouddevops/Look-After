@@ -19,6 +19,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Prepare Firebase config for CI
+        run: cp Config/GoogleService-Info.plist.example Config/GoogleService-Info.plist
+
       - name: Generate Xcode project
         run: xcodegen generate
 
