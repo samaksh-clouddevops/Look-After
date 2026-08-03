@@ -52,7 +52,7 @@ struct APIKeysSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("No API keys yet")
                                 .font(.system(size: 15, weight: .semibold, design: .default))
-                            Text("Add one or more API keys. LifeOS rotates automatically when a key hits quota. A default key is included on first launch.")
+                            Text("Add one or more API keys. \(UserFacingCopy.productName) rotates automatically when a key hits quota. A default key is included on first launch.")
                                 .font(.system(size: 12, design: .default))
                                 .foregroundColor(DesignSystem.textSecondary)
                         }
@@ -73,7 +73,7 @@ struct APIKeysSettingsView: View {
                 } header: {
                     Text("API Keys")
                 } footer: {
-                    Text("LifeOS uses GLM 5.2 (z.ai), not Gemini. Old Gemini keys were migrated here but will not work — delete them and add a GLM key.")
+                    Text("\(UserFacingCopy.productName) uses GLM 5.2 (z.ai), not Gemini. Old Gemini keys were migrated here but will not work — delete them and add a GLM key.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 }

@@ -35,7 +35,7 @@ struct CycleQuickLogSheet: View {
                         .padding(12)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
 
-                    Text("LifeOS is not a medical device. For severe symptoms, consult a healthcare provider.")
+                    Text(UserFacingCopy.medicalDisclaimerWithProvider)
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 }

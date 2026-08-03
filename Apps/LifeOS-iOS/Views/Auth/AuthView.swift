@@ -42,7 +42,7 @@ public struct AuthView: View {
                             .foregroundColor(DesignSystem.textMuted)
                             .padding(.top, 40)
                         
-                        Text("ADHD Bitch")
+                        Text(UserFacingCopy.productName)
                             .font(.system(size: 36, weight: .bold, design: .default))
                             .foregroundColor(DesignSystem.textPrimary)
                         
@@ -155,7 +155,7 @@ public struct AuthView: View {
                                     Text("Signing in...")
                                         .font(.system(size: 16, weight: .bold, design: .default))
                                 } else {
-                                    Text(isSignUpMode ? "Create ADHD Bitch Account" : "Sign In")
+                                    Text(isSignUpMode ? "Create \(UserFacingCopy.productName) Account" : "Sign In")
                                         .font(.system(size: 16, weight: .bold, design: .default))
                                 }
                             }
@@ -260,7 +260,7 @@ public struct AuthView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Enter your Google account email to sign in and sync your ADHD Bitch profile.")
+            Text("Enter your Google account email to sign in and sync your \(UserFacingCopy.productName) profile.")
         }
         .alert("Sign In with Apple", isPresented: $showApplePrompt) {
             TextField("Apple ID Email (e.g. name@icloud.com)", text: $ssoEmailInput)
@@ -269,7 +269,7 @@ public struct AuthView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Enter your Apple ID email to sign in and sync your ADHD Bitch profile.")
+            Text("Enter your Apple ID email to sign in and sync your \(UserFacingCopy.productName) profile.")
         }
         .interactiveDismissDisabled(isLoading)
     }

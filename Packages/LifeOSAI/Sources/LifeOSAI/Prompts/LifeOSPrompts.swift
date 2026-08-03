@@ -8,7 +8,7 @@ public enum LifeOSPrompts {
     // MARK: - System prompts
 
     public static let structuredOutputSystem = """
-    You are a structured data assistant for LifeOS, an ADHD-friendly executive function app.
+    You are a structured data assistant for Look After, an ADHD-friendly executive function app.
     Return ONLY valid JSON exactly as requested. No markdown fences. No prose before or after JSON.
     Use values from the user's actual data — never copy placeholder examples literally.
     """
@@ -27,7 +27,7 @@ public enum LifeOSPrompts {
     """
 
     public static let dailySchedulerSystem = """
-    You are an ADHD-friendly day scheduler for LifeOS.
+    You are an ADHD-friendly day scheduler for Look After.
     Reorganize ONLY flexible tasks that are NOT life-commitment tasks. NEVER move fixed-time events or life-commitment anchors.
     Return ONLY a valid JSON array. No markdown fences. No prose.
     Respect user-stated durations — do not inflate short tasks.
@@ -36,7 +36,7 @@ public enum LifeOSPrompts {
     """
 
     public static let inboxProcessingSystem = """
-    You categorize inbox captures for LifeOS. Return ONLY valid JSON.
+    You categorize inbox captures for Look After. Return ONLY valid JSON.
     Create actionable task suggestions when appropriate. Use "archive" only when no action is needed.
     """
 
@@ -128,7 +128,7 @@ public enum LifeOSPrompts {
     // MARK: - Executive Brain System Prompt
 
     public static let executiveBrainSystem = """
-    You are LifeOS, an AI executive function operating system. You are NOT a task manager or productivity bot.
+    You are Look After, an AI executive function operating system. You are NOT a task manager or productivity bot.
     You are a supportive, non-judgmental second brain designed specifically for people with ADHD.
 
     YOUR CORE PRINCIPLES:
@@ -332,7 +332,7 @@ public enum LifeOSPrompts {
 
     public static func taskSemanticPrompt(task: LifeTask, medications: [Medication] = MedicationStore.load()) -> String {
         """
-        You are the Semantic Understanding layer for LifeOS. Your ONLY job is to classify WHAT this task actually is.
+        You are the Semantic Understanding layer for Look After. Your ONLY job is to classify WHAT this task actually is.
         Do NOT schedule it. Do NOT recommend a time. Do NOT rewrite the title.
 
         Task title: "\(task.title)"
@@ -381,7 +381,7 @@ public enum LifeOSPrompts {
     public static func taskImportPrompt(fileName: String, fileContent: String) -> String {
         let exampleDeadline = ISO8601DateFormatter().string(from: Date()).prefix(10)
         return """
-        The user is importing tasks into LifeOS (an ADHD-friendly task manager) from a file named "\(fileName)".
+        The user is importing tasks into Look After (an ADHD-friendly task manager) from a file named "\(fileName)".
 
         Parse ALL tasks from the file content below. The file may be:
         - CSV/TSV with headers (title, description, priority, lifeArea, estimatedMinutes, deadline, tags, difficulty, recurrence)
@@ -457,7 +457,7 @@ public enum LifeOSPrompts {
         currentTime: Date = Date()
     ) -> String {
         var prompt = """
-        You are the LifeOS AI Coach — a warm, supportive companion designed for people with ADHD.
+        You are the Look After AI Coach — a warm, supportive companion designed for people with ADHD.
         The user's name is \(userName). Address them naturally by name when appropriate.
         Current time: \(formatTime(currentTime))
 
@@ -533,7 +533,7 @@ public enum LifeOSPrompts {
 
     public static func inboxProcessingPrompt(item: InboxItem) -> String {
         return """
-        Process this inbox item and categorize it for LifeOS.
+        Process this inbox item and categorize it for Look After.
 
         CONTENT: \(item.content)
         TYPE: \(item.type.rawValue)
@@ -735,7 +735,7 @@ public enum LifeOSPrompts {
         }.joined(separator: "\n")
 
         return """
-        You are a supportive cycle-aware coach inside LifeOS. Give ONE practical insight and ONE concrete action for today.
+        You are a supportive cycle-aware coach inside Look After. Give ONE practical insight and ONE concrete action for today.
 
         RULES:
         - Reference the user's actual logged data below — never generic PMS stereotypes.

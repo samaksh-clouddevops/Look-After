@@ -18,7 +18,7 @@ public enum ExperienceMode: String, CaseIterable, Identifiable, Codable, Sendabl
 
     public var subtitle: String {
         switch self {
-        case .classic: return "Module-based navigation with full LifeOS features"
+        case .classic: return "Module-based navigation with full \(UserFacingCopy.productName) features"
         case .aiExecutive: return "Today-first layout with decisions, timeline, and profile"
         }
     }

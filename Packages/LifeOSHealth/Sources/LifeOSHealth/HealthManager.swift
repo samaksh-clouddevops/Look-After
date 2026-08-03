@@ -74,7 +74,7 @@ public final class HealthManager: ObservableObject {
         let access = await assessReadAccess()
         isAuthorized = access.canExecuteQueries
         if !access.canExecuteQueries {
-            error = "Could not read Apple Health data. Enable Sleep, Steps, and Heart Rate in Settings → Health → ADHD Bitch."
+            error = "Could not read Apple Health data. Enable Sleep, Steps, and Heart Rate in Settings → Health → \(UserFacingCopy.productName)."
         } else {
             error = nil
         }
@@ -86,7 +86,7 @@ public final class HealthManager: ObservableObject {
         let access = await assessReadAccess()
         isAuthorized = access.canExecuteQueries
         if !access.canExecuteQueries {
-            error = "Health read access unavailable. Check Settings → Health → ADHD Bitch."
+            error = "Health read access unavailable. Check Settings → Health → \(UserFacingCopy.productName)."
         }
         return access.canExecuteQueries
     }

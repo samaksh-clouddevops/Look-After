@@ -199,7 +199,7 @@ struct CycleDashboardView: View {
     }
 
     private var disclaimer: some View {
-        Text("LifeOS is not a medical device. For severe symptoms, consult a healthcare provider.")
+        Text(UserFacingCopy.medicalDisclaimerWithProvider)
             .font(.system(size: 11))
             .foregroundColor(DesignSystem.textMuted)
     }

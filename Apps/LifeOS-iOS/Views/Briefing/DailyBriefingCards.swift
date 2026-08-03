@@ -318,7 +318,7 @@ struct BriefingCycleCard: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("LifeOS is not a medical device.")
+                Text(UserFacingCopy.medicalDisclaimer)
                     .font(.system(size: 10))
                     .foregroundColor(DesignSystem.textMuted)
             }

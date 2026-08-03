@@ -315,7 +315,7 @@ public final class GLMKeyManager: @unchecked Sendable {
         guard !bundled.isEmpty else { return }
 
         let record = GLMKeyRecord(
-            name: "LifeOS Default",
+            name: "\(UserFacingCopy.productName) Default",
             sortOrder: 0,
             maskedSuffix: Self.maskedSuffix(for: bundled),
             isDefault: true

@@ -306,7 +306,7 @@ struct TodayMetricDetailSheet: View {
                     .font(.system(size: 14))
                     .foregroundColor(DesignSystem.textSecondary)
             }
-            Text("LifeOS is not a medical device.")
+            Text(UserFacingCopy.medicalDisclaimer)
                 .font(.system(size: 11))
                 .foregroundColor(DesignSystem.textMuted)
         }

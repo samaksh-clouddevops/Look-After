@@ -100,7 +100,7 @@ struct FocusLiveActivity: Widget {
                 }
             }
 
-            Text("Timer pinned — open ADHD Bitch to control.")
+            Text("Timer pinned — open \(UserFacingCopy.productName) to control.")
                 .font(.dsMetadata())
                 .foregroundColor(LiveActivityStyle.textMuted)
         }

@@ -1,6 +1,6 @@
-# LifeOS
+# Look After
 
-AI-powered executive function operating system for Apple platforms (iOS, macOS, Widget).
+**Look After** is an AI-powered executive function operating system for Apple platforms (iOS, macOS, Widget).
 
 ## Quick start
 

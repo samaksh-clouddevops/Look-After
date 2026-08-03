@@ -246,7 +246,7 @@
 		4E6F0ED0248D7ED31EB366E4 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
 		50A7B918B7E3C97E686DDC9E /* CognitiveAITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitiveAITests.swift; sourceTree = "<group>"; };
 		56B25775262C8A1C470DE0AD /* SpeechRecognitionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionManager.swift; sourceTree = "<group>"; };
-		5DC0F1173224ABE037D944BA /* LifeOS-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LifeOS-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DC0F1173224ABE037D944BA /* LifeOS-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "LifeOS-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DC7505AAA60659F6E1F4BC8 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		5E869D47D6E166D71CDE98A5 /* ADHDViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADHDViews.swift; sourceTree = "<group>"; };
 		5F0FC1F590A2B697279BF1DF /* ExecutiveCaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveCaptureSheet.swift; sourceTree = "<group>"; };
@@ -254,7 +254,7 @@
 		63D8734A55D1ED59C05D3631 /* TestCalendarFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCalendarFixtures.swift; sourceTree = "<group>"; };
 		6669530FC493F016ED29A40B /* FlowDirectorAppIntegrationScenarioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDirectorAppIntegrationScenarioTests.swift; sourceTree = "<group>"; };
 		66A4D9502FC53C8B80E8FFB3 /* HeroObjectiveResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroObjectiveResolverTests.swift; sourceTree = "<group>"; };
-		6F48D2F70B8554C96F6ACC6B /* LifeOSWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LifeOSWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6F48D2F70B8554C96F6ACC6B /* LifeOSWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LifeOSWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F77639F815370540642C4E4 /* LifeProfileNameExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeProfileNameExtractorTests.swift; sourceTree = "<group>"; };
 		6FB42E2E85995EC6B3F54A02 /* DailyBriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefingView.swift; sourceTree = "<group>"; };
 		734AD7120CB812AF649F7E73 /* CycleQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleQuickLogSheet.swift; sourceTree = "<group>"; };
@@ -1338,14 +1338,10 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/LifeOSWidget/LifeOSWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
 				INFOPLIST_FILE = Apps/LifeOSWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app.widget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1358,14 +1354,10 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/LifeOSWidget/LifeOSWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
 				INFOPLIST_FILE = Apps/LifeOSWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app.widget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1380,17 +1372,13 @@
 				CODE_SIGN_ENTITLEMENTS = "Config/LifeOS-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				INFOPLIST_FILE = "Apps/LifeOS-iOS/Info.plist";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
-				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "LifeOS analyzes your sleep, HRV, and heart rate to estimate energy levels.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlowOS uses the microphone for voice capture and speech-to-text transcription.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlowOS transcribes your spoken thoughts into tasks, journal entries, and notes.";
+				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Look After reads your calendar for scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Look After needs access to your calendar to add scheduled tasks.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Look After analyzes your sleep, HRV, and heart rate to estimate energy levels.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Look After uses the microphone for voice capture and speech-to-text transcription.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Look After transcribes your spoken thoughts into tasks, journal entries, and notes.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1398,12 +1386,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app;
-				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -1415,9 +1398,10 @@
 				CODE_SIGN_ENTITLEMENTS = "Config/LifeOS-macOS.entitlements";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
-				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Look After reads your calendar for scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Look After needs access to your calendar to add scheduled tasks.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1452,9 +1436,10 @@
 				CODE_SIGN_ENTITLEMENTS = "Config/LifeOS-macOS.entitlements";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
-				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Look After reads your calendar for scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Look After needs access to your calendar to add scheduled tasks.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1610,13 +1595,13 @@
 				CODE_SIGN_ENTITLEMENTS = "Config/LifeOS-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
 				INFOPLIST_FILE = "Apps/LifeOS-iOS/Info.plist";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "FlowOS reads your calendar for Flow Director scheduling.";
-				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "LifeOS needs access to your calendar to add scheduled tasks.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "LifeOS analyzes your sleep, HRV, and heart rate to estimate energy levels.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlowOS uses the microphone for voice capture and speech-to-text transcription.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlowOS transcribes your spoken thoughts into tasks, journal entries, and notes.";
+				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Look After reads your calendar for scheduling.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Look After needs access to your calendar to add scheduled tasks.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Look After analyzes your sleep, HRV, and heart rate to estimate energy levels.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Look After uses the microphone for voice capture and speech-to-text transcription.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Look After transcribes your spoken thoughts into tasks, journal entries, and notes.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1625,10 +1610,6 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app;
 				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

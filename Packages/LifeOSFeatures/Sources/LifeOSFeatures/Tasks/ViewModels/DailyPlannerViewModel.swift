@@ -389,7 +389,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         )
         return buildProposal(
             from: suggestions,
-            summary: "LifeOS created a focused local plan (AI planner unavailable)."
+            summary: "\(UserFacingCopy.productName) created a focused local plan (AI planner unavailable)."
         )
     }
 

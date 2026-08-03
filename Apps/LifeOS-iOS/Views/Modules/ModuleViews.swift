@@ -53,7 +53,7 @@ struct AIMemoryView: View {
                                 EmptyStateView(
                                     icon: "brain",
                                     title: "No AI Memories Yet",
-                                    subtitle: "ADHD Bitch automatically indexes your daily reflections, tasks, and notes into on-device semantic memory."
+                                    subtitle: "\(UserFacingCopy.productName) automatically indexes your daily reflections, tasks, and notes into on-device semantic memory."
                                 )
                                 .padding(.top, 40)
                             } else {

@@ -3,6 +3,18 @@ import Foundation
 /// User-visible copy helpers — internal Brain/scheduling categories never surface here.
 public enum UserFacingCopy {
 
+    // MARK: - Product branding
+
+    public static let productName = "Look After"
+
+    public static var medicalDisclaimer: String {
+        "\(productName) is not a medical device."
+    }
+
+    public static var medicalDisclaimerWithProvider: String {
+        "\(productName) is not a medical device. For severe symptoms, consult a healthcare provider."
+    }
+
     // MARK: - Section titles
 
     public static let todayTitle = "Today"

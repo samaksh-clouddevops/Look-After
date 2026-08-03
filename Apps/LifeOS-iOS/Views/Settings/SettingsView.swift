@@ -238,7 +238,7 @@ struct SettingsView: View {
                     }
                     .listRowBackground(Color.white.opacity(0.05))
 
-                    Text("LifeOS includes a default GLM key for first-run AI. Add your own key in API Keys to replace it, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
+                    Text("\(UserFacingCopy.productName) includes a default GLM key for first-run AI. Add your own key in API Keys to replace it, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
                         .font(.system(size: 12, design: .default))
                         .foregroundColor(DesignSystem.textMuted)
                         .listRowBackground(Color.white.opacity(0.05))
@@ -360,7 +360,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Health Data Sync")
                     } footer: {
-                        Text("ADHD Bitch reads from the iPhone Health app, which includes metrics recorded by your Apple Watch.")
+                        Text("\(UserFacingCopy.productName) reads from the iPhone Health app, which includes metrics recorded by your Apple Watch.")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
                     }
@@ -417,7 +417,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Cycle tracking")
                 } footer: {
-                    Text("Optional. Includes menstrual data from Apple Health when enabled. LifeOS is not a medical device.")
+                    Text("Optional. Includes menstrual data from Apple Health when enabled. \(UserFacingCopy.medicalDisclaimer)")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 }
@@ -439,7 +439,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Home Screen Widgets")
                                 .font(.system(size: 15, weight: .semibold, design: .default))
-                            Text("Long-press your home screen → Edit → Add Widget → search ADHD Bitch. Choose Next Step, Energy Pulse, or Task Glance.")
+                            Text("Long-press your home screen → Edit → Add Widget → search \(UserFacingCopy.productName). Choose Next Step, Energy Pulse, or Task Glance.")
                                 .font(.system(size: 12, design: .default))
                                 .foregroundColor(DesignSystem.textMuted)
                         }
@@ -504,7 +504,7 @@ struct SettingsView: View {
                             .foregroundColor(DesignSystem.textMuted)
                     }
                 } header: {
-                    Text("About ADHD Bitch")
+                    Text("About \(UserFacingCopy.productName)")
                 }
             }
             .scrollContentBackground(.hidden)

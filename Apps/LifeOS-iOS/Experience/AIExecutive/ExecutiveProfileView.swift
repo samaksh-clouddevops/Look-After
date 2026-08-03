@@ -55,7 +55,7 @@ struct ExecutiveProfileView: View {
                     .environmentObject(shell)
             }
             #endif
-            .alert("Factory Reset LifeOS?", isPresented: $showResetAlert) {
+            .alert("Factory Reset \(UserFacingCopy.productName)?", isPresented: $showResetAlert) {
                 Button("Erase Everything", role: .destructive) {
                     Task { await performFactoryReset() }
                 }
@@ -66,7 +66,7 @@ struct ExecutiveProfileView: View {
             .alert("Factory reset complete", isPresented: $resetComplete) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("LifeOS is starting fresh. Health and calendar will re-import automatically.")
+                Text("\(UserFacingCopy.productName) is starting fresh. Health and calendar will re-import automatically.")
             }
         }
     }

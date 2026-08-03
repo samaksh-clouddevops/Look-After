@@ -248,11 +248,11 @@ final class HealthSyncService: ObservableObject {
             currentStepLabel = authorized ? "Connected to Health" : "Health access not granted"
 
             if !authorized {
-                let message = "Could not verify Health access. Tap Retry or enable in Settings → Health → ADHD Bitch."
+                let message = "Could not verify Health access. Tap Retry or enable in Settings → Health → \(UserFacingCopy.productName)."
                 verificationReport = Self.verificationFailureReport(
                     headline: "Permission not granted",
                     summary: message,
-                    checks: [Self.failedCheck(id: "authorize", title: "Apple Health access", icon: "hand.raised.slash.fill", issue: message, fix: "Open Health → Sharing → Apps → ADHD Bitch and turn on Sleep, Steps, and Heart Rate.")]
+                    checks: [Self.failedCheck(id: "authorize", title: "Apple Health access", icon: "hand.raised.slash.fill", issue: message, fix: "Open Health → Sharing → Apps → \(UserFacingCopy.productName) and turn on Sleep, Steps, and Heart Rate.")]
                 )
                 setupStatusMessage = message
                 syncMessage = message
@@ -364,12 +364,12 @@ final class HealthSyncService: ObservableObject {
             }
             
             guard authorized else {
-                let message = "Health access denied. Enable in Settings → Health → ADHD Bitch."
+                let message = "Health access denied. Enable in Settings → Health → \(UserFacingCopy.productName)."
                 updateStep(id: "authorize", status: .noData, detail: message)
                 verificationReport = Self.verificationFailureReport(
                     headline: "Permission not granted",
                     summary: message,
-                    checks: [Self.failedCheck(id: "authorize", title: "Apple Health access", icon: "hand.raised.slash.fill", issue: message, fix: "Open Health → Sharing → Apps → ADHD Bitch and turn on Sleep, Steps, and Heart Rate.")]
+                    checks: [Self.failedCheck(id: "authorize", title: "Apple Health access", icon: "hand.raised.slash.fill", issue: message, fix: "Open Health → Sharing → Apps → \(UserFacingCopy.productName) and turn on Sleep, Steps, and Heart Rate.")]
                 )
                 failSync(message: message, stepId: "authorize")
                 return
@@ -410,10 +410,10 @@ final class HealthSyncService: ObservableObject {
 
             importedMetricCount = Self.countImportedMetrics(summary)
             
-            currentStepLabel = "Uploading to ADHD Bitch…"
-            updateStep(id: "save", status: .active, detail: "Saving locally and uploading to ADHD Bitch")
+            currentStepLabel = "Uploading to \(UserFacingCopy.productName)…"
+            updateStep(id: "save", status: .active, detail: "Saving locally and uploading to \(UserFacingCopy.productName)")
             
-            try await HealthSyncLogger.measure("Uploading to ADHD Bitch") {
+            try await HealthSyncLogger.measure("Uploading to \(UserFacingCopy.productName)") {
                 try await withTimeout(seconds: Self.saveTimeoutSeconds) {
                     try await self.healthRepo.save(summary)
                 }
@@ -425,7 +425,7 @@ final class HealthSyncService: ObservableObject {
             updateStep(id: "save", status: .done, detail: "Saved for brain & task recommendations")
 
             currentStepLabel = "Verifying import…"
-            updateStep(id: "verify", status: .active, detail: "Checking ADHD Bitch can read saved health data")
+            updateStep(id: "verify", status: .active, detail: "Checking \(UserFacingCopy.productName) can read saved health data")
 
             let report = await buildVerificationReport(userId: userId, fetched: summary)
             verificationReport = report
@@ -538,7 +538,7 @@ final class HealthSyncService: ObservableObject {
             HealthSyncStepItem(
                 id: "connect",
                 title: "Connect Health",
-                explanation: "ADHD Bitch reads sleep, heart rate, and activity from Apple Health",
+                explanation: "\(UserFacingCopy.productName) reads sleep, heart rate, and activity from Apple Health",
                 icon: "heart.text.square.fill",
                 status: .pending,
                 detail: nil
@@ -559,7 +559,7 @@ final class HealthSyncService: ObservableObject {
             HealthSyncStepItem(
                 id: "authorize",
                 title: "Grant read access",
-                explanation: "ADHD Bitch only reads — it never writes to Health",
+                explanation: "\(UserFacingCopy.productName) only reads — it never writes to Health",
                 icon: "hand.raised.fill",
                 status: .pending,
                 detail: nil
@@ -590,7 +590,7 @@ final class HealthSyncService: ObservableObject {
         steps.append(
             HealthSyncStepItem(
                 id: "save",
-                title: "Save to ADHD Bitch",
+                title: "Save to \(UserFacingCopy.productName)",
                 explanation: "Uses this data to estimate energy & personalize tasks",
                 icon: "square.and.arrow.down.fill",
                 status: .pending,
@@ -669,7 +669,7 @@ final class HealthSyncService: ObservableObject {
         if importedMetricCount == 0 {
             return """
             Connected to Apple Health, but no sleep or activity was returned. \
-            Open the Health app → Sharing → Apps → ADHD Bitch and turn on Sleep, Steps, and Heart Rate.
+            Open the Health app → Sharing → Apps → \(UserFacingCopy.productName) and turn on Sleep, Steps, and Heart Rate.
             """
         }
 
@@ -715,7 +715,7 @@ final class HealthSyncService: ObservableObject {
                 title: "Apple Health permission",
                 icon: "hand.raised.slash.fill",
                 issue: authorizeStep?.detail ?? "Health access was not granted.",
-                fix: "Open Health → Sharing → Apps → ADHD Bitch and enable Sleep, Steps, and Heart Rate."
+                fix: "Open Health → Sharing → Apps → \(UserFacingCopy.productName) and enable Sleep, Steps, and Heart Rate."
             ))
         }
 
@@ -726,7 +726,7 @@ final class HealthSyncService: ObservableObject {
             hasData: (fetched.totalSleepMinutes ?? 0) > 0,
             value: fetched.totalSleepMinutes.map { String(format: "%.1fh imported", $0 / 60) },
             emptyIssue: "No sleep found in the last 36 hours.",
-            emptyFix: "Wear your Apple Watch overnight, or turn on Sleep in Health → Sharing → Apps → ADHD Bitch."
+            emptyFix: "Wear your Apple Watch overnight, or turn on Sleep in Health → Sharing → Apps → \(UserFacingCopy.productName)."
         ))
 
         checks.append(verificationCheckForFetchStep(
@@ -736,7 +736,7 @@ final class HealthSyncService: ObservableObject {
             hasData: (fetched.stepCount ?? 0) > 0,
             value: fetched.stepCount.map { "\($0) steps imported" },
             emptyIssue: "No steps recorded today in Apple Health.",
-            emptyFix: "Walk with your iPhone or Apple Watch, or enable Steps for ADHD Bitch in the Health app."
+            emptyFix: "Walk with your iPhone or Apple Watch, or enable Steps for \(UserFacingCopy.productName) in the Health app."
         ))
 
         checks.append(verificationCheckForFetchStep(
@@ -746,7 +746,7 @@ final class HealthSyncService: ObservableObject {
             hasData: fetched.restingHeartRate != nil || fetched.averageHeartRate != nil,
             value: Self.heartRateVerificationValue(fetched),
             emptyIssue: "No heart rate samples today.",
-            emptyFix: "Enable Heart Rate in Health → Sharing → Apps → ADHD Bitch, or wear your Watch."
+            emptyFix: "Enable Heart Rate in Health → Sharing → Apps → \(UserFacingCopy.productName), or wear your Watch."
         ))
 
         checks.append(verificationCheckForFetchStep(
@@ -763,7 +763,7 @@ final class HealthSyncService: ObservableObject {
         if let stored, Self.countImportedMetrics(stored) > 0 {
             checks.append(HealthVerificationCheck(
                 id: "storage",
-                title: "Saved inside ADHD Bitch",
+                title: "Saved inside \(UserFacingCopy.productName)",
                 icon: "internaldrive.fill",
                 status: .passed,
                 value: Self.summaryMessage(from: stored, importedMetricCount: Self.countImportedMetrics(stored)),
@@ -773,7 +773,7 @@ final class HealthSyncService: ObservableObject {
         } else {
             checks.append(Self.failedCheck(
                 id: "storage",
-                title: "Saved inside ADHD Bitch",
+                title: "Saved inside \(UserFacingCopy.productName)",
                 icon: "internaldrive.fill",
                 issue: "Health data did not persist locally after sync.",
                 fix: "Tap Retry Connection. If this keeps happening, sign out and back in."

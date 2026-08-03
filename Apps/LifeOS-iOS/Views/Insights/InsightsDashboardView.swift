@@ -112,7 +112,7 @@ public struct InsightsDashboardView: View {
                 .font(.system(size: 24, weight: .bold, design: .default))
                 .foregroundColor(DesignSystem.textPrimary)
 
-            Text("All metrics from your HealthKit and ADHD Bitch history.")
+            Text("All metrics from your HealthKit and \(UserFacingCopy.productName) history.")
                 .font(.system(size: 13, design: .default))
                 .foregroundColor(DesignSystem.textSecondary)
 

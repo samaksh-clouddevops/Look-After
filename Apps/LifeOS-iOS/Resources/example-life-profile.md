@@ -1,6 +1,6 @@
 # EXAMPLE LIFE PROFILE — replace with your own details
 
-This is a fictional template showing the format LifeOS expects. Tap "Load example" to preview it, then edit every section before compiling.
+This is a fictional template showing the format Look After expects. Tap "Load example" to preview it, then edit every section before compiling.
 
 ---
 

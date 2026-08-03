@@ -58,7 +58,7 @@ struct MacContentView: View {
                         .font(.system(size: 14, weight: .medium, design: .default))
                 }
             }
-            .navigationTitle("ADHD Bitch")
+            .navigationTitle(UserFacingCopy.productName)
             .listStyle(.sidebar)
         } detail: {
             // Detail view based on selected section

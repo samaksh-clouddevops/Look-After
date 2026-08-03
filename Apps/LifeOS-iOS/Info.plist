@@ -19,15 +19,15 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>FlowOS reads your calendar to find free blocks and meeting-aware scheduling windows for Flow Director.</string>
+	<string>Look After reads your calendar to find free blocks and meeting-aware scheduling windows.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>FlowOS needs access to your calendar to add scheduled tasks and sync events.</string>
+	<string>Look After needs access to your calendar to add scheduled tasks and sync events.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>FlowOS reads sleep, heart rate, HRV, steps, and workout data from Apple Health (including Apple Watch) to estimate your energy levels and personalize task recommendations.</string>
+	<string>Look After reads sleep, heart rate, HRV, steps, and workout data from Apple Health (including Apple Watch) to estimate your energy levels and personalize task recommendations.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>FlowOS uses the microphone for voice capture and speech-to-text transcription.</string>
+	<string>Look After uses the microphone for voice capture and speech-to-text transcription.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>FlowOS transcribes your spoken thoughts into tasks, journal entries, and notes.</string>
+	<string>Look After transcribes your spoken thoughts into tasks, journal entries, and notes.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UILaunchScreen</key>

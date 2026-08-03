@@ -419,7 +419,7 @@ struct OnboardingView: View {
                     }
                 }
 
-                Text("LifeOS is not a medical device. For severe symptoms, consult a healthcare provider.")
+                Text(UserFacingCopy.medicalDisclaimerWithProvider)
                     .font(.system(size: 11))
                     .foregroundColor(DesignSystem.textMuted)
             }
@@ -781,7 +781,7 @@ private enum StartStep: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .welcome: return "Welcome to ADHD Bitch"
+        case .welcome: return "Welcome to \(UserFacingCopy.productName)"
         case .name: return "What should we call you?"
         case .gender: return "How do you identify?"
         case .schedule: return "Your typical work day"
@@ -810,7 +810,7 @@ private enum StartStep: Int, CaseIterable {
         case .health:
             return "Optional but recommended — sleep and recovery shape your daily capacity."
         case .cycle:
-            return "Optional — helps LifeOS learn your rhythm and give phase-aware coaching."
+            return "Optional — helps \(UserFacingCopy.productName) learn your rhythm and give phase-aware coaching."
         case .ready:
             return "Review below, then we'll build your first day."
         }

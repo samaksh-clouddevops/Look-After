@@ -39,7 +39,7 @@ struct HealthSyncProgressView: View {
             return error
         }
         if healthSync.syncPhase == .complete {
-            return healthSync.syncMessage ?? "Health data saved to ADHD Bitch"
+            return healthSync.syncMessage ?? "Health data saved to \(UserFacingCopy.productName)"
         }
         if let setup = healthSync.setupStatusMessage {
             return setup
@@ -257,7 +257,7 @@ struct HealthConnectSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-                    Text("Apple Health will ask which data ADHD Bitch can read. Turn on Sleep, Steps, and Heart Rate for the best plan.")
+                    Text("Apple Health will ask which data \(UserFacingCopy.productName) can read. Turn on Sleep, Steps, and Heart Rate for the best plan.")
                         .font(.system(size: 14))
                         .foregroundColor(DesignSystem.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)

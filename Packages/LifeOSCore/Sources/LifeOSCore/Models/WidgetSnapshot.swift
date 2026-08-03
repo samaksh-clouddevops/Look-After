@@ -35,7 +35,7 @@ public struct WidgetSnapshot: Codable, Sendable {
         topTaskMinutes: Int? = nil,
         energyScore: Int = 50,
         energyLevel: String = "Moderate",
-        recommendation: String = "Open FlowOS to see your next step.",
+        recommendation: String = "Open \(UserFacingCopy.productName) to see your next step.",
         completedTodayCount: Int = 0,
         activeTaskCount: Int = 0,
         sleepHours: Double? = nil,
