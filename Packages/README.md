@@ -9,7 +9,7 @@ Open **only** the main project:
 ```bash
 cd /path/to/LifeOS
 xcodegen generate
-open LifeOS.xcodeproj
+open LookAfter.xcodeproj
 ```
 
 Or use `LifeOS.code-workspace`.
@@ -18,12 +18,12 @@ Or use `LifeOS.code-workspace`.
 
 ```mermaid
 flowchart BT
-    Core[LifeOSCore]
-    AI[LifeOSAI]
-    Data[LifeOSData]
-    Health[LifeOSHealth]
+    Core[LookAfterCore]
+    AI[LookAfterAI]
+    Data[LookAfterData]
+    Health[LookAfterHealth]
     EB[ExecutiveBrain]
-    Features[LifeOSFeatures]
+    Features[LookAfterFeatures]
 
     Core --> AI
     Core --> Data
@@ -35,18 +35,18 @@ flowchart BT
     EB --> Features
 ```
 
-**Rules:** No circular dependencies. `LifeOSCore` is the foundation. `LifeOSFeatures` is the top integration layer for ViewModels.
+**Rules:** No circular dependencies. `LookAfterCore` is the foundation. `LookAfterFeatures` is the top integration layer for ViewModels.
 
 ## Package responsibilities
 
 | Package | Responsibility | Put new code here when… |
 |---------|----------------|-------------------------|
-| **LifeOSCore** | Domain models, scheduling, semantics, design system, pure logic | It has no I/O and no UI beyond shared design tokens/components |
+| **LookAfterCore** | Domain models, scheduling, semantics, design system, pure logic | It has no I/O and no UI beyond shared design tokens/components |
 | **ExecutiveBrain** | Deterministic decision engine (WorldState, Planning, Decision) | It's rule-based brain logic without LLM calls |
-| **LifeOSAI** | GLM provider, FlowDirector, prompts, semantic analysis | It calls an LLM or wraps AI inference |
-| **LifeOSData** | Persistence, Firebase, repositories, environment signals | It reads/writes storage or syncs to cloud |
-| **LifeOSHealth** | HealthKit I/O | It touches HealthKit APIs |
-| **LifeOSFeatures** | ViewModels and feature orchestration | It's presentation state for SwiftUI views |
+| **LookAfterAI** | GLM provider, FlowDirector, prompts, semantic analysis | It calls an LLM or wraps AI inference |
+| **LookAfterData** | Persistence, Firebase, repositories, environment signals | It reads/writes storage or syncs to cloud |
+| **LookAfterHealth** | HealthKit I/O | It touches HealthKit APIs |
+| **LookAfterFeatures** | ViewModels and feature orchestration | It's presentation state for SwiftUI views |
 
 ## Internal folder conventions
 
@@ -54,32 +54,32 @@ Each package uses consistent subfolders where applicable:
 
 - `Models/` — Codable domain types
 - `Protocols/` — interfaces for DI
-- `Repositories/` / `Persistence/` / `Storage/` — I/O (LifeOSData)
-- `DesignSystem/` — UI tokens and shared components (LifeOSCore)
-- `ViewModels/` — `@MainActor` presentation logic (LifeOSFeatures)
+- `Repositories/` / `Persistence/` / `Storage/` — I/O (LookAfterData)
+- `DesignSystem/` — UI tokens and shared components (LookAfterCore)
+- `ViewModels/` — `@MainActor` presentation logic (LookAfterFeatures)
 - `Engine/` — deterministic engines (ExecutiveBrain)
-- `GLM/` — LLM service and configuration (LifeOSAI)
+- `GLM/` — LLM service and configuration (LookAfterAI)
 
 ## Where to put new code
 
 ```
-SwiftUI view (rendering only)     → Apps/LifeOS-iOS/Views/
-ViewModel                           → LifeOSFeatures/<Feature>/ViewModels/
-Platform adapter (HealthKit, etc.)  → Apps/LifeOS-iOS/Services/ or LifeOSHealth
-Domain model                        → LifeOSCore/Models/
-Repository / persistence            → LifeOSData/
-LLM prompt or AI call               → LifeOSAI/
+SwiftUI view (rendering only)     → Apps/LookAfter-iOS/Views/
+ViewModel                           → LookAfterFeatures/<Feature>/ViewModels/
+Platform adapter (HealthKit, etc.)  → Apps/LookAfter-iOS/Services/ or LookAfterHealth
+Domain model                        → LookAfterCore/Models/
+Repository / persistence            → LookAfterData/
+LLM prompt or AI call               → LookAfterAI/
 Deterministic brain logic           → ExecutiveBrain/
-Design token / shared component     → LifeOSCore/DesignSystem/
+Design token / shared component     → LookAfterCore/DesignSystem/
 ```
 
 ## Command-line tests
 
 ```bash
-cd Packages/LifeOSCore && swift test
+cd Packages/LookAfterCore && swift test
 cd Packages/ExecutiveBrain && swift test
-cd Packages/LifeOSData && swift test
-cd Packages/LifeOSFeatures && swift test
+cd Packages/LookAfterData && swift test
+cd Packages/LookAfterFeatures && swift test
 ```
 
 ## Architecture decisions

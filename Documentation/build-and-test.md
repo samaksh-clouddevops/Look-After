@@ -13,7 +13,7 @@ Run after any change to `project.yml` or top-level folder moves.
 ## iOS build
 
 ```bash
-xcodebuild -scheme LifeOS-iOS \
+xcodebuild -scheme LookAfter-iOS \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   build
 ```
@@ -21,7 +21,7 @@ xcodebuild -scheme LifeOS-iOS \
 ## macOS build
 
 ```bash
-xcodebuild -scheme LifeOS-macOS \
+xcodebuild -scheme LookAfter-macOS \
   -destination 'platform=macOS' \
   build
 ```
@@ -29,7 +29,7 @@ xcodebuild -scheme LifeOS-macOS \
 ## Xcode test suite
 
 ```bash
-xcodebuild -scheme LifeOS-iOS \
+xcodebuild -scheme LookAfter-iOS \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   test
 ```
@@ -37,10 +37,10 @@ xcodebuild -scheme LifeOS-iOS \
 ## Package unit tests
 
 ```bash
-cd Packages/LifeOSCore && swift test
+cd Packages/LookAfterCore && swift test
 cd Packages/ExecutiveBrain && swift test
-cd Packages/LifeOSData && swift test
-cd Packages/LifeOSFeatures && swift test
+cd Packages/LookAfterData && swift test
+cd Packages/LookAfterFeatures && swift test
 ```
 
 ## Troubleshooting

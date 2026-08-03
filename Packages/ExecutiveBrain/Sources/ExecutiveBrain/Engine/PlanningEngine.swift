@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Builds the day plan from world state + reasoning — not a task list poster.
 public struct PlanningEngine: Sendable {

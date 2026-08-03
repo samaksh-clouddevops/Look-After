@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 import ExecutiveBrain
 
 public struct DecisionFixture: Codable, Sendable {

@@ -28,7 +28,7 @@ LifeOS/
 ├── Tools/             # CI helpers (future)
 ├── Tests/             # Integration tests (future)
 ├── project.yml        # XcodeGen source of truth
-└── LifeOS.xcodeproj/  # Generated — do not hand-edit
+└── LookAfter.xcodeproj/  # Generated — do not hand-edit
 ```
 
 ## Package overview

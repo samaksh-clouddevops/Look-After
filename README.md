@@ -6,7 +6,7 @@
 
 ```bash
 xcodegen generate
-open LifeOS.xcodeproj
+open LookAfter.xcodeproj
 ```
 
 See [Documentation/getting-started.md](Documentation/getting-started.md) for prerequisites, Firebase setup, and signing.

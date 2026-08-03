@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Deterministic explanations from reasoning — LLM may enrich later, never decide.
 public struct ExplanationBuilder: Sendable {

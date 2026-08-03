@@ -2,12 +2,12 @@ import Foundation
 
 public struct BuildValidator: Sendable {
     private let packages = [
-        "LifeOSCore",
+        "LookAfterCore",
         "ExecutiveBrain",
-        "LifeOSData",
-        "LifeOSFeatures",
-        "LifeOSAI",
-        "LifeOSHealth"
+        "LookAfterData",
+        "LookAfterFeatures",
+        "LookAfterAI",
+        "LookAfterHealth"
     ]
 
     public init() {}

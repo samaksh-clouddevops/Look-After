@@ -27,11 +27,11 @@ Ensure LifeOS is **production ready** by validating every feature, interaction, 
 | Area | Details |
 |------|---------|
 | **Platforms** | iOS 17+ (iPhone primary, iPad layouts), macOS productivity monitor |
-| **Targets** | LifeOS-iOS, LifeOS-macOS, LifeOSWidget, Focus Live Activity |
-| **Packages** | LifeOSCore, LifeOSAI, LifeOSData, LifeOSFeatures, LifeOSHealth, ExecutiveBrain |
+| **Targets** | LookAfter-iOS, LookAfter-macOS, LookAfterWidget, Focus Live Activity |
+| **Packages** | LookAfterCore, LookAfterAI, LookAfterData, LookAfterFeatures, LookAfterHealth, ExecutiveBrain |
 | **Intelligence** | ExecutiveBrainEngine (deterministic), FlowDirector, ContextOrchestrator, GLMService |
 | **Integrations** | Firebase Auth + Firestore, HealthKit, EventKit (Calendar), Speech/Microphone |
-| **Experience modes** | Classic (`LifeOSMasterCanvas`) and AI Executive (`AIExecutiveCanvas`) |
+| **Experience modes** | Classic (`LookAfterMasterCanvas`) and AI Executive (`AIExecutiveCanvas`) |
 
 ### Out of scope (v1)
 
@@ -50,8 +50,8 @@ Ensure LifeOS is **production ready** by validating every feature, interaction, 
 ```mermaid
 flowchart TD
     subgraph apps [Apps]
-        iOS[LifeOS-iOS]
-        macOS[LifeOS-macOS]
+        iOS[LookAfter-iOS]
+        macOS[LookAfter-macOS]
         Widget[Widget + LiveActivity]
     end
     subgraph shell [Shared Shell]
@@ -83,7 +83,7 @@ flowchart TD
     Widget --> data
 ```
 
-**Critical invariant:** `AppShellState` (`Apps/LifeOS-iOS/Experience/AppShellState.swift`) is the single data shell — mode switches must not fork state.
+**Critical invariant:** `AppShellState` (`Apps/LookAfter-iOS/Experience/AppShellState.swift`) is the single data shell — mode switches must not fork state.
 
 ---
 
@@ -110,7 +110,7 @@ flowchart TD
 **Build commands:** [build-and-test.md](../build-and-test.md)
 
 ```bash
-xcodebuild -scheme LifeOS-iOS \
+xcodebuild -scheme LookAfter-iOS \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   build test
 ```
@@ -189,6 +189,6 @@ Distributed across: [03-module-test-cases.md](03-module-test-cases.md), [04-scre
 ## 1.12 References
 
 - Product spec: [ATTENTION_OS_SPEC.md](../ATTENTION_OS_SPEC.md)  
-- Onboarding steps: `Apps/LifeOS-iOS/Views/Onboarding/OnboardingView.swift` (`StartStep`)  
-- Permissions: `Apps/LifeOS-iOS/Info.plist`  
-- Prompts: `Packages/LifeOSAI/Sources/LifeOSAI/Prompts/LifeOSPrompts.swift`  
+- Onboarding steps: `Apps/LookAfter-iOS/Views/Onboarding/OnboardingView.swift` (`StartStep`)  
+- Permissions: `Apps/LookAfter-iOS/Info.plist`  
+- Prompts: `Packages/LookAfterAI/Sources/LookAfterAI/Prompts/LookAfterPrompts.swift`  

@@ -11,7 +11,7 @@
 #
 # After running:
 #   1. Mac owner signs into Xcode → Settings → Accounts
-#   2. Open LifeOS.xcodeproj → Signing & Capabilities → pick their Team (both targets)
+#   2. Open LookAfter.xcodeproj → Signing & Capabilities → pick their Team (both targets)
 #   3. Register App Group + App IDs at developer.apple.com (script prints details)
 #
 set -euo pipefail
@@ -56,7 +56,7 @@ Optional:
 Example (someone else's Mac — owner uses Personal Team):
   ./Scripts/reconfigure-signing.sh --prefix com.janedoe.flowos --clear-team
 
-Then in Xcode: Settings → Accounts → sign in → pick Team on LifeOS-iOS + LifeOSWidget.
+Then in Xcode: Settings → Accounts → sign in → pick Team on LookAfter-iOS + LookAfterWidget.
 EOF
 }
 
@@ -134,12 +134,12 @@ fi
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${ROOT}/.signing-backup-${TIMESTAMP}"
 FILES=(
-  "Config/LifeOS-iOS.entitlements"
-  "Apps/LifeOSWidget/LifeOSWidget.entitlements"
-  "Packages/LifeOSCore/Sources/LifeOSCore/Models/WidgetSnapshot.swift"
-  "Packages/LifeOSAI/Sources/LifeOSAI/Security/KeychainStore.swift"
+  "Config/LookAfter-iOS.entitlements"
+  "Apps/LookAfterWidget/LookAfterWidget.entitlements"
+  "Packages/LookAfterCore/Sources/LookAfterCore/Models/WidgetSnapshot.swift"
+  "Packages/LookAfterAI/Sources/LookAfterAI/Security/KeychainStore.swift"
   "project.yml"
-  "LifeOS.xcodeproj/project.pbxproj"
+  "LookAfter.xcodeproj/project.pbxproj"
   "Config/GoogleService-Info.plist"
 )
 
@@ -165,7 +165,7 @@ fi
 # Order matters: replace longer / more specific IDs first.
 PBX_EXPR=(
   "s|${OLD_PREFIX}\\.app\\.widget|${NEW_PREFIX}.app.widget|g"
-  "s|${OLD_PREFIX}\\.LifeOSTests|${NEW_PREFIX}.LifeOSTests|g"
+  "s|${OLD_PREFIX}\\.LookAfterTests|${NEW_PREFIX}.LookAfterTests|g"
   "s|${OLD_PREFIX}\\.app|${NEW_PREFIX}.app|g"
   "s|${OLD_PREFIX}\\.ai-keys|${NEW_PREFIX}.ai-keys|g"
   "s|${OLD_MAC_BUNDLE}|${NEW_MAC_BUNDLE}|g"
@@ -179,10 +179,10 @@ elif [[ "$CLEAR_TEAM" -eq 1 ]]; then
   PBX_EXPR+=("/DEVELOPMENT_TEAM = ${OLD_TEAM};/d")
 fi
 
-replace_in_file "Config/LifeOS-iOS.entitlements" "s|${OLD_GROUP}|${NEW_GROUP}|g"
-replace_in_file "Apps/LifeOSWidget/LifeOSWidget.entitlements" "s|${OLD_GROUP}|${NEW_GROUP}|g"
-replace_in_file "Packages/LifeOSCore/Sources/LifeOSCore/Models/WidgetSnapshot.swift" "s|${OLD_GROUP}|${NEW_GROUP}|g"
-replace_in_file "Packages/LifeOSAI/Sources/LifeOSAI/Security/KeychainStore.swift" \
+replace_in_file "Config/LookAfter-iOS.entitlements" "s|${OLD_GROUP}|${NEW_GROUP}|g"
+replace_in_file "Apps/LookAfterWidget/LookAfterWidget.entitlements" "s|${OLD_GROUP}|${NEW_GROUP}|g"
+replace_in_file "Packages/LookAfterCore/Sources/LookAfterCore/Models/WidgetSnapshot.swift" "s|${OLD_GROUP}|${NEW_GROUP}|g"
+replace_in_file "Packages/LookAfterAI/Sources/LookAfterAI/Security/KeychainStore.swift" \
   "s|${OLD_PREFIX}.ai-keys|${NEW_PREFIX}.ai-keys|g"
 replace_in_file "project.yml" \
   "s|bundleIdPrefix: ${OLD_PREFIX}|bundleIdPrefix: ${NEW_PREFIX}|g" \
@@ -190,7 +190,7 @@ replace_in_file "project.yml" \
   "s|${OLD_PREFIX}\\.app\\.widget|${NEW_PREFIX}.app.widget|g" \
   "s|${OLD_PREFIX}\\.app|${NEW_PREFIX}.app|g" \
   "s|${OLD_MAC_BUNDLE}|${NEW_MAC_BUNDLE}|g"
-replace_in_file "LifeOS.xcodeproj/project.pbxproj" "${PBX_EXPR[@]}"
+replace_in_file "LookAfter.xcodeproj/project.pbxproj" "${PBX_EXPR[@]}"
 
 if [[ "$UPDATE_FIREBASE" -eq 1 ]]; then
   replace_in_file "Config/GoogleService-Info.plist" \
@@ -224,8 +224,8 @@ cat <<EOF
 Next steps on this Mac:
 ──────────────────────
 1. Xcode → Settings → Accounts → + → sign in with the Mac owner's Apple ID
-2. Open LifeOS.xcodeproj
-3. Targets LifeOS-iOS AND LifeOSWidget → Signing & Capabilities:
+2. Open LookAfter.xcodeproj
+3. Targets LookAfter-iOS AND LookAfterWidget → Signing & Capabilities:
    • Enable "Automatically manage signing"
    • Team → owner's team (Personal Team is OK for local dev)
 4. Apple Developer portal (developer.apple.com) — for widget + App Group:

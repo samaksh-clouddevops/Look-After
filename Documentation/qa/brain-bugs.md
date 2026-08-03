@@ -116,7 +116,7 @@ Coach: "Take your **Adderall at 2 PM** with lunch."
 GLM coach prompt lacked hard guard when med list empty.
 
 #### Fixed in
-LifeOSPrompts coach guard + empty-state check — build 1.0.1
+LookAfterPrompts coach guard + empty-state check — build 1.0.1
 
 #### Regression
 LO-HALL-001

@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Medication reasoning with strict safety rules.
 ///

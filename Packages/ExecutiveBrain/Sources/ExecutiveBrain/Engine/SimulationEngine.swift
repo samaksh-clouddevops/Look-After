@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Compares candidate futures — outputs inspectable simulations, not UI.
 public struct SimulationEngine: Sendable {

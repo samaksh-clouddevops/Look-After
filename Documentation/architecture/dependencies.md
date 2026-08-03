@@ -4,12 +4,12 @@
 
 ```mermaid
 flowchart BT
-    Core[LifeOSCore]
-    AI[LifeOSAI]
-    Data[LifeOSData]
-    Health[LifeOSHealth]
+    Core[LookAfterCore]
+    AI[LookAfterAI]
+    Data[LookAfterData]
+    Health[LookAfterHealth]
     EB[ExecutiveBrain]
-    Features[LifeOSFeatures]
+    Features[LookAfterFeatures]
     Apps[Apps targets]
 
     Core --> AI
@@ -28,16 +28,16 @@ flowchart BT
 
 ## Layering rules
 
-1. **LifeOSCore** — no dependencies on other LifeOS packages
-2. **LifeOSAI, LifeOSData, LifeOSHealth, ExecutiveBrain** — depend on Core only (Data also depends on AI for test targets)
-3. **LifeOSFeatures** — integrates Core, AI, Data, ExecutiveBrain
+1. **LookAfterCore** — no dependencies on other LifeOS packages
+2. **LookAfterAI, LookAfterData, LookAfterHealth, ExecutiveBrain** — depend on Core only (Data also depends on AI for test targets)
+3. **LookAfterFeatures** — integrates Core, AI, Data, ExecutiveBrain
 4. **Apps** — depend on Features, Core, Health, and platform frameworks
 
 ## Decoupling notes
 
-- `CognitiveModel` lives in **LifeOSCore** so LifeOSData analytics does not import LifeOSAI
+- `CognitiveModel` lives in **LookAfterCore** so LookAfterData analytics does not import LookAfterAI
 - `LLMPlanningEngine` (Features) is distinct from `PlanningEngine` (ExecutiveBrain)
-- Persistence consolidation (Core/EB stores → LifeOSData) is documented in [future-work.md](../future-work.md)
+- Persistence consolidation (Core/EB stores → LookAfterData) is documented in [future-work.md](../future-work.md)
 
 ## ADRs
 

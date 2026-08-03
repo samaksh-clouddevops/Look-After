@@ -8,15 +8,15 @@ Deferred improvements — not blocking the repository restructure.
 
 ## Persistence consolidation
 
-Move stores into LifeOSData over time:
+Move stores into LookAfterData over time:
 
-- Core: `MedicationStore`, `CycleLogStore`, etc. → `LifeOSData/Repositories/`
-- ExecutiveBrain: `DecisionHistoryStore` → `LifeOSData/Storage/`
-- LifeOSAI: `KeychainStore` → `LifeOSData/Security/` with `SecretsStoring` protocol in Core
+- Core: `MedicationStore`, `CycleLogStore`, etc. → `LookAfterData/Repositories/`
+- ExecutiveBrain: `DecisionHistoryStore` → `LookAfterData/Storage/`
+- LookAfterAI: `KeychainStore` → `LookAfterData/Security/` with `SecretsStoring` protocol in Core
 
 ## Dependency injection
 
-- Introduce `Apps/LifeOS-iOS/Composition/AppDependencies.swift` for testable DI
+- Introduce `Apps/LookAfter-iOS/Composition/AppDependencies.swift` for testable DI
 - Wire `AnalyticsEnrichmentProviding` protocol if AI enrichment returns to Data layer
 
 ## CI

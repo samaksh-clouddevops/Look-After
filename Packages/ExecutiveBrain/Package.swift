@@ -11,12 +11,12 @@ let package = Package(
         .library(name: "ExecutiveBrain", targets: ["ExecutiveBrain"])
     ],
     dependencies: [
-        .package(path: "../LifeOSCore")
+        .package(path: "../LookAfterCore")
     ],
     targets: [
         .target(
             name: "ExecutiveBrain",
-            dependencies: ["LifeOSCore"],
+            dependencies: ["LookAfterCore"],
             path: "Sources/ExecutiveBrain"
         ),
         .testTarget(

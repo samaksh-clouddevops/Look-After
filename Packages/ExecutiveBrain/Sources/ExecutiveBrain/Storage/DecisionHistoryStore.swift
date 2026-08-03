@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Append-only decision history for policy learning and Brain Inspector.
 public final class DecisionHistoryStore: @unchecked Sendable {

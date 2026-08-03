@@ -49,7 +49,7 @@ Test whether compressed memories remain faithful to decision-critical informatio
 
 ## Data Source
 
-[`BehaviorMemoryStore`](../../Packages/LifeOSData/Sources/LifeOSData/Behavior/BehaviorMemoryStore.swift)
+[`BehaviorMemoryStore`](../../Packages/LookAfterData/Sources/LookAfterData/Behavior/BehaviorMemoryStore.swift)
 
 ---
 

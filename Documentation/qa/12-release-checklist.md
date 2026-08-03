@@ -9,10 +9,10 @@ Pre-release gate checklist for App Store / TestFlight GA.
 
 ## Build & Infrastructure
 
-- [ ] Version and build number incremented in `Apps/LifeOS-iOS/Info.plist`
+- [ ] Version and build number incremented in `Apps/LookAfter-iOS/Info.plist`
 - [ ] `xcodegen generate` run if `project.yml` changed
-- [ ] iOS build succeeds: `xcodebuild -scheme LifeOS-iOS -destination 'platform=iOS Simulator,name=iPhone 17' build`
-- [ ] macOS build succeeds: `xcodebuild -scheme LifeOS-macOS -destination 'platform=macOS' build`
+- [ ] iOS build succeeds: `xcodebuild -scheme LookAfter-iOS -destination 'platform=iOS Simulator,name=iPhone 17' build`
+- [ ] macOS build succeeds: `xcodebuild -scheme LookAfter-macOS -destination 'platform=macOS' build`
 - [ ] Signing verified on physical device (Team ID, App Groups, entitlements)
 - [ ] `./Scripts/reconfigure-signing.sh` run on non-owner Macs if needed
 - [ ] `GoogleService-Info.plist` present locally (not committed); template documented in Config
@@ -24,7 +24,7 @@ Pre-release gate checklist for App Store / TestFlight GA.
 ## Automated Regression
 
 - [ ] **Tier 1** — All package `swift test` pass (54 files)
-- [ ] **Tier 2** — `xcodebuild -scheme LifeOS-iOS test` pass
+- [ ] **Tier 2** — `xcodebuild -scheme LookAfter-iOS test` pass
 - [ ] No new compiler warnings treated as errors in CI
 - [ ] `.build/` and `build/` not in release artifact
 

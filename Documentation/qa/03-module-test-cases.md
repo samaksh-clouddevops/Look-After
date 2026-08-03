@@ -7,9 +7,9 @@ Package-level validation for all six Swift packages plus app-layer integration p
 
 ---
 
-## LifeOSCore
+## LookAfterCore
 
-**Path:** `Packages/LifeOSCore/`  
+**Path:** `Packages/LookAfterCore/`  
 **Automated baseline:** 28 test files (Core + FlowScheduling)
 
 ### LO-CORE-FN-001 — Task recurrence engine weekly rule
@@ -122,9 +122,9 @@ Package-level validation for all six Swift packages plus app-layer integration p
 
 ---
 
-## LifeOSData
+## LookAfterData
 
-**Path:** `Packages/LifeOSData/`  
+**Path:** `Packages/LookAfterData/`  
 **Automated baseline:** 12 test files
 
 ### LO-DATA-FN-001 — Task repository merge conflict resolution
@@ -224,9 +224,9 @@ Package-level validation for all six Swift packages plus app-layer integration p
 
 ---
 
-## LifeOSAI
+## LookAfterAI
 
-**Path:** `Packages/LifeOSAI/`
+**Path:** `Packages/LookAfterAI/`
 
 ### LO-AI-AI-001 — Planning JSON schema compliance
 
@@ -356,9 +356,9 @@ Package-level validation for all six Swift packages plus app-layer integration p
 
 ---
 
-## LifeOSFeatures
+## LookAfterFeatures
 
-**Path:** `Packages/LifeOSFeatures/`
+**Path:** `Packages/LookAfterFeatures/`
 
 ### LO-FEAT-FN-001 — TasksViewModel create update delete
 
@@ -428,9 +428,9 @@ Package-level validation for all six Swift packages plus app-layer integration p
 
 ---
 
-## LifeOSHealth
+## LookAfterHealth
 
-**Path:** `Packages/LifeOSHealth/`
+**Path:** `Packages/LookAfterHealth/`
 
 ### LO-HEALTH-FN-001 — HealthManager authorization request
 
@@ -445,7 +445,7 @@ Package-level validation for all six Swift packages plus app-layer integration p
 | Priority | P0 |
 | Severity | S2 |
 | Feature | Cycle HealthKit import |
-| Automated | `LifeOSHealthTests.swift` |
+| Automated | `LookAfterHealthTests.swift` |
 
 ### LO-HEALTH-FN-003 — HealthKit observer callback scheduling
 
@@ -531,12 +531,12 @@ Package-level validation for all six Swift packages plus app-layer integration p
 
 | Package | P0 | P1 | P2 | Total |
 |---------|----|----|----|----|
-| LifeOSCore | 8 | 12 | 6 | 26 |
-| LifeOSData | 10 | 8 | 4 | 22 |
-| LifeOSAI | 8 | 10 | 4 | 22 |
+| LookAfterCore | 8 | 12 | 6 | 26 |
+| LookAfterData | 10 | 8 | 4 | 22 |
+| LookAfterAI | 8 | 10 | 4 | 22 |
 | ExecutiveBrain | 6 | 6 | 2 | 14 |
-| LifeOSFeatures | 10 | 12 | 8 | 30 |
-| LifeOSHealth | 4 | 4 | 2 | 10 |
+| LookAfterFeatures | 10 | 12 | 8 | 30 |
+| LookAfterHealth | 4 | 4 | 2 | 10 |
 | iOS/MAC/WGT | 12 | 10 | 6 | 28 |
 | **Total** | **58** | **62** | **32** | **152** |
 

@@ -5,7 +5,7 @@
 
 Validates that recommendations **depend on the user's model** — same calendar, different people, different decisions.
 
-**UI entry:** `HomeManagementView` → `DigitalTwinTabView` (`Packages/LifeOSFeatures/.../HomeManagementView.swift`)  
+**UI entry:** `HomeManagementView` → `DigitalTwinTabView` (`Packages/LookAfterFeatures/.../HomeManagementView.swift`)  
 **Model sources:** `UserLifeProfileStore`, `LifeModelStore`, `StructuredLifeProfileSections`, behavior memory, health calibration
 
 ---

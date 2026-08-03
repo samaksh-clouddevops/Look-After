@@ -4,7 +4,7 @@
 **Validation Layer:** Cross-cutting  
 **Parent:** [README.md](README.md)
 
-Validates Task → Project → Mission → Goal hierarchy via [`LifeModelStore`](../../Packages/LifeOSCore/Sources/LifeOSCore/Profile/LifeModelStore.swift).
+Validates Task → Project → Mission → Goal hierarchy via [`LifeModelStore`](../../Packages/LookAfterCore/Sources/LookAfterCore/Profile/LifeModelStore.swift).
 
 ---
 

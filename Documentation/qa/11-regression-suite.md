@@ -12,7 +12,7 @@ Tiered regression strategy mapped to **54 existing unit test files**.
 | Tier | Trigger | Duration | Scope |
 |------|---------|----------|-------|
 | **T1** | Every commit / PR | ~5 min | Package `swift test` |
-| **T2** | Pre-merge to main | ~15 min | T1 + `xcodebuild -scheme LifeOS-iOS test` |
+| **T2** | Pre-merge to main | ~15 min | T1 + `xcodebuild -scheme LookAfter-iOS test` |
 | **T3** | Pre-release | ~45 min | T2 + manual P0 flows FLOW-001–010 |
 | **T4** | Major release | ~3 days | All documented cases (~180) |
 
@@ -23,15 +23,15 @@ Tiered regression strategy mapped to **54 existing unit test files**.
 Run from repo root:
 
 ```bash
-cd Packages/LifeOSCore && swift test
+cd Packages/LookAfterCore && swift test
 cd Packages/ExecutiveBrain && swift test
-cd Packages/LifeOSData && swift test
-cd Packages/LifeOSFeatures && swift test
-cd Packages/LifeOSAI && swift test
-cd Packages/LifeOSHealth && swift test
+cd Packages/LookAfterData && swift test
+cd Packages/LookAfterFeatures && swift test
+cd Packages/LookAfterAI && swift test
+cd Packages/LookAfterHealth && swift test
 ```
 
-### LifeOSCore (31 files)
+### LookAfterCore (31 files)
 
 | Test file | Regression IDs | Feature area |
 |-----------|----------------|----------------|
@@ -56,7 +56,7 @@ cd Packages/LifeOSHealth && swift test
 | `LifeModelValidatorTests.swift` | LO-AI-AI-010 | F01 Profile |
 | `LifeProfileNameExtractorTests.swift` | LO-IOS-FN-010 | F01 Onboarding |
 | `CoreDomainTests.swift` | LO-CORE-* | Core domain |
-| `LifeOSCoreTests.swift` | LO-CORE-* | Core smoke |
+| `LookAfterCoreTests.swift` | LO-CORE-* | Core smoke |
 | `FlowDirectorContractsTests.swift` | LO-BRAIN-FN-010 | F10 Brain |
 | `FlowSchedulingRuleTests.swift` | LO-BRAIN-FN-015 | F10 Brain |
 | `FlowSchedulingEngineTests.swift` | LO-BRAIN-FN-015 | F10 Brain |
@@ -70,7 +70,7 @@ cd Packages/LifeOSHealth && swift test
 | `IntentBuilderTests.swift` | LO-BRAIN-FN-002 |
 | `MedicationReasoningTests.swift` | LO-BRAIN-FN-003 |
 
-### LifeOSData (12 files)
+### LookAfterData (12 files)
 
 | Test file | Regression IDs |
 |-----------|----------------|
@@ -87,7 +87,7 @@ cd Packages/LifeOSHealth && swift test
 | `SimulatedUserFlowTests.swift` | FLOW-001, FLOW-002 |
 | `HealthSummaryRepositoryTests.swift` | FLOW-005 |
 
-### LifeOSFeatures (11 files)
+### LookAfterFeatures (11 files)
 
 | Test file | Regression IDs |
 |-----------|----------------|
@@ -99,9 +99,9 @@ cd Packages/LifeOSHealth && swift test
 | `MultiDayTaskPlannerTests.swift` | LO-AI-AI-005, FLOW-011 |
 | `InsightsViewModelTests.swift` | LO-FEAT-FN-006 |
 | `ShoppingListViewModelTests.swift` | LO-FEAT-FN-007 |
-| `LifeOSFeaturesTests.swift` | LO-FEAT-* smoke |
+| `LookAfterFeaturesTests.swift` | LO-FEAT-* smoke |
 
-### LifeOSAI (5 files)
+### LookAfterAI (5 files)
 
 | Test file | Regression IDs |
 |-----------|----------------|
@@ -110,18 +110,18 @@ cd Packages/LifeOSHealth && swift test
 | `GLMKeyManagerTests.swift` | LO-AI-FN-003, LO-DATA-SEC-001 |
 | `CognitiveAITests.swift` | LO-AI-FN-004 |
 
-### LifeOSHealth (1 file)
+### LookAfterHealth (1 file)
 
 | Test file | Regression IDs |
 |-----------|----------------|
-| `LifeOSHealthTests.swift` | LO-HEALTH-FN-002 |
+| `LookAfterHealthTests.swift` | LO-HEALTH-FN-002 |
 
 ---
 
 ## Tier 2 — Xcode iOS Test Scheme
 
 ```bash
-xcodebuild -scheme LifeOS-iOS \
+xcodebuild -scheme LookAfter-iOS \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   test
 ```

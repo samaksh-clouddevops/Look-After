@@ -1,4 +1,4 @@
-name: LifeOS
+name: LookAfter
 options:
   bundleIdPrefix: com.samaksh.flowos
   createIntermediateGroups: true
@@ -13,23 +13,23 @@ settings:
     ENABLE_BITCODE: false
 
 targets:
-  LifeOS-iOS:
+  LookAfter-iOS:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: Apps/LifeOS-iOS
+      - path: Apps/LookAfter-iOS
       - path: Apps/Shared
       - path: Config/GoogleService-Info.plist
-      - path: Config/LifeOS-iOS.entitlements
+      - path: Config/LookAfter-iOS.entitlements
     entitlements:
-      path: Config/LifeOS-iOS.entitlements
+      path: Config/LookAfter-iOS.entitlements
       properties:
         com.apple.developer.healthkit: true
         com.apple.security.application-groups:
           - group.com.samaksh.flowos
     info:
-      path: Apps/LifeOS-iOS/Info.plist
+      path: Apps/LookAfter-iOS/Info.plist
       properties:
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
@@ -39,17 +39,17 @@ targets:
         NSMicrophoneUsageDescription: "Look After uses the microphone for voice capture and speech-to-text transcription."
         NSSpeechRecognitionUsageDescription: "Look After transcribes your spoken thoughts into tasks, journal entries, and notes."
     dependencies:
-      - target: LifeOSWidget
+      - target: LookAfterWidget
         embed: true
-      - package: LifeOSCore
-      - package: LifeOSAI
-      - package: LifeOSData
-      - package: LifeOSHealth
-      - package: LifeOSFeatures
+      - package: LookAfterCore
+      - package: LookAfterAI
+      - package: LookAfterData
+      - package: LookAfterHealth
+      - package: LookAfterFeatures
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app
       CODE_SIGN_STYLE: Automatic
-      CODE_SIGN_ENTITLEMENTS: Config/LifeOS-iOS.entitlements
+      CODE_SIGN_ENTITLEMENTS: Config/LookAfter-iOS.entitlements
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       INFOPLIST_KEY_CFBundleDisplayName: "Look After"
       INFOPLIST_KEY_NSHealthShareUsageDescription: "Look After analyzes your sleep, HRV, and heart rate to estimate energy levels."
@@ -59,60 +59,60 @@ targets:
       INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Look After transcribes your spoken thoughts into tasks, journal entries, and notes."
       INFOPLIST_KEY_NSSupportsLiveActivities: true
 
-  LifeOSWidget:
+  LookAfterWidget:
     type: app-extension
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: Apps/LifeOSWidget
+      - path: Apps/LookAfterWidget
       - path: Apps/Shared
     entitlements:
-      path: Apps/LifeOSWidget/LifeOSWidget.entitlements
+      path: Apps/LookAfterWidget/LookAfterWidget.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.samaksh.flowos
     dependencies:
-      - package: LifeOSCore
+      - package: LookAfterCore
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app.widget
       CODE_SIGN_STYLE: Automatic
-      CODE_SIGN_ENTITLEMENTS: Apps/LifeOSWidget/LifeOSWidget.entitlements
+      CODE_SIGN_ENTITLEMENTS: Apps/LookAfterWidget/LookAfterWidget.entitlements
       INFOPLIST_KEY_CFBundleDisplayName: "Look After"
-      INFOPLIST_FILE: Apps/LifeOSWidget/Info.plist
+      INFOPLIST_FILE: Apps/LookAfterWidget/Info.plist
       SKIP_INSTALL: true
       LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
 
-  LifeOS-macOS:
+  LookAfter-macOS:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: Apps/LifeOS-macOS
+      - path: Apps/LookAfter-macOS
       - path: Config/GoogleService-Info.plist
-      - path: Config/LifeOS-macOS.entitlements
+      - path: Config/LookAfter-macOS.entitlements
       # These SwiftUI screens are shared by the macOS dashboard. The iOS-only
       # master canvas and Daily Plan timer intentionally remain excluded.
-      - path: Apps/LifeOS-iOS/Views/ADHD
-      - path: Apps/LifeOS-iOS/Views/Brain
-      - path: Apps/LifeOS-iOS/Views/Coach
-      - path: Apps/LifeOS-iOS/Views/Inbox
-      - path: Apps/LifeOS-iOS/Views/Settings
+      - path: Apps/LookAfter-iOS/Views/ADHD
+      - path: Apps/LookAfter-iOS/Views/Brain
+      - path: Apps/LookAfter-iOS/Views/Coach
+      - path: Apps/LookAfter-iOS/Views/Inbox
+      - path: Apps/LookAfter-iOS/Views/Settings
         excludes:
           - SettingsView.swift
-      - path: Apps/LifeOS-iOS/Views/Shared
+      - path: Apps/LookAfter-iOS/Views/Shared
         excludes:
           - HealthSyncProgressView.swift
           - LifeProfileImportView.swift
           - VoiceCaptureView.swift
-      - path: Apps/LifeOS-iOS/Views/Tasks
+      - path: Apps/LookAfter-iOS/Views/Tasks
         excludes:
           - DailyPlanView.swift
     dependencies:
-      - package: LifeOSCore
-      - package: LifeOSAI
-      - package: LifeOSData
-      - package: LifeOSFeatures
-      - package: LifeOSHealth
+      - package: LookAfterCore
+      - package: LookAfterAI
+      - package: LookAfterData
+      - package: LookAfterFeatures
+      - package: LookAfterHealth
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.lifeos.mac
       GENERATE_INFOPLIST_FILE: YES
@@ -120,64 +120,64 @@ targets:
       INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
       INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "Look After reads your calendar for scheduling."
       INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription: "Look After needs access to your calendar to add scheduled tasks."
-      CODE_SIGN_ENTITLEMENTS: Config/LifeOS-macOS.entitlements
+      CODE_SIGN_ENTITLEMENTS: Config/LookAfter-macOS.entitlements
 
-  LifeOSTests:
+  LookAfterTests:
     type: bundle.unit-test
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: Packages/LifeOSData/Tests/LifeOSDataTests
-      - path: Packages/LifeOSData/Tests/BehaviorMemoryStoreTests
-      - path: Packages/LifeOSData/Tests/EnvironmentContextProviderTests
-      - path: Packages/LifeOSCore/Tests/LifeOSCoreTests
-      - path: Packages/LifeOSCore/Tests/FlowSchedulingTests
-      - path: Packages/LifeOSAI/Tests/LifeOSAITests
-      - path: Packages/LifeOSAI/Tests/FlowDirectorTests
-      - path: Packages/LifeOSFeatures/Tests/LifeOSFeaturesTests
+      - path: Packages/LookAfterData/Tests/LookAfterDataTests
+      - path: Packages/LookAfterData/Tests/BehaviorMemoryStoreTests
+      - path: Packages/LookAfterData/Tests/EnvironmentContextProviderTests
+      - path: Packages/LookAfterCore/Tests/LookAfterCoreTests
+      - path: Packages/LookAfterCore/Tests/FlowSchedulingTests
+      - path: Packages/LookAfterAI/Tests/LookAfterAITests
+      - path: Packages/LookAfterAI/Tests/FlowDirectorTests
+      - path: Packages/LookAfterFeatures/Tests/LookAfterFeaturesTests
         excludes:
           - TestCalendarFixtures.swift
       - path: Packages/ExecutiveBrain/Tests/ExecutiveBrainTests
-      - path: Packages/LifeOSHealth/Tests/LifeOSHealthTests
+      - path: Packages/LookAfterHealth/Tests/LookAfterHealthTests
     dependencies:
-      - package: LifeOSData
-      - package: LifeOSCore
-      - package: LifeOSAI
-      - package: LifeOSFeatures
+      - package: LookAfterData
+      - package: LookAfterCore
+      - package: LookAfterAI
+      - package: LookAfterFeatures
       - package: ExecutiveBrain
-      - package: LifeOSHealth
+      - package: LookAfterHealth
     settings:
       GENERATE_INFOPLIST_FILE: YES
 
 packages:
-  LifeOSCore:
-    path: Packages/LifeOSCore
-  LifeOSAI:
-    path: Packages/LifeOSAI
-  LifeOSData:
-    path: Packages/LifeOSData
-  LifeOSHealth:
-    path: Packages/LifeOSHealth
-  LifeOSFeatures:
-    path: Packages/LifeOSFeatures
+  LookAfterCore:
+    path: Packages/LookAfterCore
+  LookAfterAI:
+    path: Packages/LookAfterAI
+  LookAfterData:
+    path: Packages/LookAfterData
+  LookAfterHealth:
+    path: Packages/LookAfterHealth
+  LookAfterFeatures:
+    path: Packages/LookAfterFeatures
   ExecutiveBrain:
     path: Packages/ExecutiveBrain
 
 schemes:
-  LifeOS-iOS:
+  LookAfter-iOS:
     build:
       targets:
-        LifeOS-iOS: all
-        LifeOSWidget: all
-        LifeOSTests: [test]
+        LookAfter-iOS: all
+        LookAfterWidget: all
+        LookAfterTests: [test]
     test:
       targets:
-        - name: LifeOSTests
+        - name: LookAfterTests
     run:
       config: Debug
-  LifeOS-macOS:
+  LookAfter-macOS:
     build:
       targets:
-        LifeOS-macOS: all
+        LookAfter-macOS: all
     run:
       config: Debug

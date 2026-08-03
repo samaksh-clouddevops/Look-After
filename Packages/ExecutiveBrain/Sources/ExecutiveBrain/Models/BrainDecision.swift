@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// A structured decision — never an LLM blob.
 public struct BrainDecision: Codable, Sendable, Equatable {

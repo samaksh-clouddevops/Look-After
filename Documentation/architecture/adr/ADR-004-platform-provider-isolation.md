@@ -8,13 +8,13 @@ Accepted — D2.3, reaffirmed D2.4 (2026-07-31)
 
 FlowOS orchestration consumes signals from HealthKit, EventKit, WeatherKit, and device state. These APIs:
 
-- Require platform frameworks not suitable for `LifeOSCore`.
+- Require platform frameworks not suitable for `LookAfterCore`.
 - Have permission models that fail gracefully.
 - Are difficult to unit test when called directly from business logic.
 
 ## Decision
 
-**LifeOSCore defines protocols and DTOs only.** Platform implementations live in `LifeOSData` or the app layer:
+**LookAfterCore defines protocols and DTOs only.** Platform implementations live in `LookAfterData` or the app layer:
 
 | Signal | Protocol | Default Implementation |
 |--------|----------|------------------------|
@@ -32,7 +32,7 @@ FlowOS orchestration consumes signals from HealthKit, EventKit, WeatherKit, and 
 
 **Positive**
 
-- LifeOSCore builds on macOS for fast CI without simulators.
+- LookAfterCore builds on macOS for fast CI without simulators.
 - Each provider is individually mockable in tests.
 - WeatherKit can remain disabled until licensed/configured.
 
@@ -43,5 +43,5 @@ FlowOS orchestration consumes signals from HealthKit, EventKit, WeatherKit, and 
 
 ## Alternatives Considered
 
-- **HealthKit in LifeOSCore** — rejected; violates package layering and testability.
+- **HealthKit in LookAfterCore** — rejected; violates package layering and testability.
 - **Single mega `EnvironmentService`** — rejected; prevents per-signal mocking and degradation.

@@ -1,0 +1,14 @@
+{
+  "folders": [
+    {
+      "name": "LookAfter",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.build": true,
+      "**/DerivedData": true
+    }
+  }
+}

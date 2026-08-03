@@ -5,7 +5,7 @@
 
 GLM/LLM output evaluation framework for all AI touchpoints in LifeOS.
 
-**Source of truth for prompts:** `Packages/LifeOSAI/Sources/LifeOSAI/Prompts/LifeOSPrompts.swift`
+**Source of truth for prompts:** `Packages/LookAfterAI/Sources/LookAfterAI/Prompts/LookAfterPrompts.swift`
 
 ---
 

@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Builds future-oriented intent from world model + reasoning — never UI copy.
 public struct IntentBuilder: Sendable {

@@ -10,14 +10,14 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/ExecutiveBrain"),
-        .package(path: "../../Packages/LifeOSCore")
+        .package(path: "../../Packages/LookAfterCore")
     ],
     targets: [
         .target(
             name: "EVPCore",
             dependencies: [
                 .product(name: "ExecutiveBrain", package: "ExecutiveBrain"),
-                .product(name: "LifeOSCore", package: "LifeOSCore")
+                .product(name: "LookAfterCore", package: "LookAfterCore")
             ],
             path: "Sources/EVPCore"
         ),

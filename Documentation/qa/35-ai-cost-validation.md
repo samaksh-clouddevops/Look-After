@@ -49,7 +49,7 @@ Dedicated layer for GLM/OpenRouter cost creep as prompts evolve.
 
 ## Data Source
 
-[`GLMUsageLogger`](../../Packages/LifeOSAI/Sources/LifeOSAI/Logging/GLMUsageLogger.swift)
+[`GLMUsageLogger`](../../Packages/LookAfterAI/Sources/LookAfterAI/Logging/GLMUsageLogger.swift)
 
 ---
 

@@ -1,6 +1,6 @@
 import XCTest
 @testable import ExecutiveBrain
-import LifeOSCore
+import LookAfterCore
 
 final class MedicationReasoningTests: XCTestCase {
 

@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Canonical continuously-updated model of the user's life.
 /// One source of truth — UI reads this, never recomputes it.

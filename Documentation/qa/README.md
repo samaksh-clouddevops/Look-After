@@ -117,13 +117,13 @@ LO-{MODULE}-{CATEGORY}-{NNN}
 
 | Code | Scope |
 |------|-------|
-| `CORE` | LifeOSCore package |
-| `DATA` | LifeOSData package |
-| `AI` | LifeOSAI package (GLM, prompts, FlowDirector) |
+| `CORE` | LookAfterCore package |
+| `DATA` | LookAfterData package |
+| `AI` | LookAfterAI package (GLM, prompts, FlowDirector) |
 | `BRAIN` | ExecutiveBrain package |
-| `FEAT` | LifeOSFeatures ViewModels |
-| `IOS` | LifeOS-iOS app UI |
-| `MAC` | LifeOS-macOS app |
+| `FEAT` | LookAfterFeatures ViewModels |
+| `IOS` | LookAfter-iOS app UI |
+| `MAC` | LookAfter-macOS app |
 | `WGT` | Widget + Live Activity |
 | `FLOW` | End-to-end user flows |
 
@@ -229,12 +229,12 @@ Every screen in [04-screen-test-cases.md](04-screen-test-cases.md) includes:
 ### Phase 1 — Automated baseline (~30 min)
 
 ```bash
-cd Packages/LifeOSCore && swift test
+cd Packages/LookAfterCore && swift test
 cd Packages/ExecutiveBrain && swift test
-cd Packages/LifeOSData && swift test
-cd Packages/LifeOSFeatures && swift test
-cd Packages/LifeOSAI && swift test
-cd Packages/LifeOSHealth && swift test
+cd Packages/LookAfterData && swift test
+cd Packages/LookAfterFeatures && swift test
+cd Packages/LookAfterAI && swift test
+cd Packages/LookAfterHealth && swift test
 ```
 
 See [11-regression-suite.md](11-regression-suite.md) Tier 1–2.

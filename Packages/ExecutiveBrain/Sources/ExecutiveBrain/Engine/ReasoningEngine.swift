@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Multi-factor reasoning — the Brain thinks, the LLM explains.
 public struct ReasoningEngine: Sendable {

@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Status:** Single source of truth for product, design, and implementation  
-**Codebase:** `LifeOS/` (packages: LifeOSCore, LifeOSAI, LifeOSData, LifeOSFeatures, LifeOSHealth)  
+**Codebase:** `LifeOS/` (packages: LookAfterCore, LookAfterAI, LookAfterData, LookAfterFeatures, LookAfterHealth)  
 **Last updated:** July 2026
 
 ---
@@ -88,7 +88,7 @@ Canonical terminology. Use these names in product copy, new code, and documentat
 | **FlowOS** | User-facing product name |
 | **Flow** | An immersive work session (replaces "Focus Session" in product copy) |
 | **Flow Director** | Background orchestration engine; proactive day planner (evolves `ExecutiveBrain`) |
-| **Flow Canvas** | Single living UI surface; states morph, no traditional navigation (evolves `LifeOSMasterCanvas`) |
+| **Flow Canvas** | Single living UI surface; states morph, no traditional navigation (evolves `LookAfterMasterCanvas`) |
 | **Flow Surface** | Render model Flow Canvas consumes from Flow Director (hero task, briefing, button state) |
 | **Flow World** | Living progress environment: Garden + River + Timeline (replaces XP/gamification) |
 | **Flow Ring** | Circular timer/progress indicator during an active Flow |
@@ -111,7 +111,7 @@ Swift types may retain legacy names until refactored. Mapping:
 | Product Term | Current Code |
 |--------------|--------------|
 | Flow Director | `ExecutiveBrain` → `FlowDirector` |
-| Flow Canvas | `LifeOSMasterCanvas` → `FlowCanvasView` |
+| Flow Canvas | `LookAfterMasterCanvas` → `FlowCanvasView` |
 | Flow session state | `ADHDViewModel` → `FlowSessionController` (future) |
 | Flow Surface | New type; fed by Flow Director |
 | Design tokens | `DesignSystem` → `FlowDesignSystem` |
@@ -302,7 +302,7 @@ Best deep work window today: 10:00–12:30
 
 ### AI Role in Flow Director
 
-LLM (`GeminiProvider` via `LifeOSPrompts`) generates **natural language only**:
+LLM (`GeminiProvider` via `LookAfterPrompts`) generates **natural language only**:
 
 - Briefing copy
 - Coach moment copy
@@ -398,7 +398,7 @@ Card tilt via Core Motion: ±5° max. Disabled in Restore personality, Anchor Mo
 
 **Do not remove existing navigation until Flow Canvas reaches feature parity.**
 
-During migration, `LifeOSMasterCanvas` coexists: legacy sheets/buttons remain reachable while Flow Canvas states are built incrementally. Remove legacy nav only when:
+During migration, `LookAfterMasterCanvas` coexists: legacy sheets/buttons remain reachable while Flow Canvas states are built incrementally. Remove legacy nav only when:
 
 - [ ] NOW, FLOW, CELEBRATE states stable
 - [ ] Stack gesture matches `TaskCardStackView` functionality
@@ -516,9 +516,9 @@ You finish documentation faster with music.
 
 ### Implementation
 
-- New `BehaviorMemoryStore` in `LifeOSData`
+- New `BehaviorMemoryStore` in `LookAfterData`
 - Nightly on-device analysis (rule-based first; ML optional later)
-- Feeds `FlowDirector` and `LifeOSPrompts` context
+- Feeds `FlowDirector` and `LookAfterPrompts` context
 - Deprecate `ExecutiveBrain.chatHistory` as primary UX (see §19)
 
 ---
@@ -645,7 +645,7 @@ Single Flow Canvas with gesture-accessed states. No tab bar.
 
 | Access | Content | Legacy Equivalent |
 |--------|---------|-------------------|
-| NOW (default) | Hero task, briefing, action | `LifeOSMasterCanvas` center |
+| NOW (default) | Hero task, briefing, action | `LookAfterMasterCanvas` center |
 | FLOW | Immersive timer | `FocusSessionView` |
 | Stack (swipe up) | Task queue | `TaskCardStackView` |
 | World (swipe down) | Flow Garden | New |
@@ -731,7 +731,7 @@ Timeline gesture → day's moments
 
 ## 15. Design System — Flow Material v2
 
-Evolves `DesignSystem.swift` in LifeOSCore.
+Evolves `DesignSystem.swift` in LookAfterCore.
 
 ### Color Tokens
 
@@ -1046,7 +1046,7 @@ Current `SettingsView` reduced incrementally; do not delete until replacements e
 
 ## 24. Data Contracts
 
-Protocol-driven contracts for D2 implementation. Types live in `LifeOSCore` unless noted.
+Protocol-driven contracts for D2 implementation. Types live in `LookAfterCore` unless noted.
 
 ### FlowPersonality
 
@@ -1179,7 +1179,7 @@ public protocol EnvironmentContextProviderProtocol {
 
 ### CalendarEventReference
 
-Lightweight EventKit bridge (avoid EventKit in LifeOSCore):
+Lightweight EventKit bridge (avoid EventKit in LookAfterCore):
 
 ```swift
 public struct CalendarEventReference: Codable, Sendable, Identifiable {
@@ -1197,15 +1197,15 @@ public struct CalendarEventReference: Codable, Sendable, Identifiable {
 
 | Spec Component | Current File | Target |
 |----------------|--------------|--------|
-| Flow Director | `ExecutiveBrain.swift` | `FlowDirector.swift` (LifeOSAI) |
-| AI prompts | `LifeOSPrompts.swift` | Add `flowBriefingPrompt`, `coachMomentPrompt` |
-| Flow Canvas | `LifeOSMasterCanvas.swift` | `FlowCanvasView.swift` |
+| Flow Director | `ExecutiveBrain.swift` | `FlowDirector.swift` (LookAfterAI) |
+| AI prompts | `LookAfterPrompts.swift` | Add `flowBriefingPrompt`, `coachMomentPrompt` |
+| Flow Canvas | `LookAfterMasterCanvas.swift` | `FlowCanvasView.swift` |
 | Flow session | `ADHDViewModel.swift` | Keep; rename later |
 | Flow UI (timer) | `FocusSessionView` in `ADHDViews.swift` | Morph into canvas FLOW state |
 | Task stack | `TaskCardStackView.swift` | Stack canvas state |
 | Tasks CRUD | `TasksViewModel.swift` | Unchanged; Flow Director reads |
 | Health | `HealthSyncService.swift`, `HealthManager.swift` | Feeds Environment Context |
-| Widgets | `WidgetSyncService.swift`, `LifeOSWidget/` | Read `FlowSurface` |
+| Widgets | `WidgetSyncService.swift`, `LookAfterWidget/` | Read `FlowSurface` |
 | Live Activity | `LiveActivityManager.swift`, `FocusLiveActivity.swift` | Flow branding + progress |
 | Voice | `SpeechRecognitionManager.swift` | Capture gesture |
 | Design tokens | `DesignSystem.swift` | `FlowDesignSystem.swift` |
@@ -1233,15 +1233,15 @@ Build in order. **Stop after each milestone for approval.**
 
 | Milestone | Deliverable | Compiles |
 |-----------|-------------|----------|
-| D2.1 | Data contracts in `LifeOSCore` (`FlowSurface`, `FlowPrediction`, etc.) | ✅ |
+| D2.1 | Data contracts in `LookAfterCore` (`FlowSurface`, `FlowPrediction`, etc.) | ✅ |
 | D2.2 | `BehaviorMemoryStore` stub (empty snapshot) | ✅ |
 | D2.3 | `EnvironmentContextProvider` (health + calendar + time) | ✅ |
 | D2.4 | `FlowDirector` pure scheduling logic (no LLM) | ✅ |
-| D2.5 | LLM briefing integration via `ExecutiveBrain`/`LifeOSPrompts` | ✅ |
+| D2.5 | LLM briefing integration via `ExecutiveBrain`/`LookAfterPrompts` | ✅ |
 | D2.6 | `WidgetSyncService` publishes `FlowSurface` | ✅ |
 | D2.7 | Unit tests for scheduling rules | ✅ |
 
-**Does not change UI yet.** `LifeOSMasterCanvas` may optionally display `FlowSurface` briefing.
+**Does not change UI yet.** `LookAfterMasterCanvas` may optionally display `FlowSurface` briefing.
 
 ### Phase D1 — Flow Canvas
 

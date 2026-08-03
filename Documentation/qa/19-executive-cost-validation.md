@@ -5,7 +5,7 @@
 
 Validates LifeOS's **optimization function itself** — not just that code runs.
 
-**Code reference:** `ExecutiveCost`, `ExecutiveCostDelta` in `Packages/LifeOSCore/Sources/LifeOSCore/Executive/ExecutiveCost.swift`; projection in `SimulationEngine.projectCost`; scoring in `SimulationEngine.score`.
+**Code reference:** `ExecutiveCost`, `ExecutiveCostDelta` in `Packages/LookAfterCore/Sources/LookAfterCore/Executive/ExecutiveCost.swift`; projection in `SimulationEngine.projectCost`; scoring in `SimulationEngine.score`.
 
 ---
 

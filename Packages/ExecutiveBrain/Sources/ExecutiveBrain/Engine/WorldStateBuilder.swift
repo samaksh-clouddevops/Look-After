@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Fuses fragmented signals into one canonical WorldState.
 public struct WorldStateBuilder: Sendable {

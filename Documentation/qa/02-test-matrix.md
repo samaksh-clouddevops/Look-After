@@ -39,7 +39,7 @@ Legend:
 | F13 | Life modules | `AllModulesGridView`, `LifeModulesViewModel` |
 | F14 | Insights & Analytics | `InsightsViewModel`, `PersonalAnalyticsEngine` |
 | F15 | Settings & Factory Reset | `SettingsView`, `FactoryResetManager` |
-| F16 | Widget & Live Activity | `LifeOSWidgetBundle`, `LiveActivityManager` |
+| F16 | Widget & Live Activity | `LookAfterWidgetBundle`, `LiveActivityManager` |
 | F17 | macOS productivity | `MacContentView`, `ProductivityTracker` |
 | F18 | Background services | `BackgroundAnalyticsScheduler`, health observers |
 | F19 | Decision quality (DQS) | [15-decision-quality-framework.md](15-decision-quality-framework.md) |

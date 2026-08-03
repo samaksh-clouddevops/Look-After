@@ -4,23 +4,23 @@
 
 ```
 Is it a SwiftUI view?
-  └─ Yes → Apps/LifeOS-iOS/Views/ or Experience/
+  └─ Yes → Apps/LookAfter-iOS/Views/ or Experience/
   └─ No ↓
 
 Is it @MainActor presentation state?
-  └─ Yes → LifeOSFeatures/<Feature>/ViewModels/
+  └─ Yes → LookAfterFeatures/<Feature>/ViewModels/
   └─ No ↓
 
 Does it call an LLM?
-  └─ Yes → LifeOSAI/
+  └─ Yes → LookAfterAI/
   └─ No ↓
 
 Does it read/write disk or Firebase?
-  └─ Yes → LifeOSData/
+  └─ Yes → LookAfterData/
   └─ No ↓
 
 Does it use HealthKit?
-  └─ Yes → LifeOSHealth/ (or app Services/ for sync orchestration)
+  └─ Yes → LookAfterHealth/ (or app Services/ for sync orchestration)
   └─ No ↓
 
 Is it deterministic brain logic (no LLM)?
@@ -28,14 +28,14 @@ Is it deterministic brain logic (no LLM)?
   └─ No ↓
 
 Is it a shared model, protocol, or design token?
-  └─ Yes → LifeOSCore/
+  └─ Yes → LookAfterCore/
 ```
 
 ## App target rules
 
 | Folder | Contents |
 |--------|----------|
-| `App/` | Entry point (`LifeOSApp.swift`, `ContentView.swift`) |
+| `App/` | Entry point (`LookAfterApp.swift`, `ContentView.swift`) |
 | `Composition/` | Dependency wiring (future: `AppDependencies.swift`) |
 | `Experience/` | App shell, AI Executive mode |
 | `Views/` | SwiftUI only — rendering and bindings |
@@ -49,4 +49,4 @@ macOS shares a subset of iOS views via `project.yml`. See [architecture/macOS-sh
 ## Tests
 
 - Package tests: colocated under `Packages/<Name>/Tests/`
-- Aggregated app tests: `LifeOSTests` target in `project.yml`
+- Aggregated app tests: `LookAfterTests` target in `project.yml`

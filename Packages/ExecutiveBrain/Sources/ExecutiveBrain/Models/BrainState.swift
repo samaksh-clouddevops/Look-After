@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Everything the UI needs to render — no business logic in views.
 public struct BrainState: Codable, Sendable, Equatable {

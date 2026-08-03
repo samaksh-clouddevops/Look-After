@@ -63,7 +63,7 @@ Each flow includes:
 | **Error** | Orchestrate fails → hero shows last known with retry toast |
 | **Recovery** | Pull refresh / tab switch triggers `orchestrateBrain` |
 | **Success** | Hero task ID ≠ completed ID; `BehaviorMemoryStore` has completion entry |
-| **Key files** | `LifeOSMasterCanvas`, `AppShellState.orchestrateBrain`, `FlowDirector.handleTaskCompleted` |
+| **Key files** | `LookAfterMasterCanvas`, `AppShellState.orchestrateBrain`, `FlowDirector.handleTaskCompleted` |
 | **Test IDs** | LO-IOS-FN-001, LO-AI-FN-002 |
 
 ---
@@ -139,7 +139,7 @@ Each flow includes:
 | **Alternative** | Start focus from emergency |
 | **Interrupted** | Kill app in emergency → relaunch → not stuck in emergency OR clear exit path |
 | **Success** | `adhdVM.isEmergencyMode == false`; bottom nav visible |
-| **Key files** | `ADHDViewModel`, `PhysiologicalResetView`, `LifeOSMasterCanvas.showsBottomNav` |
+| **Key files** | `ADHDViewModel`, `PhysiologicalResetView`, `LookAfterMasterCanvas.showsBottomNav` |
 | **Test IDs** | LO-IOS-FN-040, LO-FEAT-FN-040 |
 
 ---

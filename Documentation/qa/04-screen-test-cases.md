@@ -11,53 +11,53 @@ All iOS, macOS, and Widget surfaces with **15-field screen specs** plus linked t
 
 | # | Screen | File |
 |---|--------|------|
-| S01 | ExperienceRootView | `Apps/LifeOS-iOS/Experience/ExperienceRootView.swift` |
-| S02 | LifeOSMasterCanvas | `Apps/LifeOS-iOS/Views/LifeOSMasterCanvas.swift` |
-| S03 | AIExecutiveCanvas | `Apps/LifeOS-iOS/Experience/AIExecutive/AIExecutiveCanvas.swift` |
-| S04 | LifeOSBottomNav | `Apps/LifeOS-iOS/Views/Navigation/LifeOSBottomNav.swift` |
-| S05 | TodayView | `Apps/LifeOS-iOS/Views/Briefing/TodayView.swift` |
-| S06 | DailyBriefingView | `Apps/LifeOS-iOS/Views/Briefing/DailyBriefingView.swift` |
-| S07 | DailyBriefingCustomizationView | `Apps/LifeOS-iOS/Views/Briefing/DailyBriefingCustomizationView.swift` |
-| S08 | ExecutiveCapacityCard | `Apps/LifeOS-iOS/Views/Briefing/ExecutiveCapacityCard.swift` |
-| S09 | ExecutivePlanningConversationView | `Apps/LifeOS-iOS/Views/Briefing/ExecutivePlanningConversationView.swift` |
-| S10 | ExecutiveLiveTimelineView | `Apps/LifeOS-iOS/Views/Briefing/ExecutiveLiveTimelineView.swift` |
-| S11 | ExecutiveAssistantSheet | `Apps/LifeOS-iOS/Views/Briefing/ExecutiveAssistantSheet.swift` |
-| S12 | ExecutiveTodayView | `Apps/LifeOS-iOS/Experience/AIExecutive/ExecutiveTodayView.swift` |
-| S13 | ExecutiveTimelineView | `Apps/LifeOS-iOS/Experience/AIExecutive/ExecutiveTimelineView.swift` |
-| S14 | TaskListView | `Apps/LifeOS-iOS/Views/Tasks/TaskListView.swift` |
-| S15 | DailyPlanView | `Apps/LifeOS-iOS/Views/Tasks/DailyPlanView.swift` |
-| S16 | TaskCardStackView | `Apps/LifeOS-iOS/Views/Tasks/TaskCardStackView.swift` |
-| S17 | TaskImportSheet | `Apps/LifeOS-iOS/Views/Tasks/TaskImportSheet.swift` |
-| S18 | ReschedulePreviewSheet | `Apps/LifeOS-iOS/Views/Tasks/ReschedulePreviewSheet.swift` |
-| S19 | BrainDashboardView | `Apps/LifeOS-iOS/Views/Brain/BrainDashboardView.swift` |
-| S20 | BrainInspectorView | `Apps/LifeOS-iOS/Experience/AIExecutive/BrainInspectorView.swift` |
-| S21 | SettingsView | `Apps/LifeOS-iOS/Views/Settings/SettingsView.swift` |
-| S22 | APIKeysSettingsView | `Apps/LifeOS-iOS/Views/Settings/APIKeysSettingsView.swift` |
-| S23 | GLMConfigurationSettingsView | `Apps/LifeOS-iOS/Views/Settings/GLMConfigurationSettingsView.swift` |
-| S24 | InsightsDashboardView | `Apps/LifeOS-iOS/Views/Insights/InsightsDashboardView.swift` |
-| S25 | OnboardingView | `Apps/LifeOS-iOS/Views/Onboarding/OnboardingView.swift` |
-| S26 | AuthView | `Apps/LifeOS-iOS/Views/Auth/AuthView.swift` |
-| S27 | InboxView | `Apps/LifeOS-iOS/Views/Inbox/InboxView.swift` |
-| S28 | AICoachView | `Apps/LifeOS-iOS/Views/Coach/AICoachView.swift` |
-| S29 | AllModulesGridView | `Apps/LifeOS-iOS/Views/Modules/AllModulesGridView.swift` |
-| S30 | EmergencyModeView | `Apps/LifeOS-iOS/Views/ADHD/ADHDViews.swift` |
-| S31 | FocusSessionView | `Apps/LifeOS-iOS/Views/ADHD/ADHDViews.swift` |
-| S32 | DecideForMeView | `Apps/LifeOS-iOS/Views/ADHD/DecideForMeView.swift` |
-| S33 | PhysiologicalResetView | `Apps/LifeOS-iOS/Views/ADHD/PhysiologicalResetView.swift` |
-| S34 | ADHDFloatingDockView | `Apps/LifeOS-iOS/Views/Shared/ADHDFloatingDockView.swift` |
-| S35 | CycleDashboardView | `Apps/LifeOS-iOS/Views/Health/CycleDashboardView.swift` |
-| S36 | CycleQuickLogSheet | `Apps/LifeOS-iOS/Views/Health/CycleQuickLogSheet.swift` |
-| S37 | HealthSyncProgressView | `Apps/LifeOS-iOS/Views/Shared/HealthSyncProgressView.swift` |
-| S38 | HealthDetailView | `Apps/LifeOS-iOS/Experience/AIExecutive/HealthDetailView.swift` |
-| S39 | VoiceCaptureView | `Apps/LifeOS-iOS/Views/Shared/VoiceCaptureView.swift` |
-| S40 | ContinueSessionView | `Apps/LifeOS-iOS/Experience/AIExecutive/ContinueSessionView.swift` |
-| S41 | TodaysStoryView | `Apps/LifeOS-iOS/Experience/AIExecutive/TodaysStoryView.swift` |
-| S42 | ExecutiveProfileView | `Apps/LifeOS-iOS/Experience/AIExecutive/ExecutiveProfileView.swift` |
-| S43 | NowWidgetView | `Apps/LifeOSWidget/LifeOSWidgetBundle.swift` |
-| S44 | EnergyWidgetView | `Apps/LifeOSWidget/LifeOSWidgetBundle.swift` |
-| S45 | FocusLiveActivity | `Apps/LifeOSWidget/FocusLiveActivity.swift` |
-| S46 | MacContentView | `Apps/LifeOS-macOS/Views/MacContentView.swift` |
-| S47 | MacSettingsView | `Apps/LifeOS-macOS/Views/MacSettingsView.swift` |
+| S01 | ExperienceRootView | `Apps/LookAfter-iOS/Experience/ExperienceRootView.swift` |
+| S02 | LookAfterMasterCanvas | `Apps/LookAfter-iOS/Views/LookAfterMasterCanvas.swift` |
+| S03 | AIExecutiveCanvas | `Apps/LookAfter-iOS/Experience/AIExecutive/AIExecutiveCanvas.swift` |
+| S04 | LookAfterBottomNav | `Apps/LookAfter-iOS/Views/Navigation/LookAfterBottomNav.swift` |
+| S05 | TodayView | `Apps/LookAfter-iOS/Views/Briefing/TodayView.swift` |
+| S06 | DailyBriefingView | `Apps/LookAfter-iOS/Views/Briefing/DailyBriefingView.swift` |
+| S07 | DailyBriefingCustomizationView | `Apps/LookAfter-iOS/Views/Briefing/DailyBriefingCustomizationView.swift` |
+| S08 | ExecutiveCapacityCard | `Apps/LookAfter-iOS/Views/Briefing/ExecutiveCapacityCard.swift` |
+| S09 | ExecutivePlanningConversationView | `Apps/LookAfter-iOS/Views/Briefing/ExecutivePlanningConversationView.swift` |
+| S10 | ExecutiveLiveTimelineView | `Apps/LookAfter-iOS/Views/Briefing/ExecutiveLiveTimelineView.swift` |
+| S11 | ExecutiveAssistantSheet | `Apps/LookAfter-iOS/Views/Briefing/ExecutiveAssistantSheet.swift` |
+| S12 | ExecutiveTodayView | `Apps/LookAfter-iOS/Experience/AIExecutive/ExecutiveTodayView.swift` |
+| S13 | ExecutiveTimelineView | `Apps/LookAfter-iOS/Experience/AIExecutive/ExecutiveTimelineView.swift` |
+| S14 | TaskListView | `Apps/LookAfter-iOS/Views/Tasks/TaskListView.swift` |
+| S15 | DailyPlanView | `Apps/LookAfter-iOS/Views/Tasks/DailyPlanView.swift` |
+| S16 | TaskCardStackView | `Apps/LookAfter-iOS/Views/Tasks/TaskCardStackView.swift` |
+| S17 | TaskImportSheet | `Apps/LookAfter-iOS/Views/Tasks/TaskImportSheet.swift` |
+| S18 | ReschedulePreviewSheet | `Apps/LookAfter-iOS/Views/Tasks/ReschedulePreviewSheet.swift` |
+| S19 | BrainDashboardView | `Apps/LookAfter-iOS/Views/Brain/BrainDashboardView.swift` |
+| S20 | BrainInspectorView | `Apps/LookAfter-iOS/Experience/AIExecutive/BrainInspectorView.swift` |
+| S21 | SettingsView | `Apps/LookAfter-iOS/Views/Settings/SettingsView.swift` |
+| S22 | APIKeysSettingsView | `Apps/LookAfter-iOS/Views/Settings/APIKeysSettingsView.swift` |
+| S23 | GLMConfigurationSettingsView | `Apps/LookAfter-iOS/Views/Settings/GLMConfigurationSettingsView.swift` |
+| S24 | InsightsDashboardView | `Apps/LookAfter-iOS/Views/Insights/InsightsDashboardView.swift` |
+| S25 | OnboardingView | `Apps/LookAfter-iOS/Views/Onboarding/OnboardingView.swift` |
+| S26 | AuthView | `Apps/LookAfter-iOS/Views/Auth/AuthView.swift` |
+| S27 | InboxView | `Apps/LookAfter-iOS/Views/Inbox/InboxView.swift` |
+| S28 | AICoachView | `Apps/LookAfter-iOS/Views/Coach/AICoachView.swift` |
+| S29 | AllModulesGridView | `Apps/LookAfter-iOS/Views/Modules/AllModulesGridView.swift` |
+| S30 | EmergencyModeView | `Apps/LookAfter-iOS/Views/ADHD/ADHDViews.swift` |
+| S31 | FocusSessionView | `Apps/LookAfter-iOS/Views/ADHD/ADHDViews.swift` |
+| S32 | DecideForMeView | `Apps/LookAfter-iOS/Views/ADHD/DecideForMeView.swift` |
+| S33 | PhysiologicalResetView | `Apps/LookAfter-iOS/Views/ADHD/PhysiologicalResetView.swift` |
+| S34 | ADHDFloatingDockView | `Apps/LookAfter-iOS/Views/Shared/ADHDFloatingDockView.swift` |
+| S35 | CycleDashboardView | `Apps/LookAfter-iOS/Views/Health/CycleDashboardView.swift` |
+| S36 | CycleQuickLogSheet | `Apps/LookAfter-iOS/Views/Health/CycleQuickLogSheet.swift` |
+| S37 | HealthSyncProgressView | `Apps/LookAfter-iOS/Views/Shared/HealthSyncProgressView.swift` |
+| S38 | HealthDetailView | `Apps/LookAfter-iOS/Experience/AIExecutive/HealthDetailView.swift` |
+| S39 | VoiceCaptureView | `Apps/LookAfter-iOS/Views/Shared/VoiceCaptureView.swift` |
+| S40 | ContinueSessionView | `Apps/LookAfter-iOS/Experience/AIExecutive/ContinueSessionView.swift` |
+| S41 | TodaysStoryView | `Apps/LookAfter-iOS/Experience/AIExecutive/TodaysStoryView.swift` |
+| S42 | ExecutiveProfileView | `Apps/LookAfter-iOS/Experience/AIExecutive/ExecutiveProfileView.swift` |
+| S43 | NowWidgetView | `Apps/LookAfterWidget/LookAfterWidgetBundle.swift` |
+| S44 | EnergyWidgetView | `Apps/LookAfterWidget/LookAfterWidgetBundle.swift` |
+| S45 | FocusLiveActivity | `Apps/LookAfterWidget/FocusLiveActivity.swift` |
+| S46 | MacContentView | `Apps/LookAfter-macOS/Views/MacContentView.swift` |
+| S47 | MacSettingsView | `Apps/LookAfter-macOS/Views/MacSettingsView.swift` |
 
 **Package-hosted module screens** (entered via S29): CalendarIntelligenceView, MedicationView, HomeManagementView, TravelPlannerView, CreativityWorkspaceView, LearningKnowledgeView, AIMemoryView, FinanceBillsView, HydrationNutritionView, ShoppingInventoryView, RelationshipsView, ReflectionJournalView — each inherits module spec template below.
 
@@ -90,7 +90,7 @@ All iOS, macOS, and Widget surfaces with **15-field screen specs** plus linked t
 
 ---
 
-### S02 — LifeOSMasterCanvas
+### S02 — LookAfterMasterCanvas
 
 | Field | Specification |
 |-------|---------------|
@@ -139,7 +139,7 @@ All iOS, macOS, and Widget surfaces with **15-field screen specs** plus linked t
 
 ---
 
-### S04 — LifeOSBottomNav
+### S04 — LookAfterBottomNav
 
 | Field | Specification |
 |-------|---------------|

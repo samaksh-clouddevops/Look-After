@@ -1,5 +1,5 @@
 import Foundation
-import LifeOSCore
+import LookAfterCore
 
 /// Produces structured decisions from reasoning + existing rule engines.
 /// Wraps ContextBriefingGenerator — does not replace it yet, but owns the output shape.

@@ -11,7 +11,7 @@
 git clone <repo-url> LifeOS
 cd LifeOS
 xcodegen generate
-open LifeOS.xcodeproj
+open LookAfter.xcodeproj
 ```
 
 Or open `LifeOS.code-workspace`.
@@ -38,9 +38,9 @@ For device builds, run:
 
 | Scheme | Platform |
 |--------|----------|
-| LifeOS-iOS | iPhone / iPad |
-| LifeOS-macOS | macOS |
-| LifeOSWidget | Widget extension (built with iOS) |
+| LookAfter-iOS | iPhone / iPad |
+| LookAfter-macOS | macOS |
+| LookAfterWidget | Widget extension (built with iOS) |
 
 ## Next steps
 
