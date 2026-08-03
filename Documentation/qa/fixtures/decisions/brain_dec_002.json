@@ -1,0 +1,15 @@
+{
+  "id": "BRAIN-DEC-002",
+  "sourceDocument": "Documentation/qa/22-decision-regression.md",
+  "input": {
+    "medicationName": "Vitamin D",
+    "medicationHour": 9,
+    "medicationMinute": 0,
+    "now": "2026-08-01T09:10:00Z"
+  },
+  "expectedDecision": {
+    "intentContains": ["vitamin d"],
+    "conclusionsContainAny": ["vitamin d", "logged"]
+  },
+  "minMatchScore": 0.85
+}

@@ -1,0 +1,37 @@
+{
+  "id": "REPLAY-001",
+  "sourceDocument": "Documentation/qa/27-reality-replay.md",
+  "weekStart": "2026-07-21",
+  "description": "Anonymized single-week smoke fixture",
+  "decisionPoints": [
+    {
+      "timestamp": "2026-07-21T09:00:00Z",
+      "inputSnapshot": {
+        "sleepHours": 6.5,
+        "taskTitle": "Weekly planning",
+        "taskMinutes": 30,
+        "now": "2026-07-21T09:00:00Z"
+      },
+      "actualOutcome": {
+        "completed": true,
+        "stressLevel": 4,
+        "executiveCostActual": 35
+      }
+    },
+    {
+      "timestamp": "2026-07-22T14:00:00Z",
+      "inputSnapshot": {
+        "sleepHours": 5,
+        "taskTitle": "OAuth integration",
+        "taskMinutes": 90,
+        "deadlineTitle": "OAuth",
+        "now": "2026-07-22T14:00:00Z"
+      },
+      "actualOutcome": {
+        "completed": false,
+        "stressLevel": 8,
+        "executiveCostActual": 92
+      }
+    }
+  ]
+}

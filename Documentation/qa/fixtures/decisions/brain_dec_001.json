@@ -1,0 +1,20 @@
+{
+  "id": "BRAIN-DEC-001",
+  "sourceDocument": "Documentation/qa/22-decision-regression.md",
+  "input": {
+    "sleepHours": 5.2,
+    "freeBlockMinutes": 45,
+    "nextEventMinutes": 45,
+    "nextEventTitle": "Team standup",
+    "taskTitle": "Search API refactor",
+    "taskMinutes": 90,
+    "energyScore": 0.35,
+    "now": "2026-08-01T08:30:00Z"
+  },
+  "expectedDecision": {
+    "intentContains": [],
+    "mustNotRecommend": ["this evening"],
+    "conclusionsContainAny": ["small", "light", "log", "levothyroxine"]
+  },
+  "minMatchScore": 0.85
+}

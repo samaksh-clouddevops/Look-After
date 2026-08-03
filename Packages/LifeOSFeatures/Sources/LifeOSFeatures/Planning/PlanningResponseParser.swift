@@ -21,7 +21,7 @@ enum PlanningResponseParser {
             return finalize(lenient, analysis: analysis)
         }
 
-        var offline = ExecutivePlanningEngine.offlineFallback(
+        var offline = LLMPlanningEngine.offlineFallback(
             for: fallbackMessage,
             context: context,
             rawReply: looksLikeJSON(clean) ? "" : clean,

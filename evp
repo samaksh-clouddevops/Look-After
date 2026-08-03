@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
+
+EVP_PKG="Tools/ExecutiveValidationPlatform"
+BUILD_DIR="$EVP_PKG/.build/debug"
+
+build_if_needed() {
+  if [[ ! -x "$BUILD_DIR/evp" ]] || [[ "$EVP_PKG" -nt "$BUILD_DIR/evp" ]]; then
+    swift build --package-path "$EVP_PKG" -c debug
+  fi
+}
+
+build_if_needed
+exec "$BUILD_DIR/evp" "$@"

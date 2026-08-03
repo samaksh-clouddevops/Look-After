@@ -10,7 +10,7 @@ final class LifeModelValidatorTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("LifeOS-iOS/Resources/example-life-profile.md")
+            .appendingPathComponent("Apps/LifeOS-iOS/Resources/example-life-profile.md")
         if let text = try? String(contentsOf: url), !text.isEmpty {
             return text
         }

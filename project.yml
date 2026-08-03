@@ -1,6 +1,7 @@
 name: LifeOS
 options:
   bundleIdPrefix: com.samaksh.flowos
+  createIntermediateGroups: true
   deploymentTarget:
     iOS: 17.0
     macOS: 14.0
@@ -17,18 +18,18 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: LifeOS-iOS
-      - path: Shared
-      - path: GoogleService-Info.plist
-      - path: LifeOS-iOS.entitlements
+      - path: Apps/LifeOS-iOS
+      - path: Apps/Shared
+      - path: Config/GoogleService-Info.plist
+      - path: Config/LifeOS-iOS.entitlements
     entitlements:
-      path: LifeOS-iOS.entitlements
+      path: Config/LifeOS-iOS.entitlements
       properties:
         com.apple.developer.healthkit: true
         com.apple.security.application-groups:
           - group.com.samaksh.flowos
     info:
-      path: LifeOS-iOS/Info.plist
+      path: Apps/LifeOS-iOS/Info.plist
       properties:
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
@@ -48,7 +49,7 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app
       CODE_SIGN_STYLE: Automatic
-      CODE_SIGN_ENTITLEMENTS: LifeOS-iOS.entitlements
+      CODE_SIGN_ENTITLEMENTS: Config/LifeOS-iOS.entitlements
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       INFOPLIST_KEY_NSHealthShareUsageDescription: "LifeOS analyzes your sleep, HRV, and heart rate to estimate energy levels."
       INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "FlowOS reads your calendar for Flow Director scheduling."
@@ -62,10 +63,10 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: LifeOSWidget
-      - path: Shared
+      - path: Apps/LifeOSWidget
+      - path: Apps/Shared
     entitlements:
-      path: LifeOSWidget/LifeOSWidget.entitlements
+      path: Apps/LifeOSWidget/LifeOSWidget.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.samaksh.flowos
@@ -74,8 +75,8 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app.widget
       CODE_SIGN_STYLE: Automatic
-      CODE_SIGN_ENTITLEMENTS: LifeOSWidget/LifeOSWidget.entitlements
-      INFOPLIST_FILE: LifeOSWidget/Info.plist
+      CODE_SIGN_ENTITLEMENTS: Apps/LifeOSWidget/LifeOSWidget.entitlements
+      INFOPLIST_FILE: Apps/LifeOSWidget/Info.plist
       SKIP_INSTALL: true
       LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
 
@@ -84,24 +85,24 @@ targets:
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: LifeOS-macOS
-      - path: GoogleService-Info.plist
-      - path: LifeOS-macOS.entitlements
+      - path: Apps/LifeOS-macOS
+      - path: Config/GoogleService-Info.plist
+      - path: Config/LifeOS-macOS.entitlements
       # These SwiftUI screens are shared by the macOS dashboard. The iOS-only
       # master canvas and Daily Plan timer intentionally remain excluded.
-      - path: LifeOS-iOS/Views/ADHD
-      - path: LifeOS-iOS/Views/Brain
-      - path: LifeOS-iOS/Views/Coach
-      - path: LifeOS-iOS/Views/Inbox
-      - path: LifeOS-iOS/Views/Settings
+      - path: Apps/LifeOS-iOS/Views/ADHD
+      - path: Apps/LifeOS-iOS/Views/Brain
+      - path: Apps/LifeOS-iOS/Views/Coach
+      - path: Apps/LifeOS-iOS/Views/Inbox
+      - path: Apps/LifeOS-iOS/Views/Settings
         excludes:
           - SettingsView.swift
-      - path: LifeOS-iOS/Views/Shared
+      - path: Apps/LifeOS-iOS/Views/Shared
         excludes:
           - HealthSyncProgressView.swift
           - LifeProfileImportView.swift
           - VoiceCaptureView.swift
-      - path: LifeOS-iOS/Views/Tasks
+      - path: Apps/LifeOS-iOS/Views/Tasks
         excludes:
           - DailyPlanView.swift
     dependencies:
@@ -116,7 +117,7 @@ targets:
       INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
       INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "FlowOS reads your calendar for Flow Director scheduling."
       INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription: "LifeOS needs access to your calendar to add scheduled tasks."
-      CODE_SIGN_ENTITLEMENTS: LifeOS-macOS.entitlements
+      CODE_SIGN_ENTITLEMENTS: Config/LifeOS-macOS.entitlements
 
   LifeOSTests:
     type: bundle.unit-test
@@ -131,6 +132,8 @@ targets:
       - path: Packages/LifeOSAI/Tests/LifeOSAITests
       - path: Packages/LifeOSAI/Tests/FlowDirectorTests
       - path: Packages/LifeOSFeatures/Tests/LifeOSFeaturesTests
+        excludes:
+          - TestCalendarFixtures.swift
       - path: Packages/ExecutiveBrain/Tests/ExecutiveBrainTests
       - path: Packages/LifeOSHealth/Tests/LifeOSHealthTests
     dependencies:

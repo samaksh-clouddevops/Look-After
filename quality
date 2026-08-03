@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Backward-compatible alias for ./evp
+exec "$(dirname "$0")/evp" "$@"

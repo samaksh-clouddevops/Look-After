@@ -1,0 +1,68 @@
+name: Executive Validation Platform
+
+on:
+  push:
+    branches: [main, master, release/*]
+  pull_request:
+    branches: [main, master, release/*]
+
+jobs:
+  evp:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build EVP
+        run: swift build --package-path Tools/ExecutiveValidationPlatform -c release
+
+      - name: Index requirements
+        run: ./evp index
+
+      - name: Tier 2 functional validation
+        run: ./evp run --tier 2
+        continue-on-error: true
+
+      - name: Decision regression (blocking)
+        run: ./evp decisions
+
+      - name: Reality replay fixture
+        run: ./evp replay --fixture REPLAY-001
+
+      - name: Counterfactual smoke
+        run: ./evp counterfactual CF-001
+
+      - name: Production readiness
+        run: ./evp readiness
+        continue-on-error: true
+
+      - name: Release gate (release branches)
+        if: startsWith(github.ref, 'refs/heads/release/')
+        run: ./evp release
+
+      - name: Version comparison (release branches)
+        if: startsWith(github.ref, 'refs/heads/release/')
+        run: ./evp compare-versions v1.0.0 HEAD
+
+      - name: Upload EVP artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evp-reports
+          path: |
+            Documentation/qa/.engine/results.json
+            Documentation/qa/.engine/rtm.json
+            Documentation/qa/.engine/dashboard.html
+            Documentation/qa/.engine/junit.xml
+            Documentation/qa/.engine/cost-history.json
+            Documentation/qa/.engine/version-comparison.json
+
+      - name: GitHub Step Summary
+        if: always()
+        run: |
+          if [ -f Documentation/qa/.engine/github-summary.md ]; then
+            cat Documentation/qa/.engine/github-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi

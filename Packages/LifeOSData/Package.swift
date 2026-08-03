@@ -20,7 +20,6 @@ let package = Package(
             name: "LifeOSData",
             dependencies: [
                 "LifeOSCore",
-                "LifeOSAI",
                 .product(name: "FirebaseAuth", package: "firebase-ios-sdk"),
                 .product(name: "FirebaseFirestore", package: "firebase-ios-sdk")
             ],

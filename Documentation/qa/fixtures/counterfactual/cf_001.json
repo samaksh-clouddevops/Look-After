@@ -1,0 +1,15 @@
+{
+  "id": "CF-001",
+  "sourceDocument": "Documentation/qa/28-counterfactual-engine.md",
+  "input": {
+    "sleepHours": 5,
+    "energyScore": 0.35,
+    "freeBlockMinutes": 60,
+    "taskTitle": "Deep work project",
+    "taskMinutes": 90,
+    "now": "2026-08-01T09:00:00Z"
+  },
+  "expected": {
+    "minSimulations": 1
+  }
+}

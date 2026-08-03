@@ -1,0 +1,23 @@
+{
+  "id": "BRAIN-DEC-052",
+  "sourceDocument": "Documentation/qa/22-decision-regression.md",
+  "input": {
+    "sleepHours": 5,
+    "freeBlockMinutes": 60,
+    "taskTitle": "OAuth integration",
+    "taskMinutes": 120,
+    "deadlineTitle": "OAuth",
+    "deadlineDueDays": 1,
+    "medicationName": "Levothyroxine",
+    "medicationHour": 7,
+    "medicationMinute": 30,
+    "scheduledGym": true,
+    "now": "2026-08-01T08:30:00Z"
+  },
+  "expectedDecision": {
+    "intentContains": ["oauth"],
+    "mustNotRecommend": ["take thyroid now", "medication now"],
+    "conclusionsContainAny": ["small", "light", "oauth", "levothyroxine"]
+  },
+  "minMatchScore": 0.85
+}

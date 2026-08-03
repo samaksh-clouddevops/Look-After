@@ -1,37 +1,22 @@
 # ExecutiveBrain
 
-Swift package — deterministic decision layer for LifeOS.
+**Deterministic executive function engine** — no LLM calls, no SwiftUI.
 
-## Do not open this folder as a separate Xcode project
+Pipeline: Signals → World Model → Reasoning → Planner → Decision → Explanation
 
-LifeOSCore and ExecutiveBrain are **local Swift packages** linked from the main app. Opening `Packages/ExecutiveBrain`, `Packages/LifeOSCore`, or a nested `.xcodeproj` in a second window causes:
+## Structure
 
-- *"Couldn't load LifeOSCore because it is already opened from another project"*
-- *"Missing package product 'LifeOSCore'"*
-
-## How to develop
-
-**One window only.** Open the main project:
-
-```bash
-open /Users/samaksh/ADHD/LifeOS/LifeOS.xcodeproj
+```
+Engine/          # ExecutiveBrainEngine, DecisionEngine, PlanningEngine, …
+Models/          # BrainState, WorldState, DayPlan, ReasoningTrace
+Storage/         # DecisionHistoryStore (persistence — migrate to LifeOSData over time)
 ```
 
-Or in Cursor (recommended):
+## Consumers
 
-```bash
-cursor /Users/samaksh/ADHD/LifeOS/LifeOS.code-workspace
-```
+- `LifeOSFeatures.ContextOrchestrator` — primary integration
+- `BrainInspectorView` (debug UI in iOS app)
 
-Edit Brain code at `Packages/ExecutiveBrain/Sources/ExecutiveBrain/`.
+## Naming note
 
-## Command line (package-only)
-
-```bash
-cd /Users/samaksh/ADHD/LifeOS/Packages/ExecutiveBrain
-swift test
-```
-
-## Architecture
-
-See `docs/11_EXECUTIVE_BRAIN_V3.md` and `docs/12_THREE_LAYER_LANGUAGE.md`.
+`PlanningEngine` here builds deterministic day plans. For LLM planning conversations, see `LifeOSFeatures.LLMPlanningEngine`.

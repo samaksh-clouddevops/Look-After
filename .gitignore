@@ -21,6 +21,23 @@ buildServer.json
 
 # Secrets (verify not committed)
 GoogleService-Info.plist
+Config/GoogleService-Info.plist
+.env
+.env.*
 
-# Archives
+# Archives and logs
 *.zip
+LifeOS-clean.zip
+*.log
+*.tmp
+
+# Third-party dependency managers
+Pods/
+Carthage/Build/
+
+# Package build artifacts
+Packages/*/build/
+
+# EVP generated artifacts
+Documentation/qa/.engine/
+Tools/ExecutiveValidationPlatform/.build/

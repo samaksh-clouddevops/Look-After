@@ -1,0 +1,9 @@
+{
+  "teamId": "YOUR_TEAM_ID",
+  "bundleIdPrefix": "com.yourcompany",
+  "profiles": {
+    "ios": "LifeOS iOS Development",
+    "macos": "LifeOS macOS Development"
+  },
+  "_comment": "Template only — copy values locally; do not commit secrets."
+}

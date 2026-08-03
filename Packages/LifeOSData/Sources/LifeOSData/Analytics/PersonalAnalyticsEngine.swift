@@ -1,6 +1,5 @@
 import Foundation
 import LifeOSCore
-import LifeOSAI
 
 public protocol PersonalAnalyticsEngineProtocol: Sendable {
     func buildReport(timeframe: InsightsTimeframe, userId: String) async -> PersonalAnalyticsReport

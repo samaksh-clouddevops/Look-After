@@ -1,6 +1,5 @@
 import Foundation
 import LifeOSCore
-import LifeOSAI
 
 /// Background analytics orchestrator — batch-fetches once, updates incrementally, caches all timeframes.
 @MainActor

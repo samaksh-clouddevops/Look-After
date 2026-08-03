@@ -1,0 +1,9 @@
+{
+  "id": "AUTO-001",
+  "sourceDocument": "Documentation/qa/24-autonomous-actions.md",
+  "trigger": "meeting_moved_plus_2h",
+  "expected": {
+    "workoutRescheduled": true,
+    "noOrphanEvents": true
+  }
+}
