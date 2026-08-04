@@ -12,22 +12,21 @@ struct TodayWidgetView: View {
     }
 
     var body: some View {
-        WidgetRootContainer {
-            VStack(alignment: .leading, spacing: WidgetChrome.gap) {
-                WidgetEyebrow("Today", systemImage: "calendar")
+        VStack(alignment: .leading, spacing: WidgetChrome.gap) {
+            WidgetEyebrow("Today", systemImage: "calendar")
 
-                if family == .systemLarge {
-                    largeBody
-                } else {
-                    mediumBody
-                }
-
-                if entry.snapshot.isStale {
-                    WidgetStaleBanner()
-                }
-                Spacer(minLength: 0)
+            if family == .systemLarge {
+                largeBody
+            } else {
+                mediumBody
             }
+
+            if entry.snapshot.isStale {
+                WidgetStaleBanner()
+            }
+            Spacer(minLength: 0)
         }
+        .lookAfterWidgetChrome()
         .widgetURL(LookAfterDeepLink.today)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityCopy)

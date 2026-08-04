@@ -9,6 +9,20 @@ struct ExecutiveWidgetEntry: TimelineEntry {
     let snapshot: WidgetSnapshot
 }
 
+// MARK: - Extension-only chrome (WidgetKit must not live in LookAfterCore)
+
+extension View {
+    /// Standard V2 widget root: padding + system widget background.
+    func lookAfterWidgetChrome() -> some View {
+        WidgetRootPadding {
+            self
+        }
+        .containerBackground(for: .widget) {
+            WidgetChrome.canvasBackground()
+        }
+    }
+}
+
 // MARK: - Shared App Group load (matches main-app store key)
 
 enum WidgetSnapshotStore {
