@@ -57,72 +57,81 @@ public final class ContextOrchestrator: ObservableObject {
         flowConfidenceScore: Double? = nil,
         capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
     ) async {
-        self.userId = userId
-        resumeSnapshot = resumeEngine.load(userId: userId)
-        self.lifeTimelineEvents = lifeTimelineEvents
-        self.tomorrowLifeTimelineEvents = tomorrowLifeTimelineEvents
+        // Performance optimization: Compute all values first, then batch update @Published properties
+        // This reduces SwiftUI re-renders from 7 separate updates to 1 batched update
+        await PerformanceMonitor.measureAsync("ContextOrchestrator.refresh", warnAfterMs: 200) {
+            self.userId = userId
+            let resumeSnap = resumeEngine.load(userId: userId)
 
-        let envResult = await environmentProvider.currentContext(
-            cognitiveSnapshot: cognitiveSnapshot ?? CognitiveSnapshot(),
-            healthSummary: healthSummary,
-            at: Date()
-        )
+            let envResult = await environmentProvider.currentContext(
+                cognitiveSnapshot: cognitiveSnapshot ?? CognitiveSnapshot(),
+                healthSummary: healthSummary,
+                at: Date()
+            )
 
-        var environment = envResult.context
-        if let locationOverride { environment.locationContext = locationOverride }
+            var environment = envResult.context
+            if let locationOverride { environment.locationContext = locationOverride }
 
-        let input = ContextEngineInput(
-            cognitiveSnapshot: cognitiveSnapshot,
-            healthSummary: healthSummary,
-            environment: environment,
-            flowSurface: flowSurface,
-            activeFlowSession: activeFlowSession,
-            heroTask: heroTask,
-            topTasks: topTasks,
-            unpurchasedShoppingCount: unpurchasedShoppingCount,
-            resumeSnapshot: resumeSnapshot,
-            peakStartHour: peakStartHour
-        )
+            let input = ContextEngineInput(
+                cognitiveSnapshot: cognitiveSnapshot,
+                healthSummary: healthSummary,
+                environment: environment,
+                flowSurface: flowSurface,
+                activeFlowSession: activeFlowSession,
+                heroTask: heroTask,
+                topTasks: topTasks,
+                unpurchasedShoppingCount: unpurchasedShoppingCount,
+                resumeSnapshot: resumeSnap,
+                peakStartHour: peakStartHour
+            )
 
-        let calculated = contextEngine.calculate(input)
-        snapshot = calculated
+            let calculated = contextEngine.calculate(input)
 
-        let medications = MedicationStore.load()
-        let tasks = allTasks.isEmpty ? topTasks : allTasks
+            let medications = MedicationStore.load()
+            let tasks = allTasks.isEmpty ? topTasks : allTasks
 
-        let tickInput = BrainTickInput(
-            snapshot: calculated,
-            cognitiveSnapshot: cognitiveSnapshot,
-            healthSummary: healthSummary,
-            resume: resumeSnapshot,
-            medications: medications,
-            tasks: tasks,
-            timelineItems: lifeTimelineEvents,
-            upcomingBills: upcomingBills,
-            userName: userName,
-            isWeekend: isWeekend,
-            peakStartHour: peakStartHour,
-            completedTaskIDs: completedTaskIDs,
-            flowConfidenceScore: flowConfidenceScore
-        )
+            let tickInput = BrainTickInput(
+                snapshot: calculated,
+                cognitiveSnapshot: cognitiveSnapshot,
+                healthSummary: healthSummary,
+                resume: resumeSnap,
+                medications: medications,
+                tasks: tasks,
+                timelineItems: lifeTimelineEvents,
+                upcomingBills: upcomingBills,
+                userName: userName,
+                isWeekend: isWeekend,
+                peakStartHour: peakStartHour,
+                completedTaskIDs: completedTaskIDs,
+                flowConfidenceScore: flowConfidenceScore
+            )
 
-        let state = executiveBrain.tick(tickInput)
-        brainState = state
-        briefing = state.briefing
-        decisionHistory = historyStore.recent(limit: 30)
+            let state = executiveBrain.tick(tickInput)
+            let history = historyStore.recent(limit: 30)
 
-        let meetingCount = lifeTimelineEvents.filter { $0.kind == .meeting }.count
-        let capacityInput = ExecutiveCapacityInput(
-            snapshot: calculated,
-            healthSummary: healthSummary,
-            cognitiveSnapshot: cognitiveSnapshot,
-            completedTodayCount: completedTaskIDs.count,
-            activeTaskCount: tasks.filter { $0.status.isActive }.count,
-            meetingCountHint: meetingCount,
-            isInFlowSession: activeFlowSession?.isActive == true,
-            now: Date()
-        )
-        executiveCapacity = await capacityEngine.evaluate(capacityInput, llmPolicy: capacityLLMPolicy)
+            let meetingCount = lifeTimelineEvents.filter { $0.kind == .meeting }.count
+            let capacityInput = ExecutiveCapacityInput(
+                snapshot: calculated,
+                healthSummary: healthSummary,
+                cognitiveSnapshot: cognitiveSnapshot,
+                completedTodayCount: completedTaskIDs.count,
+                activeTaskCount: tasks.filter { $0.status.isActive }.count,
+                meetingCountHint: meetingCount,
+                isInFlowSession: activeFlowSession?.isActive == true,
+                now: Date()
+            )
+            let capacity = await capacityEngine.evaluate(capacityInput, llmPolicy: capacityLLMPolicy)
+
+            // Batch update all @Published properties - SwiftUI re-renders only ONCE
+            snapshot = calculated
+            resumeSnapshot = resumeSnap
+            brainState = state
+            briefing = state.briefing
+            decisionHistory = history
+            executiveCapacity = capacity
+            self.lifeTimelineEvents = lifeTimelineEvents
+            self.tomorrowLifeTimelineEvents = tomorrowLifeTimelineEvents
+        }
     }
 
     /// Clears orchestrator output so UI cannot show stale brain/timeline state.

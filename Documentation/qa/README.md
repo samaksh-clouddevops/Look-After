@@ -63,6 +63,7 @@ This folder contains the complete Quality Validation Framework for LifeOS. A ded
 | 34 | [34-human-satisfaction.md](34-human-satisfaction.md) | Accepted / ignored / dismissed / modified |
 | 35 | [35-ai-cost-validation.md](35-ai-cost-validation.md) | AI token and cost regression |
 | 36 | [36-failure-recovery.md](36-failure-recovery.md) | Intentional failure injection |
+| 37 | [37-ui-lag-fix-scorecard.md](37-ui-lag-fix-scorecard.md) | **UI lag fixes** — scenarios, scores ≥70 pass, run commands |
 
 **Fixtures:** [fixtures/ai/](fixtures/ai/), [fixtures/decisions/](fixtures/decisions/), [fixtures/replay/](fixtures/replay/), [fixtures/simulator/](fixtures/simulator/), [fixtures/counterfactual/](fixtures/counterfactual/), [fixtures/autonomous/](fixtures/autonomous/), [fixtures/learning/](fixtures/learning/), [fixtures/twin/](fixtures/twin/), [fixtures/hallucination/](fixtures/hallucination/) — no secrets committed.
 
