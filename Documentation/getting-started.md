@@ -37,8 +37,13 @@ cp Config/GoogleService-Info.plist.example Config/GoogleService-Info.plist
 For device builds, run:
 
 ```bash
-./Scripts/reconfigure-signing.sh
+./Scripts/bootstrap.sh
+./Scripts/reconfigure-signing.sh --prefix com.samaksh.flowos --clear-team
 ```
+
+Then in Xcode set **Team** on **LookAfter-iOS** and **LookAfterWidget** (same Apple ID for both).
+
+If you see **Command Ld failed**, clean build (Shift+Cmd+K), reset package caches (File → Packages → Reset Package Caches), and confirm both targets share the same signing team.
 
 ## Select a scheme
 
