@@ -30,13 +30,13 @@ final class WidgetSyncService {
         }
     }
     
-    func sync(brainVM: BrainViewModel, tasksVM: TasksViewModel) {
-        let snapshot = makeSnapshot(brainVM: brainVM, tasksVM: tasksVM)
+    func sync(brainVM: BrainViewModel, tasksVM: TasksViewModel, adhdVM: ADHDViewModel? = nil) {
+        let snapshot = makeSnapshot(brainVM: brainVM, tasksVM: tasksVM, adhdVM: adhdVM)
         WidgetDataStore.save(snapshot)
-        WidgetCenter.shared.reloadAllTimelines()
-        
+        reloadWidgetTimelines()
+
         if isNowPinned {
-            if snapshot.topTaskTitle != nil {
+            if snapshot.topTaskTitle != nil || snapshot.executive != nil {
                 if LiveActivityManager.shared.isNowPinned {
                     LiveActivityManager.shared.updateNowPin(from: snapshot)
                 } else {
@@ -45,6 +45,23 @@ final class WidgetSyncService {
             } else {
                 setNowPinned(false)
             }
+        }
+    }
+
+    /// Prefer kind-scoped reloads over reloadAllTimelines for battery + WidgetKit etiquette.
+    private func reloadWidgetTimelines() {
+        let kinds = [
+            LookAfterWidgetKind.recommendation,
+            LookAfterWidgetKind.today,
+            LookAfterWidgetKind.focus,
+            LookAfterWidgetKind.health,
+            LookAfterWidgetKind.capture,
+            LookAfterWidgetKind.nowV1,
+            LookAfterWidgetKind.energyV1,
+            LookAfterWidgetKind.tasksV1
+        ]
+        for kind in kinds {
+            WidgetCenter.shared.reloadTimelines(ofKind: kind)
         }
     }
     
@@ -95,18 +112,39 @@ final class WidgetSyncService {
         }
     }
     
-    private func makeSnapshot(brainVM: BrainViewModel, tasksVM: TasksViewModel) -> WidgetSnapshot {
+    private func makeSnapshot(
+        brainVM: BrainViewModel,
+        tasksVM: TasksViewModel,
+        adhdVM: ADHDViewModel?
+    ) -> WidgetSnapshot {
         let surface = brainVM.flowSurface
         let topTask = surface?.heroTask ?? brainVM.topTasks.first
-        let snapshot = brainVM.cognitiveSnapshot
+        let cognitive = brainVM.cognitiveSnapshot
         let health = brainVM.healthSummary
+        let presentation = brainVM.presentation
 
-        let recommendation: String
+        let whyLine: String
         if let surface, brainVM.isUsingFlowDirector {
-            recommendation = surface.briefingText.isEmpty ? surface.greeting : surface.briefingText
+            whyLine = surface.briefingText.isEmpty ? surface.greeting : surface.briefingText
+        } else if let reasons = presentation.hero?.whyReasons, let first = reasons.first {
+            whyLine = first
         } else {
-            recommendation = brainVM.recommendation
+            whyLine = brainVM.recommendation
         }
+
+        let energyScore = Int((surface?.energyScore ?? cognitive?.energyScore ?? 0.5) * 100)
+        let energyLevel = cognitive?.energy.rawValue ?? EnergyLevel.moderate.rawValue
+        let minutes = surface?.prediction?.suggestedDurationMinutes ?? topTask?.estimatedMinutes
+
+        let executive = WidgetRecommendation(
+            taskID: topTask?.id,
+            title: presentation.hero?.title ?? topTask?.title ?? WidgetRecommendation.clear.title,
+            whyLine: whyLine,
+            nextStepLine: presentation.hero?.supportingLine,
+            estimatedMinutes: minutes,
+            energyLabel: energyLevel,
+            energyScore: energyScore
+        )
 
         let widgetTasks = brainVM.topTasks.prefix(3).map { task in
             WidgetTaskItem(
@@ -117,19 +155,111 @@ final class WidgetSyncService {
             )
         }
 
+        let todaySummary = makeTodaySummary(tasksVM: tasksVM, brainVM: brainVM, topTask: topTask)
+        let focusState = makeFocusState(adhdVM: adhdVM)
+        let medStatus = makeMedicationStatus()
+        let recovery = presentation.capacity.sleepLabel
+            ?? health?.totalSleepMinutes.map { mins -> String in
+                let h = mins / 60
+                if h >= 7 { return "Good recovery" }
+                if h >= 5.5 { return "Fair recovery" }
+                return "Protect rest"
+            }
+
         return WidgetSnapshot(
             topTaskTitle: topTask?.title,
-            topTaskMinutes: surface?.prediction?.suggestedDurationMinutes ?? topTask?.estimatedMinutes,
-            energyScore: Int((surface?.energyScore ?? snapshot?.energyScore ?? 0.5) * 100),
-            energyLevel: snapshot?.energy.rawValue ?? EnergyLevel.moderate.rawValue,
-            recommendation: recommendation,
+            topTaskMinutes: minutes,
+            energyScore: energyScore,
+            energyLevel: energyLevel,
+            recommendation: whyLine,
             completedTodayCount: tasksVM.completedToday.count,
-            activeTaskCount: tasksVM.tasks.filter { $0.status.isActive }.count,
+            activeTaskCount: tasksVM.tasks.filter(\.status.isActive).count,
             sleepHours: health?.totalSleepMinutes.map { $0 / 60 },
             stepCount: health?.stepCount,
             hrvMs: health?.hrvAverage.map { Int($0) },
             tasks: Array(widgetTasks),
-            updatedAt: Date()
+            updatedAt: Date(),
+            executive: executive,
+            today: todaySummary,
+            focus: focusState,
+            medication: medStatus,
+            recoveryLabel: recovery,
+            schemaVersion: 2
+        )
+    }
+
+    private func makeTodaySummary(
+        tasksVM: TasksViewModel,
+        brainVM: BrainViewModel,
+        topTask: LifeTask?
+    ) -> WidgetTodaySummary {
+        let active = tasksVM.tasks.filter(\.status.isActive)
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "H:mm"
+
+        var beats: [WidgetTimelineBeat] = []
+        for task in active.prefix(4) {
+            let label: String
+            if let t = task.scheduledTime {
+                label = timeFormatter.string(from: t)
+            } else {
+                label = "Next"
+            }
+            beats.append(WidgetTimelineBeat(
+                id: task.id,
+                timeLabel: label,
+                title: task.title,
+                detail: "\(task.estimatedMinutes)m",
+                kind: "task"
+            ))
+        }
+
+        let nextTimed = active
+            .compactMap { task -> (LifeTask, Date)? in
+                guard let t = task.scheduledTime else { return nil }
+                return (task, t)
+            }
+            .sorted { $0.1 < $1.1 }
+            .first
+
+        return WidgetTodaySummary(
+            nextEventTitle: nextTimed?.0.title,
+            nextEventTimeLabel: nextTimed.map { timeFormatter.string(from: $0.1) },
+            nextTaskTitle: topTask?.title ?? active.first?.title,
+            freeMinutes: brainVM.cognitiveSnapshot?.availableMinutes,
+            capacityLabel: brainVM.presentation.capacity.bandLabel,
+            beats: beats
+        )
+    }
+
+    private func makeFocusState(adhdVM: ADHDViewModel?) -> WidgetFocusState {
+        guard let adhdVM, adhdVM.isFocusSessionActive else { return .idle }
+        let remaining = max(0, adhdVM.focusSessionTarget - adhdVM.focusSessionElapsed)
+        return WidgetFocusState(
+            isActive: true,
+            taskTitle: adhdVM.currentFocusTask?.title,
+            remainingLabel: adhdVM.focusRemainingString,
+            sessionEndDate: Date().addingTimeInterval(remaining),
+            isPaused: adhdVM.isPaused,
+            isOnBreak: adhdVM.isOnBreak
+        )
+    }
+
+    private func makeMedicationStatus() -> WidgetMedicationStatus {
+        let meds = MedicationStore.load()
+        guard let next = meds.filter({ !$0.isTaken }).sorted(by: { $0.scheduledTime < $1.scheduledTime }).first
+                ?? meds.sorted(by: { $0.scheduledTime < $1.scheduledTime }).first
+        else {
+            return .none
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return WidgetMedicationStatus(
+            id: next.id,
+            name: next.name,
+            timeLabel: formatter.string(from: next.scheduledTime),
+            isTaken: next.isTaken,
+            dosage: next.dosage
         )
     }
 }
