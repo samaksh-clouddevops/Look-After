@@ -36,6 +36,7 @@ public struct LookAfterMasterCanvas: View {
     @StateObject private var planningVM = ExecutivePlanningViewModel()
     @StateObject private var tomorrowPlannerVM = DailyPlannerViewModel()
     @StateObject private var planningSpeech = PlanningSpeechSynthesizer()
+    @ObservedObject private var notificationRouter = NotificationRouter.shared
     @State private var selectedTab: LookAfterTab = .briefing
     @State private var tabBeforeFocus: LookAfterTab = .briefing
     @State private var showTomorrowPlanPreview = false
@@ -417,6 +418,31 @@ public struct LookAfterMasterCanvas: View {
         }
         .onChange(of: shell.factoryResetGeneration) { _, _ in
             planningVM.factoryReset()
+        }
+        .onChange(of: notificationRouter.pendingRoute) { _, route in
+            guard let route else { return }
+            switch route {
+            case .briefing:
+                selectedTab = .briefing
+            case .today:
+                selectedTab = .today
+            case .brain:
+                selectedTab = .brain
+            case .task:
+                selectedTab = .today
+                if let taskId = notificationRouter.pendingRoutePayload,
+                   let task = shell.tasksVM.tasks.first(where: { $0.id == taskId }) {
+                    shell.tasksVM.selectedTask = task
+                    showTasks = true
+                } else {
+                    showTasks = true
+                }
+            case .medication:
+                showMedication = true
+            case .focusSession:
+                break
+            }
+            _ = notificationRouter.consumeRoute()
         }
         .accessibilityIdentifier("screen-briefing")
     }

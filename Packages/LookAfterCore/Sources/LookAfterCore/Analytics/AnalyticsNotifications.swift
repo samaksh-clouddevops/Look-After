@@ -5,6 +5,8 @@ public extension Notification.Name {
     static let analyticsDataDidChange = Notification.Name("LifeOSAnalyticsDataDidChange")
     /// Posted when tasks are created, updated, completed, or deleted outside TasksViewModel.
     static let taskListDidChange = Notification.Name("LifeOSTaskListDidChange")
+    /// Posted when medication schedule or adherence changes.
+    static let medicationListDidChange = Notification.Name("LifeOSMedicationListDidChange")
 }
 
 public enum AnalyticsDataChangeReason: String, Sendable {

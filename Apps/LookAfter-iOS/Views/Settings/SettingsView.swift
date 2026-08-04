@@ -28,6 +28,8 @@ struct SettingsView: View {
     @AppStorage("pinNowToLockScreen") private var pinNowToLockScreen = false
     @AppStorage(FlowDirectorFeature.userDefaultsKey) private var enableFlowDirector = false
     @AppStorage(AppAppearanceMode.storageKey) private var appearanceRaw = AppAppearanceMode.system.rawValue
+    @StateObject private var notificationPermission = NotificationPermissionService.shared
+    @State private var notificationPreferences = NotificationPreferencesStore.load()
 
     private var appearance: AppAppearanceMode {
         AppAppearanceMode(rawValue: appearanceRaw) ?? .system
@@ -138,6 +140,86 @@ struct SettingsView: View {
                     Text(appearance.usesSystemSetting
                          ? "Look After follows your iPhone light or dark setting."
                          : "Dark Mode is controlled inside the app. Turn off “Match iPhone appearance” to change it here.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { notificationPreferences.masterEnabled },
+                        set: { enabled in
+                            notificationPreferences.masterEnabled = enabled
+                            NotificationPreferencesStore.save(notificationPreferences)
+                            if enabled {
+                                Task { _ = await notificationPermission.requestAuthorization() }
+                            }
+                            Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+                        }
+                    )) {
+                        Label("Proactive reminders", systemImage: "bell.badge")
+                    }
+                    .accessibilityIdentifier("settings-notifications-master-toggle")
+                    .listRowBackground(DesignSystem.backgroundSecondary)
+
+                    if notificationPreferences.masterEnabled {
+                        ForEach(NotificationKind.allCases.filter(\.countsTowardDailyCap)) { kind in
+                            Toggle(isOn: Binding(
+                                get: { notificationPreferences.isEnabled(kind) },
+                                set: { enabled in
+                                    notificationPreferences.setEnabled(kind, enabled)
+                                    NotificationPreferencesStore.save(notificationPreferences)
+                                    Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+                                }
+                            )) {
+                                Text(kind.displayName)
+                            }
+                            .accessibilityIdentifier("settings-notifications-\(kind.rawValue)-toggle")
+                            .listRowBackground(DesignSystem.backgroundSecondary)
+                        }
+
+                        Toggle(isOn: Binding(
+                            get: { notificationPreferences.isEnabled(.focusBreak) },
+                            set: { enabled in
+                                notificationPreferences.setEnabled(.focusBreak, enabled)
+                                NotificationPreferencesStore.save(notificationPreferences)
+                                Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+                            }
+                        )) {
+                            Text(NotificationKind.focusBreak.displayName)
+                        }
+                        .accessibilityIdentifier("settings-notifications-focusBreak-toggle")
+                        .listRowBackground(DesignSystem.backgroundSecondary)
+                    }
+
+                    if notificationPermission.isDenied {
+                        Button {
+                            notificationPermission.openSystemSettings()
+                        } label: {
+                            Label("Open iOS Settings", systemImage: "gear")
+                        }
+                        .accessibilityIdentifier("settings-notifications-open-system-settings")
+                        .listRowBackground(DesignSystem.backgroundSecondary)
+                    }
+                } header: {
+                    Text("Notifications")
+                } footer: {
+                    Text(notificationPermission.isDenied
+                         ? "Notifications are off in iOS Settings. Look After works fully without them — you won't get proactive reminders."
+                         : "Up to 2 calm proactive reminders per day. Focus break alerts only fire during an active focus session.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+
+                Section {
+                    Button(action: startAppTour) {
+                        Label("Start tour", systemImage: "map")
+                    }
+                    .accessibilityIdentifier("settings-start-tour")
+                    .listRowBackground(DesignSystem.backgroundSecondary)
+                } header: {
+                    Text("Help")
+                } footer: {
+                    Text("Walk through Briefing, Today, Capture, Brain, and profile — useful if you started before the tour existed or want a refresher.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 }
@@ -506,25 +588,6 @@ struct SettingsView: View {
                 } header: {
                     Text("Energy Profile")
                 }
-                
-                // Help
-                Section {
-                    Button {
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            NotificationCenter.default.post(name: .replayAppFeatureTour, object: nil)
-                        }
-                    } label: {
-                        Label("Replay app tour", systemImage: "map")
-                    }
-                    .accessibilityIdentifier("settings-replay-tour")
-                } header: {
-                    Text("Help")
-                } footer: {
-                    Text("Walk through Briefing, Today, Capture, Brain, and profile features again.")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.textMuted)
-                }
 
                 // About
                 Section {
@@ -554,11 +617,13 @@ struct SettingsView: View {
                 apiKeysVM.refresh()
                 refreshAIUsageSummary()
                 lifeProfile = UserLifeProfileStore.load()
+                notificationPreferences = NotificationPreferencesStore.load()
                 structuredProfileSections = LifeProfileComposer.parse(lifeProfile.profileText)
                 UserLifeProfileStore.syncUserNameFromProfileIfNeeded()
                 if userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     userName = UserLifeProfileStore.resolvedDisplayName()
                 }
+                Task { await notificationPermission.refreshStatus() }
             }
             .onChange(of: structuredProfileSections.personality) { _, _ in syncStructuredProfileToStore() }
             .onChange(of: structuredProfileSections.adhdFocusPatterns) { _, _ in syncStructuredProfileToStore() }
@@ -590,6 +655,13 @@ struct SettingsView: View {
 
     private func refreshAIUsageSummary() {
         aiUsageSummary = GLMService.shared.usageSummary()
+    }
+
+    private func startAppTour() {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            NotificationCenter.default.post(name: .replayAppFeatureTour, object: nil)
+        }
     }
 
     private func organizeLifeProfileInSettings() async {

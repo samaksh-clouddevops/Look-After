@@ -403,6 +403,7 @@ final class AppShellState: ObservableObject {
             executiveCapacityLabel: contextOrchestrator.executiveCapacity.band.displayLabel,
             actualFocusMinutes: focusMins
         )
+        await NotificationCoordinator.shared.refreshFromShell(self)
     }
 
     private var healthKitEnabled: Bool {
@@ -421,6 +422,7 @@ final class AppShellState: ObservableObject {
         clearInMemoryState(userId: userId)
         healthSync.resetForFactoryReset()
         LiveActivityManager.shared.endAllActivities()
+        await NotificationCoordinator.shared.resetForFactoryReset()
         refreshWidgetData()
         factoryResetGeneration += 1
 

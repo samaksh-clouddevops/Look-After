@@ -48,6 +48,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
             .onChange(of: scenePhase) { _, phase in
                 handleScenePhaseChange(phase)
             }
+            .modifier(ExperienceRootNotificationModifier(shell: shell))
     }
 
     private func configureOnLaunch() async {
@@ -71,6 +72,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
         if phase == .background {
             BackgroundAnalyticsScheduler.shared.handleAppBackground(userId: userId)
             PostWakeSessionStore.recordBackground()
+            BackgroundNotificationRefreshTask.scheduleNextRefresh()
             shell.persistResume(
                 userId: userId,
                 screen: "briefing",
@@ -214,6 +216,36 @@ private struct ExperienceRootDataModifier: ViewModifier {
                 guard !userId.isEmpty, !shell.isPerformingFactoryReset else { return }
                 shell.tasksVM.refreshFromLocal(userId: userId)
                 shell.refreshWidgetData()
+            }
+    }
+}
+
+private struct ExperienceRootNotificationModifier: ViewModifier {
+    @ObservedObject var shell: AppShellState
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .taskListDidChange)) { _ in
+                guard !shell.isPerformingFactoryReset else { return }
+                Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .medicationListDidChange)) { _ in
+                guard !shell.isPerformingFactoryReset else { return }
+                Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+            }
+            .onChange(of: shell.adhdVM.isFocusSessionActive) { _, _ in
+                guard !shell.isPerformingFactoryReset else { return }
+                Task {
+                    if shell.adhdVM.isFocusSessionActive {
+                        await NotificationCoordinator.shared.refreshFromShell(shell)
+                    } else {
+                        await NotificationCoordinator.shared.refreshAfterFocusSessionEnded()
+                    }
+                }
+            }
+            .onChange(of: shell.adhdVM.isOnBreak) { _, _ in
+                guard !shell.isPerformingFactoryReset, shell.adhdVM.isFocusSessionActive else { return }
+                Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
             }
     }
 }

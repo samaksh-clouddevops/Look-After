@@ -73,6 +73,7 @@ public final class MedicationViewModel: ObservableObject {
         if let data = try? JSONEncoder().encode(medications) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
         }
+        NotificationCenter.default.post(name: .medicationListDidChange, object: nil)
     }
     
     private func loadFromDisk() {

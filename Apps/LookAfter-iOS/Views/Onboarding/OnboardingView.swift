@@ -129,6 +129,8 @@ struct OnboardingView: View {
             healthStep
         case .cycle:
             cycleStep
+        case .notifications:
+            notificationsStep
         case .ready:
             readyStep
         }
@@ -445,6 +447,25 @@ struct OnboardingView: View {
         return "Connect Apple Health"
     }
 
+    private var notificationsStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            checklistRow(
+                icon: "bell.badge",
+                title: "Calm, capped reminders",
+                detail: "At most 2 proactive nudges per day — meds, meetings, tasks, and your morning briefing."
+            )
+            checklistRow(
+                icon: "hand.raised",
+                title: "You're in control",
+                detail: "Turn categories off anytime in Settings. Focus break alerts only run during a session."
+            )
+            Text("You can skip this and enable notifications later in Settings.")
+                .font(.system(size: 12))
+                .foregroundColor(DesignSystem.textMuted)
+        }
+        .accessibilityIdentifier("onboarding-notifications-step")
+    }
+
     private var readyStep: some View {
         VStack(alignment: .leading, spacing: 14) {
             summaryRow("Name", value: userName.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -486,12 +507,24 @@ struct OnboardingView: View {
                 Button("Skip for now") {
                     healthSkipped = true
                     trackCycle = false
-                    step = .ready
+                    step = .notifications
                 }
                 .foregroundColor(DesignSystem.textSecondary)
 
                 Button("Continue") { goForward() }
                     .buttonStyle(.borderedProminent)
+            } else if step == .notifications {
+                Button("Skip for now") { step = .ready }
+                    .foregroundColor(DesignSystem.textSecondary)
+
+                Button("Enable notifications") {
+                    Task {
+                        _ = await NotificationPermissionService.shared.requestAuthorization()
+                        step = .ready
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("onboarding-enable-notifications")
             } else if step == .ready {
                 Button("Start planning") { saveAndFinish() }
                     .buttonStyle(.borderedProminent)
@@ -539,9 +572,11 @@ struct OnboardingView: View {
             if selectedGender == .female && trackCycle {
                 step = .cycle
             } else {
-                step = .ready
+                step = .notifications
             }
         case .cycle:
+            step = .notifications
+        case .notifications:
             step = .ready
         default:
             break
@@ -768,6 +803,7 @@ private enum StartStep: Int, CaseIterable {
     case profile
     case health
     case cycle
+    case notifications
     case ready
 
     static var questionCount: Int { allCases.count - 1 }
@@ -790,6 +826,7 @@ private enum StartStep: Int, CaseIterable {
         case .profile: return "Teach your brain your rhythms"
         case .health: return "Connect Apple Health"
         case .cycle: return "Your cycle"
+        case .notifications: return "Stay on track"
         case .ready: return "You're all set"
         }
     }
@@ -812,6 +849,8 @@ private enum StartStep: Int, CaseIterable {
             return "Optional but recommended — sleep and recovery shape your daily capacity."
         case .cycle:
             return "Optional — helps \(UserFacingCopy.productName) learn your rhythm and give phase-aware coaching."
+        case .notifications:
+            return "Optional — up to 2 calm reminders per day for meds, meetings, and tasks. No spam."
         case .ready:
             return "Review below, then we'll build your first day."
         }

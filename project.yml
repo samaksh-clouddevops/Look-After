@@ -28,6 +28,8 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.security.application-groups:
           - group.com.samaksh.flowos
+        # Push Notifications (aps-environment) requires a paid Apple Developer Program account.
+        # Add before App Store release: aps-environment: production
     info:
       path: Apps/LookAfter-iOS/Info.plist
       properties:
@@ -38,6 +40,11 @@ targets:
         NSCalendarsWriteOnlyAccessUsageDescription: "Look After needs access to your calendar to add scheduled tasks and sync events."
         NSMicrophoneUsageDescription: "Look After uses the microphone for voice capture and speech-to-text transcription."
         NSSpeechRecognitionUsageDescription: "Look After transcribes your spoken thoughts into tasks, journal entries, and notes."
+        UIBackgroundModes:
+          - fetch
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.samaksh.flowos.app.notification-refresh
     dependencies:
       - target: LookAfterWidget
         embed: true

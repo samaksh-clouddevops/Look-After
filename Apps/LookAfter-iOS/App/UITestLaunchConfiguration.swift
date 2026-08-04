@@ -47,6 +47,11 @@ enum UITestLaunchConfiguration {
         if ProcessInfo.processInfo.arguments.contains("-SimulateOffline") {
             UserDefaults.standard.set(true, forKey: "uitest_simulate_offline")
         }
+        if ProcessInfo.processInfo.arguments.contains("-SimulateNotificationDenied") {
+            var prefs = NotificationPreferencesStore.load()
+            prefs.masterEnabled = true
+            NotificationPreferencesStore.save(prefs)
+        }
         if let category = argumentValue(prefix: "-UIPreferredContentSizeCategory") {
             UserDefaults.standard.set(category, forKey: "uitest_content_size_category")
         }
