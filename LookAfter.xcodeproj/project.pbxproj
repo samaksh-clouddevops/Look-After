@@ -1708,7 +1708,6 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/LookAfterWidget/LookAfterWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
 				INFOPLIST_FILE = Apps/LookAfterWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -1851,7 +1850,6 @@
 				CODE_SIGN_ENTITLEMENTS = "Config/LookAfter-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
 				INFOPLIST_FILE = "Apps/LookAfter-iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Look After reads your calendar for scheduling.";
@@ -1972,7 +1970,6 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/LookAfterWidget/LookAfterWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
 				INFOPLIST_FILE = Apps/LookAfterWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -2030,7 +2027,6 @@
 				CODE_SIGN_ENTITLEMENTS = "Config/LookAfter-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = QZYBP8F6F5;
 				INFOPLIST_FILE = "Apps/LookAfter-iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Look After reads your calendar for scheduling.";
