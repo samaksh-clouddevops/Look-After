@@ -339,7 +339,7 @@ struct SettingsView: View {
                     }
                     .listRowBackground(DesignSystem.backgroundSecondary)
 
-                    Text("\(UserFacingCopy.productName) includes a default GLM key for first-run AI. Add your own key in API Keys to replace it, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
+                    Text("Add a GLM API key in API Keys to enable AI features, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
                         .font(.system(size: 12, design: .default))
                         .foregroundColor(DesignSystem.textMuted)
                         .listRowBackground(DesignSystem.backgroundSecondary)

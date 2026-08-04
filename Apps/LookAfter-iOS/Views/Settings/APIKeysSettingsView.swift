@@ -52,7 +52,7 @@ struct APIKeysSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("No API keys yet")
                                 .font(.system(size: 15, weight: .semibold, design: .default))
-                            Text("Add one or more API keys. \(UserFacingCopy.productName) rotates automatically when a key hits quota. A default key is included on first launch.")
+                            Text("Add one or more API keys. \(UserFacingCopy.productName) rotates automatically when a key hits quota.")
                                 .font(.system(size: 12, design: .default))
                                 .foregroundColor(DesignSystem.textSecondary)
                         }

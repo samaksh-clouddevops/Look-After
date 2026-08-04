@@ -36,9 +36,9 @@ public struct GLMConfiguration: Codable, Sendable, Equatable {
     public static let apiKeyEnvVar = "GLM_API_KEY"
     public static let legacyEnvVar = "ZAI_API_KEY"
 
-    /// Built-in GLM key used on first launch when the user has not added their own.
-    /// Users can replace or remove it in Settings → API Keys.
-    public static let bundledDefaultAPIKey = "4051d0ad6e6d4191b695384d5d44ab3f.mvzJ0P6ZgwjUSN4C"
+    /// Optional built-in GLM key for local development only — leave empty in source control.
+    /// Users add their own key in Settings → API Keys, or set `GLM_API_KEY` in the environment.
+    public static let bundledDefaultAPIKey = ""
 
     enum CodingKeys: String, CodingKey {
         case baseURL, defaultModel, standardModel, economyModel, tieredRoutingEnabled
