@@ -175,6 +175,8 @@ public struct WidgetSnapshot: Codable, Sendable {
     public var recoveryLabel: String?
     public var hydrationMlToday: Double?
     public var insightLine: String?
+    /// False when HealthKit is off or no summary was available at sync time.
+    public var hasHealthData: Bool
     public var schemaVersion: Int
 
     public init(
@@ -197,6 +199,7 @@ public struct WidgetSnapshot: Codable, Sendable {
         recoveryLabel: String? = nil,
         hydrationMlToday: Double? = nil,
         insightLine: String? = nil,
+        hasHealthData: Bool = false,
         schemaVersion: Int = 2
     ) {
         self.topTaskTitle = topTaskTitle
@@ -218,6 +221,7 @@ public struct WidgetSnapshot: Codable, Sendable {
         self.recoveryLabel = recoveryLabel
         self.hydrationMlToday = hydrationMlToday
         self.insightLine = insightLine
+        self.hasHealthData = hasHealthData
         self.schemaVersion = schemaVersion
     }
 
@@ -243,7 +247,7 @@ public struct WidgetSnapshot: Codable, Sendable {
         case topTaskTitle, topTaskMinutes, energyScore, energyLevel, recommendation
         case completedTodayCount, activeTaskCount, sleepHours, stepCount, hrvMs
         case tasks, updatedAt, executive, today, focus, medication
-        case recoveryLabel, hydrationMlToday, insightLine, schemaVersion
+        case recoveryLabel, hydrationMlToday, insightLine, hasHealthData, schemaVersion
     }
 
     // Backward-compatible decode: V1 App Group payloads omit V2 keys.
@@ -269,6 +273,8 @@ public struct WidgetSnapshot: Codable, Sendable {
         recoveryLabel = try c.decodeIfPresent(String.self, forKey: .recoveryLabel)
         hydrationMlToday = try c.decodeIfPresent(Double.self, forKey: .hydrationMlToday)
         insightLine = try c.decodeIfPresent(String.self, forKey: .insightLine)
+        let decodedHealth = try c.decodeIfPresent(Bool.self, forKey: .hasHealthData)
+        hasHealthData = decodedHealth ?? (sleepHours != nil || stepCount != nil || hrvMs != nil)
         schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
     }
 }

@@ -1,6 +1,7 @@
 import ActivityKit
 import WidgetKit
 import SwiftUI
+import AppIntents
 import LookAfterCore
 
 private enum LiveActivityStyle {
@@ -100,12 +101,29 @@ struct FocusLiveActivity: Widget {
                 }
             }
 
-            Text("Timer pinned — open \(UserFacingCopy.productName) to control.")
-                .font(.dsMetadata())
-                .foregroundColor(LiveActivityStyle.textMuted)
+            HStack(spacing: 10) {
+                Button(intent: PauseFocusIntent()) {
+                    Text(context.state.isPaused ? "Resume" : "Pause")
+                        .font(.dsCaption(weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 10).strokeBorder(LiveActivityStyle.textMuted.opacity(0.4)))
+                }
+                .buttonStyle(.plain)
+                Button(intent: EndFocusIntent()) {
+                    Text("End")
+                        .font(.dsCaption(weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(LiveActivityStyle.accent))
+                        .foregroundStyle(DesignSystem.accentOnPrimary)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(16)
         .activityBackgroundTint(LiveActivityStyle.background)
+        .widgetURL(LookAfterDeepLink.focus)
     }
 }
 

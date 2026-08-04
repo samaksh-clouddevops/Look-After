@@ -154,14 +154,33 @@ final class WidgetSnapshotTests: XCTestCase {
             LookAfterWidgetKind.lifeState,
             LookAfterWidgetKind.brain,
             LookAfterWidgetKind.weekly,
-            LookAfterWidgetKind.memory,
-            LookAfterWidgetKind.nowV1,
-            LookAfterWidgetKind.energyV1,
-            LookAfterWidgetKind.tasksV1
+            LookAfterWidgetKind.memory
         ]
         XCTAssertEqual(Set(kinds).count, kinds.count, "Kind strings must be unique")
         XCTAssertTrue(LookAfterWidgetKind.recommendation.hasPrefix("LookAfter."))
-        XCTAssertEqual(LookAfterWidgetKind.nowV1, "NowWidget")
+        XCTAssertEqual(LookAfterWidgetKind.medication, "LookAfter.Medication")
+    }
+
+    func testLookAfterRouteParsing() {
+        XCTAssertEqual(LookAfterRoute.parse(URL(string: "lookafter://recommend")!), .recommend)
+        XCTAssertEqual(LookAfterRoute.parse(URL(string: "lookafter://capture?mode=text")!), .capture(mode: "text"))
+        XCTAssertEqual(LookAfterRoute.parse(URL(string: "lookafter://task/xyz")!), .task(id: "xyz"))
+        XCTAssertEqual(LookAfterRoute.parse(URL(string: "lookafter://meds")!), .medication)
+    }
+
+    func testWidgetCommandQueueRoundTrip() {
+        WidgetCommandQueue.clear()
+        WidgetCommandQueue.enqueue(WidgetCommand(kind: .completeTask, taskID: "t1"))
+        WidgetCommandQueue.enqueue(WidgetCommand(kind: .logWater, amountMl: 250))
+        let drained = WidgetCommandQueue.drain()
+        XCTAssertEqual(drained.count, 2)
+        XCTAssertEqual(drained[0].kind, .completeTask)
+        XCTAssertEqual(drained[1].amountMl, 250)
+        XCTAssertTrue(WidgetCommandQueue.loadAll().isEmpty)
+    }
+
+    func testHasHealthDataDefaultFalse() {
+        XCTAssertFalse(WidgetSnapshot.empty.hasHealthData)
     }
 
     func testDeepLinks() {

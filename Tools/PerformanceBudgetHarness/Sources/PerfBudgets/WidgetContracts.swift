@@ -92,22 +92,23 @@ public struct WidgetSnapshotMirror: Codable, Equatable {
 }
 
 public enum WidgetKindContract {
-    public static let all: [String] = [
+    /// Kinds currently registered in LookAfterWidgetBundle (V1 sunsets).
+    public static let shipped: [String] = [
         "LookAfter.Recommendation",
         "LookAfter.Today",
         "LookAfter.Focus",
         "LookAfter.Health",
         "LookAfter.Capture",
-        "LookAfter.Medication",
+        "LookAfter.Medication"
+    ]
+
+    public static let all: [String] = shipped + [
         "LookAfter.Calendar",
         "LookAfter.Habits",
         "LookAfter.LifeState",
         "LookAfter.Brain",
         "LookAfter.Weekly",
-        "LookAfter.Memory",
-        "NowWidget",
-        "EnergyWidget",
-        "TasksWidget"
+        "LookAfter.Memory"
     ]
 }
 
@@ -128,4 +129,43 @@ public enum WidgetAppGroupContract {
     public static let identifier = "group.com.samaksh.flowos"
     public static let snapshotKey = "flowos.widget.snapshot"
     public static let commandQueueKey = "lookafter.widget.commands"
+}
+
+public enum WidgetCommandKindContract: String, CaseIterable {
+    case completeTask, snoozeTask, markMedicationTaken, logWater
+    case startFocus, endFocus, pauseFocus, resumeFocus
+}
+
+public struct WidgetCommandMirror: Codable, Equatable {
+    public var id: String
+    public var kind: String
+    public var taskID: String?
+    public var medicationID: String?
+    public var amountMl: Double?
+    public var snoozeMinutes: Int?
+}
+
+public enum LookAfterRouteContract: Equatable {
+    case recommend, today, focus, capture(String?), health, medication, brain, task(String), unknown
+
+    public static func parse(_ url: URL) -> LookAfterRouteContract {
+        guard url.scheme == "lookafter" else { return .unknown }
+        let host = (url.host ?? "").lowercased()
+        switch host {
+        case "recommend", "now": return .recommend
+        case "today": return .today
+        case "focus": return .focus
+        case "capture":
+            let mode = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "mode" })?.value
+            return .capture(mode)
+        case "health": return .health
+        case "medication", "meds": return .medication
+        case "brain", "coach": return .brain
+        case "task":
+            let id = url.pathComponents.dropFirst().first ?? ""
+            return id.isEmpty ? .recommend : .task(id)
+        default: return .unknown
+        }
+    }
 }

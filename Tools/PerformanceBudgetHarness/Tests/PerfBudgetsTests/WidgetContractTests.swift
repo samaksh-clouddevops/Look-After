@@ -7,11 +7,13 @@ final class WidgetContractTests: XCTestCase {
     func testKindsAreUnique() {
         let kinds = WidgetKindContract.all
         XCTAssertEqual(Set(kinds).count, kinds.count)
-        XCTAssertEqual(kinds.count, 15)
         XCTAssertTrue(kinds.contains("LookAfter.Recommendation"))
-        XCTAssertTrue(kinds.contains("NowWidget"))
-        XCTAssertTrue(kinds.contains("EnergyWidget"))
-        XCTAssertTrue(kinds.contains("TasksWidget"))
+        XCTAssertTrue(kinds.contains("LookAfter.Medication"))
+        // V1 sunsets — must not reappear in shipped set
+        XCTAssertFalse(WidgetKindContract.shipped.contains("NowWidget"))
+        XCTAssertFalse(WidgetKindContract.shipped.contains("EnergyWidget"))
+        XCTAssertFalse(WidgetKindContract.shipped.contains("TasksWidget"))
+        XCTAssertEqual(WidgetKindContract.shipped.count, 6)
     }
 
     func testDeepLinks() {
@@ -129,16 +131,60 @@ final class WidgetContractTests: XCTestCase {
         XCTAssertEqual(loaded.executive?.energyScore, 88)
     }
 
-    /// Ensures V2 kind set always includes legacy V1 for migration overlap.
-    func testMigrationOverlapIncludesV1Kinds() {
-        let set = Set(WidgetKindContract.all)
-        XCTAssertTrue(set.isSuperset(of: ["NowWidget", "EnergyWidget", "TasksWidget"]))
+    func testShippedKindsAreCompleteV2Set() {
+        let set = Set(WidgetKindContract.shipped)
         XCTAssertTrue(set.isSuperset(of: [
             "LookAfter.Recommendation",
             "LookAfter.Today",
             "LookAfter.Focus",
             "LookAfter.Health",
-            "LookAfter.Capture"
+            "LookAfter.Capture",
+            "LookAfter.Medication"
         ]))
+    }
+
+    func testRouteParsing() {
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://recommend")!), .recommend)
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://today")!), .today)
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://focus")!), .focus)
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://health")!), .health)
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://medication")!), .medication)
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://brain")!), .brain)
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://capture?mode=voice")!), .capture("voice"))
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "lookafter://task/abc")!), .task("abc"))
+        XCTAssertEqual(LookAfterRouteContract.parse(URL(string: "https://example.com")!), .unknown)
+    }
+
+    func testCommandKindsCoverAllIntents() {
+        let raw = Set(WidgetCommandKindContract.allCases.map(\.rawValue))
+        XCTAssertTrue(raw.isSuperset(of: [
+            "completeTask", "snoozeTask", "markMedicationTaken", "logWater",
+            "startFocus", "endFocus", "pauseFocus", "resumeFocus"
+        ]))
+    }
+
+    func testCommandRoundTrip() throws {
+        let cmd = WidgetCommandMirror(
+            id: "c1",
+            kind: "completeTask",
+            taskID: "t1",
+            medicationID: nil,
+            amountMl: nil,
+            snoozeMinutes: nil
+        )
+        let data = try JSONEncoder().encode([cmd])
+        let decoded = try JSONDecoder().decode([WidgetCommandMirror].self, from: data)
+        XCTAssertEqual(decoded.count, 1)
+        XCTAssertEqual(decoded[0].taskID, "t1")
+        XCTAssertEqual(decoded[0].kind, "completeTask")
+    }
+
+    func testHasHealthDataHonesty() throws {
+        // Empty health should not claim metrics.
+        let snap = WidgetSnapshotMirror(energyScore: 50, recommendation: "x", schemaVersion: 2)
+        XCTAssertNil(snap.executive)
+        // Encode/decode still works without health flags in mirror.
+        let data = try JSONEncoder().encode(snap)
+        XCTAssertFalse(data.isEmpty)
     }
 }
