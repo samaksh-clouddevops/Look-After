@@ -1,8 +1,8 @@
 # Focus Timer UI Lag — Known Issue
 
 **Document ID:** QA-FOCUS-TIMER-LAG  
-**Status:** Open — deferred for follow-up  
-**Last updated:** 2026-08-04  
+**Status:** Mitigated on `performance/ui-lag-fixes` — verify on device
+**Last updated:** 2026-08-04
 **Related:** Today tab, timeline Start now, `FocusSessionView`, `ADHDViewModel`
 
 ---

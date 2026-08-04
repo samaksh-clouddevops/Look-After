@@ -28,11 +28,23 @@ final class LiveActivityManager {
         remainingLabel: String,
         isPaused: Bool
     ) {
+        // Performance: defer ActivityKit until after focus UI paints.
+        // Activity.request is MainActor and can block for hundreds of ms on device.
         Task { @MainActor in
+            // Let FocusSessionView layout/paint first.
             await Task.yield()
+            await Task.yield()
+            // Brief pause so the first frame is committed before ActivityKit work.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
-            endFocusActivity()
+            if let existing = focusActivity {
+                focusActivity = nil
+                Task {
+                    await existing.end(nil, dismissalPolicy: .immediate)
+                }
+            }
 
             let attributes = FocusActivityAttributes(taskTitle: taskTitle, sessionNumber: sessionNumber)
             let state = FocusActivityAttributes.ContentState(

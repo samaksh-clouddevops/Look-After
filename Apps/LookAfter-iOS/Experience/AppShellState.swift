@@ -262,14 +262,25 @@ final class AppShellState: ObservableObject {
     }
 
     private var contextLoopTask: Task<Void, Never>?
+    /// Prevents overlapping context refreshes from the background loop.
+    private var isContextRefreshInFlight = false
 
     /// Keeps brain/timeline fresh while the app is open. Capacity stays deterministic — no LLM polling.
+    /// Performance: skips ticks while a refresh is already running or a focus session is active.
     func startContextLoop(userId: String) {
         contextLoopTask?.cancel()
         contextLoopTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
                 guard let self, !Task.isCancelled, !self.isPerformingFactoryReset else { return }
+                // Skip while focus UI is up — avoids jank on the timer screen.
+                guard !self.adhdVM.isFocusSessionActive else { continue }
+                // Skip if a previous refresh is still running.
+                guard !self.isContextRefreshInFlight else { continue }
+
+                self.isContextRefreshInFlight = true
+                defer { self.isContextRefreshInFlight = false }
+
                 let userName = UserLifeProfileStore.resolvedDisplayName()
                 await self.refreshContext(
                     userId: userId,

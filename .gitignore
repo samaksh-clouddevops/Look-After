@@ -30,12 +30,24 @@ LifeOS-clean.zip
 *.log
 *.tmp
 
+# PowerShell — keep local only (never commit)
+*.ps1
+*.psm1
+*.psd1
+*.ps1xml
+*.psc1
+*.pssc
+*.psrc
+*.cdxml
+
 # Third-party dependency managers
 Pods/
 Carthage/Build/
 
 # Package build artifacts
 Packages/*/build/
+Tools/PerformanceBudgetHarness/.build/
+Tools/PerformanceBudgetHarness/test-output.txt
 
 # EVP generated artifacts
 Documentation/qa/.engine/

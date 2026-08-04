@@ -44,4 +44,34 @@ enum PerformanceSignposts {
     static func endOnboardingStep(_ id: OSSignpostID) {
         os_signpost(.end, log: log, name: "OnboardingStep", signpostID: id)
     }
+
+    static func beginFocusTimerOpen() -> OSSignpostID {
+        let id = OSSignpostID(log: log)
+        os_signpost(.begin, log: log, name: "FocusTimerOpen", signpostID: id)
+        return id
+    }
+
+    static func endFocusTimerOpen(_ id: OSSignpostID) {
+        os_signpost(.end, log: log, name: "FocusTimerOpen", signpostID: id)
+    }
+
+    static func beginContextRefresh() -> OSSignpostID {
+        let id = OSSignpostID(log: log)
+        os_signpost(.begin, log: log, name: "ContextRefresh", signpostID: id)
+        return id
+    }
+
+    static func endContextRefresh(_ id: OSSignpostID) {
+        os_signpost(.end, log: log, name: "ContextRefresh", signpostID: id)
+    }
+
+    static func beginHealthSync() -> OSSignpostID {
+        let id = OSSignpostID(log: log)
+        os_signpost(.begin, log: log, name: "HealthSync", signpostID: id)
+        return id
+    }
+
+    static func endHealthSync(_ id: OSSignpostID) {
+        os_signpost(.end, log: log, name: "HealthSync", signpostID: id)
+    }
 }

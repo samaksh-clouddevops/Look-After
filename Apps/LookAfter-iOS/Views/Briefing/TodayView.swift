@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import LookAfterCore
 import LookAfterFeatures
 
@@ -11,12 +12,12 @@ struct TodayView: View {
         var id: String { rawValue }
     }
 
-    @ObservedObject var briefingVM: DailyBriefingViewModel
-    @ObservedObject var planningVM: ExecutivePlanningViewModel
-    @ObservedObject var speechManager: SpeechRecognitionManager
-    @ObservedObject var speechSynthesizer: PlanningSpeechSynthesizer
-    @ObservedObject var modulesVM: LifeModulesViewModel
-    @ObservedObject var tasksVM: TasksViewModel
+    let briefingVM: DailyBriefingViewModel
+    let planningVM: ExecutivePlanningViewModel
+    let speechManager: SpeechRecognitionManager
+    let speechSynthesizer: PlanningSpeechSynthesizer
+    let modulesVM: LifeModulesViewModel
+    let tasksVM: TasksViewModel
 
     let lifeTimelineEvents: [LifeTimelineEvent]
     let tomorrowLifeTimelineEvents: [LifeTimelineEvent]
@@ -61,10 +62,10 @@ struct TodayView: View {
             planningVM.bootstrapTimeline(from: lifeTimelineEvents)
             planningVM.bootstrapTomorrowTimeline(from: tomorrowLifeTimelineEvents)
         }
-        .onChange(of: lifeTimelineEvents.map(\.id)) { _, _ in
+        .onChange(of: lifeTimelineSignature) { _, _ in
             planningVM.refreshTimeline(from: lifeTimelineEvents)
         }
-        .onChange(of: tomorrowLifeTimelineEvents.map(\.id)) { _, _ in
+        .onChange(of: tomorrowLifeTimelineSignature) { _, _ in
             planningVM.refreshTomorrowTimeline(from: tomorrowLifeTimelineEvents)
         }
         .sheet(item: $selectedMetricKind) { kind in
@@ -124,53 +125,91 @@ struct TodayView: View {
         }
     }
 
-    private var timelineSection: some View {
-        GeometryReader { geo in
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-                        todayHeader
-                        LAWeekDateStrip(
-                            days: weekDays,
-                            selectedDate: $selectedCalendarDate
-                        )
-                        .onChange(of: selectedCalendarDate) { _, newDate in
-                            syncSelectedDay(from: newDate)
-                        }
+    private var lifeTimelineSignature: String {
+        "\(lifeTimelineEvents.count)|\(lifeTimelineEvents.first?.id ?? "")|\(lifeTimelineEvents.last?.id ?? "")"
+    }
 
-                        if isSelectedToday {
-                            multiDayBanner
-                            topPrioritiesSection
-                            scheduleSection
-                            endOfDayJournalSection
-                            viewFullTimelineLink
-                        } else if isSelectedTomorrow {
-                            tomorrowHeadsUpCard
-                            scheduleSection
-                        } else {
-                            Text("No plan for this day yet.")
-                                .textStyleCaption()
-                        }
+    private var tomorrowLifeTimelineSignature: String {
+        "\(tomorrowLifeTimelineEvents.count)|\(tomorrowLifeTimelineEvents.first?.id ?? "")|\(tomorrowLifeTimelineEvents.last?.id ?? "")"
+    }
+
+    private var timelineSection: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: DesignSystem.spacingLG, pinnedViews: []) {
+                    todayHeader
+                    LAWeekDateStrip(
+                        days: weekDays,
+                        selectedDate: $selectedCalendarDate
+                    )
+                    .onChange(of: selectedCalendarDate) { _, newDate in
+                        syncSelectedDay(from: newDate)
                     }
-                    .frame(maxWidth: .infinity, minHeight: geo.size.height + 1, alignment: .top)
-                    .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
-                    .safeAreaPadding(.top, DesignSystem.spacingSM)
-                    .padding(.bottom, scrollBottomInset)
+
+                    if isSelectedToday {
+                        TodayMultiDayBanner(planningVM: planningVM, tasksVM: tasksVM)
+                        TodayPrioritiesSection(
+                            tasksVM: tasksVM,
+                            expandedPriorityId: $expandedPriorityId,
+                            onOpenTasks: onOpenTasks,
+                            onStartTask: onStartTask,
+                            onEditTask: onEditTask,
+                            onCompleteTimelineTask: onCompleteTimelineTask
+                        )
+                        TodayScheduleSection(
+                            planningVM: planningVM,
+                            isTomorrow: false,
+                            isPlanningTomorrow: isPlanningTomorrow,
+                            tasksVM: tasksVM,
+                            onViewTimeline: onViewTimeline,
+                            onPlanTomorrow: onPlanTomorrow,
+                            onCompleteTimelineTask: onCompleteTimelineTask,
+                            onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onStartTask: onStartTask,
+                            onEditTask: onEditTask
+                        )
+                        TodayEndOfDayJournalCard(
+                            modulesVM: modulesVM,
+                            tasksVM: tasksVM,
+                            speechManager: speechManager
+                        )
+                        viewFullTimelineLink
+                    } else if isSelectedTomorrow {
+                        tomorrowHeadsUpCard
+                        TodayScheduleSection(
+                            planningVM: planningVM,
+                            isTomorrow: true,
+                            isPlanningTomorrow: isPlanningTomorrow,
+                            tasksVM: tasksVM,
+                            onViewTimeline: onViewTimeline,
+                            onPlanTomorrow: onPlanTomorrow,
+                            onCompleteTimelineTask: onCompleteTimelineTask,
+                            onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onStartTask: onStartTask,
+                            onEditTask: onEditTask
+                        )
+                    } else {
+                        Text("No plan for this day yet.")
+                            .textStyleCaption()
+                    }
                 }
-                .refreshable {
-                    await onRefresh()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
-                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
-                    if raw == AppFeatureTourAnchorID.todayTimeline.rawValue {
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .center)
-                        }
-                    } else if raw == AppFeatureTourAnchorID.todayAssistant.rawValue {
-                        // Give the bottom assistant room: scroll timeline toward the top.
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .top)
-                        }
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+                .safeAreaPadding(.top, DesignSystem.spacingSM)
+                .padding(.bottom, scrollBottomInset)
+            }
+            .refreshable {
+                await onRefresh()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
+                guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
+                if raw == AppFeatureTourAnchorID.todayTimeline.rawValue {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .center)
+                    }
+                } else if raw == AppFeatureTourAnchorID.todayAssistant.rawValue {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .top)
                     }
                 }
             }
@@ -179,17 +218,31 @@ struct TodayView: View {
 
     private var todayHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
-            headerBar
+            TodayHeaderBar(
+                planningVM: planningVM,
+                isSelectedToday: isSelectedToday,
+                isSelectedTomorrow: isSelectedTomorrow,
+                formattedSelectedDate: formattedSelectedDate,
+                isPlanningTomorrow: isPlanningTomorrow,
+                onOpenTasks: onOpenTasks,
+                onReplanDay: onReplanDay,
+                onPlanTomorrow: onPlanTomorrow,
+                onSettings: onSettings
+            )
             Text(formattedSelectedDate)
                 .textStyleCaption()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var formattedSelectedDate: String {
+    private static let selectedDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, d MMMM"
-        return formatter.string(from: selectedCalendarDate)
+        return formatter
+    }()
+
+    private var formattedSelectedDate: String {
+        Self.selectedDateFormatter.string(from: selectedCalendarDate)
     }
 
     private var weekDays: [Date] {
@@ -217,159 +270,6 @@ struct TodayView: View {
         }
     }
 
-    private var topPrioritiesSection: some View {
-        LASectionCard(title: "Top Priorities", icon: "star.fill") {
-            if topPriorityTasks.isEmpty {
-                VStack(spacing: DesignSystem.spacingSM) {
-                    Text("Nothing urgent. Add a task or capture a thought.")
-                        .textStyleCaption()
-                    Button(action: onOpenTasks) {
-                        Text("Add a task")
-                            .font(.system(size: 13, weight: .semibold, design: .default))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } else {
-                VStack(spacing: DesignSystem.spacingSM) {
-                    ForEach(topPriorityTasks) { task in
-                        LAPriorityRow(
-                            title: task.title,
-                            category: task.lifeArea.rawValue,
-                            detail: priorityDetail(for: task),
-                            ringColor: priorityColor(for: task.lifeArea),
-                            isComplete: task.status == .completed,
-                            isActionsExpanded: expandedPriorityId == task.id,
-                            onToggle: {
-                                Task { await togglePriority(task) }
-                            },
-                            onToggleActions: {
-                                withAnimation(.easeInOut(duration: 0.22)) {
-                                    expandedPriorityId = expandedPriorityId == task.id ? nil : task.id
-                                }
-                            },
-                            onStart: {
-                                expandedPriorityId = nil
-                                onStartTask(task)
-                            },
-                            onEdit: {
-                                expandedPriorityId = nil
-                                onEditTask(task)
-                            }
-                        )
-                    }
-
-                    Button(action: onOpenTasks) {
-                        Text("View all tasks →")
-                            .font(.system(size: 13, weight: .semibold, design: .default))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                    }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, DesignSystem.spacingXS)
-                }
-            }
-        }
-        .accessibilityIdentifier("top-priorities")
-    }
-
-    @ViewBuilder
-    private var endOfDayJournalSection: some View {
-        TodayEndOfDayJournalCard(
-            modulesVM: modulesVM,
-            tasksVM: tasksVM,
-            speechManager: speechManager
-        )
-    }
-
-    private func priorityDetail(for task: LifeTask) -> String {
-        var parts: [String] = []
-        if task.estimatedMinutes > 0 {
-            parts.append(task.estimatedMinutes.durationString)
-        }
-        if let scheduled = task.scheduledTime ?? task.scheduledDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = task.scheduledTime != nil ? "h:mm a" : "EEE"
-            parts.append(formatter.string(from: scheduled))
-        }
-        parts.append(task.priority.label)
-        return parts.joined(separator: " · ")
-    }
-
-    private var topPriorityTasks: [LifeTask] {
-        Array(
-            tasksVM.activeTasks
-                .sorted { $0.priority > $1.priority }
-                .prefix(3)
-        )
-    }
-
-    private func priorityColor(for area: LifeArea) -> Color {
-        switch area {
-        case .work: return DesignSystem.focus
-        case .health, .medication, .hydration: return DesignSystem.health
-        case .learning, .creativity: return DesignSystem.learning
-        case .finance, .shopping: return DesignSystem.finance
-        case .relationships: return DesignSystem.relationships
-        case .travel: return DesignSystem.travel
-        case .reflection, .personal, .home: return DesignSystem.reflection
-        }
-    }
-
-    private func togglePriority(_ task: LifeTask) async {
-        if task.status == .completed {
-            return
-        }
-        onCompleteTimelineTask(task.id)
-    }
-
-    private var scheduleSection: some View {
-        LASectionCard(
-            title: "Schedule",
-            subtitle: selectedDay == .tomorrow ? "Preview for tomorrow" : "Tap a task to start or edit",
-            icon: "calendar"
-        ) {
-            if selectedDay == .tomorrow {
-                ExecutiveLiveTimelineView(
-                    rows: planningVM.tomorrowTimelineRows,
-                    thinkingStep: nil,
-                    isProcessing: false,
-                    title: "",
-                    emptyMessage: "Nothing on tomorrow's calendar yet.",
-                    isPreview: true,
-                    showPlanButton: true,
-                    isPlanning: isPlanningTomorrow,
-                    onViewAll: onViewTimeline,
-                    onPlan: onPlanTomorrow
-                )
-            } else {
-                ExecutiveLiveTimelineView(
-                    rows: planningVM.timelineRows,
-                    thinkingStep: planningVM.visibleThinkingStep,
-                    isProcessing: planningVM.isProcessing,
-                    title: "",
-                    emptyMessage: "Your day fills in as you add tasks and commitments.",
-                    onViewAll: onViewTimeline,
-                    onCompleteTask: onCompleteTimelineTask,
-                    onStartTask: { taskId in
-                        if let task = task(for: taskId) { onStartTask(task) }
-                    },
-                    onEditTask: { taskId in
-                        if let task = task(for: taskId) { onEditTask(task) }
-                    },
-                    onRescheduleTask: onRescheduleTimelineTask
-                )
-            }
-        }
-        .featureTourAnchor(.todayTimeline, cornerRadius: DesignSystem.radiusLG)
-        .id(AppFeatureTourAnchorID.todayTimeline.rawValue)
-    }
-
-    private func task(for id: String) -> LifeTask? {
-        tasksVM.tasks.first { $0.id == id }
-            ?? tasksVM.completedToday.first { $0.id == id }
-    }
-
     private var viewFullTimelineLink: some View {
         Button(action: onViewTimeline) {
             Text("View full timeline")
@@ -393,72 +293,6 @@ struct TodayView: View {
         .pickerStyle(.segmented)
     }
 
-    @ViewBuilder
-    private var multiDayBanner: some View {
-        if selectedDay == .today {
-            if let banner = planningVM.activeMultiDayBanner {
-                multiDayBannerView(title: banner.title, dayIndex: banner.dayIndex, dayCount: banner.dayCount, sliceTitle: banner.sliceTitle)
-            } else if let banner = TasksViewModel.activeMultiDayBanner(from: tasksVM.tasks) {
-                multiDayBannerView(title: banner.title, dayIndex: banner.dayIndex, dayCount: banner.dayCount, sliceTitle: banner.sliceTitle)
-            }
-        }
-    }
-
-    private func multiDayBannerView(title: String, dayIndex: Int, dayCount: Int, sliceTitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(title) · day \(dayIndex) of \(dayCount)")
-                .textStyleCaption(color: DesignSystem.focus)
-            Text("Today: \(sliceTitle)")
-                .textStyleCaption()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, DesignSystem.spacingMD)
-        .padding(.vertical, DesignSystem.spacingSM)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(DesignSystem.focus.opacity(0.08))
-        )
-    }
-
-    @ViewBuilder
-    private var activeTimelineSection: some View {
-        switch selectedDay {
-        case .today:
-            ExecutiveLiveTimelineView(
-                rows: planningVM.timelineRows,
-                thinkingStep: planningVM.visibleThinkingStep,
-                isProcessing: planningVM.isProcessing,
-                title: "Your Day",
-                onViewAll: onViewTimeline,
-                onCompleteTask: onCompleteTimelineTask,
-                onRescheduleTask: onRescheduleTimelineTask
-            )
-        case .tomorrow:
-            ExecutiveLiveTimelineView(
-                rows: planningVM.tomorrowTimelineRows,
-                thinkingStep: nil,
-                isProcessing: false,
-                title: tomorrowTimelineTitle,
-                emptyMessage: "Tap Plan to let your brain slot tomorrow's flexible work around fixed commitments.",
-                isPreview: true,
-                showPlanButton: true,
-                isPlanning: isPlanningTomorrow,
-                onViewAll: onViewTimeline,
-                onPlan: onPlanTomorrow
-            )
-        }
-    }
-
-    private var tomorrowTimelineTitle: String {
-        let calendar = Calendar.current
-        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) else {
-            return "Tomorrow"
-        }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
-        return "Tomorrow · \(formatter.string(from: tomorrow))"
-    }
-
     private var tomorrowHeadsUpCard: some View {
         ElevatedSurface(padding: DesignSystem.spacingMD, emphasis: .subtle) {
             VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
@@ -472,10 +306,20 @@ struct TodayView: View {
             }
         }
     }
+}
 
-    // MARK: - Header
+private struct TodayHeaderBar: View {
+    @ObservedObject var planningVM: ExecutivePlanningViewModel
+    let isSelectedToday: Bool
+    let isSelectedTomorrow: Bool
+    let formattedSelectedDate: String
+    let isPlanningTomorrow: Bool
+    var onOpenTasks: () -> Void
+    var onReplanDay: () -> Void
+    var onPlanTomorrow: () -> Void
+    var onSettings: () -> Void
 
-    private var headerBar: some View {
+    var body: some View {
         HStack(alignment: .center) {
             Text(isSelectedToday ? "Today" : isSelectedTomorrow ? "Tomorrow" : formattedSelectedDate)
                 .textStyleScreenTitle()
@@ -545,6 +389,218 @@ struct TodayView: View {
             }
             .accessibilityLabel("Settings")
         }
+    }
+}
+
+private struct TodayMultiDayBanner: View {
+    @ObservedObject var planningVM: ExecutivePlanningViewModel
+    @ObservedObject var tasksVM: TasksViewModel
+
+    var body: some View {
+        if let banner = planningVM.activeMultiDayBanner {
+            multiDayBannerView(title: banner.title, dayIndex: banner.dayIndex, dayCount: banner.dayCount, sliceTitle: banner.sliceTitle)
+        } else if let banner = TasksViewModel.activeMultiDayBanner(from: tasksVM.tasks) {
+            multiDayBannerView(title: banner.title, dayIndex: banner.dayIndex, dayCount: banner.dayCount, sliceTitle: banner.sliceTitle)
+        }
+    }
+
+    private func multiDayBannerView(title: String, dayIndex: Int, dayCount: Int, sliceTitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(title) · day \(dayIndex) of \(dayCount)")
+                .textStyleCaption(color: DesignSystem.focus)
+            Text("Today: \(sliceTitle)")
+                .textStyleCaption()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DesignSystem.spacingMD)
+        .padding(.vertical, DesignSystem.spacingSM)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(DesignSystem.focus.opacity(0.08))
+        )
+    }
+}
+
+// MARK: - Scroll performance: isolate @ObservedObject to leaf sections
+
+private struct TodayPrioritiesSection: View {
+    @ObservedObject var tasksVM: TasksViewModel
+    @Binding var expandedPriorityId: String?
+    var onOpenTasks: () -> Void
+    var onStartTask: (LifeTask) -> Void
+    var onEditTask: (LifeTask) -> Void
+    var onCompleteTimelineTask: (String) -> Void
+
+    @State private var cachedTopTasks: [LifeTask] = []
+    @State private var tasksRevision: Int = 0
+
+    var body: some View {
+        LASectionCard(title: "Top Priorities", icon: "star.fill") {
+            if cachedTopTasks.isEmpty {
+                VStack(spacing: DesignSystem.spacingSM) {
+                    Text("Nothing urgent. Add a task or capture a thought.")
+                        .textStyleCaption()
+                    Button(action: onOpenTasks) {
+                        Text("Add a task")
+                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .foregroundColor(DesignSystem.accentPrimary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                VStack(spacing: DesignSystem.spacingSM) {
+                    ForEach(cachedTopTasks) { task in
+                        LAPriorityRow(
+                            title: task.title,
+                            category: task.lifeArea.rawValue,
+                            detail: priorityDetail(for: task),
+                            ringColor: priorityColor(for: task.lifeArea),
+                            isComplete: task.status == .completed,
+                            isActionsExpanded: expandedPriorityId == task.id,
+                            onToggle: {
+                                if task.status != .completed {
+                                    onCompleteTimelineTask(task.id)
+                                }
+                            },
+                            onToggleActions: {
+                                withAnimation(.easeInOut(duration: 0.22)) {
+                                    expandedPriorityId = expandedPriorityId == task.id ? nil : task.id
+                                }
+                            },
+                            onStart: {
+                                expandedPriorityId = nil
+                                onStartTask(task)
+                            },
+                            onEdit: {
+                                expandedPriorityId = nil
+                                onEditTask(task)
+                            }
+                        )
+                    }
+
+                    Button(action: onOpenTasks) {
+                        Text("View all tasks →")
+                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .foregroundColor(DesignSystem.accentPrimary)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, DesignSystem.spacingXS)
+                }
+            }
+        }
+        .accessibilityIdentifier("top-priorities")
+        .onAppear { refreshTopTasks() }
+        .onChange(of: tasksVM.tasks.count) { _, _ in refreshTopTasks() }
+        .onChange(of: tasksRevision) { _, _ in refreshTopTasks() }
+        .onReceive(tasksVM.objectWillChange) { _ in
+            tasksRevision &+= 1
+        }
+    }
+
+    private func refreshTopTasks() {
+        cachedTopTasks = Array(
+            tasksVM.activeTasks
+                .sorted { $0.priority > $1.priority }
+                .prefix(3)
+        )
+    }
+
+    private static let scheduleFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE"
+        return formatter
+    }()
+
+    private func priorityDetail(for task: LifeTask) -> String {
+        var parts: [String] = []
+        if task.estimatedMinutes > 0 {
+            parts.append(task.estimatedMinutes.durationString)
+        }
+        if let scheduled = task.scheduledTime ?? task.scheduledDate {
+            let formatter = task.scheduledTime != nil ? Self.scheduleFormatter : Self.dayFormatter
+            parts.append(formatter.string(from: scheduled))
+        }
+        parts.append(task.priority.label)
+        return parts.joined(separator: " · ")
+    }
+
+    private func priorityColor(for area: LifeArea) -> Color {
+        switch area {
+        case .work: return DesignSystem.focus
+        case .health, .medication, .hydration: return DesignSystem.health
+        case .learning, .creativity: return DesignSystem.learning
+        case .finance, .shopping: return DesignSystem.finance
+        case .relationships: return DesignSystem.relationships
+        case .travel: return DesignSystem.travel
+        case .reflection, .personal, .home: return DesignSystem.reflection
+        }
+    }
+}
+
+private struct TodayScheduleSection: View {
+    @ObservedObject var planningVM: ExecutivePlanningViewModel
+    let isTomorrow: Bool
+    let isPlanningTomorrow: Bool
+    @ObservedObject var tasksVM: TasksViewModel
+    var onViewTimeline: () -> Void
+    var onPlanTomorrow: () -> Void
+    var onCompleteTimelineTask: (String) -> Void
+    var onRescheduleTimelineTask: (String) -> Void
+    var onStartTask: (LifeTask) -> Void
+    var onEditTask: (LifeTask) -> Void
+
+    var body: some View {
+        LASectionCard(
+            title: "Schedule",
+            subtitle: isTomorrow ? "Preview for tomorrow" : "Tap a task to start or edit",
+            icon: "calendar"
+        ) {
+            if isTomorrow {
+                ExecutiveLiveTimelineView(
+                    rows: planningVM.tomorrowTimelineRows,
+                    thinkingStep: nil,
+                    isProcessing: false,
+                    title: "",
+                    emptyMessage: "Nothing on tomorrow's calendar yet.",
+                    isPreview: true,
+                    showPlanButton: true,
+                    isPlanning: isPlanningTomorrow,
+                    onViewAll: onViewTimeline,
+                    onPlan: onPlanTomorrow
+                )
+            } else {
+                ExecutiveLiveTimelineView(
+                    rows: planningVM.timelineRows,
+                    thinkingStep: planningVM.visibleThinkingStep,
+                    isProcessing: planningVM.isProcessing,
+                    title: "",
+                    emptyMessage: "Your day fills in as you add tasks and commitments.",
+                    onViewAll: onViewTimeline,
+                    onCompleteTask: onCompleteTimelineTask,
+                    onStartTask: { taskId in
+                        if let task = task(for: taskId) { onStartTask(task) }
+                    },
+                    onEditTask: { taskId in
+                        if let task = task(for: taskId) { onEditTask(task) }
+                    },
+                    onRescheduleTask: onRescheduleTimelineTask
+                )
+            }
+        }
+        .featureTourAnchor(.todayTimeline, cornerRadius: DesignSystem.radiusLG)
+        .id(AppFeatureTourAnchorID.todayTimeline.rawValue)
+    }
+
+    private func task(for id: String) -> LifeTask? {
+        tasksVM.tasks.first { $0.id == id }
+            ?? tasksVM.completedToday.first { $0.id == id }
     }
 }
 
