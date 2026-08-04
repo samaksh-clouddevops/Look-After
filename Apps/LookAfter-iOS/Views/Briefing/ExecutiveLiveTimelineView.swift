@@ -82,7 +82,6 @@ struct ExecutiveLiveTimelineView: View {
                 continuousTimeline
             }
         }
-        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: rows.map(\.id))
         .accessibilityIdentifier("screen-live-timeline")
     }
 
@@ -137,7 +136,7 @@ struct ExecutiveLiveTimelineView: View {
     private var continuousTimeline: some View {
         let phases = rowPhases(rows)
 
-        return VStack(spacing: 0) {
+        return LazyVStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 gitRailRow(row: row, phase: phases[index], index: index, isLast: index == rows.count - 1)
             }
@@ -325,8 +324,6 @@ private struct ContinuousTimelineTrack: View {
 private struct TimelineDotView: View {
     let phase: TimelineEventPhase
 
-    @State private var breathing = false
-
     var body: some View {
         ZStack {
             switch phase {
@@ -342,13 +339,11 @@ private struct TimelineDotView: View {
                 Circle()
                     .fill(ExecutiveTimelineVisuals.lime.opacity(0.25))
                     .frame(width: ExecutiveTimelineVisuals.dotCurrent + 10, height: ExecutiveTimelineVisuals.dotCurrent + 10)
-                    .scaleEffect(breathing ? 1.08 : 0.92)
 
                 Circle()
                     .fill(ExecutiveTimelineVisuals.lime)
                     .frame(width: ExecutiveTimelineVisuals.dotCurrent, height: ExecutiveTimelineVisuals.dotCurrent)
-                    .shadow(color: ExecutiveTimelineVisuals.lime.opacity(breathing ? 0.7 : 0.4), radius: breathing ? 10 : 5)
-                    .scaleEffect(breathing ? 1.06 : 1.0)
+                    .shadow(color: ExecutiveTimelineVisuals.lime.opacity(0.45), radius: 6)
 
             case .upcoming:
                 Circle()
@@ -358,12 +353,6 @@ private struct TimelineDotView: View {
             }
         }
         .frame(width: ExecutiveTimelineVisuals.gutterWidth, height: dotRowHeight)
-        .onAppear {
-            guard phase == .current else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-                breathing = true
-            }
-        }
     }
 
     private var dotRowHeight: CGFloat {
@@ -535,10 +524,6 @@ private struct EventTimelineCard: View {
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
         .opacity(row.isCompleted ? 0.72 : ((isCompleting || isRescheduling) ? 0.55 : 1))
         .scaleEffect((isCompleting || isRescheduling) ? 0.98 : 1)
-        .animation(.easeOut(duration: 0.25), value: row.isCompleted)
-        .animation(.easeOut(duration: 0.2), value: isCompleting)
-        .animation(.easeOut(duration: 0.2), value: isRescheduling)
-        .animation(.easeInOut(duration: 0.22), value: isActionsExpanded)
         .contentShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
         .onTapGesture(count: 1) {
             if showsTaskActions {
