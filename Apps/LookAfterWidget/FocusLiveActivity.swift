@@ -1,10 +1,11 @@
 import ActivityKit
 import WidgetKit
 import SwiftUI
+import AppIntents
 import LookAfterCore
 
 private enum LiveActivityStyle {
-    static let accent = DesignSystem.accentPrimary
+    static let accent = WidgetChrome.accentPrimary
     static let textPrimary = DesignSystem.textPrimary
     static let textSecondary = DesignSystem.textSecondary
     static let textMuted = DesignSystem.textMuted
@@ -100,12 +101,29 @@ struct FocusLiveActivity: Widget {
                 }
             }
 
-            Text("Timer pinned — open \(UserFacingCopy.productName) to control.")
-                .font(.dsMetadata())
-                .foregroundColor(LiveActivityStyle.textMuted)
+            HStack(spacing: 10) {
+                Button(intent: PauseFocusIntent()) {
+                    Text(context.state.isPaused ? "Resume" : "Pause")
+                        .font(.dsCaption(weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 10).strokeBorder(LiveActivityStyle.textMuted.opacity(0.4)))
+                }
+                .buttonStyle(.plain)
+                Button(intent: EndFocusIntent()) {
+                    Text("End")
+                        .font(.dsCaption(weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(LiveActivityStyle.accent))
+                        .foregroundStyle(WidgetChrome.accentOnPrimary)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(16)
         .activityBackgroundTint(LiveActivityStyle.background)
+        .widgetURL(LookAfterDeepLink.focus)
     }
 }
 

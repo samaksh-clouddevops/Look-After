@@ -12,6 +12,7 @@ Architecture and contributor guides for the LifeOS monorepo.
 | [architecture/dependencies.md](architecture/dependencies.md) | Package dependency graph |
 | [architecture/macOS-shared-views.md](architecture/macOS-shared-views.md) | Why macOS compiles iOS views |
 | [architecture/adr/](architecture/adr/) | Architecture decision records |
+| [architecture/WIDGET_SYSTEM_V2.md](architecture/WIDGET_SYSTEM_V2.md) | Widget System V2 — Executive Brain ecosystem |
 | [ATTENTION_OS_SPEC.md](ATTENTION_OS_SPEC.md) | Attention OS product spec |
 | [future-work.md](future-work.md) | Deferred improvements |
 

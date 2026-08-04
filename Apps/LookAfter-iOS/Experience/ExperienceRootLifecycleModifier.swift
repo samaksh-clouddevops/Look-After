@@ -86,6 +86,10 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
                     await healthSync.ensureSynced(userId: userId, maxAgeSeconds: 15 * 60)
                 }
             }
+            // Drain widget App Intent command queue on every foreground.
+            Task {
+                await WidgetCommandProcessor.processPending(shell: shell)
+            }
         }
     }
 }
