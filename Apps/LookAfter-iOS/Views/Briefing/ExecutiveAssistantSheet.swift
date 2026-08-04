@@ -131,6 +131,8 @@ struct ExecutiveAssistantSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Replan or adjust my day")
+        .featureTourAnchor(.todayAssistant, cornerRadius: DesignSystem.radiusLG)
+        .id(AppFeatureTourAnchorID.todayAssistant.rawValue)
     }
 
     private var dragHandle: some View {

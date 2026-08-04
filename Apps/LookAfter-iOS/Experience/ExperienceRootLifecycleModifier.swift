@@ -265,5 +265,9 @@ private struct ExperienceRootTourModifier: ViewModifier {
                 guard !isShowing, firebase.isAuthenticated else { return }
                 Task { await presentFeatureTour(.milliseconds(900)) }
             }
+            .task(id: "\(firebase.isAuthenticated)-\(showOnboarding)") {
+                guard firebase.isAuthenticated, !showOnboarding else { return }
+                await presentFeatureTour(.milliseconds(700))
+            }
     }
 }

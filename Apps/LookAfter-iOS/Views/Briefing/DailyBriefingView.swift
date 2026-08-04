@@ -46,6 +46,10 @@ struct DailyBriefingView: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: 0)
+                            .id(AppFeatureTourAnchorID.briefingScrollTop.rawValue)
+
                         firstViewport(onContinue: {
                             withAnimation(.easeInOut(duration: 0.35)) {
                                 proxy.scrollTo(chaptersAnchorID, anchor: .top)
@@ -66,6 +70,19 @@ struct DailyBriefingView: View {
                 .onPreferenceChange(BriefingScrollOffsetKey.self) { scrollOffset = $0 }
                 .refreshable {
                     await reload()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
+                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String,
+                          raw == AppFeatureTourAnchorID.briefingHero.rawValue else { return }
+                    let scrollAnchor = note.userInfo?[TourScrollUserInfoKey.scrollAnchor] as? String ?? "center"
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        if scrollAnchor == "top" {
+                            // Keep greeting + hero below Dynamic Island — scroll to top, not center on hero.
+                            proxy.scrollTo(AppFeatureTourAnchorID.briefingScrollTop.rawValue, anchor: .top)
+                        } else {
+                            proxy.scrollTo(AppFeatureTourAnchorID.briefingHero.rawValue, anchor: .center)
+                        }
+                    }
                 }
             }
 
@@ -117,12 +134,13 @@ struct DailyBriefingView: View {
                 isLoading: briefingVM.isLoadingDayHeroSummary,
                 onContinue: onContinue
             )
-            .featureTourAnchor(.briefingHero)
+            .featureTourAnchor(.briefingHero, cornerRadius: DesignSystem.radiusLG)
+            .id(AppFeatureTourAnchorID.briefingHero.rawValue)
 
             todayAtAGlanceSection
         }
         .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
-        .safeAreaPadding(.top, DesignSystem.spacingSM)
+        .safeAreaPadding(.top, DesignSystem.spacingMD)
         .padding(.bottom, DesignSystem.spacingSM)
     }
 

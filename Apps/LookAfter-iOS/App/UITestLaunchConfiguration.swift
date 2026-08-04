@@ -22,7 +22,9 @@ enum UITestLaunchConfiguration {
         var profile = UserLifeProfileStore.load()
         profile.hasCompletedOnboarding = !ProcessInfo.processInfo.arguments.contains("-ShowOnboarding")
         profile.preferredName = "UITest User"
-        if !ProcessInfo.processInfo.arguments.contains("-ShowFeatureTour") {
+        if ProcessInfo.processInfo.arguments.contains("-ShowFeatureTour") {
+            AppFeatureTourStore.reset()
+        } else {
             AppFeatureTourStore.markCompleted()
         }
         if profile.profileText.isEmpty {

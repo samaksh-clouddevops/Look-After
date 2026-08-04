@@ -37,6 +37,14 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
     }
 }
 
+struct TourTabBarFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .null
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next.isValidObstacle { value = next }
+    }
+}
+
 struct LookAfterBottomNav: View {
     @Binding var selection: LookAfterTab
     var onCapture: () -> Void
@@ -61,6 +69,14 @@ struct LookAfterBottomNav: View {
                         .frame(height: 1)
                 }
         )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: TourTabBarFramePreferenceKey.self,
+                    value: geo.frame(in: .global)
+                )
+            }
+        )
         .accessibilityElement(children: .contain)
     }
 
@@ -79,7 +95,7 @@ struct LookAfterBottomNav: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-capture")
         .accessibilityLabel("Capture")
-        .featureTourAnchor(.tabCapture)
+        .featureTourAnchor(.tabCapture, cornerRadius: 22)
     }
 
     private func tabButton(_ tab: LookAfterTab) -> some View {

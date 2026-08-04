@@ -134,71 +134,85 @@ struct TodayView: View {
     }
 
     private var timelineSection: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: DesignSystem.spacingLG, pinnedViews: []) {
-                todayHeader
-                LAWeekDateStrip(
-                    days: weekDays,
-                    selectedDate: $selectedCalendarDate
-                )
-                .onChange(of: selectedCalendarDate) { _, newDate in
-                    syncSelectedDay(from: newDate)
-                }
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: DesignSystem.spacingLG, pinnedViews: []) {
+                    todayHeader
+                    LAWeekDateStrip(
+                        days: weekDays,
+                        selectedDate: $selectedCalendarDate
+                    )
+                    .onChange(of: selectedCalendarDate) { _, newDate in
+                        syncSelectedDay(from: newDate)
+                    }
 
-                if isSelectedToday {
-                    TodayMultiDayBanner(planningVM: planningVM, tasksVM: tasksVM)
-                    TodayPrioritiesSection(
-                        tasksVM: tasksVM,
-                        expandedPriorityId: $expandedPriorityId,
-                        onOpenTasks: onOpenTasks,
-                        onStartTask: onStartTask,
-                        onEditTask: onEditTask,
-                        onCompleteTimelineTask: onCompleteTimelineTask
-                    )
-                    TodayScheduleSection(
-                        planningVM: planningVM,
-                        isTomorrow: false,
-                        isPlanningTomorrow: isPlanningTomorrow,
-                        tasksVM: tasksVM,
-                        onViewTimeline: onViewTimeline,
-                        onPlanTomorrow: onPlanTomorrow,
-                        onCompleteTimelineTask: onCompleteTimelineTask,
-                        onRescheduleTimelineTask: onRescheduleTimelineTask,
-                        onStartTask: onStartTask,
-                        onEditTask: onEditTask
-                    )
-                    TodayEndOfDayJournalCard(
-                        modulesVM: modulesVM,
-                        tasksVM: tasksVM,
-                        speechManager: speechManager
-                    )
-                    viewFullTimelineLink
-                } else if isSelectedTomorrow {
-                    tomorrowHeadsUpCard
-                    TodayScheduleSection(
-                        planningVM: planningVM,
-                        isTomorrow: true,
-                        isPlanningTomorrow: isPlanningTomorrow,
-                        tasksVM: tasksVM,
-                        onViewTimeline: onViewTimeline,
-                        onPlanTomorrow: onPlanTomorrow,
-                        onCompleteTimelineTask: onCompleteTimelineTask,
-                        onRescheduleTimelineTask: onRescheduleTimelineTask,
-                        onStartTask: onStartTask,
-                        onEditTask: onEditTask
-                    )
-                } else {
-                    Text("No plan for this day yet.")
-                        .textStyleCaption()
+                    if isSelectedToday {
+                        TodayMultiDayBanner(planningVM: planningVM, tasksVM: tasksVM)
+                        TodayPrioritiesSection(
+                            tasksVM: tasksVM,
+                            expandedPriorityId: $expandedPriorityId,
+                            onOpenTasks: onOpenTasks,
+                            onStartTask: onStartTask,
+                            onEditTask: onEditTask,
+                            onCompleteTimelineTask: onCompleteTimelineTask
+                        )
+                        TodayScheduleSection(
+                            planningVM: planningVM,
+                            isTomorrow: false,
+                            isPlanningTomorrow: isPlanningTomorrow,
+                            tasksVM: tasksVM,
+                            onViewTimeline: onViewTimeline,
+                            onPlanTomorrow: onPlanTomorrow,
+                            onCompleteTimelineTask: onCompleteTimelineTask,
+                            onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onStartTask: onStartTask,
+                            onEditTask: onEditTask
+                        )
+                        TodayEndOfDayJournalCard(
+                            modulesVM: modulesVM,
+                            tasksVM: tasksVM,
+                            speechManager: speechManager
+                        )
+                        viewFullTimelineLink
+                    } else if isSelectedTomorrow {
+                        tomorrowHeadsUpCard
+                        TodayScheduleSection(
+                            planningVM: planningVM,
+                            isTomorrow: true,
+                            isPlanningTomorrow: isPlanningTomorrow,
+                            tasksVM: tasksVM,
+                            onViewTimeline: onViewTimeline,
+                            onPlanTomorrow: onPlanTomorrow,
+                            onCompleteTimelineTask: onCompleteTimelineTask,
+                            onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onStartTask: onStartTask,
+                            onEditTask: onEditTask
+                        )
+                    } else {
+                        Text("No plan for this day yet.")
+                            .textStyleCaption()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+                .safeAreaPadding(.top, DesignSystem.spacingSM)
+                .padding(.bottom, scrollBottomInset)
+            }
+            .refreshable {
+                await onRefresh()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
+                guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
+                if raw == AppFeatureTourAnchorID.todayTimeline.rawValue {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .center)
+                    }
+                } else if raw == AppFeatureTourAnchorID.todayAssistant.rawValue {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .top)
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .top)
-            .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
-            .safeAreaPadding(.top, DesignSystem.spacingSM)
-            .padding(.bottom, scrollBottomInset)
-        }
-        .refreshable {
-            await onRefresh()
         }
     }
 
@@ -580,7 +594,8 @@ private struct TodayScheduleSection: View {
                 )
             }
         }
-        .featureTourAnchor(.todayTimeline)
+        .featureTourAnchor(.todayTimeline, cornerRadius: DesignSystem.radiusLG)
+        .id(AppFeatureTourAnchorID.todayTimeline.rawValue)
     }
 
     private func task(for id: String) -> LifeTask? {

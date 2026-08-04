@@ -132,7 +132,8 @@ struct ExecutiveProfileView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .featureTourAnchor(.youProfile)
+        .featureTourAnchor(.youProfile, cornerRadius: DesignSystem.radiusMD)
+        .id(AppFeatureTourAnchorID.youProfile.rawValue)
     }
 
     private var profileInitials: String {
