@@ -39,11 +39,11 @@ struct AppFeatureTourOverlay: View {
             }
             .onAppear {
                 publishChrome(geo: geo)
-                focusTourCard = true
+                scheduleAccessibilityFocus()
             }
             .onChange(of: geo.size) { _, _ in publishChrome(geo: geo) }
             .onChange(of: coordinator.stepIndex) { _, _ in
-                focusTourCard = true
+                scheduleAccessibilityFocus()
                 publishChrome(geo: geo)
             }
             .onChange(of: dynamicTypeSize) { _, _ in publishChrome(geo: geo) }
@@ -88,15 +88,9 @@ struct AppFeatureTourOverlay: View {
     ) -> some View {
         cardContent
             .frame(width: layoutWidth, alignment: .topLeading)
-            .background(
-                GeometryReader { cardGeo in
-                    Color.clear.preference(
-                        key: TourCardSizeKey.self,
-                        value: cardGeo.size
-                    )
-                }
-            )
-            .onPreferenceChange(TourCardSizeKey.self) { size in
+            .onGeometryChange(for: CGSize.self) { proxy in
+                proxy.size
+            } action: { size in
                 applyMeasuredCardSize(size, geo: geo)
             }
             .overlay {
@@ -122,7 +116,17 @@ struct AppFeatureTourOverlay: View {
         let deltaH = abs(size.height - measuredCardSize.height)
         guard deltaW > 2 || deltaH > 2 else { return }
         measuredCardSize = size
-        publishChrome(geo: geo)
+        Task { @MainActor in
+            publishChrome(geo: geo)
+        }
+    }
+
+    /// Avoid forcing AX tree sync during SwiftUI layout passes.
+    private func scheduleAccessibilityFocus() {
+        Task { @MainActor in
+            await Task.yield()
+            focusTourCard = true
+        }
     }
 
     @ViewBuilder
@@ -331,14 +335,6 @@ struct AppFeatureTourOverlay: View {
 }
 
 // MARK: - Supporting views
-
-private struct TourCardSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        let next = nextValue()
-        if next.width > 1, next.height > 1 { value = next }
-    }
-}
 
 private struct TourArrowView: View {
     let edge: TourArrowEdge

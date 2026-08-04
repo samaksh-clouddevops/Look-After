@@ -4,6 +4,12 @@ import LookAfterCore
 
 // MARK: - Anchors
 
+/// Batch anchor payload for tests and legacy batch updates.
+struct AppFeatureTourAnchorPayload: Equatable {
+    var frame: CGRect
+    var cornerRadius: CGFloat
+}
+
 enum AppFeatureTourAnchorID: String, Hashable, CaseIterable, Sendable {
     case tabBriefing
     case tabToday

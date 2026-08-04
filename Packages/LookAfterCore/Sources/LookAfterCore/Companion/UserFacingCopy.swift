@@ -357,11 +357,17 @@ public enum UserFacingCopy {
 
     private static func replaceCaseInsensitive(_ target: String, with replacement: String, in source: String) -> String {
         guard !target.isEmpty else { return source }
-        var result = source
-        var searchRange = result.startIndex..<result.endIndex
-        while let range = result.range(of: target, options: .caseInsensitive, range: searchRange) {
-            result.replaceSubrange(range, with: replacement)
-            searchRange = range.lowerBound..<result.endIndex
+        var result = ""
+        var remaining = Substring(source)
+        while !remaining.isEmpty {
+            if let range = remaining.range(of: target, options: .caseInsensitive) {
+                result.append(contentsOf: remaining[..<range.lowerBound])
+                result.append(replacement)
+                remaining = remaining[range.upperBound...]
+            } else {
+                result.append(contentsOf: remaining)
+                break
+            }
         }
         return result
     }

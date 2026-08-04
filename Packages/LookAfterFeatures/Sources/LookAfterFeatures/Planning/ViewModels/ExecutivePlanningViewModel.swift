@@ -127,7 +127,11 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         visibleThinkingStep = "Reconsidering the rest of your day"
 
         let analysis = PlanningReasoningPipeline.analyze(message: "Replan my day", context: context.planningContext)
-        await animateThinking(steps: analysis.thinkingSteps)
+        thinkingSteps = analysis.thinkingSteps
+        let animationTask = Task { @MainActor in
+            await self.animateThinking(steps: analysis.thinkingSteps)
+        }
+        defer { animationTask.cancel() }
 
         do {
             let result = try await replanEngine.replan(context: context)
@@ -158,24 +162,46 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         refreshContext: () async -> Void
     ) async {
         let calendar = Calendar.current
+        let profile = UserLifeProfileStore.load()
+        let windows = SchedulingWindows.from(profile: profile)
+        let workHours = PlanningSchedulePolicy.WorkHours.from(profile: profile)
         let taskByID = Dictionary(uniqueKeysWithValues: tasksVM.tasks.map { ($0.id, $0) })
-        let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
+        var schedulingPool = tasksVM.tasks.filter { task in
+            guard let scheduledDate = task.scheduledDate, task.scheduledTime != nil else { return false }
+            return calendar.isDateInToday(scheduledDate)
+        }
+        let dayStart = calendar.startOfDay(for: Date())
 
         for suggestion in result.scheduleChanges {
             guard var task = taskByID[suggestion.taskID], !task.isFixedTimeEvent else { continue }
             if suggestion.deferToTomorrow {
-                task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
+                task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: dayStart)
                 task.scheduledTime = nil
+                task.scheduledEndTime = nil
             } else if let hour = suggestion.startHour, let minute = suggestion.startMinute,
-                      let time = PlanningSchedulePolicy.validatedSchedule(
+                      let time = PlanningSchedulePolicy.validatedScheduleInWindows(
+                        hour: hour,
+                        minute: minute,
+                        windows: windows
+                      ) ?? PlanningSchedulePolicy.validatedSchedule(
                         hour: hour,
                         minute: minute,
                         workHours: workHours
                       ) {
-                task.scheduledDate = calendar.startOfDay(for: Date())
-                task.scheduledTime = time
+                let resolved = ScheduleAssignmentHelper.scheduledTimeAvoidingOverlap(
+                    proposed: time,
+                    task: task,
+                    existingTasks: schedulingPool,
+                    on: dayStart,
+                    calendar: calendar
+                )
+                ScheduleAssignmentHelper.applySchedule(to: &task, start: resolved, on: dayStart, calendar: calendar)
             }
             tasksVM.updateTask(task)
+            schedulingPool.removeAll { $0.id == task.id }
+            if task.scheduledTime != nil {
+                schedulingPool.append(task)
+            }
         }
 
         if !result.mutations.isEmpty {
@@ -186,8 +212,10 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 modulesVM: modulesVM,
                 userId: userId,
                 medications: &meds,
-                lifeProfile: UserLifeProfileStore.load()
+                lifeProfile: profile
             )
+        } else {
+            await tasksVM.reconcileTodaySchedule(userId: userId)
         }
 
         await refreshContext()
@@ -287,7 +315,11 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         medications = context.medications
 
         let analysis = PlanningReasoningPipeline.analyze(message: message, context: context)
-        await animateThinking(steps: Array(analysis.thinkingSteps.prefix(3)))
+        thinkingSteps = analysis.thinkingSteps
+        let animationTask = Task { @MainActor in
+            await self.animateThinking(steps: analysis.thinkingSteps)
+        }
+        defer { animationTask.cancel() }
 
         do {
             let response = try await engine.processTurn(
@@ -488,10 +520,11 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     private func animateThinking(steps: [String]) async {
         thinkingSteps = steps
         for step in steps {
+            guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.25)) {
                 visibleThinkingStep = step
             }
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            try? await Task.sleep(nanoseconds: 300_000_000)
         }
     }
 

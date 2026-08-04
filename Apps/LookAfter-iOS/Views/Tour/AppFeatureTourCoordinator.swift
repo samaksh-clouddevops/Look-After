@@ -126,20 +126,47 @@ final class AppFeatureTourCoordinator: ObservableObject {
         requestedTab = nil
         layoutProposal = nil
         isAwaitingScroll = false
+        anchors = [:]
     }
 
     // MARK: - Anchor API
 
-    func updateAnchor(_ id: AppFeatureTourAnchorID, frame: CGRect, cornerRadius: CGFloat = 16) {
-        anchors[id] = TourAnchorGeometry(
+    func reportAnchorFrame(_ id: AppFeatureTourAnchorID, frame: CGRect, cornerRadius: CGFloat) {
+        guard isActive else { return }
+
+        let geometry = TourAnchorGeometry(
             frame: frame,
             cornerRadius: cornerRadius,
             isVisible: frame.width > 0.5 && frame.height > 0.5
         )
-        scheduleLayoutRecompute()
+        guard anchors[id] != geometry else { return }
+
+        let priorFocusFrame = currentStep.anchor.flatMap { anchors[$0]?.frame }
+        anchors[id] = geometry
+
+        guard id == currentStep.anchor else { return }
+        let oldFrame = priorFocusFrame ?? .null
+        if !oldFrame.equal(to: frame, epsilon: 2) {
+            scheduleLayoutRecompute(delay: 0.12)
+        }
     }
 
-    /// Full preference snapshot — replaces registry so stale off-screen anchors drop out.
+    func reportTabBarFrame(_ frame: CGRect) {
+        guard isActive else { return }
+        guard frame.isValidObstacle else { return }
+        let changed = abs(frame.minY - tabBarFrame.minY) > 2
+            || abs(frame.height - tabBarFrame.height) > 2
+            || abs(frame.minX - tabBarFrame.minX) > 2
+        guard changed else { return }
+        tabBarFrame = frame
+        scheduleLayoutRecomputeIfActive()
+    }
+
+    func updateAnchor(_ id: AppFeatureTourAnchorID, frame: CGRect, cornerRadius: CGFloat = 16) {
+        reportAnchorFrame(id, frame: frame, cornerRadius: cornerRadius)
+    }
+
+    /// Legacy batch API — kept for tests; production uses per-anchor `reportAnchorFrame`.
     func replaceAnchors(_ payloads: [AppFeatureTourAnchorID: AppFeatureTourAnchorPayload]) {
         let prior = anchors
         var next: [AppFeatureTourAnchorID: TourAnchorGeometry] = [:]
@@ -150,11 +177,26 @@ final class AppFeatureTourCoordinator: ObservableObject {
                 isVisible: payload.frame.width > 0.5 && payload.frame.height > 0.5
             )
         }
+        guard !anchorRegistryEqual(prior, next) else { return }
         anchors = next
         guard isActive else { return }
         if anchorMeaningfullyChanged(from: prior, to: next, focus: currentStep.anchor) {
             scheduleLayoutRecompute(delay: 0.12)
         }
+    }
+
+    private func anchorRegistryEqual(
+        _ lhs: [AppFeatureTourAnchorID: TourAnchorGeometry],
+        _ rhs: [AppFeatureTourAnchorID: TourAnchorGeometry]
+    ) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        for (id, geometry) in lhs {
+            guard let other = rhs[id] else { return false }
+            if geometry.cornerRadius != other.cornerRadius { return false }
+            if geometry.isVisible != other.isVisible { return false }
+            if !geometry.frame.equal(to: other.frame, epsilon: 0.5) { return false }
+        }
+        return true
     }
 
     func updateLayoutChrome(
@@ -181,7 +223,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
         if let cardSize, cardChanged {
             measuredCardSize = cardSize
         }
-        scheduleLayoutRecompute(delay: 0.12)
+        scheduleLayoutRecomputeIfActive()
     }
 
     // MARK: - Highlight helpers

@@ -32,6 +32,7 @@ struct DailyBriefingView: View {
     @State private var showCycleLog = false
     @State private var showCycleDashboard = false
     @State private var scrollOffset: CGFloat = 0
+    @State private var isReloading = false
 
     private let chaptersAnchorID = "briefing-chapters-start"
 
@@ -92,7 +93,7 @@ struct DailyBriefingView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: showsScrollHint)
-        .task(id: refreshToken) {
+        .task(id: externalDataToken) {
             await reload()
         }
         .onChange(of: analytics.lastRefreshAt) { _, _ in
@@ -495,17 +496,17 @@ struct DailyBriefingView: View {
 
     // MARK: - Data
 
-    private var refreshToken: String {
+    /// Stable inputs only — excludes orchestrator outputs (`generatedAt`, executive score)
+    /// so `reload()` → `refreshContext()` does not re-trigger this task in a loop.
+    private var externalDataToken: String {
         [
             userId,
-            String(brainVM.cognitiveSnapshot?.executiveFunctionScore ?? 0),
+            String(enableHealth),
             String(tasksVM.tasks.count),
             String(tasksVM.completedToday.count),
             String(brainVM.healthSummary?.totalSleepMinutes ?? 0),
             String(brainVM.healthSummary?.stepCount ?? 0),
-            healthSync.lastSyncDate?.timeIntervalSince1970.description ?? "0",
-            brainVM.flowSurface?.generatedAt.description ?? "",
-            shell.contextOrchestrator.briefing?.generatedAt.description ?? "",
+            healthSync.lastSyncDate.map { String(Int($0.timeIntervalSince1970 / 60)) } ?? "0",
         ].joined(separator: "-")
     }
 
@@ -515,6 +516,10 @@ struct DailyBriefingView: View {
     }
 
     private func reload() async {
+        guard !isReloading else { return }
+        isReloading = true
+        defer { isReloading = false }
+
         let resolvedId = FirebaseManager.shared.resolvedUserId.isEmpty ? userId : FirebaseManager.shared.resolvedUserId
         if enableHealth, !resolvedId.isEmpty {
             await healthSync.ensureSynced(userId: resolvedId)
@@ -526,19 +531,6 @@ struct DailyBriefingView: View {
             userName: resolvedName,
             peakStartHour: peakStart > 0 ? peakStart : 9
         )
-        await briefingVM.refresh(
-            brainVM: brainVM,
-            tasksVM: tasksVM,
-            userId: resolvedId,
-            userName: resolvedName,
-            healthKitAvailable: enableHealth && HealthManager().isAvailable,
-            heroBriefing: shell.contextOrchestrator.briefing?.hero,
-            brainDecision: shell.contextOrchestrator.brainState?.decision,
-            lifeSnapshot: shell.contextOrchestrator.snapshot,
-            lifeTimelineEvents: shell.contextOrchestrator.lifeTimelineEvents,
-            tomorrowLifeTimelineEvents: shell.contextOrchestrator.tomorrowLifeTimelineEvents
-        )
-        briefingVM.updateExecutiveCapacity(shell.contextOrchestrator.executiveCapacity)
     }
 }
 

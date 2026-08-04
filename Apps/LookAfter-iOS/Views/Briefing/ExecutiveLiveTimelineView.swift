@@ -199,7 +199,7 @@ struct ExecutiveLiveTimelineView: View {
                         return {
                             completingTaskIds.insert(taskId)
                             onCompleteTask?(taskId)
-                            Task {
+                            Task { @MainActor in
                                 try? await Task.sleep(nanoseconds: 600_000_000)
                                 completingTaskIds.remove(taskId)
                             }
@@ -210,7 +210,7 @@ struct ExecutiveLiveTimelineView: View {
                         return {
                             reschedulingTaskIds.insert(taskId)
                             onRescheduleTask(taskId)
-                            Task {
+                            Task { @MainActor in
                                 try? await Task.sleep(nanoseconds: 800_000_000)
                                 reschedulingTaskIds.remove(taskId)
                             }

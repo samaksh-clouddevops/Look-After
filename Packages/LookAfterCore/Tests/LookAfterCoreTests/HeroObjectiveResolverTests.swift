@@ -81,4 +81,12 @@ final class HeroObjectiveResolverTests: XCTestCase {
         let headline = HumanLanguage.outcomeHeadline(title: "Deep Work Block 3")
         XCTAssertEqual(headline, "Pick up where you left off")
     }
+
+    func testHumanizeBriefingLineRecoveryModeDoesNotLoop() {
+        let input = "You are in recovery mode today so take it easy and protect your sleep."
+        let output = UserFacingCopy.humanizeBriefingLine(input)
+        XCTAssertTrue(output.contains("in recovery mode"))
+        XCTAssertFalse(output.contains("in in in"))
+        XCTAssertLessThan(output.count, input.count + 40)
+    }
 }

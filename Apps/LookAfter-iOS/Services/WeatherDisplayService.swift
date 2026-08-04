@@ -25,6 +25,9 @@ final class WeatherDisplayService: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private var locationContinuation: CheckedContinuation<CLLocation, Error>?
     private var isRefreshing = false
+    /// Updated only from `locationManagerDidChangeAuthorization` — never read synchronously from CoreLocation on the main thread.
+    private var cachedAuthorizationStatus: CLAuthorizationStatus = .notDetermined
+    private var hasRequestedAuthorization = false
 
     override init() {
         super.init()
@@ -37,20 +40,43 @@ final class WeatherDisplayService: NSObject, ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        guard CLLocationManager.locationServicesEnabled() else { return }
-
-        let status = locationManager.authorizationStatus
-        if status == .notDetermined {
-            locationManager.requestWhenInUseAuthorization()
+        switch cachedAuthorizationStatus {
+        case .notDetermined:
+            requestAuthorizationIfNeeded()
+            return
+        case .authorizedWhenInUse, .authorizedAlways:
+            break
+        case .restricted, .denied:
+            return
+        @unknown default:
             return
         }
-        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
 
         do {
             let location = try await requestLocation()
             snapshot = try await fetchOpenMeteoWeather(for: location)
         } catch {
             // Keep last snapshot; unavailable stays as placeholder.
+        }
+    }
+
+    private func requestAuthorizationIfNeeded() {
+        guard !hasRequestedAuthorization else { return }
+        hasRequestedAuthorization = true
+        locationManager.requestWhenInUseAuthorization()
+    }
+
+    private func applyAuthorizationStatus(_ status: CLAuthorizationStatus) {
+        cachedAuthorizationStatus = status
+        switch status {
+        case .notDetermined:
+            requestAuthorizationIfNeeded()
+        case .authorizedWhenInUse, .authorizedAlways:
+            Task { await refresh() }
+        case .restricted, .denied:
+            break
+        @unknown default:
+            break
         }
     }
 
@@ -114,10 +140,7 @@ final class WeatherDisplayService: NSObject, ObservableObject {
 extension WeatherDisplayService: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            let status = manager.authorizationStatus
-            if status == .authorizedWhenInUse || status == .authorizedAlways {
-                await refresh()
-            }
+            applyAuthorizationStatus(manager.authorizationStatus)
         }
     }
 

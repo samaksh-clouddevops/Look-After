@@ -51,16 +51,6 @@ struct ExecutiveAssistantSheet: View {
                 }
             }
             .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: isExpanded)
-            .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: intrinsicSheetHeight)
-            .overlay(alignment: .bottom) {
-                if isExpanded {
-                    heightMeasurementProbe
-                        .frame(width: geo.size.width)
-                        .hidden()
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
         }
         .onChange(of: planningVM.isProcessing) { _, processing in
             if processing { expand() }
@@ -144,24 +134,6 @@ struct ExecutiveAssistantSheet: View {
             .accessibilityHidden(true)
     }
 
-    private var heightMeasurementProbe: some View {
-        VStack(spacing: 0) {
-            dragHandle
-            conversationView(maxPanelHeight: nil)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: SheetIntrinsicHeightKey.self, value: proxy.size.height)
-            }
-        )
-        .onPreferenceChange(SheetIntrinsicHeightKey.self) { height in
-            guard height > 0 else { return }
-            intrinsicSheetHeight = height
-        }
-    }
-
     private func conversationView(maxPanelHeight: CGFloat?) -> some View {
         ExecutivePlanningConversationView(
             planningVM: planningVM,
@@ -182,6 +154,18 @@ struct ExecutiveAssistantSheet: View {
             },
             onStartTyping: { expand() }
         )
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onGeometryChange(for: CGFloat.self) { geo in
+                        geo.size.height
+                    } action: { height in
+                        guard height > 0 else { return }
+                        guard abs(height - intrinsicSheetHeight) > 2 else { return }
+                        intrinsicSheetHeight = height
+                    }
+            }
+        }
     }
 
     private func expandedDragGesture(maxExpandedHeight: CGFloat) -> some Gesture {
@@ -234,14 +218,6 @@ struct ExecutiveAssistantSheet: View {
                 }
             }
         }
-    }
-}
-
-private struct SheetIntrinsicHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 

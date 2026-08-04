@@ -48,6 +48,7 @@ public struct PlanMutationApplier {
     ) async -> ApplyResult {
         var result = ApplyResult()
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: lifeProfile)
+        let windows = SchedulingWindows.from(profile: lifeProfile)
         let taskByID = Dictionary(uniqueKeysWithValues: tasksVM.tasks.map { ($0.id, $0) })
         let taskByTitle = Dictionary(
             tasksVM.tasks.map { ($0.title.lowercased(), $0) },
@@ -55,6 +56,7 @@ public struct PlanMutationApplier {
         )
         var pendingCreates: [PendingCreate] = []
         var schedulingPool = tasksScheduledToday(from: tasksVM.schedulingContext)
+        let dayStart = calendar.startOfDay(for: Date())
 
         for mutation in mutations {
             switch mutation.kind {
@@ -98,7 +100,8 @@ public struct PlanMutationApplier {
                 let preferredStart = preferredStart(
                     hour: mutation.startHour,
                     minute: mutation.startMinute,
-                    workHours: workHours
+                    workHours: workHours,
+                    windows: windows
                 )
                 pendingCreates.append(
                     PendingCreate(
@@ -116,27 +119,27 @@ public struct PlanMutationApplier {
                     result.skippedReasons.append("Could not reschedule task")
                     continue
                 }
-                guard let scheduled = PlanningSchedulePolicy.validatedSchedule(
+                guard let scheduled = PlanningSchedulePolicy.validatedScheduleInWindows(
+                    hour: hour,
+                    minute: minute,
+                    windows: windows
+                ) ?? PlanningSchedulePolicy.validatedSchedule(
                     hour: hour,
                     minute: minute,
                     workHours: workHours
                 ) else {
-                    result.skippedReasons.append("Could not reschedule \"\(task.title)\" — outside work hours or past")
+                    result.skippedReasons.append("Could not reschedule \"\(task.title)\" — outside allowed windows or past")
                     continue
                 }
-                let dayStart = calendar.startOfDay(for: Date())
-                task.scheduledDate = dayStart
-                task.scheduledTime = scheduled
-                let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
-                task.scheduledEndTime = scheduled.addingTimeInterval(TimeInterval(duration * 60))
 
-                let others = schedulingPool.filter { $0.id != task.id }
-                if let window = TaskScheduleInterval.window(for: task, on: dayStart, calendar: calendar),
-                   TaskScheduleInterval.intervals(from: others, on: dayStart, calendar: calendar)
-                    .contains(where: { window.overlaps($0) }) {
-                    result.skippedReasons.append("Could not reschedule \"\(task.title)\" — overlaps an existing task")
-                    continue
-                }
+                let resolved = ScheduleAssignmentHelper.scheduledTimeAvoidingOverlap(
+                    proposed: scheduled,
+                    task: task,
+                    existingTasks: schedulingPool,
+                    on: dayStart,
+                    calendar: calendar
+                )
+                ScheduleAssignmentHelper.applySchedule(to: &task, start: resolved, on: dayStart, calendar: calendar)
 
                 tasksVM.updateTask(task)
                 schedulingPool.removeAll { $0.id == task.id }
@@ -229,10 +232,12 @@ public struct PlanMutationApplier {
                     preferredStart: $0.preferredStart
                 )
             }
-            let allocations = DaySlotAllocator.allocate(
+            let allocations = DaySlotAllocator.allocateAcrossWindows(
                 requests: requests,
                 existingTasks: schedulingPool,
-                workHours: workHours
+                windows: windows,
+                on: dayStart,
+                calendar: calendar
             )
             let allocationByID = Dictionary(uniqueKeysWithValues: allocations.map { ($0.id, $0.scheduledTime) })
 
@@ -271,10 +276,15 @@ public struct PlanMutationApplier {
     private func preferredStart(
         hour: Int?,
         minute: Int?,
-        workHours: PlanningSchedulePolicy.WorkHours
+        workHours: PlanningSchedulePolicy.WorkHours,
+        windows: SchedulingWindows
     ) -> Date? {
         guard let hour, let minute else { return nil }
-        return PlanningSchedulePolicy.validatedSchedule(
+        return PlanningSchedulePolicy.validatedScheduleInWindows(
+            hour: hour,
+            minute: minute,
+            windows: windows
+        ) ?? PlanningSchedulePolicy.validatedSchedule(
             hour: hour,
             minute: minute,
             workHours: workHours
