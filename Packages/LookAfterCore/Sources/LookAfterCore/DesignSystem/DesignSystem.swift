@@ -1,4 +1,4 @@
-Fix e piimport SwiftUI
+import SwiftUI
 
 /// Look After Design System V4 — semantic tokens, calm Apple-quality hierarchy.
 public struct DesignSystem {
@@ -21,6 +21,7 @@ public struct DesignSystem {
     // MARK: - Surfaces & borders
 
     public static let border = Color.adaptive(light: "E5E7EB", dark: "31353A")
+    public static let borderPrimary = border
     public static let divider = Color.adaptive(light: "ECECEC", dark: "2A2E33")
 
     // MARK: - Accent (primary action — ~5% of UI)

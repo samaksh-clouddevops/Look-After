@@ -132,6 +132,8 @@ public struct WidgetEmptyState: View {
 }
 
 public struct WidgetStaleBanner: View {
+    public init() {}
+
     public var body: some View {
         Text("Open \(UserFacingCopy.productName) to refresh")
             .font(.dsCaption())
