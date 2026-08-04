@@ -18,6 +18,12 @@ struct ContentView: View {
             .environmentObject(shell)
             .lookAfterThemed()
             .preferredColorScheme(appearance.colorScheme)
+            .onOpenURL { url in
+                shell.handleDeepLink(url)
+                Task {
+                    await WidgetCommandProcessor.processPending(shell: shell)
+                }
+            }
     }
 }
 

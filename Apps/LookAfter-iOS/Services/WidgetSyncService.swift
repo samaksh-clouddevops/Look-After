@@ -1,5 +1,6 @@
 import Foundation
 import WidgetKit
+import EventKit
 import LookAfterCore
 import LookAfterData
 import LookAfterFeatures
@@ -7,36 +8,51 @@ import LookAfterFeatures
 /// Builds widget snapshot from app state and refreshes home screen + pinned Live Activity.
 @MainActor
 final class WidgetSyncService {
-    
+
     static let shared = WidgetSyncService()
-    
+
     private let pinNowKey = "pinNowToLockScreen"
-    
+    private let eventStore = EKEventStore()
+
     private init() {}
-    
+
     var isNowPinned: Bool {
         UserDefaults.standard.bool(forKey: pinNowKey)
     }
-    
+
     func setNowPinned(_ pinned: Bool) {
         UserDefaults.standard.set(pinned, forKey: pinNowKey)
         if pinned {
             let snapshot = WidgetDataStore.load()
-            if snapshot.topTaskTitle != nil {
+            if snapshot.topTaskTitle != nil || snapshot.executive?.title != nil {
                 LiveActivityManager.shared.startNowPin(from: snapshot)
             }
         } else {
             LiveActivityManager.shared.endNowPin()
         }
     }
-    
+
+    /// Auto-unpin Now Pin when the pinned hero task completes.
+    func handleTaskCompleted(taskID: String) {
+        guard isNowPinned else { return }
+        let snap = WidgetDataStore.load()
+        let pinnedID = snap.executive?.taskID
+        if pinnedID == taskID || snap.topTaskTitle != nil {
+            // If completed task was the hero, drop pin.
+            if pinnedID == taskID {
+                setNowPinned(false)
+            }
+        }
+    }
+
     func sync(brainVM: BrainViewModel, tasksVM: TasksViewModel, adhdVM: ADHDViewModel? = nil) {
         let snapshot = makeSnapshot(brainVM: brainVM, tasksVM: tasksVM, adhdVM: adhdVM)
         WidgetDataStore.save(snapshot)
         reloadWidgetTimelines()
 
         if isNowPinned {
-            if snapshot.topTaskTitle != nil || snapshot.executive != nil {
+            let hasHero = (snapshot.executive?.taskID != nil) || (snapshot.topTaskTitle != nil)
+            if hasHero {
                 if LiveActivityManager.shared.isNowPinned {
                     LiveActivityManager.shared.updateNowPin(from: snapshot)
                 } else {
@@ -56,9 +72,7 @@ final class WidgetSyncService {
             LookAfterWidgetKind.focus,
             LookAfterWidgetKind.health,
             LookAfterWidgetKind.capture,
-            LookAfterWidgetKind.nowV1,
-            LookAfterWidgetKind.energyV1,
-            LookAfterWidgetKind.tasksV1
+            LookAfterWidgetKind.medication
         ]
         for kind in kinds {
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
@@ -158,13 +172,21 @@ final class WidgetSyncService {
         let todaySummary = makeTodaySummary(tasksVM: tasksVM, brainVM: brainVM, topTask: topTask)
         let focusState = makeFocusState(adhdVM: adhdVM)
         let medStatus = makeMedicationStatus()
-        let recovery = presentation.capacity.sleepLabel
-            ?? health?.totalSleepMinutes.map { mins -> String in
-                let h = mins / 60
-                if h >= 7 { return "Good recovery" }
-                if h >= 5.5 { return "Fair recovery" }
-                return "Protect rest"
-            }
+        let hasHealth = health != nil && (
+            (health?.totalSleepMinutes ?? 0) > 0
+            || (health?.stepCount ?? 0) > 0
+            || health?.hrvAverage != nil
+        )
+        let recovery = hasHealth
+            ? (presentation.capacity.sleepLabel
+                ?? health?.totalSleepMinutes.map { mins -> String in
+                    let h = mins / 60
+                    if h >= 7 { return "Good recovery" }
+                    if h >= 5.5 { return "Fair recovery" }
+                    return "Protect rest"
+                })
+            : nil
+        let hydration = WidgetCommandProcessor.todayHydrationMl()
 
         return WidgetSnapshot(
             topTaskTitle: topTask?.title,
@@ -174,9 +196,9 @@ final class WidgetSyncService {
             recommendation: whyLine,
             completedTodayCount: tasksVM.completedToday.count,
             activeTaskCount: tasksVM.tasks.filter(\.status.isActive).count,
-            sleepHours: health?.totalSleepMinutes.map { $0 / 60 },
-            stepCount: health?.stepCount,
-            hrvMs: health?.hrvAverage.map { Int($0) },
+            sleepHours: hasHealth ? health?.totalSleepMinutes.map { $0 / 60 } : nil,
+            stepCount: hasHealth ? health?.stepCount : nil,
+            hrvMs: hasHealth ? health?.hrvAverage.map { Int($0) } : nil,
             tasks: Array(widgetTasks),
             updatedAt: Date(),
             executive: executive,
@@ -184,6 +206,8 @@ final class WidgetSyncService {
             focus: focusState,
             medication: medStatus,
             recoveryLabel: recovery,
+            hydrationMlToday: hydration > 0 ? hydration : nil,
+            hasHealthData: hasHealth,
             schemaVersion: 2
         )
     }
@@ -196,40 +220,100 @@ final class WidgetSyncService {
         let active = tasksVM.tasks.filter(\.status.isActive)
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "H:mm"
+        let now = Date()
 
-        var beats: [WidgetTimelineBeat] = []
-        for task in active.prefix(4) {
-            let label: String
-            if let t = task.scheduledTime {
-                label = timeFormatter.string(from: t)
-            } else {
-                label = "Next"
+        // Calendar events (EventKit) — only if already authorized (no prompt from widget sync).
+        let calendarBeats = loadCalendarBeats(from: now, formatter: timeFormatter)
+        let nextCalendar = calendarBeats.first
+
+        // Tasks with scheduled times
+        var taskBeats: [WidgetTimelineBeat] = []
+        let timedTasks = active
+            .compactMap { task -> (LifeTask, Date)? in
+                guard let t = task.scheduledTime, t >= now else { return nil }
+                return (task, t)
             }
-            beats.append(WidgetTimelineBeat(
+            .sorted { $0.1 < $1.1 }
+
+        for (task, time) in timedTasks.prefix(4) {
+            taskBeats.append(WidgetTimelineBeat(
                 id: task.id,
-                timeLabel: label,
+                timeLabel: timeFormatter.string(from: time),
                 title: task.title,
                 detail: "\(task.estimatedMinutes)m",
                 kind: "task"
             ))
         }
 
-        let nextTimed = active
-            .compactMap { task -> (LifeTask, Date)? in
-                guard let t = task.scheduledTime else { return nil }
-                return (task, t)
+        // Merge calendar + tasks by time label order (simple stable merge via start times)
+        var merged: [(sort: Date, beat: WidgetTimelineBeat)] = []
+        for beat in calendarBeats {
+            if let d = parseTimeToday(beat.timeLabel, formatter: timeFormatter) {
+                merged.append((d, beat))
             }
-            .sorted { $0.1 < $1.1 }
-            .first
+        }
+        for (task, time) in timedTasks.prefix(4) {
+            merged.append((time, WidgetTimelineBeat(
+                id: task.id,
+                timeLabel: timeFormatter.string(from: time),
+                title: task.title,
+                detail: "\(task.estimatedMinutes)m",
+                kind: "task"
+            )))
+        }
+        merged.sort { $0.sort < $1.sort }
+        var beats = merged.map(\.beat)
+        // Deduplicate IDs keep first
+        var seen = Set<String>()
+        beats = beats.filter { seen.insert($0.id).inserted }
+        beats = Array(beats.prefix(4))
+
+        let free = brainVM.cognitiveSnapshot?.availableMinutes
 
         return WidgetTodaySummary(
-            nextEventTitle: nextTimed?.0.title,
-            nextEventTimeLabel: nextTimed.map { timeFormatter.string(from: $0.1) },
+            nextEventTitle: nextCalendar?.title ?? timedTasks.first?.0.title,
+            nextEventTimeLabel: nextCalendar?.timeLabel ?? timedTasks.first.map { timeFormatter.string(from: $0.1) },
             nextTaskTitle: topTask?.title ?? active.first?.title,
-            freeMinutes: brainVM.cognitiveSnapshot?.availableMinutes,
+            freeMinutes: free,
             capacityLabel: brainVM.presentation.capacity.bandLabel,
             beats: beats
         )
+    }
+
+    private func loadCalendarBeats(from date: Date, formatter: DateFormatter) -> [WidgetTimelineBeat] {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        // iOS 17+: fullAccess / writeOnly. Do not prompt from widget sync.
+        let authorized = status == .fullAccess || status == .writeOnly
+        guard authorized else { return [] }
+
+        let end = Calendar.current.date(byAdding: .hour, value: 12, to: date) ?? date.addingTimeInterval(12 * 3600)
+        let predicate = eventStore.predicateForEvents(withStart: date, end: end, calendars: nil)
+        let events = eventStore.events(matching: predicate)
+            .filter { !$0.isAllDay }
+            .sorted { $0.startDate < $1.startDate }
+            .prefix(4)
+
+        return events.map { ek in
+            let mins = max(1, Int(ek.endDate.timeIntervalSince(ek.startDate) / 60))
+            return WidgetTimelineBeat(
+                id: ek.eventIdentifier ?? UUID().uuidString,
+                timeLabel: formatter.string(from: ek.startDate),
+                title: ek.title ?? "Event",
+                detail: "\(mins)m",
+                kind: "meeting"
+            )
+        }
+    }
+
+    private func parseTimeToday(_ label: String, formatter: DateFormatter) -> Date? {
+        guard let t = formatter.date(from: label) else { return nil }
+        let cal = Calendar.current
+        let now = Date()
+        var comps = cal.dateComponents([.year, .month, .day], from: now)
+        let tc = cal.dateComponents([.hour, .minute], from: t)
+        comps.hour = tc.hour
+        comps.minute = tc.minute
+        return cal.date(from: comps)
     }
 
     private func makeFocusState(adhdVM: ADHDViewModel?) -> WidgetFocusState {

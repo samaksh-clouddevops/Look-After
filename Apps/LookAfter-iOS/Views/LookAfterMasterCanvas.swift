@@ -444,6 +444,37 @@ public struct LookAfterMasterCanvas: View {
             }
             _ = notificationRouter.consumeRoute()
         }
+        .onChange(of: shell.requestedTab) { _, tab in
+            guard let tab else { return }
+            selectedTab = tab
+            shell.requestedTab = nil
+        }
+        .onChange(of: shell.showCaptureSheet) { _, show in
+            if show {
+                showBrainCapture = true
+                shell.showCaptureSheet = false
+            }
+        }
+        .onChange(of: shell.showMedicationSheet) { _, show in
+            if show {
+                showMedication = true
+                shell.showMedicationSheet = false
+            }
+        }
+        .onAppear {
+            if let tab = shell.requestedTab {
+                selectedTab = tab
+                shell.requestedTab = nil
+            }
+            if shell.showMedicationSheet {
+                showMedication = true
+                shell.showMedicationSheet = false
+            }
+            if shell.showCaptureSheet {
+                showBrainCapture = true
+                shell.showCaptureSheet = false
+            }
+        }
         .accessibilityIdentifier("screen-briefing")
     }
 

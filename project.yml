@@ -45,6 +45,11 @@ targets:
           - processing
         BGTaskSchedulerPermittedIdentifiers:
           - com.samaksh.flowos.app.notification-refresh
+        CFBundleURLTypes:
+          - CFBundleURLName: com.samaksh.flowos.app
+            CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - lookafter
     dependencies:
       - target: LookAfterWidget
         embed: true

@@ -23,6 +23,15 @@ final class AppShellState: ObservableObject {
     @Published private(set) var isPerformingFactoryReset = false
     @Published private(set) var isBootstrappingFreshStart = false
 
+    // MARK: - Deep link / widget routing
+    @Published var pendingRoute: LookAfterRoute?
+    @Published var requestedTab: LookAfterTab?
+    @Published var showCaptureSheet = false
+    @Published var capturePreferredMode: String?
+    @Published var showMedicationSheet = false
+    @Published var focusTaskFromRoute: LifeTask?
+    @Published var pendingTaskIDFromRoute: String?
+
     private var flowDirector: FlowDirector?
     private var flowDirectorUserName: String = ""
 
@@ -103,6 +112,7 @@ final class AppShellState: ObservableObject {
                 actualFocusMinutes: focusMins
             )
             WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM, adhdVM: adhdVM)
+            await WidgetCommandProcessor.processPending(shell: self)
 
             await seedUITestFocusTaskIfNeeded(userId: userId)
 
@@ -294,6 +304,56 @@ final class AppShellState: ObservableObject {
 
     func refreshWidgetData() {
         WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM, adhdVM: adhdVM)
+    }
+
+    /// Handle `lookafter://` URLs from widgets, Live Activities, and Spotlight.
+    func handleDeepLink(_ url: URL) {
+        let route = LookAfterRoute.parse(url)
+        pendingRoute = route
+        apply(route: route)
+    }
+
+    func apply(route: LookAfterRoute) {
+        switch route {
+        case .recommend:
+            requestedTab = .briefing
+        case .today:
+            requestedTab = .today
+        case .focus:
+            requestedTab = .today
+            let task = brainVM.flowSurface?.heroTask
+                ?? brainVM.topTasks.first
+                ?? tasksVM.tasks.first(where: \.status.isActive)
+            if let task {
+                focusTaskFromRoute = task
+                adhdVM.startFocusSession(task: task)
+            }
+        case .capture(let mode):
+            capturePreferredMode = mode
+            showCaptureSheet = true
+            requestedTab = .briefing
+        case .health:
+            requestedTab = .you
+        case .medication:
+            showMedicationSheet = true
+            requestedTab = .you
+        case .brain:
+            requestedTab = .brain
+        case .task(let id):
+            pendingTaskIDFromRoute = id
+            requestedTab = .today
+            if let task = tasksVM.tasks.first(where: { $0.id == id }) {
+                focusTaskFromRoute = task
+            }
+        case .unknown:
+            break
+        }
+    }
+
+    func clearConsumedRouteFlags() {
+        pendingRoute = nil
+        focusTaskFromRoute = nil
+        pendingTaskIDFromRoute = nil
     }
 
     func orchestrateBrain(userId: String) async {
