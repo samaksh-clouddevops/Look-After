@@ -4,6 +4,7 @@
 # for building on another Mac / another Apple Developer account.
 #
 # Usage:
+#   ./Scripts/setup-tanya.sh                    # Tanya's Mac — no args needed
 #   ./Scripts/reconfigure-signing.sh --prefix com.janedoe.lookafter
 #   ./Scripts/reconfigure-signing.sh --prefix com.janedoe.lookafter --team ABCD123456
 #   ./Scripts/reconfigure-signing.sh --prefix com.janedoe.lookafter --clear-team
@@ -74,6 +75,9 @@ Current repo identifiers (replaced when you pass a new --prefix):
 
 Example (someone else's Mac — owner uses Personal Team):
   ./Scripts/reconfigure-signing.sh --prefix com.janedoe.lookafter --clear-team
+
+Tanya's Mac (zero config — run from repo root after git pull):
+  ./Scripts/setup-tanya.sh
 
 Then in Xcode: Settings → Accounts → sign in → pick Team on LookAfter-iOS + LookAfterWidget.
 EOF

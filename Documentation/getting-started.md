@@ -32,7 +32,17 @@ If the file is missing after clone, run `./Scripts/bootstrap.sh` or:
 cp Config/GoogleService-Info.plist.example Config/GoogleService-Info.plist
 ```
 
-## Signing
+## Tanya's Mac (one command)
+
+After clone or pull:
+
+```bash
+./Scripts/setup-tanya.sh
+```
+
+No flags needed — bundle IDs, Firebase plist, signing cleanup, and Swift packages are configured automatically. Then open Xcode, set **Team** on **LookAfter-iOS** and **LookAfterWidget**, clean build, and run.
+
+## Signing (other machines)
 
 For device builds, run:
 
