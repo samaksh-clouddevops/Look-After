@@ -102,7 +102,7 @@ final class AppShellState: ObservableObject {
                 executiveCapacityLabel: contextOrchestrator.executiveCapacity.band.displayLabel,
                 actualFocusMinutes: focusMins
             )
-            WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM)
+            WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM, adhdVM: adhdVM)
 
             await seedUITestFocusTaskIfNeeded(userId: userId)
 
@@ -293,7 +293,7 @@ final class AppShellState: ObservableObject {
     }
 
     func refreshWidgetData() {
-        WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM)
+        WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM, adhdVM: adhdVM)
     }
 
     func orchestrateBrain(userId: String) async {
