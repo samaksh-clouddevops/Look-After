@@ -42,6 +42,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
 
     private var layoutWorkItem: DispatchWorkItem?
     private var scrollWaitTask: Task<Void, Never>?
+    private var lastScrollPostAt: Date = .distantPast
     nonisolated(unsafe) private var keyboardObservers: [NSObjectProtocol] = []
 
     var currentStep: AppFeatureTourStep {
@@ -140,6 +141,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
 
     /// Full preference snapshot — replaces registry so stale off-screen anchors drop out.
     func replaceAnchors(_ payloads: [AppFeatureTourAnchorID: AppFeatureTourAnchorPayload]) {
+        let prior = anchors
         var next: [AppFeatureTourAnchorID: TourAnchorGeometry] = [:]
         for (id, payload) in payloads {
             next[id] = TourAnchorGeometry(
@@ -149,7 +151,10 @@ final class AppFeatureTourCoordinator: ObservableObject {
             )
         }
         anchors = next
-        scheduleLayoutRecompute()
+        guard isActive else { return }
+        if anchorMeaningfullyChanged(from: prior, to: next, focus: currentStep.anchor) {
+            scheduleLayoutRecompute(delay: 0.12)
+        }
     }
 
     func updateLayoutChrome(
@@ -158,15 +163,25 @@ final class AppFeatureTourCoordinator: ObservableObject {
         tabBarFrame: CGRect = .null,
         cardSize: CGSize? = nil
     ) {
+        let boundsChanged = !screenBounds.equal(to: self.screenBounds, epsilon: 1)
+        let safeChanged = safeArea != self.safeAreaInsets
+        let cardChanged: Bool = {
+            guard let cardSize, cardSize.width > 1, cardSize.height > 1 else { return false }
+            return abs(cardSize.width - measuredCardSize.width) > 2
+                || abs(cardSize.height - measuredCardSize.height) > 2
+        }()
+
+        guard boundsChanged || safeChanged || cardChanged else { return }
+
         self.screenBounds = screenBounds
         self.safeAreaInsets = safeArea
         if tabBarFrame.isValidObstacle {
             self.tabBarFrame = tabBarFrame
         }
-        if let cardSize, cardSize.width > 1, cardSize.height > 1 {
+        if let cardSize, cardChanged {
             measuredCardSize = cardSize
         }
-        scheduleLayoutRecompute()
+        scheduleLayoutRecompute(delay: 0.12)
     }
 
     // MARK: - Highlight helpers
@@ -197,11 +212,15 @@ final class AppFeatureTourCoordinator: ObservableObject {
             metrics: metrics
         )
 
-        if proposal.needsScroll, let anchor = currentStep.anchor {
+        if proposal.needsScroll,
+           let anchor = currentStep.anchor,
+           anchor != .briefingHero {
             postScrollRequest(anchor: anchor, offset: proposal.suggestedScrollOffset)
         }
 
-        layoutProposal = proposal
+        if layoutProposal != proposal {
+            layoutProposal = proposal
+        }
     }
 
     private func makeMetrics() -> TourLayoutMetrics {
@@ -210,6 +229,23 @@ final class AppFeatureTourCoordinator: ObservableObject {
         for side in TourCardSide.allCases where !preferred.contains(side) {
             preferred.append(side)
         }
+
+        let assistantFrame = anchors[.todayAssistant]?.frame ?? .null
+        let bottomSheet: CGRect = {
+            guard currentStep.anchor != .todayAssistant,
+                  anchors[.todayAssistant]?.isValid == true,
+                  assistantFrame.isValidObstacle else { return .null }
+            return assistantFrame
+        }()
+
+        let layoutWidth = min(
+            DesignSystem.readableMaxWidth,
+            max(240, screenBounds.width - DesignSystem.spacingMD * 2)
+        )
+        let cardSize = CGSize(
+            width: layoutWidth,
+            height: max(measuredCardSize.height, 160)
+        )
 
         return TourLayoutMetrics(
             screenBounds: screenBounds,
@@ -221,15 +257,34 @@ final class AppFeatureTourCoordinator: ObservableObject {
             ),
             keyboardFrame: keyboardFrame,
             tabBarFrame: tabBarFrame,
-            cardSize: measuredCardSize,
+            bottomSheetFrame: bottomSheet,
+            cardSize: cardSize,
             cardMargin: DesignSystem.spacingMD,
             highlightPadding: 10,
             minimumGap: DesignSystem.spacingSM,
+            arrowLength: 10,
+            topObstacleInset: 12,
             preferredSides: preferred
         )
     }
 
-    private func scheduleLayoutRecompute(delay: TimeInterval = 0.05) {
+    private func anchorMeaningfullyChanged(
+        from prior: [AppFeatureTourAnchorID: TourAnchorGeometry],
+        to next: [AppFeatureTourAnchorID: TourAnchorGeometry],
+        focus: AppFeatureTourAnchorID?
+    ) -> Bool {
+        guard let focus else { return false }
+        let oldFrame = prior[focus]?.frame ?? .null
+        let newFrame = next[focus]?.frame ?? .null
+        return !oldFrame.equal(to: newFrame, epsilon: 2)
+    }
+
+    func scheduleLayoutRecomputeIfActive() {
+        guard isActive else { return }
+        scheduleLayoutRecompute(delay: 0.12)
+    }
+
+    private func scheduleLayoutRecompute(delay: TimeInterval = 0.12) {
         layoutWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.recomputeLayout()
@@ -252,12 +307,16 @@ final class AppFeatureTourCoordinator: ObservableObject {
     }
 
     private func postScrollRequest(anchor: AppFeatureTourAnchorID, offset: CGFloat) {
+        let now = Date()
+        guard now.timeIntervalSince(lastScrollPostAt) > 0.45 else { return }
+        lastScrollPostAt = now
         NotificationCenter.default.post(
             name: .tourScrollToAnchor,
             object: nil,
             userInfo: [
                 TourScrollUserInfoKey.anchorID: anchor.rawValue,
-                TourScrollUserInfoKey.offset: offset
+                TourScrollUserInfoKey.offset: offset,
+                TourScrollUserInfoKey.scrollAnchor: anchor.tourScrollAnchor
             ]
         )
     }
@@ -293,5 +352,14 @@ final class AppFeatureTourCoordinator: ObservableObject {
                 self?.scheduleLayoutRecompute(delay: 0.02)
             }
         })
+    }
+}
+
+private extension CGRect {
+    func equal(to other: CGRect, epsilon: CGFloat) -> Bool {
+        abs(minX - other.minX) <= epsilon
+            && abs(minY - other.minY) <= epsilon
+            && abs(width - other.width) <= epsilon
+            && abs(height - other.height) <= epsilon
     }
 }

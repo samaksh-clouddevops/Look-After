@@ -161,10 +161,16 @@ struct TodayView: View {
                     await onRefresh()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
-                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String,
-                          raw == AppFeatureTourAnchorID.todayTimeline.rawValue else { return }
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .center)
+                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
+                    if raw == AppFeatureTourAnchorID.todayTimeline.rawValue {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .center)
+                        }
+                    } else if raw == AppFeatureTourAnchorID.todayAssistant.rawValue {
+                        // Give the bottom assistant room: scroll timeline toward the top.
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .top)
+                        }
                     }
                 }
             }

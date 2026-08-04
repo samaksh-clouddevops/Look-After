@@ -107,13 +107,14 @@ public enum TourPlacementEngine {
     ) -> [TourLayoutProposal] {
         let size = metrics.cardSize
         let gap = metrics.minimumGap
+        let arrow = metrics.arrowLength
         let sides = metrics.preferredSides
         var result: [TourLayoutProposal] = []
 
         for side in sides {
             switch side {
             case .above:
-                let y = highlight.minY - gap - size.height
+                let y = highlight.minY - gap - arrow - size.height
                 let x = clampedX(ideal: highlight.midX - size.width / 2, width: size.width, usable: usable, margin: metrics.cardMargin)
                 result.append(proposal(
                     origin: CGPoint(x: x, y: y),
@@ -122,7 +123,7 @@ public enum TourPlacementEngine {
                     highlight: highlight
                 ))
             case .below:
-                let y = highlight.maxY + gap
+                let y = highlight.maxY + gap + arrow
                 let x = clampedX(ideal: highlight.midX - size.width / 2, width: size.width, usable: usable, margin: metrics.cardMargin)
                 result.append(proposal(
                     origin: CGPoint(x: x, y: y),
@@ -131,7 +132,7 @@ public enum TourPlacementEngine {
                     highlight: highlight
                 ))
             case .left:
-                let x = highlight.minX - gap - size.width
+                let x = highlight.minX - gap - arrow - size.width
                 let y = clampedY(ideal: highlight.midY - size.height / 2, height: size.height, usable: usable, margin: metrics.cardMargin)
                 result.append(proposal(
                     origin: CGPoint(x: x, y: y),
@@ -140,7 +141,7 @@ public enum TourPlacementEngine {
                     highlight: highlight
                 ))
             case .right:
-                let x = highlight.maxX + gap
+                let x = highlight.maxX + gap + arrow
                 let y = clampedY(ideal: highlight.midY - size.height / 2, height: size.height, usable: usable, margin: metrics.cardMargin)
                 result.append(proposal(
                     origin: CGPoint(x: x, y: y),

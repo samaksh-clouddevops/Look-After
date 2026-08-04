@@ -11,7 +11,9 @@ enum AppFeatureTourAnchorID: String, Hashable, CaseIterable, Sendable {
     case tabBrain
     case tabYou
     case briefingHero
+    case briefingScrollTop
     case todayTimeline
+    case todayAssistant
     case brainVoiceOrb
     case youProfile
 }
@@ -60,7 +62,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             icon: "doc.text.fill",
             tab: .briefing,
             anchor: .briefingHero,
-            preferredSides: [.below, .above, .floating],
+            preferredSides: [.below, .floating, .center],
             allowsTargetInteraction: false
         ),
         AppFeatureTourStep(
@@ -79,8 +81,8 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             message: "The bottom assistant helps replan your day. Talk or type — it reshapes your schedule with you.",
             icon: "bubble.left.and.bubble.right.fill",
             tab: .today,
-            anchor: .todayTimeline,
-            preferredSides: [.above, .floating, .center],
+            anchor: .todayAssistant,
+            preferredSides: [.above, .floating],
             allowsTargetInteraction: false
         ),
         AppFeatureTourStep(
@@ -183,4 +185,16 @@ extension Notification.Name {
 enum TourScrollUserInfoKey {
     static let anchorID = "anchorID"
     static let offset = "offset"
+    /// `"top"` keeps scroll content at the top (Briefing greeting visible); `"center"` centers the anchor.
+    static let scrollAnchor = "scrollAnchor"
+}
+
+extension AppFeatureTourAnchorID {
+    /// How scroll views should reveal this anchor during the tour.
+    var tourScrollAnchor: String {
+        switch self {
+        case .briefingHero: return "top"
+        default: return "center"
+        }
+    }
 }

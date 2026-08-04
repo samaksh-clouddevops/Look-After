@@ -37,6 +37,10 @@ public struct TourLayoutMetrics: Sendable, Equatable {
     public var cardMargin: CGFloat
     public var highlightPadding: CGFloat
     public var minimumGap: CGFloat
+    /// Vertical/horizontal arrow protrusion beyond the card rect.
+    public var arrowLength: CGFloat
+    /// Extra inset below the safe area for Dynamic Island / status bar breathing room.
+    public var topObstacleInset: CGFloat
     public var preferredSides: [TourCardSide]
 
     public init(
@@ -51,6 +55,8 @@ public struct TourLayoutMetrics: Sendable, Equatable {
         cardMargin: CGFloat = 16,
         highlightPadding: CGFloat = 10,
         minimumGap: CGFloat = 12,
+        arrowLength: CGFloat = 10,
+        topObstacleInset: CGFloat = 0,
         preferredSides: [TourCardSide] = [.above, .below, .left, .right, .center, .floating]
     ) {
         self.screenBounds = screenBounds
@@ -64,12 +70,18 @@ public struct TourLayoutMetrics: Sendable, Equatable {
         self.cardMargin = cardMargin
         self.highlightPadding = highlightPadding
         self.minimumGap = minimumGap
+        self.arrowLength = arrowLength
+        self.topObstacleInset = topObstacleInset
         self.preferredSides = preferredSides
     }
 
-    /// Usable content area after safe area, keyboard, tab bar, and bottom sheet.
+    /// Usable content area after safe area, Dynamic Island clearance, keyboard, tab bar, and bottom sheet.
     public var usableBounds: CGRect {
         var rect = screenBounds.inset(by: safeAreaInsets)
+        if topObstacleInset > 0 {
+            rect.origin.y += topObstacleInset
+            rect.size.height = max(0, rect.size.height - topObstacleInset)
+        }
         if keyboardFrame.isValidObstacle {
             let topOfKeyboard = keyboardFrame.minY
             if topOfKeyboard < rect.maxY {

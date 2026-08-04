@@ -34,6 +34,8 @@ AppFeatureTourOverlay
 | `AppFeatureTourOverlay` | Spotlight, adaptive card position, a11y focus, Reduce Motion |
 | `AppFeatureTourModels` | Steps (short copy), preferred sides (soft), store keys |
 
+Anchors include `todayAssistant` on the collapsed **Plan With Me** bar (`ExecutiveAssistantSheet`), separate from `todayTimeline`.
+
 ## Positioning rules
 
 1. Expand highlight by padding; never let card intersect that rect (+ gap).

@@ -10,54 +10,45 @@ struct AppFeatureTourOverlay: View {
 
     @State private var measuredCardSize: CGSize = CGSize(width: 320, height: 220)
 
+    private let arrowSize = CGSize(width: 18, height: 10)
+
     var body: some View {
         GeometryReader { geo in
             let proposal = coordinator.layoutProposal
-            let localCard = localCardFrame(proposal: proposal, in: geo)
+            let localHighlight = highlightRect(proposal: proposal, in: geo)
+            let localCard = cardRect(proposal: proposal, in: geo)
 
             ZStack(alignment: .topLeading) {
-                spotlightLayer(proposal: proposal, container: geo)
+                spotlightLayer(localHighlight: localHighlight)
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
                     .allowsHitTesting(false)
 
-                // Absorb taps outside the card (modal coach behavior).
                 Color.clear
                     .contentShape(Rectangle())
                     .ignoresSafeArea()
                     .allowsHitTesting(!coordinator.currentStep.allowsTargetInteraction)
 
-                cardStack(localFrame: localCard, proposal: proposal)
-                    .position(
-                        x: localCard.midX,
-                        y: localCard.midY
-                    )
+                tourDialog(
+                    localCard: localCard,
+                    localHighlight: localHighlight,
+                    proposal: proposal,
+                    layoutWidth: cardLayoutWidth(in: geo),
+                    geo: geo
+                )
             }
             .onAppear {
                 publishChrome(geo: geo)
                 focusTourCard = true
             }
-            .onChange(of: geo.size) { _, _ in
-                publishChrome(geo: geo)
-            }
-            .onChange(of: geo.safeAreaInsets) { _, _ in
-                publishChrome(geo: geo)
-            }
+            .onChange(of: geo.size) { _, _ in publishChrome(geo: geo) }
             .onChange(of: coordinator.stepIndex) { _, _ in
                 focusTourCard = true
                 publishChrome(geo: geo)
             }
-            .onChange(of: measuredCardSize) { _, size in
-                coordinator.updateLayoutChrome(
-                    screenBounds: globalScreenBounds(from: geo),
-                    safeArea: geo.safeAreaInsets,
-                    cardSize: size
-                )
-            }
-            .onChange(of: dynamicTypeSize) { _, _ in
-                publishChrome(geo: geo)
-            }
+            .onChange(of: dynamicTypeSize) { _, _ in publishChrome(geo: geo) }
         }
+        .ignoresSafeArea()
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
         .accessibilityIdentifier("screen-feature-tour")
         .accessibilityAddTraits(.isModal)
@@ -67,16 +58,13 @@ struct AppFeatureTourOverlay: View {
     // MARK: - Spotlight
 
     @ViewBuilder
-    private func spotlightLayer(proposal: TourLayoutProposal?, container: GeometryProxy) -> some View {
-        let highlight = proposal?.highlightFrame ?? coordinator.highlightFrame()
-        let radius = coordinator.currentHighlightCornerRadius
-        let localHighlight = highlight.map { globalToLocal($0, in: container) }
-
+    private func spotlightLayer(localHighlight: CGRect?) -> some View {
         ZStack {
             if let localHighlight, localHighlight.isValidObstacle {
+                let radius = coordinator.currentHighlightCornerRadius
                 SpotlightCutoutShape(highlight: localHighlight, cornerRadius: radius)
                     .fill(Color.black.opacity(0.58), style: FillStyle(eoFill: true))
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: localHighlight)
+                    .compositingGroup()
 
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .stroke(DesignSystem.accentPrimary.opacity(0.55), lineWidth: 2)
@@ -89,46 +77,91 @@ struct AppFeatureTourOverlay: View {
         }
     }
 
-    // MARK: - Card + arrow
+    // MARK: - Dialog (card + arrow pinned to engine rects)
 
-    private func cardStack(localFrame: CGRect, proposal: TourLayoutProposal?) -> some View {
-        VStack(spacing: 0) {
-            if proposal?.arrowEdge == .top {
-                TourArrowView(edge: .top)
-                    .offset(x: arrowOffsetX(localFrame: localFrame, proposal: proposal))
-            }
-
-            HStack(spacing: 0) {
-                if proposal?.arrowEdge == .left {
-                    TourArrowView(edge: .left)
-                }
-
-                cardContent
-                    .background(
-                        GeometryReader { cardGeo in
-                            Color.clear.preference(
-                                key: TourCardSizeKey.self,
-                                value: cardGeo.size
-                            )
-                        }
+    private func tourDialog(
+        localCard: CGRect,
+        localHighlight: CGRect?,
+        proposal: TourLayoutProposal?,
+        layoutWidth: CGFloat,
+        geo: GeometryProxy
+    ) -> some View {
+        cardContent
+            .frame(width: layoutWidth, alignment: .topLeading)
+            .background(
+                GeometryReader { cardGeo in
+                    Color.clear.preference(
+                        key: TourCardSizeKey.self,
+                        value: cardGeo.size
                     )
-                    .onPreferenceChange(TourCardSizeKey.self) { measuredCardSize = $0 }
-
-                if proposal?.arrowEdge == .right {
-                    TourArrowView(edge: .right)
+                }
+            )
+            .onPreferenceChange(TourCardSizeKey.self) { size in
+                applyMeasuredCardSize(size, geo: geo)
+            }
+            .overlay {
+                if let proposal, proposal.arrowEdge != .none, let localHighlight {
+                    arrowOverlay(
+                        edge: proposal.arrowEdge,
+                        cardWidth: layoutWidth,
+                        localCard: localCard,
+                        highlight: localHighlight
+                    )
                 }
             }
+            .frame(width: localCard.width, alignment: .topLeading)
+            .offset(x: localCard.minX, y: localCard.minY)
+            .accessibilityFocused($focusTourCard)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(tourAccessibilityLabel)
+    }
 
-            if proposal?.arrowEdge == .bottom {
-                TourArrowView(edge: .bottom)
-                    .offset(x: arrowOffsetX(localFrame: localFrame, proposal: proposal))
-            }
+    private func applyMeasuredCardSize(_ size: CGSize, geo: GeometryProxy) {
+        guard size.width > 1, size.height > 1 else { return }
+        let deltaW = abs(size.width - measuredCardSize.width)
+        let deltaH = abs(size.height - measuredCardSize.height)
+        guard deltaW > 2 || deltaH > 2 else { return }
+        measuredCardSize = size
+        publishChrome(geo: geo)
+    }
+
+    @ViewBuilder
+    private func arrowOverlay(
+        edge: TourArrowEdge,
+        cardWidth: CGFloat,
+        localCard: CGRect,
+        highlight: CGRect
+    ) -> some View {
+        let targetInCardX = highlight.midX - localCard.minX
+        let targetInCardY = highlight.midY - localCard.minY
+        let shiftX = min(max(targetInCardX, 24), cardWidth - 24) - cardWidth / 2
+        let cardHeight = max(measuredCardSize.height, localCard.height)
+        let shiftY = min(max(targetInCardY, 24), max(24, cardHeight - 24)) - cardHeight / 2
+
+        switch edge {
+        case .bottom:
+            TourArrowView(edge: .bottom)
+                .frame(width: arrowSize.width, height: arrowSize.height)
+                .offset(x: shiftX, y: arrowSize.height / 2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        case .top:
+            TourArrowView(edge: .top)
+                .frame(width: arrowSize.width, height: arrowSize.height)
+                .offset(x: shiftX, y: -arrowSize.height / 2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        case .right:
+            TourArrowView(edge: .right)
+                .frame(width: arrowSize.width, height: arrowSize.height)
+                .offset(x: arrowSize.width / 2, y: shiftY)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        case .left:
+            TourArrowView(edge: .left)
+                .frame(width: arrowSize.width, height: arrowSize.height)
+                .offset(x: -arrowSize.width / 2, y: shiftY)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        case .none:
+            EmptyView()
         }
-        .frame(width: max(localFrame.width, 1))
-        .accessibilityFocused($focusTourCard)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(tourAccessibilityLabel)
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.86), value: localFrame)
     }
 
     private var cardContent: some View {
@@ -162,7 +195,7 @@ struct AppFeatureTourOverlay: View {
 
             Text(coordinator.currentStep.message)
                 .textStyleBody(color: DesignSystem.textSecondary)
-                .lineLimit(3)
+                .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
 
             progressDots
@@ -201,7 +234,6 @@ struct AppFeatureTourOverlay: View {
             }
         }
         .padding(DesignSystem.cardPaddingMin)
-        .frame(maxWidth: DesignSystem.readableMaxWidth)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
                 .fill(DesignSystem.backgroundElevated)
@@ -219,7 +251,6 @@ struct AppFeatureTourOverlay: View {
                 Capsule()
                     .fill(index == coordinator.stepIndex ? DesignSystem.accentPrimary : DesignSystem.border)
                     .frame(width: index == coordinator.stepIndex ? 18 : 6, height: 6)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: coordinator.stepIndex)
             }
         }
         .accessibilityHidden(true)
@@ -241,7 +272,6 @@ struct AppFeatureTourOverlay: View {
     }
 
     private func globalScreenBounds(from geo: GeometryProxy) -> CGRect {
-        // Global frame of the overlay container (full window).
         let frame = geo.frame(in: .global)
         if frame.width > 1, frame.height > 1 { return frame }
         return UIScreen.main.bounds
@@ -257,36 +287,46 @@ struct AppFeatureTourOverlay: View {
         )
     }
 
-    private func localCardFrame(proposal: TourLayoutProposal?, in geo: GeometryProxy) -> CGRect {
-        let fallbackWidth = min(geo.size.width - DesignSystem.screenHorizontal * 2, 360)
-        let fallbackHeight = max(measuredCardSize.height, 200)
-        if let proposal {
+    private func highlightRect(proposal: TourLayoutProposal?, in geo: GeometryProxy) -> CGRect? {
+        let global: CGRect?
+        if let proposal, proposal.highlightFrame.isValidObstacle {
+            global = proposal.highlightFrame
+        } else if let padded = coordinator.highlightFrame() {
+            global = padded
+        } else {
+            global = nil
+        }
+        return global.map { globalToLocal($0, in: geo) }
+    }
+
+    private func cardRect(proposal: TourLayoutProposal?, in geo: GeometryProxy) -> CGRect {
+        let layoutWidth = cardLayoutWidth(in: geo)
+        let fallbackHeight = max(measuredCardSize.height, 180)
+
+        if let proposal, proposal.cardFrame.isValidObstacle {
             var local = globalToLocal(proposal.cardFrame, in: geo)
-            if local.width < 1 || local.height < 1 {
-                local = CGRect(
-                    x: (geo.size.width - fallbackWidth) / 2,
-                    y: (geo.size.height - fallbackHeight) / 2,
-                    width: fallbackWidth,
-                    height: fallbackHeight
-                )
+            local.size.width = layoutWidth
+            if local.height < 1 {
+                local.size.height = fallbackHeight
             }
             return local
         }
+
+        let width = layoutWidth
+        let height = fallbackHeight
         return CGRect(
-            x: (geo.size.width - fallbackWidth) / 2,
-            y: (geo.size.height - fallbackHeight) / 2,
-            width: fallbackWidth,
-            height: fallbackHeight
+            x: (geo.size.width - width) / 2,
+            y: max(geo.safeAreaInsets.top + 12, (geo.size.height - height) / 2),
+            width: width,
+            height: height
         )
     }
 
-    private func arrowOffsetX(localFrame: CGRect, proposal: TourLayoutProposal?) -> CGFloat {
-        guard let proposal, proposal.arrowEdge == .top || proposal.arrowEdge == .bottom else { return 0 }
-        // Convert global tip x into offset relative to card center.
-        // Parent uses position at card mid; arrow is centered by default.
-        let tipLocalX = proposal.arrowTip.x // global
-        // Approximate using local frame mid
-        return tipLocalX - (proposal.cardFrame.midX)
+    private func cardLayoutWidth(in geo: GeometryProxy) -> CGFloat {
+        min(
+            DesignSystem.readableMaxWidth,
+            max(240, geo.size.width - DesignSystem.spacingMD * 2)
+        )
     }
 }
 
@@ -306,17 +346,12 @@ private struct TourArrowView: View {
     var body: some View {
         Triangle()
             .fill(DesignSystem.backgroundElevated)
-            .frame(width: arrowSize.width, height: arrowSize.height)
+            .overlay(
+                Triangle()
+                    .stroke(DesignSystem.border, lineWidth: 0.5)
+            )
             .rotationEffect(rotation)
             .accessibilityHidden(true)
-    }
-
-    private var arrowSize: CGSize {
-        switch edge {
-        case .top, .bottom: return CGSize(width: 18, height: 10)
-        case .left, .right: return CGSize(width: 10, height: 18)
-        case .none: return .zero
-        }
     }
 
     private var rotation: Angle {
