@@ -20,8 +20,7 @@ Package.resolved
 buildServer.json
 
 # Secrets (verify not committed)
-GoogleService-Info.plist
-Config/GoogleService-Info.plist
+# Config/GoogleService-Info.plist is committed as a dummy template — replace locally for real Firebase.
 .env
 .env.*
 

@@ -53,6 +53,16 @@ targets:
       - package: LookAfterData
       - package: LookAfterHealth
       - package: LookAfterFeatures
+    preBuildScripts:
+      - name: Ensure GoogleService-Info.plist
+        basedOnDependencyAnalysis: false
+        script: |
+          PLIST="${SRCROOT}/Config/GoogleService-Info.plist"
+          EXAMPLE="${SRCROOT}/Config/GoogleService-Info.plist.example"
+          if [ ! -f "$PLIST" ] && [ -f "$EXAMPLE" ]; then
+            cp "$EXAMPLE" "$PLIST"
+            echo "Created GoogleService-Info.plist from example template."
+          fi
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app
       CODE_SIGN_STYLE: Automatic
@@ -120,6 +130,16 @@ targets:
       - package: LookAfterData
       - package: LookAfterFeatures
       - package: LookAfterHealth
+    preBuildScripts:
+      - name: Ensure GoogleService-Info.plist
+        basedOnDependencyAnalysis: false
+        script: |
+          PLIST="${SRCROOT}/Config/GoogleService-Info.plist"
+          EXAMPLE="${SRCROOT}/Config/GoogleService-Info.plist.example"
+          if [ ! -f "$PLIST" ] && [ -f "$EXAMPLE" ]; then
+            cp "$EXAMPLE" "$PLIST"
+            echo "Created GoogleService-Info.plist from example template."
+          fi
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.lifeos.mac
       GENERATE_INFOPLIST_FILE: YES

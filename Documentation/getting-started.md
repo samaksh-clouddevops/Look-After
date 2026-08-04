@@ -8,23 +8,29 @@
 ## Clone and open
 
 ```bash
-git clone <repo-url> LifeOS
-cd LifeOS
-xcodegen generate
+git clone <repo-url> Look-After
+cd Look-After
+./Scripts/bootstrap.sh
 open LookAfter.xcodeproj
 ```
 
-Or open `LifeOS.code-workspace`.
+`Config/GoogleService-Info.plist` is included as a **dummy template** (offline mode). Replace it with your Firebase console download for cloud sync.
 
-## Firebase (optional)
+Or open `LookAfter.code-workspace`.
 
-Copy your Firebase config:
+## Firebase (optional — cloud sync)
+
+Replace the dummy config with your project file from the Firebase console:
 
 ```bash
 cp /path/to/your/GoogleService-Info.plist Config/GoogleService-Info.plist
 ```
 
-This file is gitignored. The app runs without it (local-only mode).
+If the file is missing after clone, run `./Scripts/bootstrap.sh` or:
+
+```bash
+cp Config/GoogleService-Info.plist.example Config/GoogleService-Info.plist
+```
 
 ## Signing
 

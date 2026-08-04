@@ -430,7 +430,7 @@
 		CE586C5429F94C0CF3913CFD /* LookAfterBottomNav.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookAfterBottomNav.swift; sourceTree = "<group>"; };
 		CEFED34A2D2926D36D8263C7 /* ProductivityTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductivityTracker.swift; sourceTree = "<group>"; };
 		D02F0C52B250D68FED6C161C /* FlowSchedulingRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSchedulingRuleTests.swift; sourceTree = "<group>"; };
-		D376A83048C88E5AFC8028C8 /* LookAfter-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LookAfter-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D376A83048C88E5AFC8028C8 /* LookAfter-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "LookAfter-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3F781374B8D90C092813246 /* BriefingCardContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingCardContainer.swift; sourceTree = "<group>"; };
 		D49E87C98C8E9EBC7AE9AD49 /* LifeProfileImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeProfileImportView.swift; sourceTree = "<group>"; };
 		D56D58161CCF7456D6B4D572 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
@@ -459,7 +459,7 @@
 		E842F02C4F00CB1355A325FC /* TaskCardStackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCardStackView.swift; sourceTree = "<group>"; };
 		EAF9B08DAE93B5D6702F4308 /* TaskCardUIContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCardUIContractTests.swift; sourceTree = "<group>"; };
 		EC6FA656C9292F7A970E43A0 /* ExecutiveAssistantSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutiveAssistantSheet.swift; sourceTree = "<group>"; };
-		EDF7C9FD5658D979819A03B4 /* LookAfterWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LookAfterWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		EDF7C9FD5658D979819A03B4 /* LookAfterWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LookAfterWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F01FEDF615DB98447A4E7748 /* DailyBriefingCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefingCards.swift; sourceTree = "<group>"; };
 		F0831ACC69A8B120886CEFB5 /* AppFeatureTourAnchor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureTourAnchor.swift; sourceTree = "<group>"; };
 		F145D35587CD0D4541819335 /* HealthSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncService.swift; sourceTree = "<group>"; };
@@ -1295,6 +1295,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E0914358BDD3F6D830A1BCDC /* Build configuration list for PBXNativeTarget "LookAfter-macOS" */;
 			buildPhases = (
+				39FCA7E8754FBF4960E6B3A7 /* Ensure GoogleService-Info.plist */,
 				CEA5233CBBE221106FDDEB8C /* Sources */,
 				5524D4A2CF1C3568DBC9D60F /* Resources */,
 				09EB3A8DF94A2B6A905EE6BD /* Frameworks */,
@@ -1319,6 +1320,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 30F9BE9A20E9FEDE37943713 /* Build configuration list for PBXNativeTarget "LookAfter-iOS" */;
 			buildPhases = (
+				7DE91F813E30211C4D9B4B84 /* Ensure GoogleService-Info.plist */,
 				FB24D66A315B6497E55E11F9 /* Sources */,
 				D11B19053B4AF8C6383303CC /* Resources */,
 				69EBA28612E607D2065D3472 /* Frameworks */,
@@ -1435,6 +1437,47 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		39FCA7E8754FBF4960E6B3A7 /* Ensure GoogleService-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Ensure GoogleService-Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "PLIST=\"${SRCROOT}/Config/GoogleService-Info.plist\"\nEXAMPLE=\"${SRCROOT}/Config/GoogleService-Info.plist.example\"\nif [ ! -f \"$PLIST\" ] && [ -f \"$EXAMPLE\" ]; then\n  cp \"$EXAMPLE\" \"$PLIST\"\n  echo \"Created GoogleService-Info.plist from example template.\"\nfi\n";
+		};
+		7DE91F813E30211C4D9B4B84 /* Ensure GoogleService-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Ensure GoogleService-Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "PLIST=\"${SRCROOT}/Config/GoogleService-Info.plist\"\nEXAMPLE=\"${SRCROOT}/Config/GoogleService-Info.plist.example\"\nif [ ! -f \"$PLIST\" ] && [ -f \"$EXAMPLE\" ]; then\n  cp \"$EXAMPLE\" \"$PLIST\"\n  echo \"Created GoogleService-Info.plist from example template.\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		901C56D53131EB59851255F3 /* Sources */ = {
@@ -1711,11 +1754,7 @@
 				INFOPLIST_FILE = Apps/LookAfterWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app.widget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1973,11 +2012,7 @@
 				INFOPLIST_FILE = Apps/LookAfterWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samaksh.flowos.app.widget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
