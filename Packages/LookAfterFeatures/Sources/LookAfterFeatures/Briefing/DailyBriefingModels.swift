@@ -26,11 +26,11 @@ public enum BriefingCardKind: String, CaseIterable, Codable, Identifiable, Senda
     public var title: String {
         switch self {
         case .greeting: return "Greeting"
-        case .executiveHero: return "Executive Briefing"
-        case .healthSnapshot: return UserFacingCopy.healthSnapshotTitle
-        case .dailySummary: return "Daily Summary"
+        case .executiveHero: return "For today"
+        case .healthSnapshot: return "How you're doing"
+        case .dailySummary: return "Day so far"
         case .sleep: return "Sleep"
-        case .energy: return "Executive Capacity"
+        case .energy: return "Energy"
         case .mission: return UserFacingCopy.todayTitle
         case .calendar: return "Calendar"
         case .health: return "Health"
@@ -38,7 +38,7 @@ public enum BriefingCardKind: String, CaseIterable, Codable, Identifiable, Senda
         case .aiCoach: return UserFacingCopy.suggestedNextStepTitle
         case .focusPrediction: return UserFacingCopy.openWindowsTitle
         case .progress: return UserFacingCopy.progressTitle
-        case .weeklyTrends: return "Weekly Trends"
+        case .weeklyTrends: return "This week"
         case .alerts: return UserFacingCopy.headsUpTitle
         case .cycle: return "Cycle"
         }
@@ -405,6 +405,13 @@ public struct BriefingProgressData: Sendable, Equatable {
         self.deepWorkMinutes = deepWorkMinutes
         self.productivityScore = productivityScore
     }
+
+    /// Full-day completion percentage (completed vs active workload).
+    public var dayCompletionPercent: Int {
+        let total = completedCount + remainingCount
+        guard total > 0 else { return 0 }
+        return Int((Double(completedCount) / Double(total)) * 100)
+    }
 }
 
 public struct BriefingTrendPoint: Identifiable, Sendable, Equatable {
@@ -471,5 +478,19 @@ public struct BriefingCycleData: Sendable, Equatable {
     public init(snapshot: CycleSnapshot, topInsight: CycleInsight? = nil) {
         self.snapshot = snapshot
         self.topInsight = topInsight
+    }
+}
+
+public struct BriefingModuleInsight: Identifiable, Sendable, Equatable {
+    public var id: String
+    public var module: String
+    public var icon: String
+    public var message: String
+
+    public init(id: String = UUID().uuidString, module: String, icon: String, message: String) {
+        self.id = id
+        self.module = module
+        self.icon = icon
+        self.message = message
     }
 }

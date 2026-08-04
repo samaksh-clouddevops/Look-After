@@ -149,7 +149,7 @@ public enum DayAssembler {
             scheduledDate: dayStart,
             scheduledTime: start,
             tags: [LifeModel.commitmentTaskTag, tag],
-            recurrence: .none,
+            recurrence: nil,
             schedulingMode: isFixed ? .fixedTime : .flexible,
             scheduledEndTime: end
         )
@@ -173,7 +173,7 @@ public enum DayAssembler {
             estimatedMinutes: commitment.defaultMinutes,
             scheduledDate: date,
             tags: [LifeModel.commitmentTaskTag, tag],
-            recurrence: .none,
+            recurrence: nil,
             schedulingMode: .flexible
         )
         task.userId = userId

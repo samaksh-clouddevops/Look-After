@@ -82,9 +82,10 @@ struct DailyPlanView: View {
                         Button {
                             Task { await proposeReplan() }
                         } label: {
-                            Label("Replan My Day", systemImage: "sparkles")
+                            Label("Adjust schedule", systemImage: "sparkles")
                         }
                         .disabled(viewModel.isScheduling)
+                        .accessibilityLabel("Adjust schedule")
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .foregroundColor(DesignSystem.textSecondary)
@@ -149,7 +150,7 @@ struct DailyPlanView: View {
                 HStack {
                     if viewModel.isScheduling { ProgressView().tint(.white) }
                     Image(systemName: "sparkles")
-                    Text(viewModel.isScheduling ? "Planning…" : "Replan My Day")
+                    Text(viewModel.isScheduling ? "Planning…" : "Adjust schedule")
                     Spacer()
                     Image(systemName: "arrow.right")
                 }

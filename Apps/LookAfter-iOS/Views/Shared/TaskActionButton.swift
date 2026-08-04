@@ -13,6 +13,7 @@ struct TaskActionButton: View {
     let icon: String
     let style: Style
     let isDisabled: Bool
+    let isLoading: Bool
     let action: () -> Void
 
     init(
@@ -20,33 +21,49 @@ struct TaskActionButton: View {
         icon: String,
         style: Style = .secondary,
         isDisabled: Bool = false,
+        isLoading: Bool = false,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.icon = icon
         self.style = style
         self.isDisabled = isDisabled
+        self.isLoading = isLoading
         self.action = action
     }
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 13, weight: .semibold, design: .default))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 44)
-                .padding(.horizontal, 12)
-                .foregroundColor(foregroundColor)
-                .background(background)
-                .overlay(border)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous))
+            VStack(spacing: 5) {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.85)
+                        .tint(foregroundColor)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .semibold))
+                }
+
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.75)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 56)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 8)
+            .foregroundColor(foregroundColor)
+            .background(background)
+            .overlay(border)
+            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .opacity(isDisabled ? 0.55 : 1)
-        .accessibilityLabel(title)
+        .disabled(isDisabled || isLoading)
+        .opacity(isDisabled && !isLoading ? 0.55 : 1)
+        .accessibilityLabel(isLoading ? "Loading" : title)
     }
 
     private var foregroundColor: Color {
@@ -89,8 +106,8 @@ struct TaskActionButton: View {
 
 /// Layout metrics shared by tests and previews.
 enum TaskActionButtonMetrics {
-    static let minHeight: CGFloat = DesignSystem.minTouchTarget
+    static let minHeight: CGFloat = 56
     static let cornerRadius: CGFloat = DesignSystem.radiusSM
-    static let horizontalPadding: CGFloat = DesignSystem.spacingMD
-    static let iconSize: CGFloat = 14
+    static let horizontalPadding: CGFloat = 6
+    static let iconSize: CGFloat = 15
 }

@@ -20,6 +20,30 @@ public enum LookAfterPrompts {
     Do NOT contradict structured work/peak hours when provided separately.
     """
 
+    public static let taskFocusStretchSystem = """
+    You estimate realistic ADHD focus stretch length for a single task session.
+    Be conservative when energy is low or sleep was poor. Never exceed 60 minutes.
+    Reply with valid JSON only — no markdown.
+    """
+
+    public static let briefingModuleInsightsSystem = """
+    You write warm, human briefing notes for an ADHD productivity app.
+    One sentence per insight. No jargon, no guilt, no exclamation spam.
+    Sound like a thoughtful friend who knows their day — not a corporate dashboard.
+    Return valid JSON array only.
+    """
+
+    public static let briefingDayHeroSummarySystem = """
+    You write a 3-line morning briefing for an ADHD user inside Look After.
+    Sound like a calm friend texting, not a corporate assistant or AI.
+    Use short sentences. Say "you" and "your". No em dashes, en dashes, semicolons, or bullet points.
+    No words like: leverage, optimize, utilize, on deck, heads up, momentum, capacity mode.
+    Line 1: how they're doing today (sleep, energy, pace of the day).
+    Line 2: what's on the task list — how many, what's done, what matters most.
+    Line 3: one gentle suggestion for what to do next.
+    Return JSON only: {"lines":["line1","line2","line3"]}
+    """
+
     public static let executiveCapacitySystem = """
     You infer executive capacity for an ADHD user. Return ONLY valid JSON.
     Bands: Peak Focus, Good Capacity, Moderate Capacity, Low Capacity, Recovery Mode.

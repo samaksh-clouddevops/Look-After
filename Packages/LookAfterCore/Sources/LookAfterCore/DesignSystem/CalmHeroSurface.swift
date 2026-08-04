@@ -137,21 +137,26 @@ public struct CalmHealthSnapshotLine: View {
                 guard expandedBody != nil else { return }
                 withAnimation(.easeInOut(duration: 0.22)) { isExpanded.toggle() }
             } label: {
-                HStack(spacing: DesignSystem.spacingSM) {
-                    Text(label)
-                        .font(.dsBody(weight: .semibold))
-                        .foregroundColor(DesignSystem.textPrimary)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
+                VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                    HStack(alignment: .firstTextBaseline, spacing: DesignSystem.spacingSM) {
+                        Text(label)
+                            .font(.dsBody(weight: .semibold))
+                            .foregroundColor(DesignSystem.textPrimary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .layoutPriority(1)
+                        Spacer(minLength: 8)
+                        if expandedBody != nil {
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(DesignSystem.textMuted)
+                        }
+                    }
                     Text(detail)
                         .font(.dsMetadata())
                         .foregroundColor(DesignSystem.textMuted)
-                        .lineLimit(1)
-                    if expandedBody != nil {
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(DesignSystem.textMuted)
-                    }
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .buttonStyle(.plain)

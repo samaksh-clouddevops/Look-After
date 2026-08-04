@@ -104,6 +104,8 @@ final class AppShellState: ObservableObject {
             )
             WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM)
 
+            await seedUITestFocusTaskIfNeeded(userId: userId)
+
             let userName = UserLifeProfileStore.resolvedDisplayName()
             await refreshContext(
                 userId: userId,
@@ -111,7 +113,36 @@ final class AppShellState: ObservableObject {
                 peakStartHour: UserLifeProfileStore.load().peakStartHour
             )
             startContextLoop(userId: userId)
+
+            if UITestLaunchConfiguration.shouldAutoStartFocusSession {
+                startFocusSessionForUITestIfNeeded(userId: userId)
+            }
         }
+    }
+
+    private func seedUITestFocusTaskIfNeeded(userId: String) async {
+        guard UITestLaunchConfiguration.shouldSeedFocusTask else { return }
+        let taskId = UITestLaunchConfiguration.focusTaskId
+        guard !tasksVM.tasks.contains(where: { $0.id == taskId }) else { return }
+
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: Date())
+        let start = calendar.date(byAdding: .hour, value: 1, to: day) ?? day
+        let end = calendar.date(byAdding: .minute, value: 45, to: start) ?? start
+
+        let task = LifeTask(
+            id: taskId,
+            title: "UITest focus task",
+            lifeArea: .work,
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: start,
+            schedulingMode: .flexible,
+            scheduledEndTime: end,
+            userId: userId
+        )
+
+        tasksVM.createTask(task)
     }
 
     /// Creates fixed + flexible starter tasks from the life profile once after onboarding.
@@ -513,5 +544,20 @@ final class AppShellState: ObservableObject {
         let actual = completed.compactMap(\.actualMinutes).reduce(0, +)
         if actual > 0 { return actual }
         return completed.reduce(0) { $0 + $1.estimatedMinutes }
+    }
+
+    /// UITest hook — starts a focus session immediately after bootstrap for perf measurement.
+    func startFocusSessionForUITestIfNeeded(userId: String) {
+        guard UITestLaunchConfiguration.shouldAutoStartFocusSession else { return }
+        guard !adhdVM.isFocusSessionActive else { return }
+
+        let task = tasksVM.tasks.first(where: { $0.status.isActive })
+            ?? LifeTask(
+                title: "UITest focus block",
+                lifeArea: .work,
+                estimatedMinutes: 25,
+                userId: userId
+            )
+        adhdVM.startFocusSession(task: task)
     }
 }

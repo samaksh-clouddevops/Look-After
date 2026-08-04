@@ -4,11 +4,14 @@ import LookAfterAI
 import LookAfterData
 import LookAfterFeatures
 
-/// Brain tab — one clear action, capacity context, and lightweight scaffolding.
+/// Brain tab — voice-first psychologist companion with optional text chat.
 struct BrainDashboardView: View {
 
     @ObservedObject var brainVM: BrainViewModel
     @ObservedObject var adhdVM: ADHDViewModel
+    @ObservedObject var brain: ExecutiveBrain
+    @ObservedObject var speechManager: SpeechRecognitionManager
+    @ObservedObject var speechSynthesizer: PlanningSpeechSynthesizer
     let userId: String
     let onStartHero: (LifeTask?) -> Void
     let onRescheduleHero: (LifeTask) -> Void
@@ -18,71 +21,175 @@ struct BrainDashboardView: View {
     let onMarkMedicationTaken: (String) -> Void
     let onNavigateToTasks: () -> Void
     let onNavigateToCoach: () -> Void
+    let onReset: () -> Void
     let onRefresh: () async -> Void
 
-    @State private var showWhyNow = false
-    @State private var showEnergyLog = false
-
-    private var presentation: BrainPresentation { brainVM.presentation }
+    @State private var orbState: LABrainVoiceOrbState = .ready
+    @State private var statusLine: String?
+    @State private var responseSubtitle: String?
 
     var body: some View {
         ZStack {
             PremiumBackground()
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: DesignSystem.spacingXL) {
-                    headerSection
-                    askBrainSection
-                    heroSection
-                    secondarySections
-                    Spacer(minLength: 100)
+            VStack(spacing: DesignSystem.spacingLG) {
+                headerSection
+                statusRow
+                Spacer(minLength: DesignSystem.spacingMD)
+
+                LABrainVoiceOrb(state: orbState, onTap: handleOrbTap)
+                    .featureTourAnchor(.brainVoiceOrb)
+
+                contextCopy
+
+                if let responseSubtitle {
+                    Text(responseSubtitle)
+                        .textStyleBody(color: DesignSystem.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .padding(.horizontal, DesignSystem.spacingMD)
+                        .transition(.opacity)
                 }
-                .padding(.horizontal, DesignSystem.screenHorizontal)
-                .padding(.top, DesignSystem.spacingSM)
+
+                Spacer(minLength: DesignSystem.spacingMD)
+
+                decideForMeChip
+                askBrainGhostButton
             }
+            .padding(.horizontal, DesignSystem.screenHorizontal)
+            .padding(.top, DesignSystem.spacingSM)
+            .padding(.bottom, DesignSystem.spacingXXL)
         }
         .accessibilityIdentifier("screen-brain-dashboard")
         .task {
             await brainVM.refresh(userId: userId)
             await onRefresh()
         }
-        .sheet(isPresented: $showEnergyLog) {
-            BrainEnergyLogSheet(brainVM: brainVM, userId: userId)
+        .onChange(of: speechSynthesizer.isSpeaking) { _, speaking in
+            if !speaking, orbState == .speaking {
+                orbState = .ready
+            }
+        }
+        .onChange(of: brain.isThinking) { _, thinking in
+            if thinking {
+                orbState = .thinking
+                statusLine = "Thinking…"
+            }
         }
     }
 
-    // MARK: - Ask Brain (primary path)
+    // MARK: - Header
 
-    private var askBrainSection: some View {
-        Button(action: onNavigateToCoach) {
-            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-                HStack {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(DesignSystem.accentPrimary)
-                    Text("Ask Brain")
-                        .font(.dsHeadline())
-                        .foregroundColor(DesignSystem.textPrimary)
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(DesignSystem.textMuted)
+    private var headerSection: some View {
+        HStack(alignment: .center) {
+            Text("Executive Brain")
+                .textStyleScreenTitle()
+
+            Spacer()
+
+            Menu {
+                Button(action: onNavigateToTasks) {
+                    Label("All tasks", systemImage: "checklist")
                 }
-
-                Text("What's on your mind? I can help you plan, prioritize, or untangle the day.")
-                    .font(.dsSecondary())
+                Button(action: onCapture) {
+                    Label("Capture", systemImage: "plus.circle")
+                }
+                Button(action: onDecideForMe) {
+                    Label("Decide for me", systemImage: "sparkles")
+                }
+                Button {
+                    adhdVM.startBodyDoubling()
+                } label: {
+                    Label("Body doubling", systemImage: "person.2.fill")
+                }
+                if adhdVM.lastInterruptedTask != nil {
+                    Button {
+                        onResume(adhdVM.lastInterruptedTask?.id)
+                    } label: {
+                        Label("Resume last session", systemImage: "play.circle")
+                    }
+                }
+                Button(action: onReset) {
+                    Label("Reset", systemImage: "heart.flow.fill")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.dsIcon())
                     .foregroundColor(DesignSystem.textSecondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 44, height: 44)
             }
-            .padding(DesignSystem.cardPaddingMin)
+            .accessibilityLabel("Brain actions")
+        }
+    }
+
+    @ViewBuilder
+    private var statusRow: some View {
+        if let statusLine {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(statusDotColor)
+                    .frame(width: 6, height: 6)
+                Text(statusLine)
+                    .textStyleCaption(color: DesignSystem.textSecondary)
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        } else if orbState == .ready {
+            Text("I'm here when you're ready.")
+                .textStyleCaption(color: DesignSystem.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var statusDotColor: Color {
+        switch orbState {
+        case .listening: return DesignSystem.health
+        case .thinking: return DesignSystem.focus
+        default: return DesignSystem.textMuted
+        }
+    }
+
+    private var contextCopy: some View {
+        Text("Analyzing your context, commitments, energy, and goals to help you decide.")
+            .textStyleBody(color: DesignSystem.textSecondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var decideForMeChip: some View {
+        Button(action: onDecideForMe) {
+            HStack(spacing: DesignSystem.spacingSM) {
+                Image(systemName: "sparkles")
+                    .font(.dsIcon())
+                Text("Decide for me")
+                    .textStyleCardTitle()
+            }
+            .foregroundColor(DesignSystem.accentPrimary)
+            .padding(.horizontal, DesignSystem.spacingLG)
+            .padding(.vertical, DesignSystem.spacingMD)
             .background(
-                RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
-                    .fill(DesignSystem.backgroundSecondary)
+                Capsule(style: .continuous)
+                    .fill(DesignSystem.accentPrimary.opacity(0.12))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("brain-decide-entry")
+        .accessibilityLabel("Decide for me")
+    }
+
+    private var askBrainGhostButton: some View {
+        Button(action: onNavigateToCoach) {
+            HStack(spacing: DesignSystem.spacingSM) {
+                Image(systemName: "bubble.left")
+                    .font(.dsIcon())
+                Text("Ask Brain")
+                    .textStyleCardTitle()
+            }
+            .foregroundColor(DesignSystem.textPrimary)
+            .padding(.horizontal, DesignSystem.spacingLG)
+            .padding(.vertical, DesignSystem.spacingMD)
+            .background(
+                Capsule(style: .continuous)
                     .stroke(DesignSystem.border, lineWidth: 1)
             )
         }
@@ -91,555 +198,60 @@ struct BrainDashboardView: View {
         .accessibilityLabel("Ask Brain")
     }
 
-    @ViewBuilder
-    private var secondarySections: some View {
-        resumeSection
-        capacitySection
+    // MARK: - Voice flow
 
-        DisclosureGroup("Tools & shortcuts") {
-            VStack(spacing: DesignSystem.spacingMD) {
-                scaffoldingSection
-                headsUpSection
-                backupSection
-                capturePill
-            }
-            .padding(.top, DesignSystem.spacingSM)
-        }
-        .font(.dsCaption(weight: .semibold))
-        .foregroundColor(DesignSystem.textSecondary)
-        .tint(DesignSystem.accentPrimary)
-    }
-
-    // MARK: - Header
-
-    private var headerSection: some View {
-        HStack(alignment: .center) {
-            Text(presentation.greeting)
-                .font(.system(size: 28, weight: .bold, design: .default))
-                .foregroundColor(DesignSystem.textPrimary)
-
-            Spacer()
-
-            Text(presentation.readinessLabel)
-                .font(.system(size: 12, weight: .semibold, design: .default))
-                .foregroundColor(DesignSystem.accentPrimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(DesignSystem.accentPrimary.opacity(0.12))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(DesignSystem.accentPrimary.opacity(0.25), lineWidth: 1)
-                        )
-                )
+    private func handleOrbTap() {
+        switch orbState {
+        case .ready:
+            Task { await startListening() }
+        case .listening:
+            finishListeningAndSend()
+        case .thinking:
+            break
+        case .speaking:
+            speechSynthesizer.stop()
+            orbState = .ready
+            statusLine = nil
         }
     }
 
-    // MARK: - Resume
-
-    @ViewBuilder
-    private var resumeSection: some View {
-        if let resume = presentation.resume {
-            Button {
-                onResume(resume.taskID)
-            } label: {
-                VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-                    HStack {
-                        Label("Continue", systemImage: "arrow.uturn.forward")
-                            .font(.dsMetadata(weight: .semibold))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                        Spacer()
-                        if let paused = resume.pausedAgoLabel {
-                            Text(paused)
-                                .font(.dsMetadata())
-                                .foregroundColor(DesignSystem.textMuted)
-                        }
-                    }
-
-                    Text(resume.title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(DesignSystem.textPrimary)
-                        .multilineTextAlignment(.leading)
-
-                    Text(resume.detail)
-                        .font(.dsCaption())
-                        .foregroundColor(DesignSystem.textSecondary)
-                        .lineLimit(2)
-
-                    if let elapsed = resume.elapsedLabel {
-                        Text(elapsed)
-                            .font(.dsMetadata())
-                            .foregroundColor(DesignSystem.textMuted)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            .elevatedSurface()
-        }
+    private func startListening() async {
+        orbState = .listening
+        statusLine = "Listening…"
+        responseSubtitle = nil
+        await speechManager.startListening()
     }
 
-    // MARK: - Hero
-
-    @ViewBuilder
-    private var heroSection: some View {
-        if let hero = presentation.hero {
-            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-                if hero.hasTask {
-                    Label("DO THIS NOW", systemImage: "target")
-                        .font(.dsMetadata(weight: .semibold))
-                        .foregroundColor(DesignSystem.accentPrimary)
-                }
-
-                Text(hero.title)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(DesignSystem.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if !hero.supportingLine.isEmpty {
-                    Text(hero.supportingLine)
-                        .font(.dsCaption())
-                        .foregroundColor(DesignSystem.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                heroMetaRow(hero)
-
-                if let coach = presentation.coachMoment {
-                    Text(coach)
-                        .font(.dsMetadata())
-                        .foregroundColor(DesignSystem.textMuted)
-                        .italic()
-                }
-
-                if let confidence = presentation.confidenceLabel {
-                    Text(confidence)
-                        .font(.dsMetadata())
-                        .foregroundColor(DesignSystem.textMuted)
-                }
-
-                PremiumPrimaryButton(
-                    hero.buttonLabel,
-                    icon: hero.hasTask ? "play.fill" : "plus.circle.fill"
-                ) {
-                    onStartHero(hero.task)
-                }
-
-                if hero.hasTask, let task = hero.task {
-                    HStack(spacing: DesignSystem.spacingSM) {
-                        Button("Reschedule") {
-                            onRescheduleHero(task)
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(DesignSystem.textSecondary)
-
-                        Spacer()
-
-                        Button("Decide for me") {
-                            onDecideForMe()
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(DesignSystem.accentPrimary)
-                    }
-                } else {
-                    Button("Decide for me") {
-                        onDecideForMe()
-                    }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(DesignSystem.accentPrimary)
-                }
-
-                if !hero.whyReasons.isEmpty {
-                    whyNowSection(reasons: hero.whyReasons)
-                }
-            }
-            .elevatedSurface()
-        } else if brainVM.isLoading {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DesignSystem.spacingXL)
+    private func finishListeningAndSend() {
+        speechManager.stopListening()
+        let message = speechManager.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else {
+            orbState = .ready
+            statusLine = nil
+            return
         }
-    }
 
-    private func heroMetaRow(_ hero: BrainHeroPresentation) -> some View {
-        HStack(spacing: DesignSystem.spacingMD) {
-            if let scheduled = hero.scheduledLabel {
-                metaChip(icon: "clock", label: scheduled, highlight: hero.isPastDue)
-            }
-            if let minutes = hero.durationMinutes, minutes > 0 {
-                metaChip(icon: "hourglass", label: "\(minutes) min")
-            }
-            if let window = presentation.flowWindowLabel {
-                metaChip(icon: "sparkles", label: window)
-            }
-        }
-    }
+        orbState = .thinking
+        statusLine = "Thinking…"
 
-    private func metaChip(icon: String, label: String, highlight: Bool = false) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
-            Text(label)
-                .font(.dsMetadata())
-        }
-        .foregroundColor(highlight ? DesignSystem.warning : DesignSystem.accentPrimary)
-    }
-
-    private func whyNowSection(reasons: [String]) -> some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.22)) { showWhyNow.toggle() }
-            } label: {
-                HStack {
-                    Image(systemName: "questionmark.circle")
-                    Text(showWhyNow ? "Hide why now" : "Why now?")
-                        .font(.dsMetadata())
-                    Spacer()
-                    Image(systemName: showWhyNow ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+        Task {
+            let response = await brain.chat(message: message)
+            await MainActor.run {
+                let reply = response.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !reply.isEmpty else {
+                    orbState = .ready
+                    statusLine = "I didn't catch that — try again."
+                    return
                 }
-                .foregroundColor(DesignSystem.textMuted)
-            }
-            .buttonStyle(.plain)
-
-            if showWhyNow {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(reasons, id: \.self) { reason in
-                        HStack(alignment: .top, spacing: 8) {
-                            Circle()
-                                .fill(DesignSystem.accentPrimary.opacity(0.6))
-                                .frame(width: 5, height: 5)
-                                .padding(.top, 6)
-                            Text(reason)
-                                .font(.dsCaption())
-                                .foregroundColor(DesignSystem.textSecondary)
-                        }
-                    }
+                responseSubtitle = reply
+                orbState = .speaking
+                statusLine = nil
+                speechSynthesizer.speak(reply)
+                if !speechSynthesizer.isSpeaking {
+                    orbState = .ready
+                    statusLine = "Couldn't play voice reply."
                 }
             }
         }
-        .padding(.top, 4)
-    }
-
-    // MARK: - Capacity
-
-    private var capacitySection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(presentation.capacity.bandLabel)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(DesignSystem.textPrimary)
-                    Text(presentation.capacity.tagline)
-                        .font(.dsCaption())
-                        .foregroundColor(DesignSystem.textSecondary)
-                }
-                Spacer()
-            }
-
-            HStack(spacing: DesignSystem.spacingSM) {
-                if let free = presentation.capacity.freeMinutesLabel {
-                    capacityChip(free)
-                }
-                if let sleep = presentation.capacity.sleepLabel {
-                    capacityChip(sleep)
-                }
-                Spacer()
-                Button("Log how I feel") {
-                    showEnergyLog = true
-                }
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(DesignSystem.accentPrimary)
-            }
-        }
-        .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
-    }
-
-    private func capacityChip(_ label: String) -> some View {
-        Text(label)
-            .font(.dsMetadata())
-            .foregroundColor(DesignSystem.textSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(DesignSystem.backgroundElevated.opacity(0.85))
-            )
-    }
-
-    // MARK: - Scaffolding
-
-    private var scaffoldingSection: some View {
-        HStack(spacing: DesignSystem.spacingSM) {
-            scaffoldButton(icon: "play.fill", label: "Start focus") {
-                onStartHero(presentation.hero?.task)
-            }
-            scaffoldButton(icon: "exclamationmark.triangle.fill", label: "Emergency") {
-                adhdVM.activateEmergencyMode(allTasks: brainVM.topTasks)
-            }
-            scaffoldButton(icon: "bubble.left.fill", label: UserFacingCopy.chatTitle) {
-                onNavigateToCoach()
-            }
-        }
-    }
-
-    private func scaffoldButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(DesignSystem.textMuted)
-                Text(label)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 72)
-            .elevatedSurface(padding: 8, cornerRadius: DesignSystem.radiusMD)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Heads up
-
-    @ViewBuilder
-    private var headsUpSection: some View {
-        if !presentation.headsUp.isEmpty {
-            VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-                Text("Heads up")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(DesignSystem.textPrimary)
-
-                ForEach(presentation.headsUp) { item in
-                    headsUpRow(item)
-                }
-            }
-            .elevatedSurface()
-        }
-    }
-
-    private func headsUpRow(_ item: BrainHeadsUpItem) -> some View {
-        HStack(spacing: DesignSystem.spacingSM) {
-            Image(systemName: headsUpIcon(item.kind))
-                .font(.system(size: 14))
-                .foregroundColor(DesignSystem.textMuted)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.textPrimary)
-                Text(item.subtitle)
-                    .font(.dsMetadata())
-                    .foregroundColor(DesignSystem.textSecondary)
-            }
-
-            Spacer()
-
-            if item.kind == .medication, let medID = item.medicationID {
-                Button(item.actionLabel ?? "Taken") {
-                    onMarkMedicationTaken(medID)
-                }
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(DesignSystem.accentPrimary)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func headsUpIcon(_ kind: BrainHeadsUpItem.Kind) -> String {
-        switch kind {
-        case .medication: return "pills.fill"
-        case .bill: return "creditcard"
-        case .calendar: return "calendar"
-        }
-    }
-
-    // MARK: - Backup
-
-    @ViewBuilder
-    private var backupSection: some View {
-        if !presentation.backupTasks.isEmpty {
-            VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-                HStack {
-                    Text("If you finish early")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(DesignSystem.textPrimary)
-                    Spacer()
-                    Button("All tasks", action: onNavigateToTasks)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(DesignSystem.accentPrimary)
-                }
-
-                ForEach(presentation.backupTasks) { task in
-                    CompactTaskRowView(task: task)
-                }
-            }
-            .elevatedSurface()
-        }
-    }
-
-    // MARK: - Capture
-
-    private var capturePill: some View {
-        Button(action: onCapture) {
-            HStack(spacing: 8) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 14, weight: .medium))
-                Text("Capture a thought")
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundColor(DesignSystem.textPrimary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(DesignSystem.backgroundElevated.opacity(0.9))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(DesignSystem.divider.opacity(0.6), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Energy log
-
-private struct BrainEnergyLogSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var brainVM: BrainViewModel
-
-    let userId: String
-
-    @State private var energy: EnergyLevel = .moderate
-    @State private var focusNote = ""
-    @State private var isSaving = false
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                PremiumBackground()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-                        Text("How are you feeling right now?")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(DesignSystem.textPrimary)
-
-                        VStack(spacing: DesignSystem.spacingSM) {
-                            ForEach(EnergyLevel.allCases) { level in
-                                Button {
-                                    energy = level
-                                } label: {
-                                    HStack(spacing: DesignSystem.spacingMD) {
-                                        Image(systemName: level.icon)
-                                            .font(.system(size: 18))
-                                            .foregroundColor(
-                                                energy == level
-                                                    ? DesignSystem.accentPrimary
-                                                    : DesignSystem.textMuted
-                                            )
-                                            .frame(width: 28)
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(level.rawValue)
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundColor(DesignSystem.textPrimary)
-                                            Text(level.description)
-                                                .font(.dsMetadata())
-                                                .foregroundColor(DesignSystem.textSecondary)
-                                                .multilineTextAlignment(.leading)
-                                        }
-
-                                        Spacer()
-
-                                        if energy == level {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(DesignSystem.accentPrimary)
-                                        }
-                                    }
-                                    .padding(DesignSystem.spacingMD)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                                            .fill(
-                                                energy == level
-                                                    ? DesignSystem.accentPrimary.opacity(0.1)
-                                                    : DesignSystem.backgroundElevated.opacity(0.6)
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                                                    .stroke(
-                                                        energy == level
-                                                            ? DesignSystem.accentPrimary.opacity(0.35)
-                                                            : DesignSystem.divider.opacity(0.5),
-                                                        lineWidth: 1
-                                                    )
-                                            )
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Optional note")
-                                .font(.dsMetadata(weight: .semibold))
-                                .foregroundColor(DesignSystem.textMuted)
-                            TextField("Scattered, locked in, tired…", text: $focusNote, axis: .vertical)
-                                .lineLimit(2...4)
-                                .textFieldStyle(.plain)
-                                .padding(DesignSystem.spacingMD)
-                                .background(
-                                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                                        .fill(DesignSystem.backgroundElevated.opacity(0.85))
-                                )
-                        }
-
-                        PremiumPrimaryButton(isSaving ? "Saving…" : "Save check-in", icon: "checkmark") {
-                            Task { await save() }
-                        }
-                        .disabled(isSaving)
-                    }
-                    .padding(DesignSystem.spacingMD)
-                }
-            }
-            .navigationTitle("Log how I feel")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func save() async {
-        isSaving = true
-        let note = focusNote.trimmingCharacters(in: .whitespacesAndNewlines)
-        await brainVM.logEnergyReport(
-            energy: energy,
-            focusNote: note.isEmpty ? nil : note,
-            userId: userId
-        )
-        isSaving = false
-        dismiss()
-    }
-}
-
-/// A compact task row for the dashboard.
-struct TaskRowView: View {
-    let task: LifeTask
-
-    var body: some View {
-        CompactTaskRowView(task: task)
     }
 }

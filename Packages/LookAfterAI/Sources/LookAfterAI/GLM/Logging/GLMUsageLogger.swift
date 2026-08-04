@@ -70,13 +70,40 @@ public final class GLMUsageLogger: @unchecked Sendable {
         estimateCostUSD(model: GLMConfiguration.defaultModel, promptTokens: promptTokens, completionTokens: completionTokens)
     }
 
+    /// Per-token USD rates derived from https://docs.z.ai/guides/overview/pricing (per 1M tokens).
     private static func ratesForModel(_ model: String) -> (input: Double, output: Double) {
         let normalized = model.lowercased()
-        if normalized.contains("flash") || normalized.contains("air") {
-            return (0.00000006, 0.0000004)
+
+        // FlashX is paid — check before generic "flash".
+        if normalized.contains("flashx") {
+            if normalized.contains("4.6v") {
+                return (0.00000004, 0.0000004) // GLM-4.6V-FlashX: $0.04 / $0.40 per 1M
+            }
+            return (0.00000007, 0.0000004) // GLM-4.7-FlashX: $0.07 / $0.40 per 1M
         }
-        if normalized.contains("4.7") || normalized.contains("4.5") {
-            return (0.0000006, 0.0000022)
+
+        // GLM-4.7-Flash, GLM-4.5-Flash, GLM-4.6V-Flash are free on z.ai.
+        if normalized.contains("flash") {
+            return (0, 0)
+        }
+
+        if normalized.contains("airx") {
+            return (0.0000011, 0.0000045) // GLM-4.5-AirX
+        }
+        if normalized.contains("air") {
+            return (0.0000002, 0.0000011) // GLM-4.5-Air
+        }
+        if normalized.contains("32b") {
+            return (0.0000001, 0.0000001) // GLM-4-32B
+        }
+        if normalized.contains("4.7") || normalized.contains("4.6") || normalized.contains("4.5") {
+            return (0.0000006, 0.0000022) // GLM-4.7 / 4.6 / 4.5
+        }
+        if normalized.contains("5-turbo") || normalized.contains("5.1") || normalized.contains("5.2") {
+            return (0.0000014, 0.0000044) // GLM-5.1 / 5.2 / 5-Turbo
+        }
+        if normalized.contains("glm-5") {
+            return (0.000001, 0.0000032) // GLM-5 base
         }
         return (0.0000014, 0.0000044)
     }

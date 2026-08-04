@@ -9,6 +9,12 @@ struct AllModulesGridView: View {
 
     @EnvironmentObject private var shell: AppShellState
     @ObservedObject var modulesVM: LifeModulesViewModel
+    let userId: String
+
+    init(modulesVM: LifeModulesViewModel, userId: String) {
+        self.modulesVM = modulesVM
+        self.userId = userId
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,9 +37,10 @@ struct AllModulesGridView: View {
                             subtitle: "Plan and complete work",
                             badge: "Active",
                             destination: TaskListView(
-                                tasksVM: TasksViewModel(decomposer: TaskDecomposer()),
-                                adhdVM: ADHDViewModel(),
-                                userId: "user"
+                                tasksVM: shell.tasksVM,
+                                adhdVM: shell.adhdVM,
+                                brainVM: shell.brainVM,
+                                userId: userId
                             )
                         )
 
@@ -41,7 +48,7 @@ struct AllModulesGridView: View {
                             title: "Data Insights",
                             subtitle: "Patterns from your history",
                             badge: "Personalized",
-                            destination: InsightsDashboardView(brain: ExecutiveBrain())
+                            destination: InsightsDashboardView(brain: shell.brain, userId: userId)
                         )
 
                         moduleLink(
@@ -111,7 +118,8 @@ struct AllModulesGridView: View {
             .navigationBarHidden(true)
         }
         .task {
-            await modulesVM.loadAllData(userId: "user")
+            guard !userId.isEmpty else { return }
+            await modulesVM.loadAllData(userId: userId)
         }
         .accessibilityIdentifier("screen-modules")
     }

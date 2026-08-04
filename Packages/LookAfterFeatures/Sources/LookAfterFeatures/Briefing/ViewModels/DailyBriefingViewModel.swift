@@ -52,8 +52,12 @@ public final class DailyBriefingViewModel: ObservableObject {
     @Published public private(set) var alerts: [BriefingAlert] = []
     @Published public private(set) var postWakeState: PostWakeDetector.Result = .inactive
     @Published public private(set) var dayBriefing: MorningDayBriefing?
+    @Published public private(set) var dayHeroSummaryLines: [String] = []
+    @Published public private(set) var isLoadingDayHeroSummary = false
     @Published public private(set) var lifeGaps: [LifeGap] = []
     @Published public private(set) var cycleData = BriefingCycleData.disabled
+    @Published public private(set) var moduleInsights: [BriefingModuleInsight] = []
+    @Published public private(set) var isLoadingModuleInsights = false
     @Published public var cardOrder: [BriefingCardKind] = BriefingCardKind.defaultOrder
     @Published public var hiddenCards: Set<BriefingCardKind> = []
     @Published public var pinnedCards: Set<BriefingCardKind> = []
@@ -73,10 +77,10 @@ public final class DailyBriefingViewModel: ObservableObject {
 
     public init(
         healthRepo: HealthSummaryRepository? = nil,
-        analyticsService: BackgroundAnalyticsService? = BackgroundAnalyticsService.shared
+        analyticsService: BackgroundAnalyticsService? = nil
     ) {
         self.healthRepo = healthRepo ?? HealthSummaryRepository()
-        self.analyticsService = analyticsService
+        self.analyticsService = analyticsService ?? BackgroundAnalyticsService.shared
         loadPreferences()
         loadHabitState()
     }
@@ -156,7 +160,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             healthKitAvailable: healthKitAvailable,
             healthSummary: resolvedHealth
         )
-        buildMission(topTasks: brainVM.topTasks, completedToday: tasksVM.completedToday)
+        buildMission(tasksVM: tasksVM)
         buildCalendar(flowSurface: brainVM.flowSurface)
         buildHealth(health: resolvedHealth, available: healthKitAvailable)
         buildAIRecommendation(brainVM: brainVM)
@@ -175,6 +179,8 @@ public final class DailyBriefingViewModel: ObservableObject {
         buildLifeGaps(tasksVM: tasksVM)
         buildCycleData(healthSummary: resolvedHealth)
         refreshHabitCompletions()
+        await buildDayHeroSummary(userName: userName, tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
+        await buildModuleInsights(userName: userName)
         await loadWeeklyTrends(userId: userId, tasksVM: tasksVM)
     }
 
@@ -453,10 +459,7 @@ public final class DailyBriefingViewModel: ObservableObject {
     }
 
     private func isDuplicateCopy(_ a: String, _ b: String) -> Bool {
-        let left = a.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let right = b.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if left.isEmpty || right.isEmpty { return false }
-        return left == right || left.contains(right) || right.contains(left)
+        UserFacingCopy.isDuplicateCopy(a, b)
     }
 
     private func applyGreetingLine(_ source: String, displayName: String) {
@@ -654,17 +657,37 @@ public final class DailyBriefingViewModel: ObservableObject {
         )
     }
 
-    private func buildMission(topTasks: [LifeTask], completedToday: [LifeTask]) {
-        var items: [BriefingMissionTask] = completedToday.prefix(3).map {
+    private func buildMission(tasksVM: TasksViewModel) {
+        let allTasks = tasksVM.tasks + tasksVM.completedToday + tasksVM.recurrenceTemplates
+        let now = Date()
+        let calendar = Calendar.current
+
+        let scheduledCompleted = LifeTimelinePresenter.completedTasksScheduledForToday(
+            from: tasksVM.completedToday,
+            allTasks: allTasks,
+            now: now,
+            calendar: calendar
+        )
+        let scheduledActive = LifeTimelinePresenter.tasksScheduledForToday(
+            from: tasksVM.tasks.filter { $0.status.isActive },
+            allTasks: allTasks,
+            now: now,
+            calendar: calendar
+        )
+
+        let completedIds = Set(scheduledCompleted.map(\.id))
+        let pending = scheduledActive.filter { !completedIds.contains($0.id) }
+
+        var items: [BriefingMissionTask] = scheduledCompleted.prefix(3).map {
             BriefingMissionTask(id: $0.id, title: $0.title, isCompleted: true, priority: $0.priority)
         }
-        items += topTasks.prefix(6).map {
+        items += pending.prefix(6).map {
             BriefingMissionTask(id: $0.id, title: $0.title, isCompleted: false, priority: $0.priority)
         }
 
-        let total = items.count
-        let done = items.filter(\.isCompleted).count
-        let percent = total > 0 ? Int((Double(done) / Double(total)) * 100) : 0
+        let totalScheduled = Set(scheduledCompleted.map(\.id) + scheduledActive.map(\.id)).count
+        let done = scheduledCompleted.count
+        let percent = totalScheduled > 0 ? Int((Double(done) / Double(totalScheduled)) * 100) : 0
 
         mission = BriefingMissionData(tasks: items, completionPercent: percent)
     }
@@ -797,10 +820,27 @@ public final class DailyBriefingViewModel: ObservableObject {
     }
 
     private func buildProgress(tasksVM: TasksViewModel, snapshot: CognitiveSnapshot?) {
-        let overdue = tasksVM.tasks.filter(\.isOverdue).count
-        let completed = tasksVM.completedToday.count
-        let remaining = tasksVM.tasks.count
-        let deepWork = tasksVM.completedToday.reduce(0) { $0 + $1.estimatedMinutes }
+        let allTasks = tasksVM.tasks + tasksVM.completedToday + tasksVM.recurrenceTemplates
+        let now = Date()
+        let calendar = Calendar.current
+
+        let scheduledActive = LifeTimelinePresenter.tasksScheduledForToday(
+            from: tasksVM.tasks.filter { $0.status.isActive },
+            allTasks: allTasks,
+            now: now,
+            calendar: calendar
+        )
+        let scheduledCompleted = LifeTimelinePresenter.completedTasksScheduledForToday(
+            from: tasksVM.completedToday,
+            allTasks: allTasks,
+            now: now,
+            calendar: calendar
+        )
+
+        let overdue = scheduledActive.filter(\.isOverdue).count
+        let completed = scheduledCompleted.count
+        let remaining = scheduledActive.count
+        let deepWork = scheduledCompleted.reduce(0) { $0 + $1.estimatedMinutes }
         let productivity = snapshot?.executiveFunctionScore ?? min(completed * 15, 100)
 
         progress = BriefingProgressData(
@@ -1012,6 +1052,53 @@ public final class DailyBriefingViewModel: ObservableObject {
             completedTasks: tasksVM.completedToday,
             activeTasks: tasksVM.tasks
         )
+    }
+
+    private func buildDayHeroSummary(
+        userName: String,
+        tasksVM: TasksViewModel,
+        lifeTimelineEvents: [LifeTimelineEvent]
+    ) async {
+        isLoadingDayHeroSummary = true
+        defer { isLoadingDayHeroSummary = false }
+
+        let input = BriefingDayHeroSummaryGenerator.Input(
+            userName: userName,
+            dayBriefing: dayBriefing,
+            mission: mission,
+            progress: progress,
+            executiveCapacity: executiveCapacity,
+            energy: energy,
+            calendar: calendar,
+            sleep: sleep,
+            tasks: tasksVM.tasks,
+            completedToday: tasksVM.completedToday,
+            lifeTimelineEvents: lifeTimelineEvents
+        )
+        dayHeroSummaryLines = await BriefingDayHeroSummaryGenerator.generate(input)
+    }
+
+    private func buildModuleInsights(userName: String) async {
+        isLoadingModuleInsights = true
+        defer { isLoadingModuleInsights = false }
+
+        let input = BriefingModuleInsightsBuilder.Input(
+            userName: userName,
+            progress: progress,
+            mission: mission,
+            sleep: sleep,
+            energy: energy,
+            executiveCapacity: executiveCapacity,
+            habits: habits,
+            calendar: calendar,
+            lifeGaps: lifeGaps,
+            cycleData: cycleData,
+            alerts: alerts,
+            aiRecommendation: aiRecommendation
+        )
+        var insights = BriefingModuleInsightsBuilder.buildDeterministic(input)
+        insights = await BriefingModuleInsightsBuilder.supplementWithAI(existing: insights, input: input)
+        moduleInsights = insights
     }
 
     private func buildCycleData(healthSummary: HealthSummary?) {

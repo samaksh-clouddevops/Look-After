@@ -51,11 +51,6 @@ public final class TaskSemanticAnalyzer: @unchecked Sendable {
         let cogStr = (json["cognitiveRequirement"] as? String ?? "moderate").lowercased()
         let cognitive = CognitiveRequirement.allCases.first { $0.rawValue.lowercased() == cogStr } ?? .moderate
 
-        let delayStr = (json["consequenceOfDelay"] as? String ?? "low").lowercased()
-        let consequence = ConsequenceOfDelay.allCases.first {
-            $0.rawValue.lowercased() == delayStr.replacingOccurrences(of: "medicalrisk", with: "medicalrisk")
-        } ?? .low
-
         return TaskSemanticProfile(
             semanticType: semanticType,
             subtype: json["subtype"] as? String ?? "",

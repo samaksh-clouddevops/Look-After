@@ -22,6 +22,9 @@ enum UITestLaunchConfiguration {
         var profile = UserLifeProfileStore.load()
         profile.hasCompletedOnboarding = !ProcessInfo.processInfo.arguments.contains("-ShowOnboarding")
         profile.preferredName = "UITest User"
+        if !ProcessInfo.processInfo.arguments.contains("-ShowFeatureTour") {
+            AppFeatureTourStore.markCompleted()
+        }
         if profile.profileText.isEmpty {
             profile.profileText = """
             # UITest Profile
@@ -31,7 +34,11 @@ enum UITestLaunchConfiguration {
         }
         UserLifeProfileStore.save(profile)
 
-        Task { @MainActor in
+        if ProcessInfo.processInfo.arguments.contains("-SkipLiveActivity") {
+            UserDefaults.standard.set(false, forKey: "enableHealth")
+        }
+
+        MainActor.assumeIsolated {
             FirebaseManager.shared.currentUserId = userId
             FirebaseManager.shared.isAuthenticated = true
             FirebaseManager.shared.userEmail = "uitest@lookafter.test"
@@ -47,6 +54,20 @@ enum UITestLaunchConfiguration {
             UserDefaults.standard.set(true, forKey: "uitest_reduce_motion")
         }
     }
+
+    static var shouldAutoStartFocusSession: Bool {
+        isEnabled && ProcessInfo.processInfo.arguments.contains("-AutoStartFocusSession")
+    }
+
+    static var shouldSkipLiveActivity: Bool {
+        isEnabled && ProcessInfo.processInfo.arguments.contains("-SkipLiveActivity")
+    }
+
+    static var shouldSeedFocusTask: Bool {
+        isEnabled && ProcessInfo.processInfo.arguments.contains("-SeedFocusTask")
+    }
+
+    static let focusTaskId = "uitest-focus-task"
 
     static func argumentValue(prefix: String) -> String? {
         let args = ProcessInfo.processInfo.arguments

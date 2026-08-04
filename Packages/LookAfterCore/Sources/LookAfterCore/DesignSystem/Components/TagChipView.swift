@@ -108,7 +108,7 @@ public extension LifeTask {
     /// One-line metadata for compact task rows.
     var compactMetadataLine: String? {
         var parts: [String] = []
-        parts.append("\(estimatedMinutes)m")
+        parts.append("Estimated time \(estimatedMinutes) min")
 
         if isRecurring {
             parts.append(recurrenceRule.rawValue)
@@ -129,10 +129,10 @@ public extension LifeTask {
     }
 
     /// Standard metadata chips for task cards.
-    func metadataTags() -> [TagChipView] {
+    func metadataTags(timeLabel: String? = nil) -> [TagChipView] {
         var tags: [TagChipView] = [
             TagChipView(lifeArea.rawValue, icon: lifeArea.icon, style: .neutral),
-            TagChipView("~\(estimatedMinutes)m")
+            TagChipView(timeLabel ?? "Estimated time \(estimatedMinutes) min")
         ]
         if isRecurring {
             tags.append(TagChipView(recurrenceRule.rawValue, icon: "repeat", style: .accent))

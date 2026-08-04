@@ -36,9 +36,14 @@ public final class SpeechRecognitionManager: ObservableObject {
         }
         
         #if os(iOS)
-        let micGranted = await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                continuation.resume(returning: granted)
+        let micGranted: Bool
+        if #available(iOS 17.0, *) {
+            micGranted = await AVAudioApplication.requestRecordPermission()
+        } else {
+            micGranted = await withCheckedContinuation { continuation in
+                AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                    continuation.resume(returning: granted)
+                }
             }
         }
         guard micGranted else {

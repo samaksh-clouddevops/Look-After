@@ -88,7 +88,7 @@ final class CompanionEngineTests: XCTestCase {
     }
 
     func testSleepInsightIncludesMetrics() {
-        var snapshot = LifeContextSnapshot(sleepQuality: .poor)
+        let snapshot = LifeContextSnapshot(sleepQuality: .poor)
         var health = HealthSummary()
         health.totalSleepMinutes = 368
         health.deepSleepMinutes = 52
@@ -99,7 +99,7 @@ final class CompanionEngineTests: XCTestCase {
     }
 
     func testPositiveSleepInsightForGoodNight() {
-        var snapshot = LifeContextSnapshot(sleepQuality: .good)
+        let snapshot = LifeContextSnapshot(sleepQuality: .good)
         var health = HealthSummary()
         health.totalSleepMinutes = 582
         health.deepSleepMinutes = 95

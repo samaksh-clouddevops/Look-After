@@ -29,12 +29,18 @@ final class DailyBriefingViewModelTests: XCTestCase {
             contextNotes: "Strong day for deep work.",
             executiveFunctionScore: 82
         )
-        brainVM.topTasks = [
-            LifeTask(title: "Vision API Review", priority: .high),
-            LifeTask(title: "Gym", priority: .medium),
+        let today = Calendar.current.startOfDay(for: Date())
+        tasksVM.tasks = [
+            LifeTask(title: "Vision API Review", priority: .high, scheduledDate: today),
+            LifeTask(title: "Gym", priority: .medium, scheduledDate: today),
         ]
         tasksVM.completedToday = [
-            LifeTask(title: "Morning standup", status: .completed),
+            LifeTask(
+                title: "Morning standup",
+                status: .completed,
+                scheduledDate: today,
+                completedAt: Date()
+            ),
         ]
 
         await vm.refresh(

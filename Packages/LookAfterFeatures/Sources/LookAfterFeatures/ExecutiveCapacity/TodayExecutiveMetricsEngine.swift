@@ -204,7 +204,6 @@ public enum TodayExecutiveMetricsEngine {
         let pending = input.medications.filter { !$0.isTaken }
         guard !pending.isEmpty else { return nil }
 
-        let cal = Calendar.current
         let sorted = pending.sorted { $0.scheduledTime < $1.scheduledTime }
         guard let next = sorted.first else { return nil }
 

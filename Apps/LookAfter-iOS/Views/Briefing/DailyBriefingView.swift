@@ -33,18 +33,24 @@ struct DailyBriefingView: View {
     @State private var showCycleDashboard = false
     @State private var scrollOffset: CGFloat = 0
 
+    private let chaptersAnchorID = "briefing-chapters-start"
+
     private var showsScrollHint: Bool {
         scrollOffset < 40
     }
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                PremiumBackground()
+        ZStack(alignment: .bottom) {
+            PremiumBackground()
 
+            ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        firstViewport
+                        firstViewport(onContinue: {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo(chaptersAnchorID, anchor: .top)
+                            }
+                        })
                         scrollChapters
                     }
                     .background(
@@ -61,16 +67,14 @@ struct DailyBriefingView: View {
                 .refreshable {
                     await reload()
                 }
-
-                if showsScrollHint {
-                    BriefingScrollAffordance()
-                        .padding(.bottom, 24)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        .allowsHitTesting(false)
-                }
             }
-            .animation(.easeOut(duration: 0.25), value: showsScrollHint)
+
+            if showsScrollHint {
+                scrollHintOverlay
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
+        .animation(.easeOut(duration: 0.25), value: showsScrollHint)
         .task(id: refreshToken) {
             await reload()
         }
@@ -96,101 +100,115 @@ struct DailyBriefingView: View {
             guard phase == .complete else { return }
             Task { await reload() }
         }
-        .accessibilityIdentifier("screen-daily-briefing")
+        .accessibilityIdentifier("screen-briefing")
     }
 
     // MARK: - First viewport
 
-    private var firstViewport: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingXL) {
-            headerBar
-            BriefingGreetingHeader(greeting: briefingVM.greeting)
-
-            Spacer(minLength: DesignSystem.spacingHero)
-
-            Text(v4MissionLine)
-                .font(.dsTitle())
-                .foregroundColor(DesignSystem.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            v4PrimaryRecommendation
-
-            if let why = v4WhyLine {
-                Text(why)
-                    .font(.dsSecondary())
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    private func firstViewport(onContinue: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
+            VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                headerBar
+                BriefingGreetingHeader(greeting: briefingVM.greeting)
             }
 
-            PremiumPrimaryButton("Continue Briefing →", icon: "arrow.right") {
-                onOpenToday()
-            }
+            LAExecutiveBriefingCard(
+                summaryLines: briefingVM.dayHeroSummaryLines,
+                isLoading: briefingVM.isLoadingDayHeroSummary,
+                onContinue: onContinue
+            )
+            .featureTourAnchor(.briefingHero)
 
-            Spacer(minLength: DesignSystem.spacingHero)
+            todayAtAGlanceSection
         }
-        .padding(.horizontal, DesignSystem.screenHorizontal)
-        .padding(.top, DesignSystem.spacingSM)
-        .padding(.bottom, DesignSystem.spacingXL)
+        .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+        .safeAreaPadding(.top, DesignSystem.spacingSM)
+        .padding(.bottom, DesignSystem.spacingSM)
     }
 
-    private var v4MissionLine: String {
-        if let hero = briefingVM.executiveHero, !hero.actionLine.isEmpty {
-            return UserFacingCopy.sanitize(hero.actionLine)
-        }
-        if let overview = briefingVM.dayBriefing, !overview.headline.isEmpty {
-            return UserFacingCopy.sanitize(overview.headline)
-        }
-        return "One clear step for today."
+    private var scrollHintOverlay: some View {
+        Text("↓ Scroll for more")
+            .textStyleCaption(color: DesignSystem.textSecondary)
+            .padding(.horizontal, DesignSystem.spacingMD)
+            .padding(.vertical, DesignSystem.spacingSM)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .shadow(
+                        color: DesignSystem.shadowElevated.opacity(0.12),
+                        radius: 12,
+                        y: 4
+                    )
+            )
+            .padding(.bottom, DesignSystem.spacingMD)
+            .accessibilityLabel("Scroll for more")
+            .accessibilityHint("Scroll down to see sleep, tasks, and health")
     }
 
     @ViewBuilder
-    private var v4PrimaryRecommendation: some View {
-        if let hero = briefingVM.executiveHero, hero.isActionableTask {
-            BriefingNextActionStrip(
-                hero: hero,
-                task: resolveHeroTask(hero),
-                onStart: {
-                    if let task = resolveHeroTask(hero) {
-                        onStartTask(task)
-                    } else {
-                        onOpenToday()
+    private var todayAtAGlanceSection: some View {
+        BriefingSectionCard(title: "Today at a Glance") {
+            if glanceEvents.isEmpty {
+                Text("Nothing fixed on the calendar yet.")
+                    .textStyleCaption()
+            } else {
+                VStack(spacing: DesignSystem.spacingSM) {
+                    ForEach(glanceEvents) { event in
+                        LABriefingGlanceRow(
+                            title: event.title,
+                            timeRange: event.timeRange,
+                            dotColor: event.dotColor,
+                            action: onOpenToday
+                        )
                     }
                 }
-            )
-        } else if let overview = briefingVM.dayBriefing {
-            BriefingDayOverviewCard(
-                briefing: overview,
-                isMorningStyle: briefingVM.isPostWake,
-                onOpenTimeline: onOpenToday,
-                onOpenTasks: onOpenTasks,
-                onCapture: onCapture
-            )
-        } else {
-            ElevatedSurface(padding: DesignSystem.cardPaddingMin, emphasis: .standard) {
-                Text(briefingVM.aiRecommendation ?? "Your day is open — capture a thought or pick one task.")
-                    .font(.dsBody())
-                    .foregroundColor(DesignSystem.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(.top, DesignSystem.spacingSM)
+        .accessibilityIdentifier("briefing-today-at-glance")
     }
 
-    private var v4WhyLine: String? {
-        if let hero = briefingVM.executiveHero, let why = hero.whyLine, !why.isEmpty {
-            return UserFacingCopy.sanitize(why)
+    private struct GlanceEvent: Identifiable {
+        let id: String
+        let title: String
+        let timeRange: String
+        let dotColor: Color
+    }
+
+    private var glanceEvents: [GlanceEvent] {
+        shell.contextOrchestrator.lifeTimelineEvents
+            .filter(\.isImportantCommitment)
+            .sorted { $0.date < $1.date }
+            .prefix(3)
+            .map { event in
+                GlanceEvent(
+                    id: event.id,
+                    title: event.title,
+                    timeRange: event.scheduleRangeLabel,
+                    dotColor: glanceColor(for: event.kind)
+                )
+            }
+    }
+
+    private func glanceColor(for kind: LifeTimelineEventKind) -> Color {
+        switch kind {
+        case .work, .meeting: return DesignSystem.focus
+        case .health, .medication, .exercise, .recovery: return DesignSystem.health
+        case .creative, .personal: return DesignSystem.reflection
+        case .finance, .bill, .shopping: return DesignSystem.learning
+        case .travel: return DesignSystem.travel
+        case .habit, .relationship: return DesignSystem.relationships
         }
-        if let rec = briefingVM.aiRecommendation, !rec.isEmpty {
-            return CalmHeroContentBuilder.firstSentence(rec)
-        }
-        return nil
     }
 
     // MARK: - Scroll chapters (below the fold)
 
     private var scrollChapters: some View {
         VStack(spacing: DesignSystem.BriefingViewport.chapterSpacing) {
+            Color.clear.frame(height: 1).id(chaptersAnchorID)
+
             BriefingChapterSection(
-                title: "Today's Snapshot",
+                title: "How you're doing",
                 subtitle: snapshotPreviewHint,
                 icon: "sun.max"
             ) {
@@ -202,7 +220,7 @@ struct DailyBriefingView: View {
 
             if hasSnapshotDetailsChapter {
                 BriefingChapterSection(
-                    title: "Details",
+                    title: "Tasks & numbers",
                     subtitle: snapshotChapterSubtitle,
                     icon: "chart.bar.doc.horizontal"
                 ) {
@@ -232,7 +250,7 @@ struct DailyBriefingView: View {
 
             if hasRecommendationsChapter {
                 BriefingChapterSection(
-                    title: "More for today",
+                    title: "Also on your radar",
                     subtitle: recommendationsChapterSubtitle,
                     icon: "sparkles"
                 ) {
@@ -240,8 +258,14 @@ struct DailyBriefingView: View {
                 }
             }
 
-            Color.clear.frame(height: DesignSystem.spacingXXL)
+            BriefingModuleInsightsCard(
+                insights: briefingVM.moduleInsights,
+                isLoading: briefingVM.isLoadingModuleInsights
+            )
+
+            Color.clear.frame(height: DesignSystem.BriefingViewport.scrollHintHeight)
         }
+        .padding(.bottom, DesignSystem.spacingMD)
     }
 
     // MARK: - Chapter content
@@ -276,7 +300,12 @@ struct DailyBriefingView: View {
                 ExecutiveCapacityCard(capacity: briefingVM.executiveCapacity, compact: true)
             }
             if isVisible(.health) {
-                BriefingHealthCard(health: briefingVM.health, compact: true, onConnectHealth: connectHealth)
+                BriefingHealthCard(
+                    health: briefingVM.health,
+                    compact: true,
+                    showsTitle: false,
+                    onConnectHealth: connectHealth
+                )
             }
             if isVisible(.cycle), briefingVM.cycleData.isVisible {
                 BriefingCycleCard(
@@ -365,24 +394,18 @@ struct DailyBriefingView: View {
 
     // MARK: - Copy helpers
 
-    private func resolveHeroTask(_ hero: BriefingExecutiveHero) -> LifeTask? {
-        if let id = hero.actionTaskID {
-            return tasksVM.tasks.first { $0.id == id && $0.status.isActive }
-        }
-        return tasksVM.tasks.first(where: \.status.isActive)
-    }
-
     private var snapshotPreviewHint: String {
         let readiness = briefingVM.healthSnapshot.readinessLabel
-        let pct = briefingVM.mission.completionPercent
+        let pct = briefingVM.progress.dayCompletionPercent
         if pct > 0 {
-            return "\(readiness) · \(pct)% of today done"
+            return "\(readiness) · \(pct)% done so far"
         }
         return readiness
     }
 
     private var snapshotChapterSubtitle: String {
-        "\(briefingVM.healthSnapshot.readinessLabel) · \(briefingVM.mission.completionPercent)% complete"
+        let pct = briefingVM.progress.dayCompletionPercent
+        return "\(briefingVM.healthSnapshot.readinessLabel) · \(pct)% done"
     }
 
     private var healthChapterSubtitle: String {
@@ -398,17 +421,17 @@ struct DailyBriefingView: View {
         if let title = briefingVM.calendar.nextEventTitle {
             return title
         }
-        return briefingVM.energy.peakFocusWindow
+        if !briefingVM.energy.peakFocusWindow.isEmpty {
+            return "Open stretch · \(briefingVM.energy.peakFocusWindow)"
+        }
+        return "Calendar's clear"
     }
 
     private var recommendationsChapterSubtitle: String {
-        if let rec = briefingVM.aiRecommendation, !rec.isEmpty {
-            return CalmHeroContentBuilder.firstSentence(rec)
-        }
         if !briefingVM.alerts.isEmpty {
-            return "\(briefingVM.alerts.count) item\(briefingVM.alerts.count == 1 ? "" : "s") need attention"
+            return "\(briefingVM.alerts.count) thing\(briefingVM.alerts.count == 1 ? "" : "s") to look at"
         }
-        return "Suggestions and habits"
+        return "Habits and suggestions"
     }
 
     // MARK: - Header

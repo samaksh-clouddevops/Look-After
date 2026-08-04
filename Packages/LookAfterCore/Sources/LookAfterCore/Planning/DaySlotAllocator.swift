@@ -121,7 +121,7 @@ public enum DaySlotAllocator {
                 results.append(allocation)
                 remaining.removeAll { $0.id == allocation.id }
                 if let request = requests.first(where: { $0.id == allocation.id }) {
-                    var placeholder = LifeTask(
+                    let placeholder = LifeTask(
                         title: request.id,
                         estimatedMinutes: request.estimatedMinutes,
                         scheduledDate: day,

@@ -82,7 +82,45 @@ public struct LookAfterSemanticColors: Equatable, Sendable {
     }
 }
 
-// MARK: - Environment
+// MARK: - In-app appearance override
+
+public enum AppAppearanceMode: String, CaseIterable, Identifiable, Sendable {
+    case system
+    case light
+    case dark
+
+    public static let storageKey = "lookafter.appearanceMode"
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    public var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+
+    public static func load(from defaults: UserDefaults = .standard) -> AppAppearanceMode {
+        guard let raw = defaults.string(forKey: storageKey),
+              let mode = AppAppearanceMode(rawValue: raw) else { return .system }
+        return mode
+    }
+
+    public var isDark: Bool { self == .dark }
+
+    public var usesSystemSetting: Bool { self == .system }
+}
+
+// MARK: - Environment (semantic palette)
 
 private struct LookAfterThemeKey: EnvironmentKey {
     static let defaultValue = LookAfterSemanticColors.light

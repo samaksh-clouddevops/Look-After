@@ -49,7 +49,7 @@ public final class ADHDViewModel: ObservableObject {
     @Published public var efScore: Int = 50
     @Published public var efScoreTrend: String = "stable" // "improving", "declining", "stable"
     
-    private var focusTimer: Timer?
+    private var focusTickTask: Task<Void, Never>?
     private var bodyDoublingTimer: Timer?
     private var countdownTimer: Timer?
     private var pausedElapsed: TimeInterval = 0
@@ -95,69 +95,105 @@ public final class ADHDViewModel: ObservableObject {
     
     /// 3-2-1 countdown to help overcome task initiation resistance.
     public func startCountdown(for task: LifeTask, onComplete: @escaping () -> Void) {
+        cancelCountdownIfNeeded()
         isCountdownActive = true
         countdownValue = 3
         currentFocusTask = task
-        
-        countdownTimer?.invalidate()
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
             Task { @MainActor in
                 guard let self = self else { timer.invalidate(); return }
-                
+
                 if self.countdownValue > 1 {
                     self.countdownValue -= 1
                 } else {
                     timer.invalidate()
+                    self.countdownTimer = nil
                     self.isCountdownActive = false
                     self.countdownValue = 3
                     onComplete()
                 }
             }
         }
+        countdownTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    public func cancelCountdownIfNeeded() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+        isCountdownActive = false
+        countdownValue = 3
     }
     
     // MARK: - Focus Session
     
-    /// Start a focus/pomodoro session with user-configured duration.
+    /// Start a focus/pomodoro session — uses the scheduled window when set, else task estimate.
     public func startFocusSession(task: LifeTask, durationMinutes: Int? = nil) {
-        let duration = durationMinutes ?? focusDurationMinutes
-        isFocusSessionActive = true
+        let duration = durationMinutes ?? Self.focusDuration(for: task, defaultMinutes: focusDurationMinutes)
+        cancelCountdownIfNeeded()
+        stopFocusTick()
         focusSessionElapsed = 0
         focusSessionTarget = TimeInterval(duration * 60)
         focusBreakReminder = false
         currentFocusTask = task
         isPaused = false
         isOnBreak = false
-        
-        startFocusTimer()
+        showContextRecovery = false
+        currentSessionNumber = 1
+        isFocusSessionActive = true
+
+        Task { @MainActor in
+            await Task.yield()
+            guard isFocusSessionActive else { return }
+            startFocusTimer()
+        }
+    }
+
+    /// Preferred focus block length — honors fixed schedule windows (e.g. 9h office block).
+    public static func focusDuration(for task: LifeTask, defaultMinutes: Int, now: Date = Date()) -> Int {
+        let calendar = Calendar.current
+        let referenceDay = calendar.startOfDay(for: task.scheduledDate ?? task.scheduledTime ?? now)
+        if let window = TaskScheduleInterval.window(for: task, on: referenceDay, calendar: calendar) {
+            return window.durationMinutes
+        }
+        if task.estimatedMinutes > 0 {
+            return task.estimatedMinutes
+        }
+        return defaultMinutes
     }
     
+    private func stopFocusTick() {
+        focusTickTask?.cancel()
+        focusTickTask = nil
+    }
+
     private func startFocusTimer() {
-        focusTimer?.invalidate()
-        focusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            Task { @MainActor in
-                guard let self = self else { timer.invalidate(); return }
-                
-                self.focusSessionElapsed += 1
-                
-                // Check if session is complete
-                if self.focusSessionElapsed >= self.focusSessionTarget {
-                    timer.invalidate()
-                    if self.isOnBreak {
-                        // Break finished — start next focus session
-                        self.isOnBreak = false
-                        self.currentSessionNumber += 1
-                        self.startFocusSession(task: self.currentFocusTask ?? LifeTask(title: "Working"))
+        stopFocusTick()
+        focusTickTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, isFocusSessionActive else { return }
+                guard !isPaused else { continue }
+
+                focusSessionElapsed += 1
+
+                if focusSessionElapsed >= focusSessionTarget {
+                    stopFocusTick()
+                    if isOnBreak {
+                        isOnBreak = false
+                        currentSessionNumber += 1
+                        if let task = currentFocusTask {
+                            startFocusSession(task: task)
+                        }
                     } else {
-                        // Focus finished — start break
-                        self.startBreak()
+                        startBreak()
                     }
                     return
                 }
-                
-                // Check for hyperfocus (past target by 50%) only during focus (not break)
-                if !self.isOnBreak && self.focusSessionElapsed > self.focusSessionTarget * 1.5 {
-                    self.focusBreakReminder = true
+
+                if !isOnBreak && focusSessionElapsed > focusSessionTarget * 1.5 {
+                    focusBreakReminder = true
                 }
             }
         }
@@ -178,7 +214,7 @@ public final class ADHDViewModel: ObservableObject {
     
     /// Pause the focus session.
     public func pauseFocusSession() {
-        focusTimer?.invalidate()
+        stopFocusTick()
         isPaused = true
         pausedElapsed = focusSessionElapsed
         
@@ -201,7 +237,7 @@ public final class ADHDViewModel: ObservableObject {
     /// Skip the current break and start next focus session.
     public func skipBreak() {
         guard isOnBreak else { return }
-        focusTimer?.invalidate()
+        stopFocusTick()
         isOnBreak = false
         currentSessionNumber += 1
         if let task = currentFocusTask {
@@ -222,7 +258,7 @@ public final class ADHDViewModel: ObservableObject {
     
     /// Reset current session timer to full configured duration.
     public func resetTimer() {
-        focusTimer?.invalidate()
+        stopFocusTick()
         focusSessionElapsed = 0
         if isOnBreak {
             let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
@@ -237,19 +273,24 @@ public final class ADHDViewModel: ObservableObject {
     /// Optional hook for Flow Director re-orchestration after a focus session ends.
     public var onFocusSessionEnded: ((Int, LifeTask?) -> Void)?
 
-    /// End the focus session.
+    /// End the focus session and return to the app shell.
     public func endFocusSession() {
         let durationMinutes = max(1, Int(focusSessionElapsed / 60))
         let task = currentFocusTask
-        focusTimer?.invalidate()
+        stopFocusTick()
+        cancelCountdownIfNeeded()
         isFocusSessionActive = false
         focusSessionElapsed = 0
         focusBreakReminder = false
         currentFocusTask = nil
         isPaused = false
         isOnBreak = false
+        showContextRecovery = false
         currentSessionNumber = 1
-        onFocusSessionEnded?(durationMinutes, task)
+        Task { @MainActor in
+            await Task.yield()
+            onFocusSessionEnded?(durationMinutes, task)
+        }
     }
     
     /// Resume from interruption with context recovery.
@@ -304,8 +345,13 @@ public final class ADHDViewModel: ObservableObject {
     /// Formatted remaining time for focus session.
     public var focusRemainingString: String {
         let remaining = max(0, focusSessionTarget - focusSessionElapsed)
-        let minutes = Int(remaining) / 60
-        let seconds = Int(remaining) % 60
+        let totalSeconds = Int(remaining)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
         return String(format: "%02d:%02d", minutes, seconds)
     }
     
@@ -348,7 +394,7 @@ public final class ADHDViewModel: ObservableObject {
     // MARK: - Cleanup
     
     public func cleanup() {
-        focusTimer?.invalidate()
+        stopFocusTick()
         bodyDoublingTimer?.invalidate()
         countdownTimer?.invalidate()
     }

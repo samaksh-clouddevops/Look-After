@@ -110,6 +110,7 @@ public struct CardContainerView<Content: View>: View {
     var icon: String?
     var iconGradient: LinearGradient
     var compact: Bool
+    var showsHeader: Bool
     @ViewBuilder let content: Content
 
     public init(
@@ -117,18 +118,22 @@ public struct CardContainerView<Content: View>: View {
         icon: String? = nil,
         iconGradient: LinearGradient = DesignSystem.accentGradient,
         compact: Bool = false,
+        showsHeader: Bool = true,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.icon = icon
         self.iconGradient = iconGradient
         self.compact = compact
+        self.showsHeader = showsHeader
         self.content = content()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: compact ? DesignSystem.spacingSM : DesignSystem.spacingMD) {
-            SectionHeaderView(title: title, icon: icon, iconGradient: iconGradient)
+            if showsHeader {
+                SectionHeaderView(title: title, icon: icon, iconGradient: iconGradient)
+            }
             content
         }
         .elevatedSurface(

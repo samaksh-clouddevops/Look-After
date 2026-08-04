@@ -69,9 +69,10 @@ struct TaskListView: View {
                         Button {
                             Task { await proposeReplan() }
                         } label: {
-                            Label("Replan My Day", systemImage: "sparkles")
+                            Label("Adjust schedule", systemImage: "sparkles")
                         }
                         .disabled(plannerVM.isScheduling)
+                        .accessibilityLabel("Adjust schedule")
 
                         Button {
                             Task { await proposeTomorrowPlan() }
@@ -151,6 +152,9 @@ struct TaskListView: View {
         .task {
             await tasksVM.loadTasks(userId: userId)
         }
+        .task(id: filteredTasks.map(\.id).joined()) {
+            await refreshTaskTimeDisplays()
+        }
         .undoToast(
             isShowing: Binding(
                 get: { tasksVM.isUndoToastVisible },
@@ -201,6 +205,22 @@ struct TaskListView: View {
     private func handleComplete(_ task: LifeTask) {
         HapticManager.notification(.success)
         Task { await tasksVM.completeTask(task) }
+    }
+
+    private func refreshTaskTimeDisplays() async {
+        let snapshot = brainVM?.cognitiveSnapshot
+        let sleepQuality: SleepQuality? = {
+            guard let snapshot else { return nil }
+            if snapshot.sleepDebtHours > 2 { return .poor }
+            if snapshot.recoveryScore < 0.45 { return .fair }
+            return nil
+        }()
+        let context = TaskFocusStretchResolver.Context.fromProfile(
+            energyScore: snapshot?.energyScore,
+            sleepQuality: sleepQuality,
+            executiveCapacity: nil
+        )
+        await tasksVM.refreshTimeDisplays(for: filteredTasks, context: context)
     }
 
     private var tomorrowPlanningBanner: some View {
@@ -319,7 +339,7 @@ struct TaskFormSheet: View {
                         TextField("What needs to be done?", text: $title)
                             .font(.system(.body, design: .default))
                         
-                        if !mode.isEditing && title.trimmingCharacters(in: .whitespaces).count >= 3 {
+                        if title.trimmingCharacters(in: .whitespaces).count >= 3 {
                             Button(action: fillWithAI) {
                                 HStack(spacing: 8) {
                                     if tasksVM.isAutoFilling {
@@ -328,7 +348,7 @@ struct TaskFormSheet: View {
                                         Text("AI is filling details...")
                                     } else {
                                         Image(systemName: "sparkles")
-                                        Text("Fill details with AI")
+                                        Text(mode.isEditing ? "Fill with AI" : "Fill details with AI")
                                     }
                                 }
                                 .font(.system(size: 14, weight: .semibold, design: .default))

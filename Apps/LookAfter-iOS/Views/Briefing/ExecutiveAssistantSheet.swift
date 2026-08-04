@@ -2,7 +2,7 @@ import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
 
-/// Minimal bottom affordance — expands to full planning conversation when needed.
+/// Minimal bottom affordance — expands to a dynamically sized planning conversation (up to 60% of screen).
 struct ExecutiveAssistantSheet: View {
     @ObservedObject var planningVM: ExecutivePlanningViewModel
     @ObservedObject var speechManager: SpeechRecognitionManager
@@ -15,15 +15,22 @@ struct ExecutiveAssistantSheet: View {
 
     @State private var isExpanded = false
     @State private var dragTranslation: CGFloat = 0
+    @State private var intrinsicSheetHeight: CGFloat = 136
 
     private let collapsedHeight: CGFloat = 52
-    private let expandedFraction: CGFloat = 0.72
+    private let maxExpandedFraction: CGFloat = 0.60
+    private let minExpandedHeight: CGFloat = 136
+    private let dragHandleBlockHeight: CGFloat = 20
 
     var body: some View {
         GeometryReader { geo in
-            let expandedHeight = geo.size.height * expandedFraction
+            let maxExpandedHeight = geo.size.height * maxExpandedFraction
+            let naturalExpandedHeight = max(intrinsicSheetHeight, minExpandedHeight)
+            let targetExpandedHeight = min(naturalExpandedHeight, maxExpandedHeight)
+            let atScrollCap = naturalExpandedHeight > maxExpandedHeight
+            let panelMaxHeight = atScrollCap ? (maxExpandedHeight - dragHandleBlockHeight) : nil
             let currentHeight = isExpanded
-                ? max(collapsedHeight, expandedHeight + dragTranslation)
+                ? max(collapsedHeight, targetExpandedHeight + dragTranslation)
                 : collapsedHeight
 
             ZStack(alignment: .bottom) {
@@ -36,11 +43,24 @@ struct ExecutiveAssistantSheet: View {
 
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
-                    sheetBody(expandedHeight: expandedHeight)
-                        .frame(height: currentHeight)
+                    sheetBody(
+                        maxExpandedHeight: maxExpandedHeight,
+                        panelMaxHeight: panelMaxHeight,
+                        currentHeight: currentHeight
+                    )
                 }
             }
             .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: isExpanded)
+            .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: intrinsicSheetHeight)
+            .overlay(alignment: .bottom) {
+                if isExpanded {
+                    heightMeasurementProbe
+                        .frame(width: geo.size.width)
+                        .hidden()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
         }
         .onChange(of: planningVM.isProcessing) { _, processing in
             if processing { expand() }
@@ -56,15 +76,22 @@ struct ExecutiveAssistantSheet: View {
         .onChange(of: planningVM.draftText) { _, text in
             if !text.isEmpty, !isExpanded { expand() }
         }
+        .onChange(of: planningVM.turns.count) { _, _ in
+            if !planningVM.turns.isEmpty, !isExpanded { expand() }
+        }
         .accessibilityIdentifier("screen-assistant-sheet")
     }
 
     @ViewBuilder
-    private func sheetBody(expandedHeight: CGFloat) -> some View {
+    private func sheetBody(
+        maxExpandedHeight: CGFloat,
+        panelMaxHeight: CGFloat?,
+        currentHeight: CGFloat
+    ) -> some View {
         VStack(spacing: 0) {
             if isExpanded {
                 dragHandle
-                expandedContent
+                conversationView(maxPanelHeight: panelMaxHeight)
             } else {
                 collapsedAffordance
             }
@@ -72,7 +99,8 @@ struct ExecutiveAssistantSheet: View {
         .background(sheetBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous))
         .shadow(color: DesignSystem.shadowElevated, radius: isExpanded ? 16 : 8, y: -2)
-        .gesture(expandedDragGesture(expandedHeight: expandedHeight))
+        .frame(height: currentHeight, alignment: .top)
+        .gesture(expandedDragGesture(maxExpandedHeight: maxExpandedHeight))
     }
 
     private var sheetBackground: some View {
@@ -114,12 +142,31 @@ struct ExecutiveAssistantSheet: View {
             .accessibilityHidden(true)
     }
 
-    private var expandedContent: some View {
+    private var heightMeasurementProbe: some View {
+        VStack(spacing: 0) {
+            dragHandle
+            conversationView(maxPanelHeight: nil)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: SheetIntrinsicHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(SheetIntrinsicHeightKey.self) { height in
+            guard height > 0 else { return }
+            intrinsicSheetHeight = height
+        }
+    }
+
+    private func conversationView(maxPanelHeight: CGFloat?) -> some View {
         ExecutivePlanningConversationView(
             planningVM: planningVM,
             speechManager: speechManager,
             speechSynthesizer: speechSynthesizer,
             isExpanded: true,
+            maxPanelHeight: maxPanelHeight,
             onSubmit: { text, voice in
                 if !isExpanded { expand() }
                 onSubmit(text, voice)
@@ -135,7 +182,7 @@ struct ExecutiveAssistantSheet: View {
         )
     }
 
-    private func expandedDragGesture(expandedHeight: CGFloat) -> some Gesture {
+    private func expandedDragGesture(maxExpandedHeight: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .local)
             .onChanged { value in
                 guard isExpanded else { return }
@@ -143,7 +190,7 @@ struct ExecutiveAssistantSheet: View {
             }
             .onEnded { value in
                 guard isExpanded else { return }
-                let threshold = expandedHeight * 0.22
+                let threshold = maxExpandedHeight * 0.22
                 if value.translation.height > threshold || value.predictedEndTranslation.height > threshold {
                     collapse()
                 } else {
@@ -185,6 +232,14 @@ struct ExecutiveAssistantSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct SheetIntrinsicHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

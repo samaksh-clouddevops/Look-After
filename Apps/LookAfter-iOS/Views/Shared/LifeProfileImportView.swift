@@ -14,6 +14,7 @@ struct LifeProfileImportView: View {
     @State private var compileMessage: String?
     @State private var showAdvancedEditor = false
     @State private var structuredProfileSections = StructuredLifeProfileSections()
+    @State private var organizeError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -67,8 +68,19 @@ struct LifeProfileImportView: View {
                 StructuredLifeProfileEditor(
                     sections: $structuredProfileSections,
                     minSectionHeight: 72,
-                    showsOrganizeButton: false
+                    showsOrganizeButton: true,
+                    onOrganize: { await organizeWithAI() },
+                    onOrganizeLocally: {
+                        structuredProfileSections = LifeProfileComposer.organizeLocally(structuredProfileSections)
+                        markdown = LifeProfileComposer.compile(structuredProfileSections)
+                    }
                 )
+
+                if let organizeError {
+                    Text(organizeError)
+                        .font(.system(size: 12))
+                        .foregroundColor(DesignSystem.error)
+                }
             }
             .font(.system(size: 13, weight: .medium))
             .foregroundColor(DesignSystem.textSecondary)
@@ -78,7 +90,41 @@ struct LifeProfileImportView: View {
             if markdown.isEmpty {
                 markdown = UserLifeProfileStore.load().profileText
             }
-            structuredProfileSections = LifeProfileComposer.parse(UserLifeProfileStore.load().profileText)
+            structuredProfileSections = LifeProfileComposer.parse(markdown.isEmpty ? UserLifeProfileStore.load().profileText : markdown)
+        }
+        .onChange(of: structuredProfileSections.personality) { _, _ in syncMarkdownFromSections() }
+        .onChange(of: structuredProfileSections.adhdFocusPatterns) { _, _ in syncMarkdownFromSections() }
+        .onChange(of: structuredProfileSections.dailySchedule) { _, _ in syncMarkdownFromSections() }
+        .onChange(of: structuredProfileSections.planningPreferences) { _, _ in syncMarkdownFromSections() }
+    }
+
+    private func syncMarkdownFromSections() {
+        markdown = LifeProfileComposer.compile(structuredProfileSections)
+    }
+
+    private func organizeWithAI() async {
+        organizeError = nil
+        let prompt = LifeProfileComposer.organizeStructuredPrompt(structuredProfileSections)
+        do {
+            let polished = try await GLMService.shared.complete(
+                prompt: prompt,
+                systemPrompt: LookAfterPrompts.profileOrganizeSystem,
+                tier: .economy
+            )
+            let trimmed = polished.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                structuredProfileSections = LifeProfileComposer.organizeLocally(structuredProfileSections)
+                organizeError = "AI returned empty — formatted locally."
+                syncMarkdownFromSections()
+                return
+            }
+            structuredProfileSections = LifeProfileComposer.parse(trimmed)
+            syncMarkdownFromSections()
+            HapticManager.notification(.success)
+        } catch {
+            structuredProfileSections = LifeProfileComposer.organizeLocally(structuredProfileSections)
+            organizeError = "AI unavailable — formatted locally."
+            syncMarkdownFromSections()
         }
     }
 

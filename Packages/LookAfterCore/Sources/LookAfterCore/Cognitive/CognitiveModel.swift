@@ -1,5 +1,4 @@
 import Foundation
-import LookAfterCore
 
 /// Estimates the user's cognitive state from available data.
 /// Combines health data, time of day, task history, and self-reports

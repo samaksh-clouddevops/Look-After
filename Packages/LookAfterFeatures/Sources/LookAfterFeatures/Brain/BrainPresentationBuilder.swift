@@ -208,7 +208,9 @@ enum BrainPresentationBuilder {
 
     private static func headline(from hero: HeroBriefing, task: LifeTask?) -> String {
         if !hero.actionLine.isEmpty {
-            return UserFacingCopy.sanitize(hero.actionLine)
+            let sanitized = UserFacingCopy.sanitize(hero.actionLine)
+            if !sanitized.isEmpty { return sanitized }
+            return UserFacingCopy.label(forActionKind: hero.action.kind)
         }
         if let task {
             return HumanLanguage.outcomeHeadline(task: task)
@@ -223,21 +225,22 @@ enum BrainPresentationBuilder {
     ) -> String {
         var parts: [String] = []
         if let context = hero.contextLine, !context.isEmpty {
-            parts.append(UserFacingCopy.sanitize(context))
+            parts.append(context)
         }
         if !hero.supportingLine.isEmpty {
-            parts.append(UserFacingCopy.sanitize(hero.supportingLine))
+            parts.append(hero.supportingLine)
         }
         if parts.isEmpty, let line = flowSurface?.briefingLines.first {
-            parts.append(UserFacingCopy.sanitize(line))
+            parts.append(line)
         }
         if parts.isEmpty, let reasoning = flowSurface?.prediction?.reasoning {
-            parts.append(UserFacingCopy.sanitize(reasoning))
+            parts.append(reasoning)
         }
         if parts.isEmpty, let task {
-            parts.append(capacityFitLine(for: task))
+            return capacityFitLine(for: task)
         }
-        return parts.joined(separator: " ")
+        let headline = headline(from: hero, task: task)
+        return UserFacingCopy.joinDistinct(parts.filter { !UserFacingCopy.isDuplicateCopy($0, headline) })
     }
 
     private static func capacityFitLine(for task: LifeTask) -> String {

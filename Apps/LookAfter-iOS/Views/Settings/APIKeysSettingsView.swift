@@ -234,7 +234,7 @@ final class APIKeysSettingsViewModel: ObservableObject {
     }
 
     func addKey(name: String, secret: String) {
-        try? glm.keyManagerAccess.addKey(name: name, secret: secret)
+        _ = try? glm.keyManagerAccess.addKey(name: name, secret: secret)
         refresh()
     }
 

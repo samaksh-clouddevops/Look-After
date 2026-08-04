@@ -35,7 +35,7 @@ final class FlowSchedulingRuleTests: XCTestCase {
             id: "e1", title: "Sync", startDate: Date(), endDate: Date(), minutesUntilStart: 30
         )
         let longTask = FlowSchedulingTestFixtures.task(title: "Architecture", estimatedMinutes: 90)
-        var env = EnvironmentContext(energyScore: 0.7, nextEvent: event, timeOfDay: .morning)
+        let env = EnvironmentContext(energyScore: 0.7, nextEvent: event, timeOfDay: .morning)
         let input = FlowSchedulingTestFixtures.input(tasks: [longTask], environment: env)
         var state = MutableSchedulingState(heroTask: longTask, suggestedDurationMinutes: 90)
         MeetingSoonRule().apply(to: &state, context: FlowSchedulingTestFixtures.context(from: input))
@@ -54,7 +54,7 @@ final class FlowSchedulingRuleTests: XCTestCase {
             priority: .high
         )
         let light = FlowSchedulingTestFixtures.task(title: "Quick Reply", estimatedMinutes: 10, difficulty: .easy)
-        var env = EnvironmentContext(energyScore: 0.25, timeOfDay: .morning)
+        let env = EnvironmentContext(energyScore: 0.25, timeOfDay: .morning)
         let input = FlowSchedulingTestFixtures.input(tasks: [demanding, light], environment: env)
         var state = MutableSchedulingState(heroTask: demanding, suggestedDurationMinutes: 60)
         LowEnergyRule().apply(to: &state, context: FlowSchedulingTestFixtures.context(from: input))
@@ -74,7 +74,7 @@ final class FlowSchedulingRuleTests: XCTestCase {
             priority: .high
         )
         let quick = FlowSchedulingTestFixtures.task(title: "Inbox", estimatedMinutes: 10)
-        var env = EnvironmentContext(energyScore: 0.8, freeBlockMinutes: 120, timeOfDay: .morning)
+        let env = EnvironmentContext(energyScore: 0.8, freeBlockMinutes: 120, timeOfDay: .morning)
         let input = FlowSchedulingTestFixtures.input(tasks: [quick, deep], environment: env)
         var state = MutableSchedulingState(heroTask: quick, suggestedDurationMinutes: 10)
         DeepWorkWindowRule().apply(to: &state, context: FlowSchedulingTestFixtures.context(from: input))

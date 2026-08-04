@@ -26,7 +26,9 @@ struct TaskListRowView: View {
             onEdit: { editingTask = task },
             onDuplicate: { tasksVM.duplicateTask(task) },
             onDelete: { onDelete(task) },
-            isDecomposing: tasksVM.isDecomposing
+            isDecomposing: tasksVM.isDecomposing(taskId: task.id),
+            timeDisplayLabel: tasksVM.timeDisplay(for: task).lineLabel,
+            isLoadingTimeDisplay: tasksVM.isLoadingTimeDisplay(taskId: task.id)
         )
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)

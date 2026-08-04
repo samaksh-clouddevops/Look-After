@@ -14,6 +14,9 @@ public final class TasksViewModel: ObservableObject {
     @Published public var error: String?
     @Published public var selectedTask: LifeTask?
     @Published public var isDecomposing: Bool = false
+    @Published public private(set) var decomposingTaskId: String?
+    @Published public private(set) var taskTimeDisplays: [String: TaskTimeDisplayInfo] = [:]
+    @Published public private(set) var loadingTimeDisplayTaskIds: Set<String> = []
     @Published public var isAutoFilling: Bool = false
     @Published public var isImporting: Bool = false
     @Published public var importPreview: TaskImportResult?
@@ -27,6 +30,7 @@ public final class TasksViewModel: ObservableObject {
     private let autoFiller: TaskAutoFiller
     private let taskImporter: TaskImporter
     private let semanticAnalyzer: TaskSemanticAnalyzer
+    private let focusStretchRefiner = TaskFocusStretchRefiner()
     private var undoDismissTask: Task<Void, Never>?
     private var loadGeneration = 0
     
@@ -67,7 +71,7 @@ public final class TasksViewModel: ObservableObject {
         if showSpinner { isLoading = true }
 
         do {
-            let snapshot = try await taskRepo.getTaskLists(for: userId)
+            _ = try await taskRepo.getTaskLists(for: userId)
             guard generation == loadGeneration else { return }
             try await syncRecurringOccurrences(userId: userId)
             guard generation == loadGeneration else { return }
@@ -619,13 +623,18 @@ public final class TasksViewModel: ObservableObject {
     
     /// Decompose a task into micro-steps and auto-detect recurrence using AI.
     public func decomposeTask(_ task: LifeTask) async {
+        decomposingTaskId = task.id
         isDecomposing = true
+        defer {
+            decomposingTaskId = nil
+            isDecomposing = false
+        }
         do {
             let result = try await decomposer.decompose(task: task)
             var updatedTask = task
             updatedTask.steps = result.steps
             if updatedTask.parentTaskId == nil,
-               updatedTask.recurrence == nil || updatedTask.recurrence == .none {
+               updatedTask.recurrence == nil {
                 updatedTask.recurrence = result.recurrence
             }
             try await taskRepo.update(updatedTask)
@@ -637,7 +646,43 @@ public final class TasksViewModel: ObservableObject {
         } catch {
             self.error = error.localizedDescription
         }
-        isDecomposing = false
+    }
+
+    public func isDecomposing(taskId: String) -> Bool {
+        decomposingTaskId == taskId
+    }
+
+    public func timeDisplay(for task: LifeTask, context: TaskFocusStretchResolver.Context? = nil) -> TaskTimeDisplayInfo {
+        if let cached = taskTimeDisplays[task.id] {
+            return cached
+        }
+        let resolvedContext = context ?? .fromProfile(energyScore: nil, sleepQuality: nil, executiveCapacity: nil)
+        return TaskFocusStretchResolver.displayInfo(for: task, context: resolvedContext)
+    }
+
+    public func refreshTimeDisplays(
+        for tasks: [LifeTask],
+        context: TaskFocusStretchResolver.Context
+    ) async {
+        for task in tasks {
+            var info = TaskFocusStretchResolver.displayInfo(for: task, context: context)
+            taskTimeDisplays[task.id] = info
+            guard info.needsAIRefinement else { continue }
+
+            loadingTimeDisplayTaskIds.insert(task.id)
+            if let refined = await focusStretchRefiner.refine(
+                task: task,
+                context: context,
+                estimatedMinutes: task.estimatedMinutes
+            ) {
+                taskTimeDisplays[task.id] = refined
+            }
+            loadingTimeDisplayTaskIds.remove(task.id)
+        }
+    }
+
+    public func isLoadingTimeDisplay(taskId: String) -> Bool {
+        loadingTimeDisplayTaskIds.contains(taskId)
     }
     
     /// Mark a task as completed and schedule the next recurring occurrence when applicable.
@@ -819,7 +864,7 @@ public final class TasksViewModel: ObservableObject {
 
         for var task in assembly.tasksToCreate {
             task.userId = userId
-            task.recurrence = .none
+            task.recurrence = nil
             task.isRecurrenceTemplate = false
             tasks.insert(task, at: 0)
             do {
@@ -948,7 +993,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         for id in idsToDelete {
-            guard let task = all.first(where: { $0.id == id }) else { continue }
+            guard all.contains(where: { $0.id == id }) else { continue }
             tasks.removeAll { $0.id == id }
             completedToday.removeAll { $0.id == id }
             do {

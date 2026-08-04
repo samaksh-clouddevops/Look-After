@@ -8,6 +8,7 @@ import LookAfterHealth
 /// LifeOS WWDC Master Canvas — The Zero-Surface Ambient Cognitive OS.
 public struct LookAfterMasterCanvas: View {
     @EnvironmentObject private var shell: AppShellState
+    @EnvironmentObject private var featureTour: AppFeatureTourCoordinator
     @State private var showModules = false
     @State private var showCoach = false
     @State private var showDailyPlan = false
@@ -23,6 +24,7 @@ public struct LookAfterMasterCanvas: View {
     @State private var showMedication = false
     @State private var showFullTimeline = false
     @State private var showBrainCapture = false
+    @State private var showInbox = false
     @State private var showWelcomeToast = false
     @State private var welcomeToastMessage = ""
     @AppStorage(FlowDirectorFeature.userDefaultsKey) private var enableFlowDirector = false
@@ -35,6 +37,7 @@ public struct LookAfterMasterCanvas: View {
     @StateObject private var tomorrowPlannerVM = DailyPlannerViewModel()
     @StateObject private var planningSpeech = PlanningSpeechSynthesizer()
     @State private var selectedTab: LookAfterTab = .briefing
+    @State private var tabBeforeFocus: LookAfterTab = .briefing
     @State private var showTomorrowPlanPreview = false
 
     public init() {}
@@ -185,8 +188,8 @@ public struct LookAfterMasterCanvas: View {
 
             if shell.adhdVM.isFocusSessionActive {
                 FocusSessionView(adhdVM: shell.adhdVM)
-                    .transition(.opacity)
                     .zIndex(99)
+                    .ignoresSafeArea()
             }
 
             if shell.adhdVM.isBodyDoubling {
@@ -212,9 +215,27 @@ public struct LookAfterMasterCanvas: View {
                 .zIndex(90)
                 .allowsHitTesting(false)
             }
+
+            if featureTour.isActive {
+                AppFeatureTourOverlay(coordinator: featureTour)
+                    .zIndex(200)
+            }
+        }
+        .onPreferenceChange(AppFeatureTourFramePreferenceKey.self) { frames in
+            featureTour.anchorFrames = frames
+        }
+        .onChange(of: featureTour.requestedTab) { _, tab in
+            guard let tab else { return }
+            selectedTab = tab
+        }
+        .onChange(of: featureTour.stepIndex) { _, _ in
+            if let tab = featureTour.requestedTab {
+                selectedTab = tab
+            }
         }
         .sheet(isPresented: $showModules) {
-            AllModulesGridView(modulesVM: shell.modulesVM)
+            AllModulesGridView(modulesVM: shell.modulesVM, userId: firebase.resolvedUserId)
+                .environmentObject(shell)
         }
         .sheet(isPresented: $showCoach) {
             AICoachView(brain: shell.brain)
@@ -223,8 +244,46 @@ public struct LookAfterMasterCanvas: View {
             DailyPlanView(userId: firebase.resolvedUserId)
         }
         .sheet(isPresented: $showFullTimeline) {
-            ExecutiveTimelineView(userId: firebase.resolvedUserId)
-                .environmentObject(shell)
+            NavigationStack {
+                ScrollView {
+                    ExecutiveLiveTimelineView(
+                        rows: planningVM.timelineRows,
+                        thinkingStep: planningVM.visibleThinkingStep,
+                        isProcessing: planningVM.isProcessing,
+                        title: "Full timeline",
+                        onViewAll: { showFullTimeline = false },
+                        onCompleteTask: { taskId in
+                            Task { await completeTimelineTask(taskId: taskId) }
+                        },
+                        onStartTask: { taskId in
+                            if let task = resolveTimelineTask(id: taskId) {
+                                showFullTimeline = false
+                                startBrainHeroTask(task, instant: true)
+                            }
+                        },
+                        onEditTask: { taskId in
+                            if let task = resolveTimelineTask(id: taskId) {
+                                shell.tasksVM.selectedTask = task
+                                showFullTimeline = false
+                                showTasks = true
+                            }
+                        },
+                        onRescheduleTask: { taskId in
+                            Task { await rescheduleTimelineTask(taskId: taskId) }
+                        }
+                    )
+                    .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+                    .padding(.vertical, DesignSystem.spacingMD)
+                }
+                .background(PremiumBackground())
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { showFullTimeline = false }
+                    }
+                }
+            }
+            .environmentObject(shell)
         }
         .sheet(isPresented: $showTasks) {
             TaskListView(
@@ -277,8 +336,16 @@ public struct LookAfterMasterCanvas: View {
             }
         }
         .sheet(isPresented: $showBrainCapture) {
-            ExecutiveCaptureSheet(userId: firebase.resolvedUserId)
+            ExecutiveCaptureSheet(userId: firebase.resolvedUserId, onOpenInbox: {
+                showBrainCapture = false
+                showInbox = true
+            })
                 .environmentObject(shell)
+        }
+        .sheet(isPresented: $showInbox) {
+            NavigationStack {
+                InboxView(inboxVM: shell.inboxVM, userId: firebase.resolvedUserId)
+            }
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
@@ -328,6 +395,11 @@ public struct LookAfterMasterCanvas: View {
                 shell.refreshWidgetData()
             }
         }
+        .onChange(of: shell.adhdVM.isFocusSessionActive) { wasActive, isActive in
+            if wasActive && !isActive {
+                selectedTab = tabBeforeFocus
+            }
+        }
         .onChange(of: selectedTab) { _, tab in
             if tab == .today {
                 Task { await weatherService.refresh() }
@@ -367,7 +439,7 @@ public struct LookAfterMasterCanvas: View {
                 onOpenDailyPlan: { showDailyPlan = true },
                 onOpenSettings: { showSettings = true },
                 onCapture: { showBrainCapture = true },
-                onStartTask: { task in startBrainHeroTask(task) },
+                onStartTask: { task in startBrainHeroTask(task, instant: true) },
                 onReplanDay: { showDailyPlan = true }
             )
         case .today:
@@ -405,12 +477,20 @@ public struct LookAfterMasterCanvas: View {
                 onRescheduleTimelineTask: { taskId in
                     Task { await rescheduleTimelineTask(taskId: taskId) }
                 },
+                onStartTask: { task in startBrainHeroTask(task, instant: true) },
+                onEditTask: { task in
+                    shell.tasksVM.selectedTask = task
+                    showTasks = true
+                },
                 isPlanningTomorrow: tomorrowPlannerVM.isScheduling
             )
         case .brain:
             BrainDashboardView(
                 brainVM: shell.brainVM,
                 adhdVM: shell.adhdVM,
+                brain: shell.brain,
+                speechManager: speechManager,
+                speechSynthesizer: planningSpeech,
                 userId: firebase.resolvedUserId,
                 onStartHero: { task in startBrainHeroTask(task) },
                 onRescheduleHero: { task in
@@ -422,6 +502,7 @@ public struct LookAfterMasterCanvas: View {
                 onMarkMedicationTaken: { medID in markBrainMedicationTaken(medID) },
                 onNavigateToTasks: { showTasks = true },
                 onNavigateToCoach: { showCoach = true },
+                onReset: { showResetMode = true },
                 onRefresh: {
                     let userId = firebase.resolvedUserId
                     let name = UserLifeProfileStore.resolvedDisplayName()
@@ -559,6 +640,11 @@ public struct LookAfterMasterCanvas: View {
         await tomorrowPlannerVM.proposeTomorrowReschedule(userId: userId, healthContext: healthContext)
     }
 
+    private func resolveTimelineTask(id: String) -> LifeTask? {
+        shell.tasksVM.tasks.first { $0.id == id }
+            ?? shell.tasksVM.completedToday.first { $0.id == id }
+    }
+
     private func completeTimelineTask(taskId: String) async {
         let userId = firebase.resolvedUserId
         guard !userId.isEmpty,
@@ -583,10 +669,15 @@ public struct LookAfterMasterCanvas: View {
         await refreshTimelinePage(userId: userId)
     }
 
-    private func startBrainHeroTask(_ task: LifeTask?) {
+    private func startBrainHeroTask(_ task: LifeTask?, instant: Bool = false) {
         if let task {
-            shell.adhdVM.startCountdown(for: task) {
+            tabBeforeFocus = selectedTab
+            if instant {
                 shell.adhdVM.startFocusSession(task: task)
+            } else {
+                shell.adhdVM.startCountdown(for: task) {
+                    shell.adhdVM.startFocusSession(task: task)
+                }
             }
             return
         }
@@ -627,7 +718,7 @@ public struct LookAfterMasterCanvas: View {
     }
 
     private func planningRefreshContext(userId: String) -> () async -> Void {
-        { [shell] in
+        {
             await refreshTimelinePage(userId: userId)
         }
     }

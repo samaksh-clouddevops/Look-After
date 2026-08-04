@@ -15,7 +15,9 @@ public struct AnyFlowSchedulingRule: FlowSchedulingRuleProtocol, Sendable {
 
     public init<R: FlowSchedulingRuleProtocol>(_ rule: R) {
         identifier = rule.identifier
-        applyImpl = rule.apply
+        applyImpl = { state, context in
+            rule.apply(to: &state, context: context)
+        }
     }
 
     public func apply(to state: inout MutableSchedulingState, context: FlowSchedulingContext) {

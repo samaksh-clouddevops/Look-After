@@ -145,10 +145,10 @@ struct BriefingMissionCard: View {
         BriefingCardContainer(title: UserFacingCopy.todayTitle, icon: "target", compact: compact) {
             if mission.tasks.isEmpty {
                 VStack(spacing: 10) {
-                    Text("No tasks yet today.")
+                    Text("Nothing on the list for today.")
                         .font(.system(size: 14, design: .default))
                         .foregroundColor(DesignSystem.textSecondary)
-                    Button("Create today's first task", action: onAddTask)
+                    Button("Add something for today", action: onAddTask)
                         .font(.system(size: 13, weight: .semibold, design: .default))
                         .foregroundColor(DesignSystem.accentPrimary)
                 }
@@ -158,9 +158,9 @@ struct BriefingMissionCard: View {
                 VStack(spacing: 8) {
                     ProgressView(value: Double(mission.completionPercent), total: 100)
                         .tint(DesignSystem.success)
-                    Text("\(mission.completionPercent)% complete")
+                    Text("\(mission.completionPercent)% of today's list done")
                         .font(.system(size: 11, weight: .medium, design: .default))
-                        .foregroundColor(DesignSystem.textMuted)
+                        .foregroundColor(DesignSystem.textSecondary)
 
                     ForEach(mission.tasks.prefix(compact ? 3 : 5)) { task in
                         HStack(alignment: .top, spacing: DesignSystem.spacingSM) {
@@ -184,12 +184,18 @@ struct BriefingMissionCard: View {
 
                     if let onReplanDay {
                         Button(action: onReplanDay) {
-                            Label("Replan My Day", systemImage: "sparkles")
+                            Label("Adjust schedule", systemImage: "sparkles")
                                 .font(.system(size: 13, weight: .semibold, design: .default))
                         }
                         .foregroundColor(DesignSystem.accentPrimary)
                         .padding(.top, DesignSystem.spacingXS)
                     }
+
+                    Button(action: onAddTask) {
+                        Label("All tasks", systemImage: "checklist")
+                            .font(.system(size: 13, weight: .semibold, design: .default))
+                    }
+                    .foregroundColor(DesignSystem.textSecondary)
                 }
             }
         }
@@ -222,7 +228,7 @@ struct BriefingCalendarCard: View {
                     }
                 }
             } else if calendar.isConnected {
-                Text("Nothing scheduled.")
+                Text("Calendar's clear.")
                     .font(.system(size: 14, design: .default))
                     .foregroundColor(DesignSystem.textSecondary)
             } else {
@@ -241,23 +247,48 @@ struct BriefingCalendarCard: View {
 struct BriefingHealthCard: View {
     let health: BriefingHealthMetrics
     var compact: Bool
+    var showsTitle: Bool = true
     var onConnectHealth: () -> Void
 
     var body: some View {
-        BriefingCardContainer(title: "Health", icon: "heart.fill", iconGradient: DesignSystem.healthGradient, compact: compact) {
+        BriefingCardContainer(title: "Health", icon: "heart.fill", iconGradient: DesignSystem.healthGradient, compact: compact, showsHeader: showsTitle) {
             if health.isAvailable {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: compact ? 3 : 3), spacing: DesignSystem.spacingSM) {
-                    if let steps = health.steps { miniMetric("Steps", value: "\(steps)", icon: "figure.walk") }
-                    if let move = health.moveRingPercent { miniMetric("Move", value: "\(move)%", icon: "flame.fill") }
-                    if let exercise = health.exerciseMinutes { miniMetric("Exercise", value: "\(exercise)m", icon: "figure.run") }
-                    if let stand = health.standHours { miniMetric("Stand", value: "\(stand)h", icon: "figure.stand") }
-                    if let rhr = health.restingHR { miniMetric("RHR", value: "\(rhr)", icon: "heart.fill") }
-                    if let hrv = health.hrv { miniMetric("HRV", value: "\(hrv)ms", icon: "waveform.path.ecg") }
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.spacingSM) {
+                    miniMetric("Steps", value: formattedSteps, icon: "figure.walk")
+                    miniMetric("Move", value: formattedMove, icon: "flame.fill")
+                    miniMetric("Exercise", value: formattedExercise, icon: "figure.run")
+                    miniMetric("Stand", value: formattedStand, icon: "figure.stand")
+                    miniMetric("RHR", value: formattedRHR, icon: "heart.fill")
+                    miniMetric("HRV", value: formattedHRV, icon: "waveform.path.ecg")
                 }
             } else {
                 emptyHealthPrompt(onConnect: onConnectHealth)
             }
         }
+    }
+
+    private var formattedSteps: String {
+        health.steps.map { "\($0)" } ?? "—"
+    }
+
+    private var formattedMove: String {
+        health.moveRingPercent.map { "\($0)%" } ?? "—"
+    }
+
+    private var formattedExercise: String {
+        health.exerciseMinutes.map { "\($0)m" } ?? "—"
+    }
+
+    private var formattedStand: String {
+        health.standHours.map { "\($0)h" } ?? "—"
+    }
+
+    private var formattedRHR: String {
+        health.restingHR.map { "\($0)" } ?? "—"
+    }
+
+    private var formattedHRV: String {
+        health.hrv.map { "\($0)ms" } ?? "—"
     }
 
     private func miniMetric(_ label: String, value: String, icon: String) -> some View {
@@ -335,27 +366,39 @@ struct BriefingHabitsCard: View {
 
     var body: some View {
         BriefingCardContainer(title: "Habits", icon: "checkmark.circle.fill", compact: compact) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.spacingSM) {
                 ForEach(habits.prefix(compact ? 4 : habits.count)) { habit in
                     Button {
                         onToggle(habit)
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: habit.isCompletedToday ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(habit.isCompletedToday ? DesignSystem.success : DesignSystem.textMuted)
-                            Image(systemName: habit.icon)
-                                .font(.system(size: 11))
-                                .foregroundColor(DesignSystem.accentPrimary)
+                        VStack(spacing: DesignSystem.spacingXS) {
+                            HStack(spacing: DesignSystem.spacingXS) {
+                                Image(systemName: habit.isCompletedToday ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(habit.isCompletedToday ? DesignSystem.success : DesignSystem.textMuted)
+
+                                Image(systemName: habit.icon)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(DesignSystem.accentPrimary)
+                            }
+
                             Text(habit.title)
                                 .font(.system(size: 12, weight: .semibold, design: .default))
                                 .foregroundColor(DesignSystem.textPrimary)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.85)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity)
                         }
-                        .padding(8)
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .padding(.horizontal, DesignSystem.spacingSM)
+                        .padding(.vertical, DesignSystem.spacingSM)
                         .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(habit.title)
+                    .accessibilityValue(habit.isCompletedToday ? "Done today" : "Not done")
                 }
             }
         }
@@ -409,7 +452,7 @@ struct BriefingFocusPredictionCard: View {
                     }
                     Spacer()
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, DesignSystem.spacingSM)
             }
         }
     }
@@ -528,7 +571,7 @@ struct BriefingAlertsCard: View {
 
 private func emptyHealthPrompt(onConnect: @escaping () -> Void) -> some View {
     VStack(spacing: 10) {
-        Text("Connect Apple Health to see sleep, energy, and activity.")
+        Text("Link Apple Health to see sleep and activity here.")
             .font(.system(size: 13, design: .default))
             .foregroundColor(DesignSystem.textSecondary)
             .multilineTextAlignment(.center)
@@ -540,6 +583,95 @@ private func emptyHealthPrompt(onConnect: @escaping () -> Void) -> some View {
     }
     .frame(maxWidth: .infinity)
     .padding(.vertical, DesignSystem.spacingSM)
+}
+
+// MARK: - Section card (V4 recipe)
+
+struct BriefingSectionCard<Content: View>: View {
+    let title: String
+    var subtitle: String? = nil
+    var icon: String? = nil
+    @ViewBuilder let content: Content
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(title: String, subtitle: String? = nil, icon: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            if !title.isEmpty {
+                HStack(spacing: DesignSystem.spacingSM) {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(.dsIcon())
+                            .foregroundColor(DesignSystem.accentPrimary)
+                    }
+                    VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                        Text(title)
+                            .textStyleSectionLabel()
+                        if let subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .textStyleCaption()
+                                .lineLimit(2)
+                        }
+                    }
+                }
+            } else if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .textStyleCaption()
+                    .lineLimit(2)
+            }
+
+            content
+        }
+        .padding(DesignSystem.cardPaddingMin)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(sectionBackground)
+        .overlay(sectionBorder)
+        .overlay(sectionHighlight)
+    }
+
+    private var sectionBackground: some View {
+        RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
+            .fill(DesignSystem.backgroundSecondary)
+            .shadow(
+                color: DesignSystem.shadowElevated.opacity(DesignSystem.shadowOpacity(for: colorScheme)),
+                radius: 18,
+                x: 0,
+                y: 8
+            )
+            .shadow(
+                color: DesignSystem.shadowElevated.opacity(DesignSystem.shadowOpacity(for: colorScheme) * 0.45),
+                radius: 4,
+                x: 0,
+                y: 2
+            )
+    }
+
+    private var sectionBorder: some View {
+        RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
+            .stroke(DesignSystem.border, lineWidth: 1)
+    }
+
+    private var sectionHighlight: some View {
+        RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
+            .stroke(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(colorScheme == .dark ? 0.10 : 0.35),
+                        Color.white.opacity(0.02),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 1
+            )
+    }
 }
 
 // MARK: - Greeting header (reference layout)
@@ -555,18 +687,14 @@ struct BriefingGreetingHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             if !parts.salutation.isEmpty {
                 Text(parts.salutation)
-                    .font(.dsBody())
-                    .foregroundColor(DesignSystem.textSecondary)
+                    .textStyleBriefingSalutation()
             }
             if !parts.name.isEmpty {
                 Text(parts.name)
-                    .font(.system(size: 36, weight: .bold, design: .default))
-                    .foregroundColor(DesignSystem.textPrimary)
-                    .lineLimit(1)
+                    .textStyleBriefingUserName()
             }
-            Text("Focus. Progress. Peace.")
-                .font(.dsMetadata())
-                .foregroundColor(DesignSystem.textMuted)
+            Text("Here's how today looks.")
+                .textStyleCaption(color: DesignSystem.textMuted)
                 .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -599,157 +727,6 @@ enum BriefingGreetingParts {
         var result = String(text[..<range.lowerBound]).trimmingCharacters(in: CharacterSet(charactersIn: ", "))
         if !result.isEmpty, !result.hasSuffix(",") { result += "," }
         return result
-    }
-}
-
-// MARK: - Day overview (replaces large hero)
-
-struct BriefingDayOverviewCard: View {
-    let briefing: MorningDayBriefing
-    var isMorningStyle: Bool
-    var onOpenTimeline: () -> Void
-    var onOpenTasks: () -> Void
-    var onCapture: () -> Void
-
-    var body: some View {
-        ElevatedSurface(padding: DesignSystem.spacingMD, emphasis: .standard) {
-            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-                HStack {
-                    Label(
-                        isMorningStyle ? "MORNING BRIEFING" : "TODAY",
-                        systemImage: isMorningStyle ? "sun.horizon.fill" : "calendar"
-                    )
-                    .font(.dsMetadata(weight: .semibold))
-                    .foregroundColor(DesignSystem.accentPrimary)
-                    .labelStyle(.titleAndIcon)
-
-                    Spacer()
-
-                    Button("Timeline", action: onOpenTimeline)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(DesignSystem.accentPrimary)
-                }
-
-                Text(briefing.introLine)
-                    .font(.dsBody())
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let sleepLine = briefing.sleepLine {
-                    Label(sleepLine, systemImage: "bed.double.fill")
-                        .font(.dsMetadata())
-                        .foregroundColor(DesignSystem.textMuted)
-                        .labelStyle(.titleAndIcon)
-                }
-
-                if let idealSleepLine = briefing.idealSleepLine {
-                    Label(idealSleepLine, systemImage: "moon.zzz.fill")
-                        .font(.dsMetadata())
-                        .foregroundColor(DesignSystem.textMuted)
-                        .labelStyle(.titleAndIcon)
-                }
-
-                overviewGrid
-
-                if !briefing.planItems.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Plan")
-                            .font(.dsMetadata(weight: .semibold))
-                            .foregroundColor(DesignSystem.textMuted)
-
-                        ForEach(briefing.planItems.prefix(5)) { item in
-                            planRow(item)
-                        }
-                    }
-                }
-
-                if !briefing.pendingHighlights.isEmpty {
-                    ForEach(briefing.pendingHighlights.prefix(2), id: \.self) { line in
-                        Text(line)
-                            .font(.dsCaption())
-                            .foregroundColor(DesignSystem.textSecondary)
-                    }
-                }
-
-                HStack(spacing: DesignSystem.spacingSM) {
-                    Button(action: onOpenTasks) {
-                        Label("All tasks", systemImage: "checklist")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundColor(DesignSystem.textSecondary)
-
-                    Spacer()
-
-                    Button(action: onCapture) {
-                        Label("Capture", systemImage: "mic.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundColor(DesignSystem.accentPrimary)
-                }
-            }
-        }
-    }
-
-    private var overviewGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.spacingSM) {
-            statChip(icon: "gauge.with.dots.needle.33percent", title: "Capacity", value: briefing.capacityLabel)
-            statChip(icon: "checklist", title: "Work", value: workLeftLabel)
-            if let free = briefing.freeTimeLabel {
-                statChip(icon: "clock", title: "Open", value: free)
-            }
-            if let next = briefing.nextEventLabel {
-                statChip(icon: "calendar", title: "Next", value: next)
-            }
-        }
-    }
-
-    private var workLeftLabel: String {
-        var parts: [String] = []
-        if briefing.completedCount > 0 {
-            parts.append("\(briefing.completedCount) done")
-        }
-        parts.append("\(briefing.remainingCount) left")
-        if briefing.overdueCount > 0 {
-            parts.append("\(briefing.overdueCount) overdue")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private func statChip(icon: String, title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(DesignSystem.textMuted)
-                .labelStyle(.titleAndIcon)
-            Text(value)
-                .font(.dsCaption(weight: .semibold))
-                .foregroundColor(DesignSystem.textPrimary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundElevated.opacity(0.55))
-        )
-    }
-
-    private func planRow(_ item: MorningPlanItem) -> some View {
-        HStack(spacing: 8) {
-            Text(item.timeLabel ?? "—")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(item.isCompleted ? DesignSystem.textMuted : DesignSystem.accentPrimary)
-                .frame(width: 52, alignment: .leading)
-
-            Text(item.title)
-                .font(.dsCaption())
-                .foregroundColor(item.isCompleted ? DesignSystem.textMuted : DesignSystem.textPrimary)
-                .lineLimit(1)
-                .strikethrough(item.isCompleted)
-
-            Spacer(minLength: 0)
-        }
     }
 }
 
@@ -797,71 +774,49 @@ struct BriefingNextActionStrip: View {
 struct BriefingSnapshotStrip: View {
     let snapshot: BriefingHealthSnapshot
 
+    private let columns = [
+        GridItem(.flexible(), spacing: DesignSystem.spacingSM),
+        GridItem(.flexible(), spacing: DesignSystem.spacingSM),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-            HStack {
-                Text("TODAY'S SNAPSHOT")
-                    .font(.dsMetadata(weight: .semibold))
-                    .foregroundColor(DesignSystem.textMuted)
-                    .tracking(0.6)
-                Spacer()
-                Text("View all")
-                    .font(.dsMetadata())
-                    .foregroundColor(DesignSystem.accentPrimary.opacity(0.85))
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(DesignSystem.accentPrimary.opacity(0.85))
-            }
-
-            GeometryReader { geo in
-                let gap = DesignSystem.spacingXS
-                let tileWidth = max(72, (geo.size.width - gap * 3) / 4)
-
-                HStack(spacing: gap) {
-                    snapshotTile(
-                        width: tileWidth,
-                        icon: "moon.fill",
-                        title: "Sleep",
-                        value: snapshot.sleepHours ?? "—",
-                        band: snapshot.sleepQuality ?? "—",
-                        bandIsPositive: isPositiveBand(snapshot.sleepQuality)
-                    )
-                    snapshotTile(
-                        width: tileWidth,
-                        icon: "bolt.fill",
-                        title: "Energy",
-                        value: "\(snapshot.energyPercent)%",
-                        band: energyBand,
-                        bandIsPositive: snapshot.energyPercent >= 60
-                    )
-                    snapshotTile(
-                        width: tileWidth,
-                        icon: "scope",
-                        title: "Recovery",
-                        value: snapshot.recoveryLabel,
-                        band: "\(snapshot.recoveryPercent)%",
-                        bandIsPositive: false
-                    )
-                    snapshotTile(
-                        width: tileWidth,
-                        icon: "sun.max.fill",
-                        title: "Window",
-                        value: focusWindowPrimary,
-                        band: focusWindowSecondary,
-                        bandIsPositive: false,
-                        compactValue: true
-                    )
-                }
-            }
-            .frame(height: 96)
+        LazyVGrid(columns: columns, spacing: DesignSystem.spacingSM) {
+            snapshotMetric(
+                icon: "moon.fill",
+                title: "Sleep",
+                value: snapshot.sleepHours ?? "—",
+                band: snapshot.sleepQuality ?? "—",
+                bandIsPositive: isPositiveBand(snapshot.sleepQuality)
+            )
+            snapshotMetric(
+                icon: "bolt.fill",
+                title: "Energy",
+                value: "\(snapshot.energyPercent)%",
+                band: energyBand,
+                bandIsPositive: snapshot.energyPercent >= 60
+            )
+            snapshotMetric(
+                icon: "scope",
+                title: "Recovery",
+                value: snapshot.recoveryLabel,
+                band: "\(snapshot.recoveryPercent)%",
+                bandIsPositive: false
+            )
+            snapshotMetric(
+                icon: "sun.max.fill",
+                title: "Best window",
+                value: focusWindowPrimary,
+                band: focusWindowSecondary,
+                bandIsPositive: false
+            )
         }
     }
 
     private var energyBand: String {
         switch snapshot.energyPercent {
-        case 75...: return "Good"
-        case 50..<75: return "Fair"
-        default: return "Low"
+        case 75...: return "Feeling good"
+        case 50..<75: return "Okay"
+        default: return "Running low"
         }
     }
 
@@ -873,7 +828,7 @@ struct BriefingSnapshotStrip: View {
     private var focusWindowSecondary: String {
         let parts = snapshot.focusWindow.components(separatedBy: " – ")
         guard parts.count > 1 else { return "" }
-        return "– \(parts[1])"
+        return parts[1]
     }
 
     private func isPositiveBand(_ band: String?) -> Bool {
@@ -881,51 +836,54 @@ struct BriefingSnapshotStrip: View {
         return band.lowercased() == "good" || band.lowercased() == "high"
     }
 
-    private func snapshotTile(
-        width: CGFloat,
+    private func snapshotMetric(
         icon: String,
         title: String,
         value: String,
         band: String,
-        bandIsPositive: Bool,
-        compactValue: Bool = false
+        bandIsPositive: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: DesignSystem.spacingSM) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
+                .font(.dsIcon())
                 .foregroundColor(DesignSystem.accentPrimary)
+                .frame(width: 22)
 
-            Text(value)
-                .font(.system(size: compactValue ? 13 : 16, weight: .bold, design: .default))
-                .foregroundColor(DesignSystem.textPrimary)
-                .lineLimit(compactValue ? 2 : 1)
-                .minimumScaleFactor(0.65)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if !band.isEmpty {
-                Text(band)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(bandIsPositive ? DesignSystem.accentPrimary : DesignSystem.textMuted)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.dsTabLabel())
+                    .foregroundColor(DesignSystem.textMuted)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
 
-            Text(title)
-                .font(.system(size: 10, weight: .regular))
-                .foregroundColor(DesignSystem.textMuted)
-                .lineLimit(1)
+                Text(value)
+                    .font(.dsCaption(weight: .bold))
+                    .foregroundColor(DesignSystem.textPrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !band.isEmpty {
+                    Text(band)
+                        .font(.dsTabLabel())
+                        .foregroundColor(bandIsPositive ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
-        .frame(width: width, alignment: .leading)
+        .padding(DesignSystem.spacingMD)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: DesignSystem.radiusSurface, style: .continuous)
-                .fill(DesignSystem.backgroundElevated.opacity(0.85))
+            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                .fill(DesignSystem.backgroundElevated.opacity(0.9))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.radiusSurface, style: .continuous)
-                .stroke(DesignSystem.accentPrimary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                .stroke(DesignSystem.border.opacity(0.6), lineWidth: 1)
         )
+        .clipped()
     }
 }
 
@@ -934,16 +892,27 @@ struct BriefingSnapshotStrip: View {
 struct BriefingScrollAffordance: View {
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: "chevron.compact.down")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(DesignSystem.accentPrimary.opacity(0.5))
-                .symbolEffect(.bounce, options: .repeating.speed(0.35))
+            scrollChevron
             Text("Scroll to continue")
                 .font(.dsMetadata())
-                .foregroundColor(DesignSystem.textMuted.opacity(0.5))
+                .foregroundColor(DesignSystem.textSecondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Scroll to continue")
+    }
+
+    @ViewBuilder
+    private var scrollChevron: some View {
+        if #available(iOS 18.0, *) {
+            Image(systemName: "chevron.compact.down")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(DesignSystem.accentPrimary.opacity(0.75))
+                .symbolEffect(.bounce, options: .repeating.speed(0.35))
+        } else {
+            Image(systemName: "chevron.compact.down")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(DesignSystem.accentPrimary.opacity(0.75))
+        }
     }
 }
 
@@ -956,30 +925,10 @@ struct BriefingChapterSection<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-            HStack(spacing: DesignSystem.spacingSM) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(DesignSystem.accentGradient)
-                }
-                Text(title)
-                    .font(.dsHeadline())
-                    .foregroundColor(DesignSystem.textPrimary)
-                Spacer(minLength: 0)
-            }
-
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.dsCaption())
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .lineLimit(2)
-            }
-
+        BriefingSectionCard(title: title, subtitle: subtitle, icon: icon) {
             content()
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(.horizontal, DesignSystem.screenHorizontal)
-        .padding(.top, DesignSystem.spacingMD)
+        .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+        .padding(.top, DesignSystem.spacingXS)
     }
 }

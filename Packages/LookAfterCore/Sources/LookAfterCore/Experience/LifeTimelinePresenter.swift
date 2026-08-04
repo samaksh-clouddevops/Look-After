@@ -245,6 +245,36 @@ public enum LifeTimelinePresenter {
         }
     }
 
+    /// Active tasks scheduled for today — same rules as the life timeline.
+    public static func tasksScheduledForToday(
+        from tasks: [LifeTask],
+        allTasks: [LifeTask],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [LifeTask] {
+        tasksForTodayTimeline(
+            from: tasks,
+            allTasks: allTasks,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    /// Completed tasks that count toward today's schedule — excludes stale completions.
+    public static func completedTasksScheduledForToday(
+        from completedToday: [LifeTask],
+        allTasks: [LifeTask],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [LifeTask] {
+        completedTasksForTodayTimeline(
+            from: completedToday,
+            allTasks: allTasks,
+            now: now,
+            calendar: calendar
+        )
+    }
+
     /// Tasks that belong on today's timeline — respects recurrence rules and scheduled days.
     private static func tasksForTodayTimeline(
         from tasks: [LifeTask],
@@ -320,7 +350,15 @@ public enum LifeTimelinePresenter {
     private static func makeTaskEvent(task: LifeTask, title: String, allTasks: [LifeTask], now: Date, forceCompleted: Bool) -> LifeTimelineEvent {
         let when = task.scheduledTime ?? task.scheduledDate ?? task.deadline ?? task.createdAt
         let kind = kindForTask(task)
-        let duration = task.estimatedMinutes > 0 ? task.estimatedMinutes : nil
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: when)
+
+        var duration = task.estimatedMinutes > 0 ? task.estimatedMinutes : nil
+        if let start = task.scheduledTime,
+           let window = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) {
+            duration = window.durationMinutes
+        }
+
         let subtitle: String
         if forceCompleted || task.status == .completed {
             subtitle = "Done"
@@ -328,8 +366,8 @@ public enum LifeTimelinePresenter {
             let formatter = DateFormatter()
             formatter.dateFormat = "h:mm a"
             if let start = task.scheduledTime {
-                let day = Calendar.current.startOfDay(for: when)
-                let end = TaskScheduleInterval.endDate(for: task, on: day, calendar: .current) ?? start.addingTimeInterval(TimeInterval(duration * 60))
+                let end = TaskScheduleInterval.endDate(for: task, on: day, calendar: calendar)
+                    ?? start.addingTimeInterval(TimeInterval(duration * 60))
                 subtitle = ScheduleTimeFormatting.rangeLabel(from: start, to: end)
             } else {
                 subtitle = "About \(duration) min"

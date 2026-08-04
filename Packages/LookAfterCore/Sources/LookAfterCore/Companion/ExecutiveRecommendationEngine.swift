@@ -303,7 +303,7 @@ public enum ExecutiveRecommendationEngine {
         let decision = SemanticDecisionBuilder.from(task: task, snapshot: input.snapshot, healthSummary: input.healthSummary)
         let rendered = HumanLanguage.render(decision, snapshot: input.snapshot)
 
-        var whyNow = buildWhyNow(for: task, snapshot: input.snapshot, calendar: input.calendar)
+        let whyNow = buildWhyNow(for: task, snapshot: input.snapshot, calendar: input.calendar)
         let supporting = distinctSupporting(
             headline: headline,
             contextLine: rendered.benefitLine,

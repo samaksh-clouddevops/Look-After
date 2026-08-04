@@ -9,6 +9,8 @@ private enum ExecutiveTimelineVisuals {
     static let lineWidth: CGFloat = 2
     static let cardLeadingInset: CGFloat = 12
     static let rowSpacing: CGFloat = 14
+    static let timeColumnWidth: CGFloat = 56
+    static let rescheduleLeadingInset: CGFloat = timeColumnWidth + DesignSystem.spacingMD
     static let dotCompleted: CGFloat = 10
     static let dotUpcoming: CGFloat = 10
     static let dotCurrent: CGFloat = 14
@@ -48,12 +50,15 @@ struct ExecutiveLiveTimelineView: View {
     var onViewAll: () -> Void
     var onPlan: (() -> Void)? = nil
     var onCompleteTask: ((String) -> Void)?
+    var onStartTask: ((String) -> Void)?
+    var onEditTask: ((String) -> Void)?
     var onRescheduleTask: ((String) -> Void)?
 
     @State private var dotCenters: [String: CGFloat] = [:]
     @State private var railHeight: CGFloat = 0
     @State private var completingTaskIds: Set<String> = []
     @State private var reschedulingTaskIds: Set<String> = []
+    @State private var expandedRowId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
@@ -84,31 +89,39 @@ struct ExecutiveLiveTimelineView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Text(title)
-                .font(.dsHeadline())
-                .foregroundColor(DesignSystem.textPrimary)
-            Spacer()
-            if showPlanButton, let onPlan {
-                Button(action: onPlan) {
-                    Group {
-                        if isPlanning {
-                            ProgressView()
-                                .scaleEffect(0.75)
-                                .tint(DesignSystem.accentPrimary)
-                        } else {
-                            Label("Plan", systemImage: "sparkles")
-                                .font(.dsCaption())
+        Group {
+            if !title.isEmpty || showPlanButton {
+                HStack {
+                    if !title.isEmpty {
+                        Text(title)
+                            .font(.dsHeadline())
+                            .foregroundColor(DesignSystem.textPrimary)
+                    }
+                    Spacer()
+                    if showPlanButton, let onPlan {
+                        Button(action: onPlan) {
+                            Group {
+                                if isPlanning {
+                                    ProgressView()
+                                        .scaleEffect(0.75)
+                                        .tint(DesignSystem.accentPrimary)
+                                } else {
+                                    Label("Plan", systemImage: "sparkles")
+                                        .font(.dsCaption())
+                                }
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .disabled(isPlanning)
+                        .foregroundColor(DesignSystem.accentPrimary)
+                    }
+                    if !title.isEmpty {
+                        Button("Full timeline", action: onViewAll)
+                            .font(.dsCaption())
+                            .foregroundColor(DesignSystem.textSecondary)
                     }
                 }
-                .buttonStyle(.plain)
-                .disabled(isPlanning)
-                .foregroundColor(DesignSystem.accentPrimary)
             }
-            Button("Full timeline", action: onViewAll)
-                .font(.dsCaption())
-                .foregroundColor(DesignSystem.textSecondary)
         }
     }
 
@@ -119,75 +132,111 @@ struct ExecutiveLiveTimelineView: View {
             .padding(.vertical, DesignSystem.spacingLG)
     }
 
-    // MARK: - Continuous timeline (V4 — Apple Calendar rows)
+    // MARK: - Continuous timeline (git-commit rail)
 
     private var continuousTimeline: some View {
         let phases = rowPhases(rows)
 
-        return VStack(spacing: DesignSystem.spacingSM) {
+        return VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                timelineRowView(row: row, phase: phases[index])
+                gitRailRow(row: row, phase: phases[index], index: index, isLast: index == rows.count - 1)
             }
         }
     }
 
     @ViewBuilder
-    private func timelineRowView(row: ExecutivePlanningTimelineRow, phase: TimelineEventPhase) -> some View {
+    private func gitRailRow(
+        row: ExecutivePlanningTimelineRow,
+        phase: TimelineEventPhase,
+        index: Int,
+        isLast: Bool
+    ) -> some View {
         let isCompleting = row.taskId.map { completingTaskIds.contains($0) } ?? false
         let isRescheduling = row.taskId.map { reschedulingTaskIds.contains($0) } ?? false
 
-        VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
-            LATimelineRow(
-                timeLabel: row.scheduleRangeLabel.isEmpty ? row.timeLabel : row.scheduleRangeLabel,
-                title: row.title,
-                subtitle: timelineSubtitle(for: row, phase: phase),
-                icon: row.icon,
-                isCurrent: phase == .current && !row.isCompleted,
-                isCompleted: row.isCompleted
-            )
-            .opacity(row.isCompleted ? 0.72 : ((isCompleting || isRescheduling) ? 0.55 : 1))
-            .scaleEffect((isCompleting || isRescheduling) ? 0.98 : 1)
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                guard !row.isCompleted, let taskId = row.taskId else { return }
-                completingTaskIds.insert(taskId)
-                onCompleteTask?(taskId)
-                Task {
-                    try? await Task.sleep(nanoseconds: 600_000_000)
-                    completingTaskIds.remove(taskId)
-                }
-            }
-            .accessibilityAction(named: "Mark complete") {
-                guard !row.isCompleted, let taskId = row.taskId else { return }
-                onCompleteTask?(taskId)
-            }
+        HStack(alignment: .top, spacing: ExecutiveTimelineVisuals.cardLeadingInset) {
+            VStack(spacing: 0) {
+                TimelineDotView(phase: dotPhase(for: row, uiPhase: phase))
 
-            if row.canReschedule, let taskId = row.taskId, let onRescheduleTask {
-                Button {
-                    reschedulingTaskIds.insert(taskId)
-                    onRescheduleTask(taskId)
-                    Task {
-                        try? await Task.sleep(nanoseconds: 800_000_000)
-                        reschedulingTaskIds.remove(taskId)
-                    }
-                } label: {
-                    Text(row.isPast ? "Reschedule to next open slot" : "Reschedule")
-                        .font(.dsCaption(weight: .semibold))
-                        .foregroundColor(DesignSystem.accentPrimary)
+                if !isLast {
+                    Rectangle()
+                        .fill(railSegmentColor(for: row, phase: phase))
+                        .frame(width: ExecutiveTimelineVisuals.lineWidth)
+                        .frame(maxHeight: .infinity)
+                        .frame(minHeight: 24)
                 }
-                .buttonStyle(.plain)
-                .disabled(isRescheduling)
-                .padding(.leading, 72)
             }
+            .frame(width: ExecutiveTimelineVisuals.gutterWidth)
+
+            VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                EventTimelineCard(
+                    row: row,
+                    phase: phase,
+                    isCompleting: isCompleting,
+                    isRescheduling: isRescheduling,
+                    isActionsExpanded: expandedRowId == row.id,
+                    showsTaskActions: row.taskId != nil && !row.isCompleted,
+                    onToggleActions: {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            expandedRowId = expandedRowId == row.id ? nil : row.id
+                        }
+                    },
+                    onStart: row.taskId.flatMap { taskId in
+                        guard let onStartTask else { return nil }
+                        return {
+                            expandedRowId = nil
+                            onStartTask(taskId)
+                        }
+                    },
+                    onEdit: row.taskId.flatMap { taskId in
+                        guard let onEditTask else { return nil }
+                        return {
+                            expandedRowId = nil
+                            onEditTask(taskId)
+                        }
+                    },
+                    onDoubleTapComplete: row.taskId.flatMap { taskId in
+                        guard !row.isCompleted else { return nil }
+                        return {
+                            completingTaskIds.insert(taskId)
+                            onCompleteTask?(taskId)
+                            Task {
+                                try? await Task.sleep(nanoseconds: 600_000_000)
+                                completingTaskIds.remove(taskId)
+                            }
+                        }
+                    },
+                    onReschedule: row.canReschedule ? row.taskId.flatMap { taskId in
+                        guard let onRescheduleTask else { return nil }
+                        return {
+                            reschedulingTaskIds.insert(taskId)
+                            onRescheduleTask(taskId)
+                            Task {
+                                try? await Task.sleep(nanoseconds: 800_000_000)
+                                reschedulingTaskIds.remove(taskId)
+                            }
+                        }
+                    } : nil
+                )
+            }
+            .padding(.bottom, isLast ? 0 : ExecutiveTimelineVisuals.rowSpacing)
         }
     }
 
-    private func timelineSubtitle(for row: ExecutivePlanningTimelineRow, phase: TimelineEventPhase) -> String? {
-        if row.isCompleted { return "Done" }
-        if phase == .current { return "Now" }
-        if !row.subtitle.isEmpty { return row.subtitle }
-        if row.isPast { return "Earlier today" }
-        return row.kind.sectionLabel
+    private func dotPhase(for row: ExecutivePlanningTimelineRow, uiPhase: TimelineEventPhase) -> TimelineEventPhase {
+        if row.isCompleted { return .completed }
+        if uiPhase == .current { return .current }
+        return .upcoming
+    }
+
+    private func railSegmentColor(for row: ExecutivePlanningTimelineRow, phase: TimelineEventPhase) -> Color {
+        if row.isCompleted || phase == .completed {
+            return ExecutiveTimelineVisuals.lime.opacity(0.85)
+        }
+        if phase == .current {
+            return ExecutiveTimelineVisuals.lime.opacity(0.45)
+        }
+        return ExecutiveTimelineVisuals.trackMuted
     }
 
     // MARK: - Phase logic
@@ -329,6 +378,11 @@ private struct EventTimelineCard: View {
     let phase: TimelineEventPhase
     var isCompleting: Bool = false
     var isRescheduling: Bool = false
+    var isActionsExpanded: Bool = false
+    var showsTaskActions: Bool = false
+    var onToggleActions: (() -> Void)?
+    var onStart: (() -> Void)?
+    var onEdit: (() -> Void)?
     var onDoubleTapComplete: (() -> Void)?
     var onReschedule: (() -> Void)?
 
@@ -363,7 +417,7 @@ private struct EventTimelineCard: View {
                         .padding(.vertical, 2)
                         .background(Capsule().fill(ExecutiveTimelineVisuals.lime.opacity(0.15)))
                 } else if phase != .completed {
-                    Text(row.isPast ? "Earlier" : (row.scheduleRangeLabel.isEmpty ? row.timeLabel : row.scheduleRangeLabel))
+                    Text(row.isPast ? "Passed" : (row.scheduleRangeLabel.isEmpty ? row.timeLabel : row.scheduleRangeLabel))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(row.isPast ? DesignSystem.warning.opacity(0.85) : DesignSystem.textMuted)
                 }
@@ -383,7 +437,6 @@ private struct EventTimelineCard: View {
                 .font(.dsBody())
                 .fontWeight(phase == .current && !row.isCompleted ? .semibold : .regular)
                 .foregroundColor(titleColor)
-                .strikethrough(row.isCompleted, color: DesignSystem.textMuted.opacity(0.8))
                 .lineLimit(3)
 
             if showsTaskScheduleDetails {
@@ -435,13 +488,49 @@ private struct EventTimelineCard: View {
                 }
                 .padding(.top, 2)
             }
+
+            if isActionsExpanded, showsTaskActions {
+                VStack(spacing: DesignSystem.spacingSM) {
+                    if let onStart {
+                        Button(action: onStart) {
+                            Label("Start now", systemImage: "play.fill")
+                                .font(.dsCaption(weight: .semibold))
+                                .foregroundColor(DesignSystem.accentOnPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, DesignSystem.spacingSM)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(DesignSystem.accentPrimary)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("focus-start-now")
+                    }
+                    if let onEdit {
+                        Button(action: onEdit) {
+                            Label("Edit task", systemImage: "pencil")
+                                .font(.dsCaption(weight: .semibold))
+                                .foregroundColor(DesignSystem.accentPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, DesignSystem.spacingSM)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .stroke(DesignSystem.accentPrimary, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, DesignSystem.spacingXS)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .padding(DesignSystem.spacingMD)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground)
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .stroke(borderColor, lineWidth: phase == .current ? 1 : 0.5)
+                .stroke(isActionsExpanded ? DesignSystem.accentPrimary.opacity(0.35) : borderColor, lineWidth: phase == .current || isActionsExpanded ? 1 : 0.5)
         )
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
         .opacity(row.isCompleted ? 0.72 : ((isCompleting || isRescheduling) ? 0.55 : 1))
@@ -449,10 +538,17 @@ private struct EventTimelineCard: View {
         .animation(.easeOut(duration: 0.25), value: row.isCompleted)
         .animation(.easeOut(duration: 0.2), value: isCompleting)
         .animation(.easeOut(duration: 0.2), value: isRescheduling)
+        .animation(.easeInOut(duration: 0.22), value: isActionsExpanded)
         .contentShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
+        .onTapGesture(count: 1) {
+            if showsTaskActions {
+                onToggleActions?()
+            }
+        }
         .onTapGesture(count: 2) {
             onDoubleTapComplete?()
         }
+        .accessibilityIdentifier(row.taskId.map { "timeline-event-card-\($0)" } ?? "timeline-event-card")
         .accessibilityAction(named: "Mark complete") {
             onDoubleTapComplete?()
         }
@@ -473,7 +569,7 @@ private struct EventTimelineCard: View {
                 let rangeText = row.scheduleRangeLabel.isEmpty ? row.timeLabel : row.scheduleRangeLabel
                 metadataItem(icon: "clock", text: "Scheduled \(rangeText)")
                 if let minutes = row.estimatedMinutes, minutes > 0 {
-                    metadataItem(icon: "hourglass", text: "\(minutes) min")
+                    metadataItem(icon: "hourglass", text: minutes.durationString)
                 }
             }
 

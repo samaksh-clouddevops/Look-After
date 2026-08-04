@@ -2,20 +2,27 @@ import Foundation
 import LookAfterCore
 
 #if canImport(EventKit)
-import EventKit
+@preconcurrency import EventKit
 #endif
 
 /// EventKit-backed calendar signal provider (LookAfterData — not LookAfterCore).
 public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSignalProviderProtocol {
 
     #if canImport(EventKit)
-    private let eventStore: EKEventStore
+    private final class EventStoreBox: @unchecked Sendable {
+        let store: EKEventStore
+        init(_ store: EKEventStore) { self.store = store }
+    }
+
+    private let eventStoreBox: EventStoreBox
     private let horizonHours: Int
 
     public init(eventStore: EKEventStore = EKEventStore(), horizonHours: Int = 24) {
-        self.eventStore = eventStore
+        self.eventStoreBox = EventStoreBox(eventStore)
         self.horizonHours = horizonHours
     }
+
+    private var eventStore: EKEventStore { eventStoreBox.store }
 
     public func currentSignals(at date: Date) async -> CalendarEnvironmentSignals {
         let status = EKEventStore.authorizationStatus(for: .event)
@@ -59,7 +66,8 @@ public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSign
         if #available(iOS 17.0, macOS 14.0, *) {
             return status == .fullAccess || status == .writeOnly
         }
-        return status == .authorized
+        // Legacy authorization value before iOS 17 full/write-only access levels.
+        return status.rawValue == 3
     }
 
     private func computeFreeBlockMinutes(from start: Date, to end: Date, events: [EKEvent]) -> Int {

@@ -29,6 +29,10 @@ Performance targets, measurement protocol, and Instruments profiles for LifeOS.
 | Live Activity timer drift (25 min session) | < 2s total | > 5s | Compare system clock |
 | Onboarding step transition | < 300ms | > 800ms | Animation signpost |
 | Inbox AI process (single item) | < 5s | > 15s | Network + parse |
+| Focus timer open (Today → Start now → timer visible) | < 100ms | > 500ms | `FocusTimerOpenPerformanceTests` |
+| Focus timer pause / resume label update | < 100ms | > 500ms | `FocusTimerOpenPerformanceTests` |
+| Focus timer stop → dismiss overlay | < 100ms | > 500ms | `FocusTimerOpenPerformanceTests` |
+| Focus session state activation (ViewModel) | < 16ms | > 50ms | `ADHDViewModelFocusSessionTests` |
 
 **Release tolerance:** Within **10%** of target on reference device.
 

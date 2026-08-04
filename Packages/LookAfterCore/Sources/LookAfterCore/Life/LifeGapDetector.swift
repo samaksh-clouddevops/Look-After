@@ -80,14 +80,13 @@ public enum LifeGapDetector {
 
             let blockLabel = commitment.preferredBlockLabel ?? "today"
             let severity: GapSeverity = daysSince >= 4 || commitment.isNonNegotiable ? .important : .nudge
-            let dayWord = daysSince == 1 ? "1 day" : "\(daysSince) days"
 
             gaps.append(
                 LifeGap(
                     commitmentTitle: commitment.title,
-                    message: "No \(commitment.title.lowercased()) in \(dayWord)",
+                    message: gapMessage(for: commitment.title, daysSince: daysSince),
                     severity: severity,
-                    suggestedAction: "Slot \(commitment.defaultMinutes) min in \(blockLabel)",
+                    suggestedAction: gapAction(minutes: commitment.defaultMinutes, blockLabel: blockLabel),
                     daysSinceLastCompletion: daysSince
                 )
             )
@@ -99,6 +98,20 @@ public enum LifeGapDetector {
             }
             return $0.daysSinceLastCompletion > $1.daysSinceLastCompletion
         }
+    }
+
+    private static func gapMessage(for title: String, daysSince: Int) -> String {
+        if daysSince == 1 {
+            return "\(title). Not since yesterday"
+        }
+        return "\(title). \(daysSince) days since you last did it"
+    }
+
+    private static func gapAction(minutes: Int, blockLabel: String) -> String {
+        if blockLabel.lowercased() == "today" {
+            return "Try \(minutes) min sometime today"
+        }
+        return "Try \(minutes) min in your \(blockLabel) block"
     }
 
     private static func normalized(_ title: String) -> String {

@@ -775,7 +775,7 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
             ))
         }
 
-        if let avgHRV, buckets.count >= 14 {
+        if avgHRV != nil, buckets.count >= 14 {
             let recent = buckets.suffix(7).compactMap(\.hrv)
             let prior = buckets.dropLast(7).suffix(7).compactMap(\.hrv)
             if recent.count >= 3, prior.count >= 3 {

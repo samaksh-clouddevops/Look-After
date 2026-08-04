@@ -57,7 +57,7 @@ final class DayScheduleReconcilerTests: XCTestCase {
             schedulingMode: .fixedTime,
             scheduledEndTime: gymEnd
         )
-        var flex = LifeTask(
+        let flex = LifeTask(
             title: "Review notes",
             estimatedMinutes: 30,
             scheduledDate: day,
@@ -127,7 +127,7 @@ final class DayScheduleReconcilerTests: XCTestCase {
         """
         let model = LifeModelValidator.compileLocally(from: markdown)
         let day = makeDate(year: 2026, month: 8, day: 4)
-        var gym = LifeTask(
+        let gym = LifeTask(
             title: "Gym",
             estimatedMinutes: 90,
             scheduledDate: day,

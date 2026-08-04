@@ -12,8 +12,8 @@ public final class TaskRepository: ObservableObject {
     private static let cloudReadTimeoutSeconds: TimeInterval = 8
     private var cachedAll: [LifeTask]?
     
-    public init(firebase: FirebaseManager = .shared) {
-        self.firebase = firebase
+    public init(firebase: FirebaseManager? = nil) {
+        self.firebase = firebase ?? FirebaseManager.shared
     }
     
     // MARK: - CRUD
@@ -190,8 +190,8 @@ public final class InboxRepository: ObservableObject {
     private let firebase: FirebaseManager
     private let collection = "inbox_items"
     
-    public init(firebase: FirebaseManager = .shared) {
-        self.firebase = firebase
+    public init(firebase: FirebaseManager? = nil) {
+        self.firebase = firebase ?? FirebaseManager.shared
     }
     
     public func getAll(for userId: String) async throws -> [InboxItem] {
@@ -275,8 +275,8 @@ public final class HealthSummaryRepository: ObservableObject {
     private static let cloudReadTimeoutSeconds: TimeInterval = 10
     private static let cloudWriteTimeoutSeconds: TimeInterval = 15
     
-    public init(firebase: FirebaseManager = .shared) {
-        self.firebase = firebase
+    public init(firebase: FirebaseManager? = nil) {
+        self.firebase = firebase ?? FirebaseManager.shared
     }
     
     /// Saves locally first (milliseconds), then uploads to Firestore in the background.
@@ -518,8 +518,8 @@ public final class EnergyReportRepository: ObservableObject {
     private let firebase: FirebaseManager
     private let collection = "energy_reports"
     
-    public init(firebase: FirebaseManager = .shared) {
-        self.firebase = firebase
+    public init(firebase: FirebaseManager? = nil) {
+        self.firebase = firebase ?? FirebaseManager.shared
     }
     
     public func save(_ report: EnergyReport) async throws {
