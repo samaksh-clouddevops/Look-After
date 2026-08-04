@@ -5,7 +5,7 @@ import AppIntents
 import LookAfterCore
 
 private enum LiveActivityStyle {
-    static let accent = DesignSystem.accentPrimary
+    static let accent = WidgetChrome.accentPrimary
     static let textPrimary = DesignSystem.textPrimary
     static let textSecondary = DesignSystem.textSecondary
     static let textMuted = DesignSystem.textMuted
@@ -116,7 +116,7 @@ struct FocusLiveActivity: Widget {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(RoundedRectangle(cornerRadius: 10).fill(LiveActivityStyle.accent))
-                        .foregroundStyle(DesignSystem.accentOnPrimary)
+                        .foregroundStyle(WidgetChrome.accentOnPrimary)
                 }
                 .buttonStyle(.plain)
             }

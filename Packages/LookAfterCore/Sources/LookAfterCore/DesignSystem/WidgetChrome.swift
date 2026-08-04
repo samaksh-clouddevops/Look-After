@@ -6,6 +6,10 @@ public enum WidgetChrome {
     public static let gap: CGFloat = 8
     public static let gapLoose: CGFloat = 12
 
+    /// Widget-only V4 lime accent — isolated from main app `DesignSystem` tokens.
+    public static let accentPrimary = Color(hex: "C8FF4D")
+    public static let accentOnPrimary = Color(hex: "1C1C1E")
+
     public static func canvasBackground() -> some View {
         DesignSystem.backgroundPrimary
     }
@@ -96,16 +100,16 @@ public struct WidgetEnergyChip: View {
         HStack(spacing: 4) {
             Text("\(score)%")
                 .font(.dsCaption(weight: .bold))
-                .foregroundStyle(DesignSystem.accentOnPrimary)
+                .foregroundStyle(WidgetChrome.accentOnPrimary)
             if let label, !label.isEmpty {
                 Text(label)
                     .font(.dsCaption(weight: .semibold))
-                    .foregroundStyle(DesignSystem.accentOnPrimary.opacity(0.85))
+                    .foregroundStyle(WidgetChrome.accentOnPrimary.opacity(0.85))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Capsule().fill(DesignSystem.accentPrimary))
+        .background(Capsule().fill(WidgetChrome.accentPrimary))
         .accessibilityLabel("Energy \(score) percent\(label.map { ", \($0)" } ?? "")")
     }
 }

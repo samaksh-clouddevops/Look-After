@@ -25,7 +25,7 @@ struct FocusWidgetView: View {
                 if let remaining = focus.remainingLabel {
                     Text(focus.isPaused ? "Paused · \(remaining)" : remaining)
                         .font(.system(size: family == .systemSmall ? 22 : 28, weight: .bold, design: .monospaced))
-                        .foregroundStyle(DesignSystem.accentPrimary)
+                        .foregroundStyle(WidgetChrome.accentPrimary)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                 }
@@ -41,8 +41,8 @@ struct FocusWidgetView: View {
                             Text("End")
                                 .font(.dsCaption(weight: .bold))
                                 .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(Capsule().fill(DesignSystem.accentPrimary))
-                                .foregroundStyle(DesignSystem.accentOnPrimary)
+                                .background(Capsule().fill(WidgetChrome.accentPrimary))
+                                .foregroundStyle(WidgetChrome.accentOnPrimary)
                         }.buttonStyle(.plain)
                     }
                 }
@@ -52,8 +52,8 @@ struct FocusWidgetView: View {
                     Text("Start focus")
                         .font(.dsCaption(weight: .bold))
                         .padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(Capsule().fill(DesignSystem.accentPrimary))
-                        .foregroundStyle(DesignSystem.accentOnPrimary)
+                        .background(Capsule().fill(WidgetChrome.accentPrimary))
+                        .foregroundStyle(WidgetChrome.accentOnPrimary)
                 }.buttonStyle(.plain)
             }
             Spacer(minLength: 0)
@@ -112,7 +112,7 @@ struct HealthWidgetView: View {
                         .font(.system(size: 14, weight: .bold))
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
-                .tint(DesignSystem.accentPrimary)
+                .tint(WidgetChrome.accentPrimary)
             } else {
                 Image(systemName: "heart")
                     .font(.title3)
@@ -261,9 +261,9 @@ struct CaptureWidgetView: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(DesignSystem.accentOnPrimary)
+                    .foregroundStyle(WidgetChrome.accentOnPrimary)
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(DesignSystem.accentPrimary))
+                    .background(Circle().fill(WidgetChrome.accentPrimary))
                 Text(title)
                     .font(.dsCaption(weight: .semibold))
                     .foregroundStyle(DesignSystem.textPrimary)
@@ -274,12 +274,12 @@ struct CaptureWidgetView: View {
 
     private var captureGlyph: some View {
         ZStack {
-            Circle().fill(DesignSystem.accentPrimary.opacity(0.2)).frame(width: 56, height: 56)
+            Circle().fill(WidgetChrome.accentPrimary.opacity(0.2)).frame(width: 56, height: 56)
             Image(systemName: "mic.fill")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(DesignSystem.accentOnPrimary)
+                .foregroundStyle(WidgetChrome.accentOnPrimary)
                 .padding(14)
-                .background(Circle().fill(DesignSystem.accentPrimary))
+                .background(Circle().fill(WidgetChrome.accentPrimary))
         }
     }
 }
@@ -318,13 +318,13 @@ struct MedicationWidgetView: View {
                         Text("Mark taken")
                             .font(.dsCaption(weight: .bold))
                             .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Capsule().fill(DesignSystem.accentPrimary))
-                            .foregroundStyle(DesignSystem.accentOnPrimary)
+                            .background(Capsule().fill(WidgetChrome.accentPrimary))
+                            .foregroundStyle(WidgetChrome.accentOnPrimary)
                     }
                     .buttonStyle(.plain)
                 } else {
                     HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(DesignSystem.accentPrimary)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(WidgetChrome.accentPrimary)
                         Text("Taken").font(.dsCaption(weight: .semibold)).foregroundStyle(DesignSystem.textSecondary)
                     }
                 }

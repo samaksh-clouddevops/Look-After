@@ -25,14 +25,12 @@ public struct DesignSystem {
     public static let divider = Color.adaptive(light: "ECECEC", dark: "2A2E33")
 
     // MARK: - Accent (primary action — ~5% of UI)
-    // V4 action green — current action, selection, progress, complete, recording only.
-    // Never use as a full-card background. On-accent text is near-black for contrast.
 
-    public static let accentPrimary = Color(hex: "C8FF4D")
-    public static let accentHover = Color(hex: "D4FF6E")
-    public static let accentPressed = Color(hex: "B4E63A")
-    public static let accentGlow = Color(hex: "C8FF4D").opacity(0.18)
-    public static let accentOnPrimary = Color(hex: "1C1C1E")
+    public static let accentPrimary = Color(hex: "5A9E3F")
+    public static let accentHover = Color(hex: "6BB34A")
+    public static let accentPressed = Color(hex: "4A852F")
+    public static let accentGlow = Color(hex: "5A9E3F").opacity(0.15)
+    public static let accentOnPrimary = Color(hex: "FFFFFF")
 
     public static let accentSecondary = textSecondary
     public static let accentTertiary = textMuted

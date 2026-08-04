@@ -74,8 +74,8 @@ struct RecommendationWidgetView: View {
                     .font(.dsCaption(weight: .bold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(DesignSystem.accentPrimary))
-                    .foregroundStyle(DesignSystem.accentOnPrimary)
+                    .background(Capsule().fill(WidgetChrome.accentPrimary))
+                    .foregroundStyle(WidgetChrome.accentOnPrimary)
             }
             .buttonStyle(.plain)
             Button(intent: SnoozeWidgetTaskIntent(taskID: rec.taskID, minutes: 60)) {
