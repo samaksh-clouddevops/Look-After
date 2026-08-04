@@ -20,6 +20,11 @@ struct TaskListView: View {
     @State private var isCardStackMode = false
     @StateObject private var plannerVM = DailyPlannerViewModel()
     @State private var showReschedulePreview = false
+
+    // Performance optimization: Cache filtered/sorted tasks to avoid recomputation on every render
+    @State private var cachedFilteredTasks: [LifeTask] = []
+    @State private var lastFilterApplied: TaskFilter = .today
+    @State private var lastTasksHash: Int = 0
     
     var body: some View {
         ZStack {
@@ -123,7 +128,7 @@ struct TaskListView: View {
                             }
                         }
                         
-                        ForEach(filteredTasks) { task in
+                        ForEach(cachedFilteredTasks) { task in
                             TaskListRowView(
                                 task: task,
                                 tasksVM: tasksVM,
@@ -136,7 +141,14 @@ struct TaskListView: View {
                     }
                     .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: filteredTasks.map(\.id))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: cachedFilteredTasks.map(\.id))
+                    .onAppear { updateFilteredTasksIfNeeded() }
+                    .onChange(of: selectedFilter) { _, _ in updateFilteredTasksIfNeeded() }
+                    .onChange(of: tasksVM.tasks.count) { _, _ in updateFilteredTasksIfNeeded() }
+                    .onChange(of: tasksVM.completedToday.count) { _, _ in updateFilteredTasksIfNeeded() }
+                    // Cheap invalidation signal when tasks mutate without count change (complete/status).
+                    .onChange(of: tasksVM.tasks.first?.updatedAt) { _, _ in updateFilteredTasksIfNeeded() }
+                    .onChange(of: tasksVM.tasks.last?.updatedAt) { _, _ in updateFilteredTasksIfNeeded() }
                 }
             }
         }
@@ -151,8 +163,9 @@ struct TaskListView: View {
         }
         .task {
             await tasksVM.loadTasks(userId: userId)
+            updateFilteredTasksIfNeeded()
         }
-        .task(id: filteredTasks.map(\.id).joined()) {
+        .task(id: cachedFilteredTasks.map(\.id).joined()) {
             await refreshTaskTimeDisplays()
         }
         .undoToast(
@@ -220,7 +233,7 @@ struct TaskListView: View {
             sleepQuality: sleepQuality,
             executiveCapacity: nil
         )
-        await tasksVM.refreshTimeDisplays(for: filteredTasks, context: context)
+        await tasksVM.refreshTimeDisplays(for: cachedFilteredTasks, context: context)
     }
 
     private var tomorrowPlanningBanner: some View {
@@ -247,7 +260,23 @@ struct TaskListView: View {
         .padding(.bottom, 8)
     }
     
-    private var filteredTasks: [LifeTask] {
+    /// Update cached filtered tasks only when filter or tasks change (performance optimization).
+    private func updateFilteredTasksIfNeeded() {
+        // Include status + updatedAt so mutations (complete/reschedule) invalidate the cache.
+        let currentHash = tasksVM.tasks
+            .map { "\($0.id):\($0.status.rawValue):\($0.updatedAt.timeIntervalSince1970)" }
+            .joined()
+            .hashValue
+            &+ tasksVM.completedToday.map(\.id).joined().hashValue
+        if selectedFilter != lastFilterApplied || currentHash != lastTasksHash {
+            cachedFilteredTasks = computeFilteredTasks()
+            lastFilterApplied = selectedFilter
+            lastTasksHash = currentHash
+        }
+    }
+
+    /// Compute filtered tasks (called only when necessary, not on every render).
+    private func computeFilteredTasks() -> [LifeTask] {
         let calendar = Calendar.current
         let context = tasksVM.schedulingContext
         switch selectedFilter {
