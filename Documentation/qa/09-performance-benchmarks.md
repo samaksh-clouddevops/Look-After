@@ -33,8 +33,14 @@ Performance targets, measurement protocol, and Instruments profiles for LifeOS.
 | Focus timer pause / resume label update | < 100ms | > 500ms | `FocusTimerOpenPerformanceTests` |
 | Focus timer stop → dismiss overlay | < 100ms | > 500ms | `FocusTimerOpenPerformanceTests` |
 | Focus session state activation (ViewModel) | < 16ms | > 50ms | `ADHDViewModelFocusSessionTests` |
+| Context orchestrator refresh (deterministic) | < 200ms | > 1000ms | `ContextOrchestratorPerformanceTests` |
+| Local save return (200 tasks, fire-and-forget) | < 50ms | > 200ms | `LocalPersistencePerformanceTests` |
+| Task sort 100 / 500 | < 16ms / 50ms | > 50ms / 150ms | `PerformanceMonitorTests` |
+| Tab / task-list / multi-tab (UI lag suite) | see QA-37 | see QA-37 | `UILagFixPerformanceTests` |
 
 **Release tolerance:** Within **10%** of target on reference device.
+
+**Scorecard:** [37-ui-lag-fix-scorecard.md](./37-ui-lag-fix-scorecard.md) — 0–100 scores; **acceptable pass ≥ 70**, ship composite ≥ **80**.
 
 ---
 

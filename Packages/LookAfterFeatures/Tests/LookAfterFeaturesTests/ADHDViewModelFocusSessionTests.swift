@@ -5,10 +5,6 @@ import LookAfterCore
 /// Focus session activation must be synchronous — UI overlays depend on instant state flips.
 final class ADHDViewModelFocusSessionTests: XCTestCase {
 
-    /// One frame at 60fps — focus state should flip before any async timer work.
-    private let oneFrameMs: Double = 16
-    private let activationHardFailMs: Double = 50
-
     @MainActor
     func testStartFocusSessionActivatesWithinOneFrame() throws {
         let vm = ADHDViewModel()
@@ -22,14 +18,18 @@ final class ADHDViewModelFocusSessionTests: XCTestCase {
         let start = CFAbsoluteTimeGetCurrent()
         vm.startFocusSession(task: task)
         let elapsedMs = (CFAbsoluteTimeGetCurrent() - start) * 1000
+        let score = PerformanceBudgets.score(
+            durationMs: elapsedMs,
+            targetMs: PerformanceBudgets.focusStateActivationTargetMs,
+            hardFailMs: PerformanceBudgets.focusStateActivationHardFailMs
+        )
 
         XCTAssertTrue(vm.isFocusSessionActive, "Focus session should be active immediately")
         XCTAssertEqual(vm.currentFocusTask?.id, task.id)
         XCTAssertEqual(vm.focusSessionTarget, 45 * 60, accuracy: 0.1)
-        XCTAssertLessThan(
-            elapsedMs,
-            activationHardFailMs,
-            "Focus activation took \(elapsedMs)ms — target ≤ \(oneFrameMs)ms (hard fail > \(activationHardFailMs)ms)"
+        XCTAssertTrue(
+            PerformanceBudgets.isAcceptable(score),
+            "Focus activation took \(elapsedMs)ms (score \(score)) — hard fail > \(PerformanceBudgets.focusStateActivationHardFailMs)ms"
         )
     }
 
@@ -80,7 +80,7 @@ final class ADHDViewModelFocusSessionTests: XCTestCase {
 
         XCTAssertTrue(vm.isPaused)
         XCTAssertTrue(vm.isFocusSessionActive, "Session stays open while paused")
-        XCTAssertLessThan(elapsedMs, activationHardFailMs, "Pause took \(elapsedMs)ms")
+        XCTAssertLessThan(elapsedMs, PerformanceBudgets.focusStateActivationHardFailMs, "Pause took \(elapsedMs)ms")
     }
 
     @MainActor
@@ -96,7 +96,7 @@ final class ADHDViewModelFocusSessionTests: XCTestCase {
 
         XCTAssertFalse(vm.isPaused)
         XCTAssertTrue(vm.isFocusSessionActive)
-        XCTAssertLessThan(elapsedMs, activationHardFailMs, "Resume took \(elapsedMs)ms")
+        XCTAssertLessThan(elapsedMs, PerformanceBudgets.focusStateActivationHardFailMs, "Resume took \(elapsedMs)ms")
     }
 
     @MainActor
@@ -111,6 +111,6 @@ final class ADHDViewModelFocusSessionTests: XCTestCase {
 
         XCTAssertFalse(vm.isFocusSessionActive)
         XCTAssertNil(vm.currentFocusTask)
-        XCTAssertLessThan(elapsedMs, activationHardFailMs, "Stop took \(elapsedMs)ms")
+        XCTAssertLessThan(elapsedMs, PerformanceBudgets.focusStateActivationHardFailMs, "Stop took \(elapsedMs)ms")
     }
 }
