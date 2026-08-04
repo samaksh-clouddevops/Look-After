@@ -1,0 +1,12 @@
+[0/1] Planning build
+Building for debugging...
+Build complete! (1.03s)
+[1/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testScore_DoubleHardFail_IsZero
+[2/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testScore_BetweenTargetAndHardFail_IsAcceptable
+[3/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testScore_AtHardFail_IsNotAcceptable
+[4/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testAllBudgetPairs_HaveHardFailAboveTarget
+[5/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testScore_AtOrUnderTarget_Is100
+[6/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testJSONPersistenceSortMicrobench_AcceptableOnLinux
+[7/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testLocalJSONRoundTrip_ReturnAndWriteBudgets
+[8/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testSimulatedScenarioMatrix_AllTargetsScore100
+[9/9] Testing PerfBudgetsTests.PerformanceBudgetsTests/testScore_LinearMidpoint
