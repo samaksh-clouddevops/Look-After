@@ -10,23 +10,22 @@ struct RecommendationWidgetView: View {
     private var rec: WidgetRecommendation { entry.snapshot.resolvedRecommendation }
 
     var body: some View {
-        WidgetRootContainer {
-            VStack(alignment: .leading, spacing: WidgetChrome.gap) {
-                header
-                WidgetPrimaryText(rec.title, lineLimit: family == .systemSmall ? 3 : 2)
-                if family != .systemSmall, !rec.whyLine.isEmpty {
-                    WidgetMetaText(rec.whyLine, lineLimit: 2)
-                }
-                if family == .systemLarge, let next = rec.nextStepLine, !next.isEmpty {
-                    WidgetMetaText(next, lineLimit: 2)
-                }
-                metaRow
-                if entry.snapshot.isStale {
-                    WidgetStaleBanner()
-                }
-                Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: WidgetChrome.gap) {
+            header
+            WidgetPrimaryText(rec.title, lineLimit: family == .systemSmall ? 3 : 2)
+            if family != .systemSmall, !rec.whyLine.isEmpty {
+                WidgetMetaText(rec.whyLine, lineLimit: 2)
             }
+            if family == .systemLarge, let next = rec.nextStepLine, !next.isEmpty {
+                WidgetMetaText(next, lineLimit: 2)
+            }
+            metaRow
+            if entry.snapshot.isStale {
+                WidgetStaleBanner()
+            }
+            Spacer(minLength: 0)
         }
+        .lookAfterWidgetChrome()
         .widgetURL(deepLink)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityCopy)

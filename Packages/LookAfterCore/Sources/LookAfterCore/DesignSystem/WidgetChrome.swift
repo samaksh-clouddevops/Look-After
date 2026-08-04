@@ -139,9 +139,12 @@ public struct WidgetStaleBanner: View {
     }
 }
 
-// MARK: - Root container
+// MARK: - Root padding (WidgetKit containerBackground lives in the extension)
 
-public struct WidgetRootContainer<Content: View>: View {
+/// Applies standard widget padding and fill. Callers in the widget extension
+/// should chain `.containerBackground(for: .widget)` themselves so LookAfterCore
+/// never depends on WidgetKit (keeps iOS app + macOS targets building).
+public struct WidgetRootPadding<Content: View>: View {
     private let content: Content
 
     public init(@ViewBuilder content: () -> Content) {
@@ -152,8 +155,8 @@ public struct WidgetRootContainer<Content: View>: View {
         content
             .padding(WidgetChrome.padding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .containerBackground(for: .widget) {
-                WidgetChrome.canvasBackground()
-            }
     }
 }
+
+/// Backward-compatible name used by V2 widget views.
+public typealias WidgetRootContainer = WidgetRootPadding
