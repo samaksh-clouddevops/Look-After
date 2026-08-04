@@ -48,6 +48,7 @@
 		2A7C6ECD531B9013421FBE51 /* LookAfterAI in Frameworks */ = {isa = PBXBuildFile; productRef = AFDD18E817DDBF5E68CC2BC6 /* LookAfterAI */; };
 		2D11AA3576053C3D9910B306 /* CycleEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA97A9A18AB553D06A7FF75A /* CycleEngineTests.swift */; };
 		2DF65D7CCF1F2E57CCA76A6A /* GLMConfigurationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41703578EDA0DEA069DA554B /* GLMConfigurationSettingsView.swift */; };
+		2E7004829AD2BEF7D8C1FCFB /* LookAfterFirebaseConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80A1336CEAAC93F789018DB /* LookAfterFirebaseConfigurationTests.swift */; };
 		2E72389FD8BFB580B0665DB2 /* FLOW001_Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA8756BF9C84CB0696954F87 /* FLOW001_Tests.swift */; };
 		2EC4DE3085D90A79A1ADFA5F /* LifeGapsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D655ED4695BF860455CB435 /* LifeGapsCard.swift */; };
 		2F28E5432E539C6931D36283 /* GLMConfigurationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41703578EDA0DEA069DA554B /* GLMConfigurationSettingsView.swift */; };
@@ -438,6 +439,7 @@
 		D6FB84AAD4A3B32BB4ED5A50 /* BrainInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainInspectorView.swift; sourceTree = "<group>"; };
 		D700D1A9BDBE9ED291F2D97A /* ExecutivePlanningConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutivePlanningConversationView.swift; sourceTree = "<group>"; };
 		D70B75991E068648CE1D43A8 /* HeroObjectiveResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroObjectiveResolverTests.swift; sourceTree = "<group>"; };
+		D80A1336CEAAC93F789018DB /* LookAfterFirebaseConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookAfterFirebaseConfigurationTests.swift; sourceTree = "<group>"; };
 		D8250FBA922065B4359E8C87 /* BrainDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainDashboardView.swift; sourceTree = "<group>"; };
 		D882144C53C3087C750BD698 /* LookAfterWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LookAfterWidget.entitlements; sourceTree = "<group>"; };
 		D8E356086217BBA7DAA63B74 /* APIKeysSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeysSettingsView.swift; sourceTree = "<group>"; };
@@ -957,6 +959,7 @@
 				10EF61FC304B22BC19B9F04C /* DataPersistenceTests.swift */,
 				5292A117C435605350F840BC /* FullAppIntegrationTests.swift */,
 				4BC836AAA10F82C6474D4FDA /* HealthSummaryRepositoryTests.swift */,
+				D80A1336CEAAC93F789018DB /* LookAfterFirebaseConfigurationTests.swift */,
 				562A5A1B74E81FCD247AB5BB /* PersonalAnalyticsEngineTests.swift */,
 				FF01EE0A1E69C1DC89964F41 /* SimulatedUserFlowTests.swift */,
 				4E6C24F059EA4B43E1A62231 /* TaskRepositoryMergeTests.swift */,
@@ -1536,6 +1539,7 @@
 				25C6F89989519FA818A61A7E /* LifeTimelinePresenterTests.swift in Sources */,
 				1F4A179125AAC7DDF96DA2E4 /* LookAfterCoreTests.swift in Sources */,
 				EF3819A58C65C8ED88D329E3 /* LookAfterFeaturesTests.swift in Sources */,
+				2E7004829AD2BEF7D8C1FCFB /* LookAfterFirebaseConfigurationTests.swift in Sources */,
 				4D3591883D1B0AD8FE27B652 /* LookAfterHealthTests.swift in Sources */,
 				F866DA2052587D3425C315CD /* MedicationReasoningTests.swift in Sources */,
 				070F8BEB59FF7EF173EAF185 /* MockGLM.swift in Sources */,

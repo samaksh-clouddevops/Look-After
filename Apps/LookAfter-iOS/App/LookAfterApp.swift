@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseCore
+import LookAfterData
 
 /// LifeOS App Entry Point
 @main
@@ -7,11 +8,7 @@ struct LookAfterApp: App {
     @UIApplicationDelegateAdaptor(LookAfterAppDelegate.self) private var appDelegate
 
     init() {
-        // Configure Firebase safely without GoogleService-Info.plist for UI preview
-        let options = FirebaseOptions(googleAppID: "1:1234567890:ios:321abc", gcmSenderID: "1234567890")
-        options.projectID = "lifeos-mock"
-        options.apiKey = "mock-api-key"
-        FirebaseApp.configure(options: options)
+        LookAfterFirebaseConfiguration.configureIfNeeded()
         UITestLaunchConfiguration.applyIfNeeded()
     }
     

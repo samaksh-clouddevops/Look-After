@@ -15,12 +15,7 @@ public final class FirebaseManager: ObservableObject {
     @Published public var error: String?
     
     public var db: Firestore? {
-        if FirebaseApp.app() == nil {
-            if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-               let options = FirebaseOptions(contentsOfFile: path) {
-                FirebaseApp.configure(options: options)
-            }
-        }
+        LookAfterFirebaseConfiguration.configureIfNeeded()
         ensureAuthListener()
         return FirebaseApp.app() != nil ? Firestore.firestore() : nil
     }
