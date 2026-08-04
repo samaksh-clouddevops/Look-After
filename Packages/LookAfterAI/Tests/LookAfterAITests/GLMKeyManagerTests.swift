@@ -78,7 +78,7 @@ final class GLMKeyRecordTests: XCTestCase {
     }
 
     func testDisabledKeyStatus() {
-        var record = GLMKeyRecord(name: "Old", isEnabled: false)
+        let record = GLMKeyRecord(name: "Old", isEnabled: false)
         XCTAssertEqual(record.status, .disabled)
     }
 }

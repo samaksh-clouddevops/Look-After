@@ -20,18 +20,18 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .briefing: return "house"
+        case .briefing: return "doc.text"
         case .today: return "calendar"
-        case .brain: return "sparkles"
+        case .brain: return "brain.head.profile"
         case .you: return "person"
         }
     }
 
     var selectedIcon: String {
         switch self {
-        case .briefing: return "house.fill"
+        case .briefing: return "doc.text.fill"
         case .today: return "calendar"
-        case .brain: return "sparkles"
+        case .brain: return "brain.head.profile"
         case .you: return "person.fill"
         }
     }
@@ -70,7 +70,7 @@ struct LookAfterBottomNav: View {
             onCapture()
         } label: {
             Image(systemName: "plus.circle.fill")
-                .font(.system(size: 44, weight: .regular))
+                .font(.dsIconLarge())
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(DesignSystem.accentOnPrimary, DesignSystem.accentPrimary)
                 .frame(maxWidth: .infinity)
@@ -79,6 +79,7 @@ struct LookAfterBottomNav: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-capture")
         .accessibilityLabel("Capture")
+        .featureTourAnchor(.tabCapture)
     }
 
     private func tabButton(_ tab: LookAfterTab) -> some View {
@@ -94,13 +95,13 @@ struct LookAfterBottomNav: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: isSelected ? tab.selectedIcon : tab.icon)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.dsIcon(weight: isSelected ? .bold : .medium))
                     .symbolRenderingMode(.monochrome)
                 Text(tab.title)
-                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                    .textStyleTabLabel(color: isSelected ? DesignSystem.accentPrimary : DesignSystem.textSecondary, active: isSelected)
                     .lineLimit(1)
             }
-            .foregroundColor(isSelected ? DesignSystem.accentPrimary : DesignSystem.textMuted)
+            .foregroundColor(isSelected ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
         }
@@ -108,5 +109,15 @@ struct LookAfterBottomNav: View {
         .accessibilityIdentifier("tab-\(tab.title.lowercased())")
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .featureTourAnchor(tourAnchor(for: tab))
+    }
+
+    private func tourAnchor(for tab: LookAfterTab) -> AppFeatureTourAnchorID {
+        switch tab {
+        case .briefing: return .tabBriefing
+        case .today: return .tabToday
+        case .brain: return .tabBrain
+        case .you: return .tabYou
+        }
     }
 }

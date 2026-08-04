@@ -25,7 +25,7 @@ final class FlowSchedulingEngineTests: XCTestCase {
             id: "e1", title: "Team Sync", startDate: Date(), endDate: Date(), minutesUntilStart: 40
         )
         let inProgress = FlowSchedulingTestFixtures.task(title: "API Review", status: .inProgress, estimatedMinutes: 18)
-        var env = EnvironmentContext(energyScore: 0.7, nextEvent: event, timeOfDay: .morning)
+        let env = EnvironmentContext(energyScore: 0.7, nextEvent: event, timeOfDay: .morning)
         let input = FlowSchedulingTestFixtures.input(tasks: [inProgress], environment: env)
 
         let result = engine.schedule(from: input)

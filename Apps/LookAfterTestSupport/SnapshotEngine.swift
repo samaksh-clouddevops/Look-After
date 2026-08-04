@@ -102,7 +102,7 @@ enum ScreenNavigator {
         },
         ScreenSpec(id: "S06", identifier: "screen-daily-briefing", platform: "ios") { app in
             tapTab(app, "briefing")
-            return wait(app, "screen-daily-briefing") || wait(app, "screen-briefing")
+            return wait(app, "screen-briefing") || wait(app, "screen-daily-briefing")
         },
         ScreenSpec(id: "S07", identifier: "screen-daily-briefing-customization", platform: "ios") { app in
             tapTab(app, "briefing")
@@ -131,22 +131,22 @@ enum ScreenNavigator {
             return wait(app, "screen-executive-timeline") || wait(app, "screen-executive-today")
         },
         ScreenSpec(id: "S14", identifier: "screen-task-list", platform: "ios") { app in
-            openTaskList(app)
+            return openTaskList(app)
         },
         ScreenSpec(id: "S15", identifier: "screen-daily-plan", platform: "ios") { app in
-            openTaskList(app)
+            _ = openTaskList(app)
             return wait(app, "screen-daily-plan") || wait(app, "screen-task-list")
         },
         ScreenSpec(id: "S16", identifier: "screen-task-card-stack", platform: "ios") { app in
-            openTaskList(app)
+            _ = openTaskList(app)
             return wait(app, "screen-task-card-stack") || wait(app, "screen-task-list")
         },
         ScreenSpec(id: "S17", identifier: "screen-task-import", platform: "ios") { app in
-            openTaskList(app)
+            _ = openTaskList(app)
             return wait(app, "screen-task-import") || wait(app, "screen-task-list")
         },
         ScreenSpec(id: "S18", identifier: "screen-reschedule-preview", platform: "ios") { app in
-            openTaskList(app)
+            _ = openTaskList(app)
             return wait(app, "screen-reschedule-preview") || wait(app, "screen-task-list")
         },
         ScreenSpec(id: "S19", identifier: "screen-brain-dashboard", platform: "ios") { app in
@@ -159,8 +159,12 @@ enum ScreenNavigator {
         },
         ScreenSpec(id: "S21", identifier: "screen-settings", platform: "ios") { app in
             tapTab(app, "you")
-            if app.buttons["nav-open-settings"].exists { app.buttons["nav-open-settings"].tap() }
-            return wait(app, "screen-settings") || wait(app, "screen-executive-profile")
+            if app.buttons["Settings"].exists {
+                app.buttons["Settings"].tap()
+            } else if app.buttons["nav-open-settings"].exists {
+                app.buttons["nav-open-settings"].tap()
+            }
+            return wait(app, "screen-settings") || wait(app, "screen-you") || wait(app, "screen-executive-profile")
         },
         ScreenSpec(id: "S22", identifier: "screen-api-keys", platform: "ios") { app in
             tapTab(app, "you")
@@ -183,7 +187,7 @@ enum ScreenNavigator {
             return wait(app, "screen-auth")
         },
         ScreenSpec(id: "S27", identifier: "screen-inbox", platform: "ios") { app in
-            openTaskList(app)
+            _ = openTaskList(app)
             return wait(app, "screen-inbox") || wait(app, "screen-task-list")
         },
         ScreenSpec(id: "S28", identifier: "screen-coach", platform: "ios") { app in
@@ -233,7 +237,7 @@ enum ScreenNavigator {
         },
         ScreenSpec(id: "S39", identifier: "screen-voice-capture", platform: "ios") { app in
             tapTab(app, "capture")
-            return wait(app, "screen-voice-capture") || wait(app, "screen-briefing")
+            return wait(app, "screen-capture") || wait(app, "screen-voice-capture") || wait(app, "screen-briefing")
         },
         ScreenSpec(id: "S40", identifier: "screen-continue-session", platform: "ios") { app in
             return wait(app, "screen-continue-session") || wait(app, "screen-executive-today")

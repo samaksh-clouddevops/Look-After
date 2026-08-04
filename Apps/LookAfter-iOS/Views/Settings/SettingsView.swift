@@ -7,6 +7,7 @@ import LookAfterHealth
 /// Settings View — configure GLM API key, health tracking, ADHD features, and profile.
 struct SettingsView: View {
     @EnvironmentObject private var shell: AppShellState
+    @Environment(\.dismiss) private var dismiss
     
     @AppStorage("enableHealth") private var enableHealth: Bool = true
     @State private var lifeProfile = UserLifeProfileStore.load()
@@ -26,6 +27,33 @@ struct SettingsView: View {
     @AppStorage("focusDurationMinutes") private var focusDurationMinutes: Int = 25
     @AppStorage("pinNowToLockScreen") private var pinNowToLockScreen = false
     @AppStorage(FlowDirectorFeature.userDefaultsKey) private var enableFlowDirector = false
+    @AppStorage(AppAppearanceMode.storageKey) private var appearanceRaw = AppAppearanceMode.system.rawValue
+
+    private var appearance: AppAppearanceMode {
+        AppAppearanceMode(rawValue: appearanceRaw) ?? .system
+    }
+
+    private var useSystemAppearance: Binding<Bool> {
+        Binding(
+            get: { appearance.usesSystemSetting },
+            set: { usesSystem in
+                appearanceRaw = usesSystem
+                    ? AppAppearanceMode.system.rawValue
+                    : AppAppearanceMode.light.rawValue
+            }
+        )
+    }
+
+    private var darkModeEnabled: Binding<Bool> {
+        Binding(
+            get: { appearance.isDark },
+            set: { isDark in
+                appearanceRaw = isDark
+                    ? AppAppearanceMode.dark.rawValue
+                    : AppAppearanceMode.light.rawValue
+            }
+        )
+    }
     
     @StateObject private var healthSync = HealthSyncService.shared
     @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
@@ -86,6 +114,30 @@ struct SettingsView: View {
                     Text("Account & Cloud Sync")
                 } footer: {
                     Text("Leave blank to use the name from your Life Profile (e.g. \"I'm Alex…\").")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+
+                Section {
+                    Toggle(isOn: useSystemAppearance) {
+                        Label("Match iPhone appearance", systemImage: "iphone")
+                    }
+                    .accessibilityIdentifier("settings-appearance-system-toggle")
+                    .listRowBackground(DesignSystem.backgroundSecondary)
+
+                    if !appearance.usesSystemSetting {
+                        Toggle(isOn: darkModeEnabled) {
+                            Label("Dark Mode", systemImage: "moon.fill")
+                        }
+                        .accessibilityIdentifier("settings-dark-mode-toggle")
+                        .listRowBackground(DesignSystem.backgroundSecondary)
+                    }
+                } header: {
+                    Text("Display")
+                } footer: {
+                    Text(appearance.usesSystemSetting
+                         ? "Look After follows your iPhone light or dark setting."
+                         : "Dark Mode is controlled inside the app. Turn off “Match iPhone appearance” to change it here.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 }
@@ -455,6 +507,25 @@ struct SettingsView: View {
                     Text("Energy Profile")
                 }
                 
+                // Help
+                Section {
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            NotificationCenter.default.post(name: .replayAppFeatureTour, object: nil)
+                        }
+                    } label: {
+                        Label("Replay app tour", systemImage: "map")
+                    }
+                    .accessibilityIdentifier("settings-replay-tour")
+                } header: {
+                    Text("Help")
+                } footer: {
+                    Text("Walk through Briefing, Today, Capture, Brain, and profile features again.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+
                 // About
                 Section {
                     HStack {

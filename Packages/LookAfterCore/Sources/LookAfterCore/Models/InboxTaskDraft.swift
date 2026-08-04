@@ -1,5 +1,4 @@
 import Foundation
-import LookAfterCore
 
 /// Creates a LifeTask from AI-processed inbox output.
 public struct InboxTaskDraft: Sendable {

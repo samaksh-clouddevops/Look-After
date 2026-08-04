@@ -49,42 +49,50 @@ final class WidgetSyncService {
     }
     
     func syncFocusActivity(adhdVM: ADHDViewModel) {
-        guard adhdVM.isFocusSessionActive else {
-            LiveActivityManager.shared.endFocusActivity()
-            return
+        guard !UITestLaunchConfiguration.shouldSkipLiveActivity else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard adhdVM.isFocusSessionActive else {
+                LiveActivityManager.shared.endFocusActivity()
+                return
+            }
+
+            let taskTitle = adhdVM.currentFocusTask?.title ?? "Working"
+            let remaining = max(0, adhdVM.focusSessionTarget - adhdVM.focusSessionElapsed)
+            let endDate = Date().addingTimeInterval(remaining)
+
+            LiveActivityManager.shared.updateFocusActivity(
+                taskTitle: taskTitle,
+                sessionNumber: adhdVM.currentSessionNumber,
+                sessionEndDate: endDate,
+                isOnBreak: adhdVM.isOnBreak,
+                sessionLabel: adhdVM.sessionLabel,
+                remainingLabel: adhdVM.focusRemainingString,
+                isPaused: adhdVM.isPaused
+            )
         }
-        
-        let taskTitle = adhdVM.currentFocusTask?.title ?? "Working"
-        let remaining = max(0, adhdVM.focusSessionTarget - adhdVM.focusSessionElapsed)
-        let endDate = Date().addingTimeInterval(remaining)
-        
-        LiveActivityManager.shared.updateFocusActivity(
-            taskTitle: taskTitle,
-            sessionNumber: adhdVM.currentSessionNumber,
-            sessionEndDate: endDate,
-            isOnBreak: adhdVM.isOnBreak,
-            sessionLabel: adhdVM.sessionLabel,
-            remainingLabel: adhdVM.focusRemainingString,
-            isPaused: adhdVM.isPaused
-        )
     }
-    
+
     func startFocusActivity(adhdVM: ADHDViewModel) {
-        guard adhdVM.isFocusSessionActive else { return }
-        
-        let taskTitle = adhdVM.currentFocusTask?.title ?? "Working"
-        let remaining = max(0, adhdVM.focusSessionTarget - adhdVM.focusSessionElapsed)
-        let endDate = Date().addingTimeInterval(remaining)
-        
-        LiveActivityManager.shared.startFocusActivity(
-            taskTitle: taskTitle,
-            sessionNumber: adhdVM.currentSessionNumber,
-            sessionEndDate: endDate,
-            isOnBreak: adhdVM.isOnBreak,
-            sessionLabel: adhdVM.sessionLabel,
-            remainingLabel: adhdVM.focusRemainingString,
-            isPaused: adhdVM.isPaused
-        )
+        guard !UITestLaunchConfiguration.shouldSkipLiveActivity else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard adhdVM.isFocusSessionActive else { return }
+
+            let taskTitle = adhdVM.currentFocusTask?.title ?? "Working"
+            let remaining = max(0, adhdVM.focusSessionTarget - adhdVM.focusSessionElapsed)
+            let endDate = Date().addingTimeInterval(remaining)
+
+            LiveActivityManager.shared.startFocusActivity(
+                taskTitle: taskTitle,
+                sessionNumber: adhdVM.currentSessionNumber,
+                sessionEndDate: endDate,
+                isOnBreak: adhdVM.isOnBreak,
+                sessionLabel: adhdVM.sessionLabel,
+                remainingLabel: adhdVM.focusRemainingString,
+                isPaused: adhdVM.isPaused
+            )
+        }
     }
     
     private func makeSnapshot(brainVM: BrainViewModel, tasksVM: TasksViewModel) -> WidgetSnapshot {

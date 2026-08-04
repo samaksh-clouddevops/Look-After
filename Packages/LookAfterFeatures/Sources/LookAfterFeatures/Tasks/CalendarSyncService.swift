@@ -1,5 +1,5 @@
 import Foundation
-import EventKit
+@preconcurrency import EventKit
 import LookAfterCore
 
 public enum CalendarSyncError: Error {
@@ -7,7 +7,7 @@ public enum CalendarSyncError: Error {
     case generic(String)
 }
 
-public final class CalendarSyncService: Sendable {
+public final class CalendarSyncService {
     private let eventStore = EKEventStore()
 
     public init() {}

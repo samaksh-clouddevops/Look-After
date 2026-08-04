@@ -9,6 +9,8 @@ struct ExecutivePlanningConversationView: View {
     @ObservedObject var speechSynthesizer: PlanningSpeechSynthesizer
 
     var isExpanded: Bool = false
+    /// When set, caps panel height and scrolls the middle section once content exceeds it.
+    var maxPanelHeight: CGFloat? = nil
     var onSubmit: (_ text: String, _ startedWithVoice: Bool) -> Void
     var onNegotiationSelect: (String) -> Void
     var onRedesignWithAI: (String) -> Void = { _ in }
@@ -34,27 +36,10 @@ struct ExecutivePlanningConversationView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
             panelHeader
-
-            if planningVM.isProcessing, !planningVM.thinkingSteps.isEmpty {
-                reasoningPipeline
-            }
-
-            conversationScroll
-
-            if let negotiation = planningVM.negotiation {
-                negotiationStrip(negotiation, action: onNegotiationSelect)
-            }
-
-            if let multiDayPlanning = planningVM.multiDayPlanning {
-                negotiationStrip(multiDayPlanning, action: onNegotiationSelect)
-            }
-
-            if planningVM.turns.isEmpty && !planningVM.isProcessing {
-                quickStartChips
-            }
-
+            scrollableMiddleSection
             inputArea
         }
+        .frame(maxHeight: maxPanelHeight, alignment: .top)
         .padding(.horizontal, DesignSystem.screenHorizontal)
         .padding(.bottom, DesignSystem.spacingSM)
         .keyboardDismissToolbar(label: "Send", onDone: submitText)
@@ -153,33 +138,88 @@ struct ExecutivePlanningConversationView: View {
 
     // MARK: - Conversation
 
-    private var conversationScroll: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-                    ForEach(planningVM.turns) { turn in
-                        turnEntry(turn)
-                            .id(turn.id)
-                    }
+    private var hasConversationTurns: Bool {
+        !planningVM.turns.isEmpty || planningVM.isProcessing
+    }
 
-                    if planningVM.isProcessing {
-                        HStack(spacing: DesignSystem.spacingSM) {
-                            ProgressView().scaleEffect(0.85)
-                            Text(planningVM.visibleThinkingStep ?? "Updating your day…")
-                                .font(.dsCaption())
-                                .foregroundColor(DesignSystem.textSecondary)
-                        }
+    @ViewBuilder
+    private var scrollableMiddleSection: some View {
+        let middle = middleSection
+
+        if let cap = middleScrollMaxHeight {
+            ScrollViewReader { proxy in
+                ViewThatFits(in: .vertical) {
+                    middle
+                    ScrollView(.vertical, showsIndicators: true) {
+                        middle
                     }
+                    .frame(maxHeight: cap)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, DesignSystem.spacingXS)
+                .onChange(of: planningVM.turns.count) { _, _ in
+                    scrollToLatestTurn(using: proxy)
+                }
+                .onChange(of: planningVM.isProcessing) { _, _ in
+                    scrollToLatestTurn(using: proxy)
+                }
             }
-            .onChange(of: planningVM.turns.count) { _, _ in
-                if let last = planningVM.turns.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+        } else {
+            middle
+        }
+    }
+
+    private var middleSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            if planningVM.isProcessing, !planningVM.thinkingSteps.isEmpty {
+                reasoningPipeline
+            }
+
+            if hasConversationTurns {
+                conversationStack
+            }
+
+            if let negotiation = planningVM.negotiation {
+                negotiationStrip(negotiation, action: onNegotiationSelect)
+            }
+
+            if let multiDayPlanning = planningVM.multiDayPlanning {
+                negotiationStrip(multiDayPlanning, action: onNegotiationSelect)
+            }
+
+            if planningVM.turns.isEmpty && !planningVM.isProcessing {
+                quickStartChips
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var middleScrollMaxHeight: CGFloat? {
+        guard let maxPanelHeight else { return nil }
+        let chromeReserve: CGFloat = planningVM.inputMode == .voice ? 228 : 168
+        return max(72, maxPanelHeight - chromeReserve)
+    }
+
+    private var conversationStack: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+            ForEach(planningVM.turns) { turn in
+                turnEntry(turn)
+                    .id(turn.id)
+            }
+
+            if planningVM.isProcessing {
+                HStack(spacing: DesignSystem.spacingSM) {
+                    ProgressView().scaleEffect(0.85)
+                    Text(planningVM.visibleThinkingStep ?? "Updating your day…")
+                        .font(.dsCaption())
+                        .foregroundColor(DesignSystem.textSecondary)
                 }
             }
         }
+        .padding(.vertical, DesignSystem.spacingXS)
+    }
+
+    private func scrollToLatestTurn(using proxy: ScrollViewProxy) {
+        guard let last = planningVM.turns.last else { return }
+        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
     }
 
     @ViewBuilder

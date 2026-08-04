@@ -72,7 +72,7 @@ public enum TaskSemanticProfileBuilder {
             || corpus.contains("synthroid")
 
         var constraints: [SchedulingConstraintKind] = [.sameTimeDaily]
-        var preferred: [TimeWindowPreference] = [.morning]
+        let preferred: [TimeWindowPreference] = [.morning]
         var forbidden: [TimeWindowPreference] = [.evening, .night]
         var subtype = "Daily medication"
         var required: [String] = ["Follow configured schedule"]

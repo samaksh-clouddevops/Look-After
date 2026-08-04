@@ -413,9 +413,10 @@ final class HealthSyncService: ObservableObject {
             currentStepLabel = "Uploading to \(UserFacingCopy.productName)…"
             updateStep(id: "save", status: .active, detail: "Saving locally and uploading to \(UserFacingCopy.productName)")
             
+            let summaryToSave = summary
             try await HealthSyncLogger.measure("Uploading to \(UserFacingCopy.productName)") {
                 try await withTimeout(seconds: Self.saveTimeoutSeconds) {
-                    try await self.healthRepo.save(summary)
+                    try await self.healthRepo.save(summaryToSave)
                 }
             }
             

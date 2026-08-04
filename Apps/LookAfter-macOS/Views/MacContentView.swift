@@ -14,8 +14,11 @@ struct MacContentView: View {
     @StateObject private var adhdVM = ADHDViewModel()
     @StateObject private var macTracker = MacProductivityTracker()
     @StateObject private var firebase = FirebaseManager.shared
+    @StateObject private var speechManager = SpeechRecognitionManager()
+    @StateObject private var planningSpeech = PlanningSpeechSynthesizer()
     
     @State private var selectedSection: NavigationSection? = .brain
+    @State private var showReset = false
     
     enum NavigationSection: String, CaseIterable, Identifiable {
         case brain = "Brain Dashboard"
@@ -68,6 +71,9 @@ struct MacContentView: View {
                     BrainDashboardView(
                         brainVM: brainVM,
                         adhdVM: adhdVM,
+                        brain: brain,
+                        speechManager: speechManager,
+                        speechSynthesizer: planningSpeech,
                         userId: firebase.currentUserId ?? "",
                         onStartHero: { task in
                             if let task {
@@ -89,6 +95,7 @@ struct MacContentView: View {
                         },
                         onNavigateToTasks: { selectedSection = .tasks },
                         onNavigateToCoach: { selectedSection = .coach },
+                        onReset: { showReset = true },
                         onRefresh: {
                             await brainVM.refresh(userId: firebase.currentUserId ?? "")
                         }
@@ -101,6 +108,9 @@ struct MacContentView: View {
                     BrainDashboardView(
                         brainVM: brainVM,
                         adhdVM: adhdVM,
+                        brain: brain,
+                        speechManager: speechManager,
+                        speechSynthesizer: planningSpeech,
                         userId: firebase.currentUserId ?? "",
                         onStartHero: { task in
                             if let task {
@@ -122,6 +132,7 @@ struct MacContentView: View {
                         },
                         onNavigateToTasks: { selectedSection = .tasks },
                         onNavigateToCoach: { selectedSection = .coach },
+                        onReset: { showReset = true },
                         onRefresh: {
                             await brainVM.refresh(userId: firebase.currentUserId ?? "")
                         }
@@ -164,6 +175,9 @@ struct MacContentView: View {
                 try? await firebase.signInAnonymously()
             }
             macTracker.startTracking()
+        }
+        .sheet(isPresented: $showReset) {
+            PhysiologicalResetView()
         }
     }
 }

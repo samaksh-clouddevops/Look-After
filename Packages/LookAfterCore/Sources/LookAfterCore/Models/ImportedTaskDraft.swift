@@ -1,5 +1,4 @@
 import Foundation
-import LookAfterCore
 
 /// A task parsed from an imported file, before conversion to LifeTask.
 public struct ImportedTaskDraft: Identifiable, Sendable, Hashable {

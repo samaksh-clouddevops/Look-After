@@ -50,7 +50,7 @@ public struct CalmHeroDisclosure: Sendable, Equatable {
     }
 }
 
-public struct CalmHeroSecondaryAction: Identifiable, Sendable, Equatable {
+public struct CalmHeroSecondaryAction: Identifiable, Equatable {
     public let id: String
     public var title: String
     public var icon: String?

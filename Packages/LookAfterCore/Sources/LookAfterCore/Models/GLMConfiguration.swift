@@ -87,10 +87,35 @@ public struct GLMConfiguration: Codable, Sendable, Equatable {
     public func fallbackTiers(startingAt tier: AIModelTier) -> [AIModelTier] {
         guard tieredRoutingEnabled else { return [.premium] }
         switch tier {
-        case .economy: return [.economy, .standard, .premium]
-        case .standard: return [.standard, .premium]
-        case .premium: return [.premium]
+        case .economy: return [.economy]
+        case .standard: return [.standard, .economy]
+        case .premium: return [.premium, .economy]
         }
+    }
+
+    /// Universal flash fallback when a premium / standard GLM model is unavailable.
+    public static let flashFallbackModel = "glm-4.7-flash"
+
+    /// Models to try for one tier — e.g. glm-5.2 then glm-4.7-flash.
+    public func modelsToAttempt(primary: String) -> [String] {
+        guard Self.usesFlashFallback(primary) else { return [primary] }
+        let flash = economyModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? Self.defaultEconomyModel
+            : economyModel
+        if primary.caseInsensitiveCompare(flash) == .orderedSame { return [primary] }
+        return [primary, flash]
+    }
+
+    /// True for GLM 5.x and glm-4.7 — not already a flash model.
+    public static func usesFlashFallback(_ model: String) -> Bool {
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return false }
+        if normalized.contains("flash") { return false }
+        if normalized.contains("glm-5") || normalized.contains("5.2")
+            || normalized.contains("5.1") || normalized.contains("5-turbo") {
+            return true
+        }
+        return normalized == "glm-4.7"
     }
 }
 

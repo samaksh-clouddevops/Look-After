@@ -8,6 +8,7 @@ struct BriefingCardContainer<Content: View>: View {
     let icon: String
     let iconGradient: LinearGradient
     var compact: Bool = false
+    var showsHeader: Bool = true
     @ViewBuilder let content: Content
 
     init(
@@ -15,12 +16,14 @@ struct BriefingCardContainer<Content: View>: View {
         icon: String,
         iconGradient: LinearGradient = DesignSystem.accentGradient,
         compact: Bool = false,
+        showsHeader: Bool = true,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.icon = icon
         self.iconGradient = iconGradient
         self.compact = compact
+        self.showsHeader = showsHeader
         self.content = content()
     }
 
@@ -29,7 +32,8 @@ struct BriefingCardContainer<Content: View>: View {
             title: title,
             icon: icon,
             iconGradient: iconGradient,
-            compact: compact
+            compact: compact,
+            showsHeader: showsHeader
         ) {
             content
         }
@@ -48,18 +52,30 @@ struct BriefingMiniChart: View {
     }
 
     var body: some View {
+        let nonZeroCount = points.filter { $0.value > 0 }.count
+        if nonZeroCount < 3 {
+            Text("Not enough data yet")
+                .font(.dsCaption())
+                .foregroundColor(DesignSystem.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        } else {
+            chartBody
+        }
+    }
+
+    private var chartBody: some View {
         HStack(alignment: .bottom, spacing: DesignSystem.spacingXS) {
             ForEach(points) { point in
                 VStack(spacing: DesignSystem.spacingXS) {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(color.opacity(point.value > 0 ? 0.9 : 0.2))
+                        .fill(color.opacity(point.value > 0 ? 0.9 : 0.35))
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 4)
                         .frame(height: max(4, CGFloat(point.value / ceiling) * 48))
 
                     Text(point.label)
                         .font(.dsCaption())
-                        .foregroundColor(DesignSystem.textMuted)
+                        .foregroundColor(DesignSystem.textSecondary)
                         .dsChipText()
                 }
                 .frame(maxWidth: .infinity)

@@ -129,7 +129,7 @@ public final class DailyPlannerViewModel: ObservableObject {
                 try await taskRepository.create(task)
                 todayTasks.append(task)
             } else {
-                var template = LifeTask(
+                let template = LifeTask(
                     title: title,
                     priority: priority,
                     difficulty: minutes >= 60 ? .hard : .medium,

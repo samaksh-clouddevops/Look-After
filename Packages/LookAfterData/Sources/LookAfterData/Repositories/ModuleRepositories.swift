@@ -13,7 +13,7 @@ public final class BillRepository: ObservableObject {
     private let collection = "bills"
     private let local = LocalPersistenceManager.shared
     
-    public init(firebase: FirebaseManager = .shared) { self.firebase = firebase }
+    public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
     
     public func getAll(for userId: String) async throws -> [BillItem] {
         guard let ref = firebase.userCollection(collection) else {
@@ -78,7 +78,7 @@ public final class ShoppingRepository: ObservableObject {
     private let collection = "shopping_items"
     private let local = LocalPersistenceManager.shared
     
-    public init(firebase: FirebaseManager = .shared) { self.firebase = firebase }
+    public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
     
     public func getAll(for userId: String) async throws -> [ShoppingItem] {
         let localItems = local.load([ShoppingItem].self, filename: collection)
@@ -165,7 +165,7 @@ public final class RelationshipRepository: ObservableObject {
     private let collection = "relationships"
     private let local = LocalPersistenceManager.shared
     
-    public init(firebase: FirebaseManager = .shared) { self.firebase = firebase }
+    public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
     
     public func getAll(for userId: String) async throws -> [RelationshipContact] {
         guard let ref = firebase.userCollection(collection) else {
@@ -228,7 +228,7 @@ public final class JournalRepository: ObservableObject {
     private let collection = "journal_entries"
     private let local = LocalPersistenceManager.shared
     
-    public init(firebase: FirebaseManager = .shared) { self.firebase = firebase }
+    public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
     
     public func getAll(for userId: String) async throws -> [JournalEntry] {
         guard let ref = firebase.userCollection(collection) else {

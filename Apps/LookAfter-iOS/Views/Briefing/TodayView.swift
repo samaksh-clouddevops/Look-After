@@ -36,25 +36,28 @@ struct TodayView: View {
     var onOpenMedication: () -> Void = {}
     var onCompleteTimelineTask: (String) -> Void = { _ in }
     var onRescheduleTimelineTask: (String) -> Void = { _ in }
+    var onStartTask: (LifeTask) -> Void = { _ in }
+    var onEditTask: (LifeTask) -> Void = { _ in }
     var isPlanningTomorrow: Bool = false
 
     @State private var selectedDay: TimelineDaySelection = .today
     @State private var selectedMetricKind: TodayMetricKind?
+    @State private var selectedCalendarDate = Calendar.current.startOfDay(for: Date())
+    @State private var expandedPriorityId: String?
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            timelineSection
-
-            ExecutiveAssistantSheet(
-                planningVM: planningVM,
-                speechManager: speechManager,
-                speechSynthesizer: speechSynthesizer,
-                onSubmit: onPlanningSubmit,
-                onNegotiationSelect: onNegotiationSelect,
-                onRedesignWithAI: onRedesignWithAI
-            )
-        }
-        .onAppear {
+        timelineSection
+            .overlay(alignment: .bottom) {
+                ExecutiveAssistantSheet(
+                    planningVM: planningVM,
+                    speechManager: speechManager,
+                    speechSynthesizer: speechSynthesizer,
+                    onSubmit: onPlanningSubmit,
+                    onNegotiationSelect: onNegotiationSelect,
+                    onRedesignWithAI: onRedesignWithAI
+                )
+            }
+            .onAppear {
             planningVM.bootstrapTimeline(from: lifeTimelineEvents)
             planningVM.bootstrapTomorrowTimeline(from: tomorrowLifeTimelineEvents)
         }
@@ -124,31 +127,33 @@ struct TodayView: View {
     private var timelineSection: some View {
         GeometryReader { geo in
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-                    headerBar
-                    timelineDayPicker
-                    multiDayBanner
-                    activeTimelineSection
+                VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
+                    todayHeader
+                    LAWeekDateStrip(
+                        days: weekDays,
+                        selectedDate: $selectedCalendarDate
+                    )
+                    .onChange(of: selectedCalendarDate) { _, newDate in
+                        syncSelectedDay(from: newDate)
+                    }
 
-                    if selectedDay == .today {
-                        TodayCompactMetricsStrip(
-                            metrics: compactMetrics,
-                            capacity: briefingVM.executiveCapacity,
-                            onMetricTap: handleMetricTap
-                        )
-
-                        TodayEndOfDayJournalCard(
-                            modulesVM: modulesVM,
-                            tasksVM: tasksVM,
-                            speechManager: speechManager
-                        )
-                    } else {
+                    if isSelectedToday {
+                        multiDayBanner
+                        topPrioritiesSection
+                        scheduleSection
+                        endOfDayJournalSection
+                        viewFullTimelineLink
+                    } else if isSelectedTomorrow {
                         tomorrowHeadsUpCard
+                        scheduleSection
+                    } else {
+                        Text("No plan for this day yet.")
+                            .textStyleCaption()
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: geo.size.height + 1, alignment: .top)
-                .padding(.horizontal, DesignSystem.screenHorizontal)
-                .padding(.top, DesignSystem.spacingSM)
+                .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+                .safeAreaPadding(.top, DesignSystem.spacingSM)
                 .padding(.bottom, scrollBottomInset)
             }
             .refreshable {
@@ -157,11 +162,210 @@ struct TodayView: View {
         }
     }
 
-    /// Clears the executive assistant sheet so the journal card is fully scrollable.
+    private var todayHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            headerBar
+            Text(formattedSelectedDate)
+                .textStyleCaption()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var formattedSelectedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, d MMMM"
+        return formatter.string(from: selectedCalendarDate)
+    }
+
+    private var weekDays: [Date] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) else {
+            return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        }
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) }
+    }
+
+    private var isSelectedToday: Bool {
+        Calendar.current.isDateInToday(selectedCalendarDate)
+    }
+
+    private var isSelectedTomorrow: Bool {
+        Calendar.current.isDateInTomorrow(selectedCalendarDate)
+    }
+
+    private func syncSelectedDay(from date: Date) {
+        if Calendar.current.isDateInToday(date) {
+            selectedDay = .today
+        } else if Calendar.current.isDateInTomorrow(date) {
+            selectedDay = .tomorrow
+        }
+    }
+
+    private var topPrioritiesSection: some View {
+        LASectionCard(title: "Top Priorities", icon: "star.fill") {
+            if topPriorityTasks.isEmpty {
+                VStack(spacing: DesignSystem.spacingSM) {
+                    Text("Nothing urgent. Add a task or capture a thought.")
+                        .textStyleCaption()
+                    Button(action: onOpenTasks) {
+                        Text("Add a task")
+                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .foregroundColor(DesignSystem.accentPrimary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                VStack(spacing: DesignSystem.spacingSM) {
+                    ForEach(topPriorityTasks) { task in
+                        LAPriorityRow(
+                            title: task.title,
+                            category: task.lifeArea.rawValue,
+                            detail: priorityDetail(for: task),
+                            ringColor: priorityColor(for: task.lifeArea),
+                            isComplete: task.status == .completed,
+                            isActionsExpanded: expandedPriorityId == task.id,
+                            onToggle: {
+                                Task { await togglePriority(task) }
+                            },
+                            onToggleActions: {
+                                withAnimation(.easeInOut(duration: 0.22)) {
+                                    expandedPriorityId = expandedPriorityId == task.id ? nil : task.id
+                                }
+                            },
+                            onStart: {
+                                expandedPriorityId = nil
+                                onStartTask(task)
+                            },
+                            onEdit: {
+                                expandedPriorityId = nil
+                                onEditTask(task)
+                            }
+                        )
+                    }
+
+                    Button(action: onOpenTasks) {
+                        Text("View all tasks →")
+                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .foregroundColor(DesignSystem.accentPrimary)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, DesignSystem.spacingXS)
+                }
+            }
+        }
+        .accessibilityIdentifier("top-priorities")
+    }
+
+    @ViewBuilder
+    private var endOfDayJournalSection: some View {
+        TodayEndOfDayJournalCard(
+            modulesVM: modulesVM,
+            tasksVM: tasksVM,
+            speechManager: speechManager
+        )
+    }
+
+    private func priorityDetail(for task: LifeTask) -> String {
+        var parts: [String] = []
+        if task.estimatedMinutes > 0 {
+            parts.append(task.estimatedMinutes.durationString)
+        }
+        if let scheduled = task.scheduledTime ?? task.scheduledDate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = task.scheduledTime != nil ? "h:mm a" : "EEE"
+            parts.append(formatter.string(from: scheduled))
+        }
+        parts.append(task.priority.label)
+        return parts.joined(separator: " · ")
+    }
+
+    private var topPriorityTasks: [LifeTask] {
+        Array(
+            tasksVM.activeTasks
+                .sorted { $0.priority > $1.priority }
+                .prefix(3)
+        )
+    }
+
+    private func priorityColor(for area: LifeArea) -> Color {
+        switch area {
+        case .work: return DesignSystem.focus
+        case .health, .medication, .hydration: return DesignSystem.health
+        case .learning, .creativity: return DesignSystem.learning
+        case .finance, .shopping: return DesignSystem.finance
+        case .relationships: return DesignSystem.relationships
+        case .travel: return DesignSystem.travel
+        case .reflection, .personal, .home: return DesignSystem.reflection
+        }
+    }
+
+    private func togglePriority(_ task: LifeTask) async {
+        if task.status == .completed {
+            return
+        }
+        onCompleteTimelineTask(task.id)
+    }
+
+    private var scheduleSection: some View {
+        LASectionCard(
+            title: "Schedule",
+            subtitle: selectedDay == .tomorrow ? "Preview for tomorrow" : "Tap a task to start or edit",
+            icon: "calendar"
+        ) {
+            if selectedDay == .tomorrow {
+                ExecutiveLiveTimelineView(
+                    rows: planningVM.tomorrowTimelineRows,
+                    thinkingStep: nil,
+                    isProcessing: false,
+                    title: "",
+                    emptyMessage: "Nothing on tomorrow's calendar yet.",
+                    isPreview: true,
+                    showPlanButton: true,
+                    isPlanning: isPlanningTomorrow,
+                    onViewAll: onViewTimeline,
+                    onPlan: onPlanTomorrow
+                )
+            } else {
+                ExecutiveLiveTimelineView(
+                    rows: planningVM.timelineRows,
+                    thinkingStep: planningVM.visibleThinkingStep,
+                    isProcessing: planningVM.isProcessing,
+                    title: "",
+                    emptyMessage: "Your day fills in as you add tasks and commitments.",
+                    onViewAll: onViewTimeline,
+                    onCompleteTask: onCompleteTimelineTask,
+                    onStartTask: { taskId in
+                        if let task = task(for: taskId) { onStartTask(task) }
+                    },
+                    onEditTask: { taskId in
+                        if let task = task(for: taskId) { onEditTask(task) }
+                    },
+                    onRescheduleTask: onRescheduleTimelineTask
+                )
+            }
+        }
+        .featureTourAnchor(.todayTimeline)
+    }
+
+    private func task(for id: String) -> LifeTask? {
+        tasksVM.tasks.first { $0.id == id }
+            ?? tasksVM.completedToday.first { $0.id == id }
+    }
+
+    private var viewFullTimelineLink: some View {
+        Button(action: onViewTimeline) {
+            Text("View full timeline")
+                .textStyleCaption(color: DesignSystem.focus)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Clears the executive assistant sheet so content is fully scrollable.
     private var scrollBottomInset: CGFloat {
-        let assistantClearance = ExecutiveAssistantMetrics.collapsedBottomPadding + 24
-        let journalExtra: CGFloat = selectedDay == .today ? 200 : 40
-        return assistantClearance + journalExtra
+        ExecutiveAssistantMetrics.collapsedBottomPadding + DesignSystem.spacingMD
     }
 
     private var timelineDayPicker: some View {
@@ -186,19 +390,17 @@ struct TodayView: View {
 
     private func multiDayBannerView(title: String, dayIndex: Int, dayCount: Int, sliceTitle: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(title) — day \(dayIndex) of \(dayCount)")
-                .font(.dsCaption())
-                .foregroundColor(DesignSystem.accentPrimary)
+            Text("\(title) · day \(dayIndex) of \(dayCount)")
+                .textStyleCaption(color: DesignSystem.focus)
             Text("Today: \(sliceTitle)")
-                .font(.system(size: 11))
-                .foregroundColor(DesignSystem.textSecondary)
+                .textStyleCaption()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DesignSystem.spacingMD)
         .padding(.vertical, DesignSystem.spacingSM)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(DesignSystem.accentPrimary.opacity(0.1))
+                .fill(DesignSystem.focus.opacity(0.08))
         )
     }
 
@@ -247,7 +449,7 @@ struct TodayView: View {
                 Label("Heads up", systemImage: "sunrise")
                     .font(.dsMetadata(weight: .semibold))
                     .foregroundColor(DesignSystem.accentPrimary)
-                Text("This is a preview — your brain uses your life model, fixed blocks, and flexible tasks to plan tomorrow. Tap Plan to refine times with AI.")
+                Text("Preview only. Tap Plan to shape tomorrow with your fixed blocks and flexible tasks.")
                     .font(.dsCaption())
                     .foregroundColor(DesignSystem.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -259,13 +461,12 @@ struct TodayView: View {
 
     private var headerBar: some View {
         HStack(alignment: .center) {
-            Text(selectedDay == .today ? "Today" : "Tomorrow")
-                .font(.system(size: 34, weight: .bold, design: .default))
-                .foregroundColor(DesignSystem.textPrimary)
+            Text(isSelectedToday ? "Today" : isSelectedTomorrow ? "Tomorrow" : formattedSelectedDate)
+                .textStyleScreenTitle()
 
             Spacer()
 
-            if selectedDay == .today {
+            if isSelectedToday {
                 Button(action: onOpenTasks) {
                     Label("All tasks", systemImage: "checklist")
                         .font(.dsCaption(weight: .semibold))
@@ -278,26 +479,26 @@ struct TodayView: View {
                 .accessibilityIdentifier("nav-all-tasks")
             }
 
-            if selectedDay == .today {
+            if isSelectedToday {
                 Button(action: onReplanDay) {
-                Group {
-                    if planningVM.isReplanning {
-                        ProgressView()
-                            .scaleEffect(0.75)
-                            .tint(DesignSystem.accentPrimary)
-                    } else {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(DesignSystem.textSecondary)
+                    Group {
+                        if planningVM.isReplanning {
+                            ProgressView()
+                                .scaleEffect(0.75)
+                                .tint(DesignSystem.accentPrimary)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(DesignSystem.textSecondary)
+                        }
                     }
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(DesignSystem.backgroundElevated))
                 }
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(DesignSystem.backgroundElevated))
-            }
-            .buttonStyle(.plain)
-            .disabled(planningVM.isReplanning || planningVM.isProcessing)
-            .accessibilityLabel("Replan my day")
-            } else {
+                .buttonStyle(.plain)
+                .disabled(planningVM.isReplanning || planningVM.isProcessing)
+                .accessibilityLabel("Refresh timeline")
+            } else if isSelectedTomorrow {
                 Button(action: onPlanTomorrow) {
                     Group {
                         if isPlanningTomorrow {

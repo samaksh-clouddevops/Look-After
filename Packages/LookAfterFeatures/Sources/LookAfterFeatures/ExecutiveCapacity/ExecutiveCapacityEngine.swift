@@ -61,7 +61,6 @@ public final class ExecutiveCapacityEngine {
     // MARK: - Deterministic inference
 
     private func inferDeterministic(_ input: ExecutiveCapacityInput) -> ExecutiveCapacityState {
-        let snapshot = input.snapshot
         let score = compositeScore(input)
         let band = band(for: score, input: input)
         let reasons = buildReasons(input: input, band: band, score: score)

@@ -26,7 +26,7 @@ public final class BackgroundAnalyticsService: ObservableObject {
         engine: PersonalAnalyticsEngine? = nil,
         taskRepo: TaskRepository? = nil,
         healthRepo: HealthSummaryRepository? = nil,
-        fetchBehaviorEvents: @escaping BehaviorEventsFetcher = PersonalAnalyticsBehaviorLoader.fetchEvents
+        fetchBehaviorEvents: @escaping BehaviorEventsFetcher = { await PersonalAnalyticsBehaviorLoader.fetchEvents() }
     ) {
         self.engine = engine ?? PersonalAnalyticsEngine(fetchBehaviorEvents: fetchBehaviorEvents)
         self.taskRepo = taskRepo ?? TaskRepository()

@@ -590,7 +590,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
     private static func subtitle(for event: LifeTimelineEvent, isPast: Bool, isCompleted: Bool) -> String {
         if isCompleted { return "Done" }
-        if isPast { return "Scheduled earlier today" }
+        if isPast { return "Window passed" }
         return event.subtitle
     }
 
@@ -611,8 +611,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     }
 
     private static func eventEndDate(_ event: LifeTimelineEvent) -> Date {
-        let minutes = event.estimatedMinutes ?? 30
-        return event.date.addingTimeInterval(TimeInterval(minutes * 60))
+        event.resolvedEndDate()
     }
 
     /// Parses "h:mm a" labels from planner deltas into today's timeline order.

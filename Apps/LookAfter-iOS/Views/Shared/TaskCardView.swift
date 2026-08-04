@@ -20,6 +20,8 @@ struct TaskCardView: View {
     let onDelete: () -> Void
     let onDefer: (() -> Void)?
     let isDecomposing: Bool
+    let timeDisplayLabel: String?
+    let isLoadingTimeDisplay: Bool
 
     @State private var isExpanded = false
 
@@ -35,7 +37,9 @@ struct TaskCardView: View {
         onDuplicate: @escaping () -> Void,
         onDelete: @escaping () -> Void,
         onDefer: (() -> Void)? = nil,
-        isDecomposing: Bool = false
+        isDecomposing: Bool = false,
+        timeDisplayLabel: String? = nil,
+        isLoadingTimeDisplay: Bool = false
     ) {
         self.task = task
         self.style = style
@@ -49,9 +53,42 @@ struct TaskCardView: View {
         self.onDelete = onDelete
         self.onDefer = onDefer
         self.isDecomposing = isDecomposing
+        self.timeDisplayLabel = timeDisplayLabel
+        self.isLoadingTimeDisplay = isLoadingTimeDisplay
     }
 
     private var isCompleted: Bool { task.isCompleted }
+
+    private var listMetadataLine: String? {
+        var parts: [String] = []
+        if let timeDisplayLabel {
+            parts.append(timeDisplayLabel)
+        } else {
+            parts.append("Estimated time \(task.estimatedMinutes) min")
+        }
+        if parts.isEmpty { return nil }
+
+        if isLoadingTimeDisplay {
+            return parts[0] + " · refining…"
+        }
+
+        if task.isRecurring {
+            parts.append(task.recurrenceRule.rawValue)
+        }
+        if task.isFixedTimeEvent {
+            if let start = task.scheduledTime {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "h:mm a"
+                parts.append(formatter.string(from: start))
+            } else {
+                parts.append("Fixed")
+            }
+        }
+        if task.isOverdue {
+            parts.append("Overdue")
+        }
+        return parts.joined(separator: " · ")
+    }
 
     var body: some View {
         switch style {
@@ -85,11 +122,12 @@ struct TaskCardView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
-                        if let meta = task.compactMetadataLine {
+                        if let meta = listMetadataLine {
                             Text(meta)
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
                                 .foregroundColor(DesignSystem.textMuted)
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.85)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -210,7 +248,29 @@ struct TaskCardView: View {
     @ViewBuilder
     private var expandedDetails: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MetadataTagRow(tags: task.metadataTags())
+            if isDecomposing {
+                HStack(spacing: DesignSystem.spacingSM) {
+                    ProgressView()
+                        .scaleEffect(0.85)
+                    Text("Breaking this into steps…")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(DesignSystem.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, DesignSystem.spacingXS)
+            }
+
+            MetadataTagRow(tags: task.metadataTags(timeLabel: timeDisplayLabel ?? "Estimated time \(task.estimatedMinutes) min"))
+
+            if isLoadingTimeDisplay {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.75)
+                    Text("Checking your focus window…")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+            }
 
             if !task.description.isEmpty {
                 Text(task.description)
@@ -247,9 +307,9 @@ struct TaskCardView: View {
 
     @ViewBuilder
     private var actionButtons: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
             if isCompleted {
-                TaskActionButton(title: "Mark Incomplete", icon: "arrow.uturn.backward.circle", action: onMarkIncomplete)
+                TaskActionButton(title: "Incomplete", icon: "arrow.uturn.backward.circle", action: onMarkIncomplete)
                 TaskActionButton(title: "Edit", icon: "pencil", action: onEdit)
                 TaskActionButton(title: "Duplicate", icon: "plus.square.on.square", action: onDuplicate)
                 TaskActionButton(title: "Delete", icon: "trash", style: .destructive, action: onDelete)
@@ -258,9 +318,9 @@ struct TaskCardView: View {
                 TaskActionButton(title: "Edit", icon: "pencil", action: onEdit)
                 if task.steps.isEmpty {
                     TaskActionButton(
-                        title: isDecomposing ? "Breaking down..." : "Break Down",
+                        title: "Break down",
                         icon: "square.split.2x2",
-                        isDisabled: isDecomposing,
+                        isLoading: isDecomposing,
                         action: onDecompose
                     )
                 }

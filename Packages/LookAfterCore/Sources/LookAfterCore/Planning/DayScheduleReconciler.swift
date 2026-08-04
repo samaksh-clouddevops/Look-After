@@ -29,7 +29,7 @@ public enum DayScheduleReconciler {
         bufferMinutes: Int = 5
     ) -> Result {
         let dayStart = calendar.startOfDay(for: day)
-        var scheduled = tasks.filter { task in
+        let scheduled = tasks.filter { task in
             guard task.status.isActive, task.scheduledTime != nil else { return false }
             guard let scheduledDate = task.scheduledDate else { return false }
             return calendar.isDate(scheduledDate, inSameDayAs: dayStart)

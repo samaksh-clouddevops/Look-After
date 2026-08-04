@@ -18,14 +18,14 @@ public enum UserFacingCopy {
     // MARK: - Section titles
 
     public static let todayTitle = "Today"
-    public static let suggestedNextStepTitle = "Suggested next step"
-    public static let openWindowsTitle = "Open windows"
+    public static let suggestedNextStepTitle = "Worth doing next"
+    public static let openWindowsTitle = "Good times to work"
     public static let headsUpTitle = "Heads up"
-    public static let progressTitle = "Progress"
+    public static let progressTitle = "Where you're at"
     public static let chatTitle = "Ask anything"
     public static let bestWindowTitle = "Best window"
     public static let taskTimeTitle = "Time on tasks"
-    public static let dayScoreTitle = "Day score"
+    public static let dayScoreTitle = "Day so far"
     public static let healthSnapshotTitle = "Health snapshot"
     public static let noFocusWindowToday = FocusWindowFormatter.noStrongWindow
     public static let voiceCapturePlaceholder = "Tell me anything — I'll figure out where it belongs."
@@ -37,11 +37,11 @@ public enum UserFacingCopy {
     /// Human-readable label for executive function / readiness score (0–100).
     public static func readinessLabel(score: Int) -> String {
         switch score {
-        case 80...: return "Ready for focused work"
-        case 65..<80: return "Good capacity today"
-        case 50..<65: return "Steady — pace yourself"
-        case 35..<50: return "Recovery mode"
-        default: return "Take it easy today"
+        case 80...: return "Sharp enough for hard stuff"
+        case 65..<80: return "Solid day ahead"
+        case 50..<65: return "Steady. Don't cram the day"
+        case 35..<50: return "Go easy on yourself"
+        default: return "Protect your energy today"
         }
     }
 
@@ -98,6 +98,81 @@ public enum UserFacingCopy {
     public static let workoutWindowDetail = "Often a good time to move."
     public static let creativeWindowDetail = "Good for lighter planning or ideas."
     public static let recoveryWindowDetail = "Wind down and protect sleep."
+
+    // MARK: - Action kind labels
+
+    public static func label(forActionKind kind: ContextActionKind) -> String {
+        switch kind {
+        case .startTask: return "Start a task"
+        case .continueTask: return "Continue your task"
+        case .resumeSession: return "Resume your session"
+        case .openContinueSession: return "Pick up where you left off"
+        case .beginWork: return "Begin focused work"
+        case .openShopping: return "Review your shopping list"
+        case .openCoach: return "Ask your coach"
+        case .openBrain: return "Check your plan"
+        case .viewPlan: return "Review today's plan"
+        case .openHealthDetail: return "Review health details"
+        }
+    }
+
+    // MARK: - Copy deduplication
+
+    public static func isDuplicateCopy(_ a: String, _ b: String) -> Bool {
+        let left = a.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = b.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        if left.isEmpty || right.isEmpty { return false }
+        return left == right || left.contains(right) || right.contains(left)
+    }
+
+    public static func joinDistinct(_ parts: [String], separator: String = " ") -> String {
+        var seen: [String] = []
+        for part in parts {
+            let cleaned = sanitize(part)
+            guard !cleaned.isEmpty else { continue }
+            if seen.contains(where: { isDuplicateCopy($0, cleaned) }) { continue }
+            seen.append(cleaned)
+        }
+        return seen.joined(separator: separator)
+    }
+
+    // MARK: - Identifier humanization
+
+    public static func humanizeIdentifier(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+
+        if trimmed.contains("_") {
+            return trimmed
+                .split(separator: "_")
+                .map { word in
+                    word.prefix(1).uppercased() + word.dropFirst().lowercased()
+                }
+                .joined(separator: " ")
+        }
+
+        guard looksLikeCamelCaseIdentifier(trimmed) else { return trimmed }
+
+        var words: [String] = []
+        var current = ""
+        for character in trimmed {
+            if character.isUppercase, !current.isEmpty {
+                words.append(current.capitalized)
+                current = String(character)
+            } else {
+                current.append(character)
+            }
+        }
+        if !current.isEmpty {
+            words.append(current.capitalized)
+        }
+        return words.joined(separator: " ")
+    }
+
+    private static func looksLikeCamelCaseIdentifier(_ text: String) -> Bool {
+        guard let first = text.first, first.isLowercase else { return false }
+        return text.contains(where: \.isUppercase) && !text.contains(where: \.isWhitespace)
+    }
 
     // MARK: - Sanitization
 
@@ -176,7 +251,55 @@ public enum UserFacingCopy {
 
         result = result.trimmingCharacters(in: .whitespacesAndNewlines)
         if isInternalExecutionLabel(result) { return "" }
+        if looksLikeCamelCaseIdentifier(result) {
+            return humanizeIdentifier(result)
+        }
         return result
+    }
+
+    /// Makes briefing hero lines sound like a person, not a dashboard.
+    public static func humanizeBriefingLine(_ text: String) -> String {
+        var result = sanitize(text)
+        guard !result.isEmpty else { return result }
+
+        result = result
+            .replacingOccurrences(of: " — ", with: ". ")
+            .replacingOccurrences(of: " – ", with: ", ")
+            .replacingOccurrences(of: "—", with: ", ")
+            .replacingOccurrences(of: "–", with: ", ")
+            .replacingOccurrences(of: "; ", with: ". ")
+            .replacingOccurrences(of: " · ", with: ", ")
+
+        let replacements: [(String, String)] = [
+            ("Heads up, ", ""),
+            ("Heads up: ", ""),
+            ("Top: ", "First up, "),
+            ("Coming up: ", "Next, "),
+            ("on deck", "on the list"),
+            ("on today's task board yet", "on your list yet"),
+            ("moderate capacity mode", "feeling pretty steady"),
+            ("good capacity mode", "in a good spot"),
+            ("low capacity mode", "running a bit low"),
+            ("recovery mode", "in recovery mode"),
+            ("peak focus mode", "feeling sharp"),
+            ("Protect a focus block", "Try to grab a quiet block"),
+            ("one small push builds momentum", "even a few minutes helps"),
+            ("when you're ready", "when you get to it"),
+            ("No rush.", "No hurry."),
+            ("Nothing urgent yet.", "Nothing pressing yet."),
+        ]
+        for (from, to) in replacements {
+            result = replaceCaseInsensitive(from, with: to, in: result)
+        }
+
+        while result.contains("..") {
+            result = result.replacingOccurrences(of: "..", with: ".")
+        }
+        while result.contains(". .") {
+            result = result.replacingOccurrences(of: ". .", with: ". ")
+        }
+
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Re-resolve if rendered headline still exposes execution mechanics.

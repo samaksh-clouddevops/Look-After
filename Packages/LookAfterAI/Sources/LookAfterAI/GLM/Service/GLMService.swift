@@ -146,45 +146,60 @@ public final class GLMService: @unchecked Sendable {
                     }
 
                     let messages = self.buildMessages(message: message, systemPrompt: systemPrompt, history: history)
-                    let model = config.model(for: tier)
-                    try await self.executeWithRotation { apiKey, keyId in
-                        let started = Date()
-                        var promptTokens = 0
-                        var completionTokens = 0
-                        var resolvedModel = model
+                    let primaryModel = config.model(for: tier)
+                    let models = config.modelsToAttempt(primary: primaryModel)
+                    var lastError: Error?
 
-                        for try await chunk in self.streamCompletion(
-                            apiKey: apiKey,
-                            configuration: config,
-                            model: model,
-                            messages: messages,
-                            temperature: 0.7,
-                            maxTokens: 4096
-                        ) {
-                            if let token = chunk.content, !token.isEmpty {
-                                continuation.yield(token)
+                    for model in models {
+                        do {
+                            try await self.executeWithRotation { apiKey, keyId in
+                                let started = Date()
+                                var promptTokens = 0
+                                var completionTokens = 0
+                                var resolvedModel = model
+
+                                for try await chunk in self.streamCompletion(
+                                    apiKey: apiKey,
+                                    configuration: config,
+                                    model: model,
+                                    messages: messages,
+                                    temperature: 0.7,
+                                    maxTokens: 4096
+                                ) {
+                                    if let token = chunk.content, !token.isEmpty {
+                                        continuation.yield(token)
+                                    }
+                                    if let m = chunk.model { resolvedModel = m }
+                                    promptTokens = chunk.promptTokens ?? promptTokens
+                                    completionTokens = chunk.completionTokens ?? completionTokens
+                                }
+
+                                let latency = Int(Date().timeIntervalSince(started) * 1000)
+                                self.keyManager.recordSuccess(keyId: keyId)
+                                self.usageLogger.log(GLMUsageRecord(
+                                    model: resolvedModel,
+                                    promptTokens: promptTokens,
+                                    completionTokens: completionTokens,
+                                    estimatedCostUSD: GLMUsageLogger.estimateCostUSD(
+                                        model: resolvedModel,
+                                        promptTokens: promptTokens,
+                                        completionTokens: completionTokens
+                                    ),
+                                    latencyMs: latency,
+                                    success: true
+                                ))
                             }
-                            if let m = chunk.model { resolvedModel = m }
-                            promptTokens = chunk.promptTokens ?? promptTokens
-                            completionTokens = chunk.completionTokens ?? completionTokens
+                            continuation.finish()
+                            return
+                        } catch {
+                            lastError = error
+                            guard model != models.last, Self.shouldAttemptModelFallback(after: error) else {
+                                throw error
+                            }
                         }
-
-                        let latency = Int(Date().timeIntervalSince(started) * 1000)
-                        self.keyManager.recordSuccess(keyId: keyId)
-                        self.usageLogger.log(GLMUsageRecord(
-                            model: resolvedModel,
-                            promptTokens: promptTokens,
-                            completionTokens: completionTokens,
-                            estimatedCostUSD: GLMUsageLogger.estimateCostUSD(
-                                model: resolvedModel,
-                                promptTokens: promptTokens,
-                                completionTokens: completionTokens
-                            ),
-                            latencyMs: latency,
-                            success: true
-                        ))
                     }
-                    continuation.finish()
+
+                    throw lastError ?? GLMServiceError.parseError("Empty model response")
                 } catch {
                     continuation.finish(throwing: error)
                 }
@@ -244,7 +259,36 @@ public final class GLMService: @unchecked Sendable {
         tier: AIModelTier
     ) async throws -> ChatResult {
         let config = configurationStore.load()
-        let model = config.model(for: tier)
+        let primaryModel = config.model(for: tier)
+        let models = config.modelsToAttempt(primary: primaryModel)
+        var lastError: Error?
+
+        for model in models {
+            do {
+                return try await chatCompletion(
+                    model: model,
+                    messages: messages,
+                    temperature: temperature,
+                    maxTokens: maxTokens
+                )
+            } catch {
+                lastError = error
+                guard model != models.last, Self.shouldAttemptModelFallback(after: error) else {
+                    throw error
+                }
+            }
+        }
+
+        throw lastError ?? GLMServiceError.parseError("Empty model response")
+    }
+
+    private func chatCompletion(
+        model: String,
+        messages: [[String: Any]],
+        temperature: Double,
+        maxTokens: Int
+    ) async throws -> ChatResult {
+        let config = configurationStore.load()
         let started = Date()
 
         return try await executeWithRotation { apiKey, keyId in
@@ -398,6 +442,12 @@ public final class GLMService: @unchecked Sendable {
         if case GLMServiceError.rateLimited = error { return true }
         let message = error.localizedDescription.lowercased()
         return ["429", "quota", "rate limit", "too many requests"].contains { message.contains($0) }
+    }
+
+    /// Retry with glm-4.7-flash unless the API key itself is invalid.
+    static func shouldAttemptModelFallback(after error: Error) -> Bool {
+        if case GLMServiceError.invalidAPIKey = error { return false }
+        return true
     }
 }
 

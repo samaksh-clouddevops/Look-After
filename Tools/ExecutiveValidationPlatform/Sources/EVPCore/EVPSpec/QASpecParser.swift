@@ -103,7 +103,7 @@ public struct QASpecParser: Sendable {
         var results: [QARequirement] = []
         var seen = Set<String>()
 
-        for (layer, regex) in Self.idPatterns {
+        for (_, regex) in Self.idPatterns {
             let range = NSRange(content.startIndex..<content.endIndex, in: content)
             regex.enumerateMatches(in: content, range: range) { match, _, _ in
                 guard let match, let idRange = Range(match.range, in: content) else { return }

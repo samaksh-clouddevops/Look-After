@@ -57,8 +57,18 @@ public struct PremiumForm<Content: View>: View {
         Form {
             content
         }
-        .listStyle(.insetGrouped)
+        .modifier(PremiumFormListStyle())
         .premiumFormStyle()
+    }
+}
+
+private struct PremiumFormListStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content.listStyle(.insetGrouped)
+        #else
+        content.listStyle(.automatic)
+        #endif
     }
 }
 

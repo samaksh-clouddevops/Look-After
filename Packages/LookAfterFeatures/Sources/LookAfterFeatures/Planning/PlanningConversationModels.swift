@@ -475,7 +475,7 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         self.timeLabel = timeLabel
         self.endTimeLabel = endTimeLabel
         self.scheduleRangeLabel = scheduleRangeLabel.isEmpty && !endTimeLabel.isEmpty
-            ? "\(timeLabel) – \(endTimeLabel)"
+            ? "\(timeLabel) to \(endTimeLabel)"
             : scheduleRangeLabel
         self.title = title
         self.subtitle = subtitle

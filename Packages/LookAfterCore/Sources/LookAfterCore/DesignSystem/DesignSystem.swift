@@ -25,11 +25,11 @@ public struct DesignSystem {
 
     // MARK: - Accent (primary action — ~5% of UI)
 
-    public static let accentPrimary = Color(hex: "C8FF4D")
-    public static let accentHover = Color(hex: "D4FF70")
-    public static let accentPressed = Color(hex: "A8E020")
-    public static let accentGlow = Color(hex: "C8FF4D").opacity(0.18)
-    public static let accentOnPrimary = Color(hex: "1C1C1E")
+    public static let accentPrimary = Color(hex: "5A9E3F")
+    public static let accentHover = Color(hex: "6BB34A")
+    public static let accentPressed = Color(hex: "4A852F")
+    public static let accentGlow = Color(hex: "5A9E3F").opacity(0.15)
+    public static let accentOnPrimary = Color(hex: "FFFFFF")
 
     public static let accentSecondary = textSecondary
     public static let accentTertiary = textMuted
@@ -116,7 +116,11 @@ public struct DesignSystem {
         public static let hero: CGFloat = 0.55
         public static let preview: CGFloat = 0.15
         public static let footer: CGFloat = 0.20
-        public static let chapterSpacing: CGFloat = 32
+        /// Tighter horizontal inset so section cards read wider on briefing.
+        public static let sectionHorizontal: CGFloat = 20
+        public static let chapterSpacing: CGFloat = 12
+        public static let heroSpacerCap: CGFloat = 32
+        public static let scrollHintHeight: CGFloat = 56
     }
 
     // MARK: - Shadows
@@ -164,45 +168,7 @@ public enum PremiumMotion {
     }
 }
 
-// MARK: - Typography (V4)
-
-public extension Font {
-    static func dsDisplay() -> Font {
-        .system(.largeTitle, design: .default, weight: .bold)
-    }
-
-    static func dsLargeTitle() -> Font {
-        .system(.title, design: .default, weight: .bold)
-    }
-
-    static func dsTitle() -> Font {
-        .system(.title2, design: .default, weight: .semibold)
-    }
-
-    static func dsHeadline(weight: Font.Weight = .semibold) -> Font {
-        .system(.title3, design: .default, weight: weight)
-    }
-
-    static func dsBody(weight: Font.Weight = .regular) -> Font {
-        .body.weight(weight)
-    }
-
-    static func dsSecondary(weight: Font.Weight = .regular) -> Font {
-        .subheadline.weight(weight)
-    }
-
-    static func dsCaption(weight: Font.Weight = .medium) -> Font {
-        .footnote.weight(weight)
-    }
-
-    static func dsMetadata(weight: Font.Weight = .regular) -> Font {
-        .caption.weight(weight)
-    }
-
-    static func dsChip(weight: Font.Weight = .medium) -> Font {
-        dsCaption(weight: weight)
-    }
-}
+// Typography v2.1 → LookAfterTypography.swift
 
 // MARK: - View layout helpers
 

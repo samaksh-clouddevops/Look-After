@@ -28,16 +28,16 @@ public final class InsightsViewModel: ObservableObject {
 
     public init(
         analyticsEngine: PersonalAnalyticsEngine? = nil,
-        analyticsService: BackgroundAnalyticsService? = BackgroundAnalyticsService.shared,
+        analyticsService: BackgroundAnalyticsService? = nil,
         userId: String = ""
     ) {
         self.userId = userId
-        self.analyticsService = analyticsService
+        self.analyticsService = analyticsService ?? BackgroundAnalyticsService.shared
         if let analyticsEngine {
             self.analyticsEngine = analyticsEngine
         } else {
             self.analyticsEngine = PersonalAnalyticsEngine(
-                fetchBehaviorEvents: PersonalAnalyticsBehaviorLoader.fetchEvents
+                fetchBehaviorEvents: { await PersonalAnalyticsBehaviorLoader.fetchEvents() }
             )
         }
     }

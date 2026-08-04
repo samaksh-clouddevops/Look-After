@@ -28,28 +28,31 @@ final class LiveActivityManager {
         remainingLabel: String,
         isPaused: Bool
     ) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        
-        endFocusActivity()
-        
-        let attributes = FocusActivityAttributes(taskTitle: taskTitle, sessionNumber: sessionNumber)
-        let state = FocusActivityAttributes.ContentState(
-            taskTitle: taskTitle,
-            sessionEndDate: sessionEndDate,
-            isPaused: isPaused,
-            isOnBreak: isOnBreak,
-            sessionLabel: sessionLabel,
-            remainingLabel: remainingLabel
-        )
-        
-        do {
-            focusActivity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: state, staleDate: nil),
-                pushType: nil
+        Task { @MainActor in
+            await Task.yield()
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+            endFocusActivity()
+
+            let attributes = FocusActivityAttributes(taskTitle: taskTitle, sessionNumber: sessionNumber)
+            let state = FocusActivityAttributes.ContentState(
+                taskTitle: taskTitle,
+                sessionEndDate: sessionEndDate,
+                isPaused: isPaused,
+                isOnBreak: isOnBreak,
+                sessionLabel: sessionLabel,
+                remainingLabel: remainingLabel
             )
-        } catch {
-            print("Focus Live Activity failed: \(error.localizedDescription)")
+
+            do {
+                focusActivity = try Activity.request(
+                    attributes: attributes,
+                    content: .init(state: state, staleDate: nil),
+                    pushType: nil
+                )
+            } catch {
+                print("Focus Live Activity failed: \(error.localizedDescription)")
+            }
         }
     }
     

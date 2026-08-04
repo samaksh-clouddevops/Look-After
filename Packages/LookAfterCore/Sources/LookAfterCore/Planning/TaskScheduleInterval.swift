@@ -84,7 +84,62 @@ public enum ScheduleTimeFormatting {
     }
 
     public static func rangeLabel(for event: LifeTimelineEvent, calendar: Calendar = .current) -> String {
-        let end = event.date.addingTimeInterval(TimeInterval((event.estimatedMinutes ?? 30) * 60))
+        let end = event.resolvedEndDate(calendar: calendar)
         return rangeLabel(from: event.date, to: end, calendar: calendar)
+    }
+}
+
+public extension LifeTimelineEvent {
+    /// Resolves the end of this event's scheduled window.
+    func resolvedEndDate(calendar: Calendar = .current) -> Date {
+        if let parsed = ScheduleTimeFormatting.parseRangeEnd(from: subtitle, on: date, calendar: calendar) {
+            return parsed
+        }
+        let minutes = estimatedMinutes ?? 30
+        return date.addingTimeInterval(TimeInterval(minutes * 60))
+    }
+
+    /// Display range label preferring subtitle when it already contains a time range.
+    var scheduleRangeLabel: String {
+        if subtitle.contains(" – "), !subtitle.hasPrefix("About ") {
+            let parts = subtitle.components(separatedBy: " · ")
+            let rangePart = parts.last ?? subtitle
+            if rangePart.contains(" – ") { return rangePart }
+        }
+        return ScheduleTimeFormatting.rangeLabel(for: self)
+    }
+
+    /// Whether this event represents an important fixed commitment for glance views.
+    var isImportantCommitment: Bool {
+        guard !isCompleted else { return false }
+        return isFixed || kind == .meeting || kind == .work
+    }
+}
+
+public extension ScheduleTimeFormatting {
+    /// Parses the end time from a subtitle like `"8:30 AM – 5:30 PM"`.
+    static func parseRangeEnd(from subtitle: String, on referenceDay: Date, calendar: Calendar = .current) -> Date? {
+        let rangePart: String
+        if subtitle.contains(" · "), let last = subtitle.components(separatedBy: " · ").last, last.contains(" – ") {
+            rangePart = last
+        } else if subtitle.contains(" – ") {
+            rangePart = subtitle
+        } else {
+            return nil
+        }
+
+        let segments = rangePart.components(separatedBy: " – ")
+        guard segments.count >= 2 else { return nil }
+        let endLabel = segments[1].trimmingCharacters(in: .whitespaces)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        formatter.calendar = calendar
+        guard let parsed = formatter.date(from: endLabel) else { return nil }
+
+        var components = calendar.dateComponents([.year, .month, .day], from: referenceDay)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: parsed)
+        components.hour = timeComponents.hour
+        components.minute = timeComponents.minute
+        return calendar.date(from: components)
     }
 }

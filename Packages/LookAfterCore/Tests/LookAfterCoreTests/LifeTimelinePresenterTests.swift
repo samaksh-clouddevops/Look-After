@@ -119,6 +119,74 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertNotNil(gymEvent?.completedAt)
     }
 
+    func testFixedWorkBlockUsesScheduledEndTime() {
+        let now = makeDate(year: 2026, month: 8, day: 4, hour: 9)
+        let day = calendar.startOfDay(for: now)
+        let start = makeDate(year: 2026, month: 8, day: 4, hour: 8, minute: 30)
+        let end = makeDate(year: 2026, month: 8, day: 4, hour: 17, minute: 30)
+        let office = LifeTask(
+            title: "Office",
+            lifeArea: .work,
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: start,
+            schedulingMode: .fixedTime,
+            scheduledEndTime: end,
+            userId: "user-1"
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [office],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let event = events.first(where: { $0.title == "Office" })
+        XCTAssertNotNil(event)
+        XCTAssertEqual(event?.subtitle, "8:30 AM – 5:30 PM")
+        XCTAssertEqual(event?.estimatedMinutes, 540)
+        XCTAssertEqual(event?.scheduleRangeLabel, "8:30 AM – 5:30 PM")
+        XCTAssertTrue(event?.isImportantCommitment == true)
+
+        let resolvedEnd = event!.resolvedEndDate(calendar: calendar)
+        XCTAssertEqual(calendar.component(.hour, from: resolvedEnd), 17)
+        XCTAssertEqual(calendar.component(.minute, from: resolvedEnd), 30)
+    }
+
+    func testFlexibleTaskUsesEstimatedMinutesForWindow() {
+        let now = makeDate(year: 2026, month: 8, day: 4, hour: 10)
+        let day = calendar.startOfDay(for: now)
+        let start = makeDate(year: 2026, month: 8, day: 4, hour: 14)
+        let task = LifeTask(
+            title: "Review notes",
+            lifeArea: .work,
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: start,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [task],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let event = events.first(where: { $0.title == "Review notes" })
+        XCTAssertNotNil(event)
+        XCTAssertEqual(event?.subtitle, "2:00 PM – 2:45 PM")
+        XCTAssertEqual(event?.estimatedMinutes, 45)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }

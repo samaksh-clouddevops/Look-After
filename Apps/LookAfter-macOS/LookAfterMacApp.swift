@@ -14,6 +14,7 @@ struct LookAfterMacApp: App {
         WindowGroup {
             MacContentView()
                 .lookAfterThemed()
+                .preferredColorScheme(AppAppearanceMode.load().colorScheme)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .windowStyle(.titleBar)

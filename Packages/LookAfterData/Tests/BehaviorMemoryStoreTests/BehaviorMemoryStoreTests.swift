@@ -288,7 +288,6 @@ final class BehaviorMemoryStoreTests: XCTestCase {
 
     func testRetentionCleanupRemovesOldEvents() async {
         let store = await makeStore()
-        let oldDate = Calendar.current.date(byAdding: .day, value: -100, to: Date())!
 
         await store.recordCompletion(
             task: LifeTask(title: "Old"),

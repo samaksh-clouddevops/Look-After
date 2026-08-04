@@ -234,7 +234,6 @@ struct ExecutiveTodayView: View {
         let task = resolveTask(taskID)
         let snapshot = shell.contextOrchestrator.snapshot
             ?? LifeContextSnapshot(currentEnergy: 0.7, availableTimeMinutes: 60)
-        let working = WorkingContext(kind: .task, title: task?.title ?? hero.actionLine, taskID: task?.id)
         let context = ContinueSessionContext.buildOrFallback(
             from: resume,
             task: task,

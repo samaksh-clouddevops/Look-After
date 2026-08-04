@@ -116,7 +116,8 @@ struct FocusSessionView: View {
     
     var body: some View {
         ZStack {
-            PremiumBackground()
+            DesignSystem.backgroundPrimary
+                .ignoresSafeArea()
             
             VStack(spacing: DesignSystem.spacingLG) {
                 Spacer()
@@ -145,30 +146,25 @@ struct FocusSessionView: View {
                         .padding(.horizontal)
                 }
                 
-                // Timer ring
+                // Timer ring + analog clock
                 ZStack {
-                    Circle()
-                        .stroke(DesignSystem.border, lineWidth: 8)
-                        .frame(width: 220, height: 220)
-                    
-                    Circle()
-                        .trim(from: 0, to: adhdVM.focusProgress)
-                        .stroke(
-                            adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary,
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                        )
-                        .frame(width: 220, height: 220)
-                        .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: 1), value: adhdVM.focusProgress)
-                    
+                    AnalogFocusClockView(
+                        progress: adhdVM.focusProgress,
+                        accentColor: adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary,
+                        trackColor: DesignSystem.border,
+                        size: 220
+                    )
+
                     VStack(spacing: 4) {
                         Text(adhdVM.focusRemainingString)
-                            .font(.system(size: 48, weight: .bold, design: .monospaced))
+                            .font(.system(size: 40, weight: .bold, design: .monospaced))
                             .foregroundColor(DesignSystem.textPrimary)
-                        
+                            .accessibilityIdentifier("focus-timer-remaining")
+
                         Text(adhdVM.isPaused ? "paused" : "remaining")
                             .font(.dsCaption())
                             .foregroundColor(DesignSystem.textMuted)
+                            .accessibilityIdentifier("focus-timer-status")
                     }
                 }
                 
@@ -241,6 +237,7 @@ struct FocusSessionView: View {
                                     .fill(DesignSystem.backgroundElevated)
                             )
                     }
+                    .accessibilityIdentifier("focus-session-pause-toggle")
 
                     if adhdVM.isOnBreak {
                         Button(action: {
@@ -271,6 +268,8 @@ struct FocusSessionView: View {
                                     .fill(DesignSystem.backgroundElevated)
                             )
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("focus-session-stop")
                 }
                 
                 Spacer()
