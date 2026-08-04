@@ -38,7 +38,8 @@ struct BrainDashboardView: View {
                 Spacer(minLength: DesignSystem.spacingMD)
 
                 LABrainVoiceOrb(state: orbState, onTap: handleOrbTap)
-                    .featureTourAnchor(.brainVoiceOrb)
+                    .featureTourAnchor(.brainVoiceOrb, cornerRadius: 110)
+                    .id(AppFeatureTourAnchorID.brainVoiceOrb.rawValue)
 
                 contextCopy
 

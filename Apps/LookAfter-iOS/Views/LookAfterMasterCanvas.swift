@@ -222,8 +222,14 @@ public struct LookAfterMasterCanvas: View {
                     .zIndex(200)
             }
         }
-        .onPreferenceChange(AppFeatureTourFramePreferenceKey.self) { frames in
-            featureTour.anchorFrames = frames
+        .onPreferenceChange(AppFeatureTourFramePreferenceKey.self) { payloads in
+            featureTour.replaceAnchors(payloads)
+        }
+        .onPreferenceChange(TourTabBarFramePreferenceKey.self) { frame in
+            if frame.isValidObstacle {
+                featureTour.tabBarFrame = frame
+                featureTour.recomputeLayout()
+            }
         }
         .onChange(of: featureTour.requestedTab) { _, tab in
             guard let tab else { return }

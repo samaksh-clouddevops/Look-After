@@ -126,38 +126,47 @@ struct TodayView: View {
 
     private var timelineSection: some View {
         GeometryReader { geo in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-                    todayHeader
-                    LAWeekDateStrip(
-                        days: weekDays,
-                        selectedDate: $selectedCalendarDate
-                    )
-                    .onChange(of: selectedCalendarDate) { _, newDate in
-                        syncSelectedDay(from: newDate)
-                    }
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
+                        todayHeader
+                        LAWeekDateStrip(
+                            days: weekDays,
+                            selectedDate: $selectedCalendarDate
+                        )
+                        .onChange(of: selectedCalendarDate) { _, newDate in
+                            syncSelectedDay(from: newDate)
+                        }
 
-                    if isSelectedToday {
-                        multiDayBanner
-                        topPrioritiesSection
-                        scheduleSection
-                        endOfDayJournalSection
-                        viewFullTimelineLink
-                    } else if isSelectedTomorrow {
-                        tomorrowHeadsUpCard
-                        scheduleSection
-                    } else {
-                        Text("No plan for this day yet.")
-                            .textStyleCaption()
+                        if isSelectedToday {
+                            multiDayBanner
+                            topPrioritiesSection
+                            scheduleSection
+                            endOfDayJournalSection
+                            viewFullTimelineLink
+                        } else if isSelectedTomorrow {
+                            tomorrowHeadsUpCard
+                            scheduleSection
+                        } else {
+                            Text("No plan for this day yet.")
+                                .textStyleCaption()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height + 1, alignment: .top)
+                    .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+                    .safeAreaPadding(.top, DesignSystem.spacingSM)
+                    .padding(.bottom, scrollBottomInset)
+                }
+                .refreshable {
+                    await onRefresh()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
+                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String,
+                          raw == AppFeatureTourAnchorID.todayTimeline.rawValue else { return }
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .center)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: geo.size.height + 1, alignment: .top)
-                .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
-                .safeAreaPadding(.top, DesignSystem.spacingSM)
-                .padding(.bottom, scrollBottomInset)
-            }
-            .refreshable {
-                await onRefresh()
             }
         }
     }
@@ -346,7 +355,8 @@ struct TodayView: View {
                 )
             }
         }
-        .featureTourAnchor(.todayTimeline)
+        .featureTourAnchor(.todayTimeline, cornerRadius: DesignSystem.radiusLG)
+        .id(AppFeatureTourAnchorID.todayTimeline.rawValue)
     }
 
     private func task(for id: String) -> LifeTask? {

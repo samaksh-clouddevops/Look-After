@@ -67,6 +67,13 @@ struct DailyBriefingView: View {
                 .refreshable {
                     await reload()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
+                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String,
+                          raw == AppFeatureTourAnchorID.briefingHero.rawValue else { return }
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        proxy.scrollTo(AppFeatureTourAnchorID.briefingHero.rawValue, anchor: .center)
+                    }
+                }
             }
 
             if showsScrollHint {
@@ -117,7 +124,8 @@ struct DailyBriefingView: View {
                 isLoading: briefingVM.isLoadingDayHeroSummary,
                 onContinue: onContinue
             )
-            .featureTourAnchor(.briefingHero)
+            .featureTourAnchor(.briefingHero, cornerRadius: DesignSystem.radiusLG)
+            .id(AppFeatureTourAnchorID.briefingHero.rawValue)
 
             todayAtAGlanceSection
         }
