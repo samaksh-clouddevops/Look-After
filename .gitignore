@@ -40,3 +40,8 @@ Packages/*/build/
 # EVP generated artifacts
 Documentation/qa/.engine/
 Tools/ExecutiveValidationPlatform/.build/
+
+# Local Windows helpers (never commit)
+*.ps1
+Tools/**/.build/
+
