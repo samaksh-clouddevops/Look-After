@@ -31,6 +31,7 @@ OLD_FIREBASE_BUNDLE="com.samaksh.lifeos"         # legacy Firebase bundle (pre-m
 OLD_FIREBASE_BUNDLE_ALT="${OLD_IOS_APP}"         # current dummy plist value
 OLD_KEYCHAIN_SERVICE="${OLD_PREFIX}.ai-keys"
 OLD_PERF_SUBSYSTEM="${OLD_IOS_APP}"
+OLD_BG_TASK="${OLD_IOS_APP}.notification-refresh"
 OLD_FLOW_DIRECTOR_SUBSYSTEM="com.flowos.app"
 OLD_TEAM="QZYBP8F6F5"
 
@@ -152,6 +153,7 @@ NEW_MAC_BUNDLE="${NEW_MAC_BUNDLE:-${NEW_PREFIX}.mac}"
 NEW_IOS_APP="${NEW_PREFIX}.app"
 NEW_IOS_WIDGET="${NEW_PREFIX}.app.widget"
 NEW_KEYCHAIN="${NEW_PREFIX}.ai-keys"
+NEW_BG_TASK="${NEW_IOS_APP}.notification-refresh"
 
 if [[ "$NEW_PREFIX" == "$OLD_PREFIX" && "$NEW_GROUP" == "$OLD_GROUP" && -z "$NEW_TEAM" && "$CLEAR_TEAM" -eq 0 ]]; then
   warn "Nothing to change (prefix/group match current values)."
@@ -168,6 +170,8 @@ FILES=(
   "Packages/LookAfterAI/Sources/LookAfterAI/Security/KeychainStore.swift"
   "Apps/LookAfter-iOS/Services/PerformanceSignposts.swift"
   "Apps/LookAfter-iOS/Services/FlowDirectorIntegrationLog.swift"
+  "Apps/LookAfter-iOS/Services/BackgroundNotificationRefreshTask.swift"
+  "Apps/LookAfter-iOS/Info.plist"
   "project.yml"
   "LookAfter.xcodeproj/project.pbxproj"
   "Config/GoogleService-Info.plist"
@@ -227,6 +231,10 @@ replace_in_file "Apps/LookAfter-iOS/Services/PerformanceSignposts.swift" \
   "s|${OLD_PERF_SUBSYSTEM}|${NEW_IOS_APP}|g"
 replace_in_file "Apps/LookAfter-iOS/Services/FlowDirectorIntegrationLog.swift" \
   "s|${OLD_FLOW_DIRECTOR_SUBSYSTEM}|${NEW_IOS_APP}|g"
+replace_in_file "Apps/LookAfter-iOS/Services/BackgroundNotificationRefreshTask.swift" \
+  "s|${OLD_BG_TASK}|${NEW_BG_TASK}|g"
+replace_in_file "Apps/LookAfter-iOS/Info.plist" \
+  "s|${OLD_BG_TASK}|${NEW_BG_TASK}|g"
 replace_in_file "project.yml" \
   "s|bundleIdPrefix: ${OLD_PREFIX}|bundleIdPrefix: ${NEW_PREFIX}|g" \
   "s|${OLD_GROUP}|${NEW_GROUP}|g" \
