@@ -13,10 +13,7 @@ final class SimulatedUserFlowTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         if FirebaseApp.app() == nil {
-            let options = FirebaseOptions(googleAppID: "1:123456789:ios:abcdef", gcmSenderID: "123456789")
-            options.apiKey = "AIzaSyMockTestKey123456789"
-            options.projectID = "flowos-test-app"
-            FirebaseApp.configure(options: options)
+            FirebaseApp.configure(options: LookAfterFirebaseConfiguration.mockOptions(projectID: "flowos-test-app"))
         }
         firebase = FirebaseManager.shared
         persistence = LocalPersistenceManager.shared

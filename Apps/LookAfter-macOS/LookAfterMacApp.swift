@@ -1,13 +1,14 @@
 import SwiftUI
 import FirebaseCore
 import LookAfterCore
+import LookAfterData
 
 /// macOS App Entry Point with Menu Bar extra and background window.
 @main
 struct LookAfterMacApp: App {
     
     init() {
-        FirebaseApp.configure()
+        LookAfterFirebaseConfiguration.configureIfNeeded()
     }
     
     var body: some Scene {
