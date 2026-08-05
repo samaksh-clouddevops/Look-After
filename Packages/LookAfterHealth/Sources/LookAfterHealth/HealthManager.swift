@@ -308,7 +308,7 @@ public final class HealthManager: ObservableObject {
         if let workout = workoutResult {
             applyWorkouts(workout, to: &summary)
             if let progress {
-                if !workout.isEmpty {
+                if workout.count > 0 {
                     let types = workout.types.prefix(2).joined(separator: ", ")
                     progress(.completed(.workouts, detail: "\(workout.count) workout(s): \(types)"))
                 } else {
