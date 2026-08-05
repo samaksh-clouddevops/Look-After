@@ -441,11 +441,13 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
     public var estimatedMinutes: Int?
     public var completedAt: Date?
     public var isFixedEvent: Bool
+    /// Semantic time lock for interactive physics (defaults flexible).
+    public var timeConstraint: TimeConstraint
 
     public var canReschedule: Bool {
         guard taskId != nil, !isCompleted else { return false }
-        if isFixedEvent, !isPast { return false }
-        return true
+        if isFixedEvent || timeConstraint == .anchored, !isPast { return false }
+        return timeConstraint.isSchedulerMovable
     }
 
     public init(
@@ -468,7 +470,8 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         taskId: String? = nil,
         estimatedMinutes: Int? = nil,
         completedAt: Date? = nil,
-        isFixedEvent: Bool = false
+        isFixedEvent: Bool = false,
+        timeConstraint: TimeConstraint = .flexible
     ) {
         self.id = id
         self.sortDate = sortDate
@@ -492,6 +495,7 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         self.estimatedMinutes = estimatedMinutes
         self.completedAt = completedAt
         self.isFixedEvent = isFixedEvent
+        self.timeConstraint = isFixedEvent && timeConstraint == .flexible ? .anchored : timeConstraint
     }
 }
 

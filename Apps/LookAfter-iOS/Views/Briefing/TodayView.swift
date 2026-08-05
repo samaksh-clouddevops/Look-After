@@ -45,6 +45,7 @@ struct TodayView: View {
     @State private var selectedMetricKind: TodayMetricKind?
     @State private var selectedCalendarDate = Calendar.current.startOfDay(for: Date())
     @State private var expandedPriorityId: String?
+    @State private var timelineBlockScrollDisabled = false
 
     var body: some View {
         timelineSection
@@ -198,6 +199,8 @@ struct TodayView: View {
                 .safeAreaPadding(.top, DesignSystem.spacingSM)
                 .padding(.bottom, scrollBottomInset)
             }
+            .scrollDisabled(timelineBlockScrollDisabled)
+            .onPreferenceChange(TimelineBlockScrollDisabledKey.self) { timelineBlockScrollDisabled = $0 }
             .refreshable {
                 await onRefresh()
             }

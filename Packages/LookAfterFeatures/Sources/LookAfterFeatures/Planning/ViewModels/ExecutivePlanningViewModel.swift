@@ -571,7 +571,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             taskId: Self.taskId(from: event.id),
             estimatedMinutes: event.estimatedMinutes,
             completedAt: event.completedAt,
-            isFixedEvent: event.isFixed
+            isFixedEvent: event.isFixed,
+            timeConstraint: event.isFixed ? .anchored : .flexible
         )
     }
 
