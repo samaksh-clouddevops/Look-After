@@ -129,8 +129,11 @@ final class BriefingPayloadTests: XCTestCase {
             somedayDecayCount: 5
         )
         let text = payload.deterministicNarrative(userName: "Sam")
-        let sentences = text.components(separatedBy: ". ").filter { !$0.isEmpty }
-        XCTAssertLessThanOrEqual(sentences.count, 4)
+        // Count real sentence terminators (period+space or trailing period), not
+        // substrings inside abbreviations such as "Dr." which ". " splits mishandle.
+        let terminators = text.filter { $0 == "." }.count
+        XCTAssertLessThanOrEqual(terminators, 4)
+        XCTAssertFalse(text.isEmpty)
     }
 
     func testRouterPayloadMatchesPhaseContract() {

@@ -411,10 +411,11 @@ public extension BriefingPayload {
         }
 
         if somedayDecayCount > 0 {
+            // Keep a single terminator so prefix(4) truly caps spoken sentences.
             sentences.append(
                 somedayDecayCount == 1
-                    ? "One parked item is past two weeks. Review or move it to someday."
-                    : "\(somedayDecayCount) parked items are past two weeks. Review or bulk-discard when ready."
+                    ? "One parked item is past two weeks — review or move it to someday."
+                    : "\(somedayDecayCount) parked items are past two weeks — review or bulk-discard when ready."
             )
         } else if let cat = nextEventCategory, let mins = minutesUntilNextEvent, mins <= 120 {
             sentences.append("Next up is a \(cat) in \(mins) minutes.")

@@ -41,9 +41,14 @@ public enum CascadeDistiller {
                 parkedCount += 1
 
             case .shiftLater:
-                // Rule 1: ignore shifts under 30 minutes.
-                let minutes = decision.shiftMinutes ?? 0
-                if minutes > significantShiftMinutes {
+                // Rule 1: ignore known micro shifts under 30 minutes.
+                // Unknown shiftMinutes (legacy / unmeasured) counts as a macro action
+                // so mutation tallies stay complete when minutes were not recorded.
+                if let minutes = decision.shiftMinutes {
+                    if minutes > significantShiftMinutes {
+                        majorShiftCount += 1
+                    }
+                } else {
                     majorShiftCount += 1
                 }
 
@@ -74,7 +79,7 @@ public enum CascadeDistiller {
         if majorShiftCount == 1 {
             actions.append("Shifted a major afternoon block to accommodate an overrun.")
         } else if majorShiftCount > 1 {
-            actions.append("Shifted several afternoon blocks to accommodate a major overrun.")
+            actions.append("Shifted \(majorShiftCount) afternoon blocks to accommodate a major overrun.")
         }
 
         if floorCompressCount == 1 {
@@ -151,8 +156,20 @@ public enum CascadeDistiller {
             } else {
                 code = "system_action"
             }
-            return BriefingMutationFact(code: code, count: 1, reason: action)
+            return BriefingMutationFact(code: code, count: extractCount(from: action), reason: action)
         }
+    }
+
+    /// Pull leading quantity from distilled copy ("Parked 2 flexible…", "Shifted 3…").
+    /// Falls back to 1 when the string uses singular wording ("a", "one", "several").
+    private static func extractCount(from action: String) -> Int {
+        let tokens = action.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        for token in tokens {
+            if let n = Int(token), n > 0 { return n }
+        }
+        let lower = action.lowercased()
+        if lower.contains("several") { return 2 }
+        return 1
     }
 }
 

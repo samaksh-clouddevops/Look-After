@@ -141,6 +141,12 @@ public enum CalendarRhythmAnalyzer {
         let highCentroid = centroids.max() ?? 1
         let lowCentroid = centroids.min() ?? 0
         let split = (highCentroid + lowCentroid) / 2
+        // When every day looks the same, k-means collapses and every day sits
+        // on the "high" side of the split. Treat low absolute load + tiny
+        // separation as a uniformly sparse calendar instead.
+        let meanLoad = dayLoads.isEmpty ? 0 : dayLoads.reduce(0, +) / Double(dayLoads.count)
+        let centroidSeparation = highCentroid - lowCentroid
+        let uniformlySparse = meanLoad < 3.0 && centroidSeparation < max(1.0, meanLoad * 0.35)
 
         var weekdayDensity: [Int: Double] = [:]
         for (wd, acc) in weekdayAccum {
@@ -149,14 +155,16 @@ public enum CalendarRhythmAnalyzer {
         }
 
         let highDays = dayLoads.filter { $0 >= split }.count
-        let highFrac = dayLoads.isEmpty ? 0 : Double(highDays) / Double(dayLoads.count)
+        let rawHighFrac = dayLoads.isEmpty ? 0 : Double(highDays) / Double(dayLoads.count)
+        let highFrac = uniformlySparse ? min(rawHighFrac, 0.2) : rawHighFrac
         let meanEvents = working.isEmpty ? 0 : Double(inlierEventCount) / Double(working.count)
 
         let startHour = percentile(startHours, p: 0.25) ?? 9
         let endHour = percentile(endHours, p: 0.75) ?? 17
 
         // Map density → baseline constraints (math only; no persona strings).
-        let meetingConstraint: TimeConstraint = highFrac >= 0.4 ? .anchored : .flexible
+        let meetingConstraint: TimeConstraint =
+            uniformlySparse ? .flexible : (highFrac >= 0.4 ? .anchored : .flexible)
         var tod: [BehavioralTimeOfDay: TimeConstraint] = [:]
         tod[.morning] = startHour <= 9.5 && highFrac < 0.65 ? .flexible : .fluid
         tod[.afternoon] = highFrac >= 0.5 ? .anchored : .flexible

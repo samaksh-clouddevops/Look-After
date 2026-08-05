@@ -179,8 +179,11 @@ public enum BriefingPIISanitizer {
     /// Map a raw title to a non-identifying category for external LLM payloads.
     public static func category(forTitle title: String) -> String {
         let t = title.lowercased()
-        if t.contains("dr ") || t.contains("doctor") || t.contains("therapy")
-            || t.contains("dentist") || t.contains("clinic") || t.contains("medical") {
+        // Match "Dr ", "Dr.", "dr.", and bare "dr" prefixes before medical names.
+        if t.contains("dr ") || t.contains("dr.") || t.hasPrefix("dr ")
+            || t.contains("doctor") || t.contains("therapy")
+            || t.contains("dentist") || t.contains("clinic") || t.contains("medical")
+            || t.contains("labs") || t.contains("lab work") {
             return "medical appointment"
         }
         if t.contains("standup") || t.contains("1:1") || t.contains("sync")

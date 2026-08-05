@@ -113,8 +113,15 @@ final class TelemetrySynthesizerTests: XCTestCase {
     }
 
     func testDoubleBufferSealedOnly() {
-        let today = TelemetryLogEnvelope.empty(dayKey: "2024_06_10", now: now)
-        var sealed = TelemetryLogEnvelope.empty(dayKey: "2024_06_09", now: now)
+        // Logger rotates against wall-clock Date(); seed relative to "today".
+        let calendar = Calendar(identifier: .gregorian)
+        let wallNow = Date()
+        let todayKey = TelemetryLogRotation.dayKey(for: wallNow, calendar: calendar)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: wallNow)!
+        let sealedKey = TelemetryLogRotation.dayKey(for: yesterday, calendar: calendar)
+
+        let today = TelemetryLogEnvelope.empty(dayKey: todayKey, now: wallNow)
+        var sealed = TelemetryLogEnvelope.empty(dayKey: sealedKey, now: wallNow)
         sealed.append(
             ConstraintTelemetryEvent(
                 semanticHash: semanticHash,
@@ -122,17 +129,18 @@ final class TelemetrySynthesizerTests: XCTestCase {
                 originalConstraint: .flexible,
                 newConstraint: .fluid,
                 source: .swipe,
-                timestamp: now.addingTimeInterval(-86_400)
+                timestamp: wallNow.addingTimeInterval(-86_400)
             ),
-            now: now
+            now: wallNow
         )
         let logger = InteractionTelemetryLogger.inMemory(
             seed: today,
-            sealed: ["2024_06_09": sealed]
+            sealed: [sealedKey: sealed],
+            calendar: calendar
         )
-        XCTAssertEqual(logger.snapshot().dayKey, "2024_06_10")
+        XCTAssertEqual(logger.snapshot().dayKey, todayKey)
         XCTAssertEqual(logger.sealedLogs(excludingDayKey: nil).count, 1)
-        XCTAssertEqual(logger.sealedLogs(excludingDayKey: nil).first?.dayKey, "2024_06_09")
+        XCTAssertEqual(logger.sealedLogs(excludingDayKey: nil).first?.dayKey, sealedKey)
     }
 
     func testStarvationDetection() {

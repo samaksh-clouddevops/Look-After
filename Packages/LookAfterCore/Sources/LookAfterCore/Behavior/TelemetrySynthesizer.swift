@@ -230,6 +230,8 @@ public enum TelemetrySynthesizer {
                 }
 
                 // High-confidence baselines still need repeated evidence.
+                // Reset overrideTicks + EMA after a flip so one batch of softens
+                // cannot cascade anchored → flexible → fluid without fresh strikes.
                 if overrideTicks >= config.baselineFlipThreshold {
                     if emaSoftening > emaHardening, emaSoftening >= 0.55 {
                         let candidate = signature.learnedConstraint.softened()
@@ -239,6 +241,9 @@ public enum TelemetrySynthesizer {
                             signature.isSeededBaseline = false
                             signature.confidence = boostedConfidence(around: event.timeOfDay, base: 0.55)
                             flipped.insert(hash)
+                            overrideTicks = 0
+                            emaSoftening = 0
+                            emaHardening = 0
                         }
                     } else if emaHardening > emaSoftening, emaHardening >= 0.55 {
                         let candidate = signature.learnedConstraint.hardened()
@@ -248,6 +253,9 @@ public enum TelemetrySynthesizer {
                             signature.isSeededBaseline = false
                             signature.confidence = boostedConfidence(around: event.timeOfDay, base: 0.55)
                             flipped.insert(hash)
+                            overrideTicks = 0
+                            emaSoftening = 0
+                            emaHardening = 0
                         }
                     }
                 }
