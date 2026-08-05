@@ -114,18 +114,18 @@ final class CalendarRhythmAnalyzerTests: XCTestCase {
 }
 
 final class TelemetrySynthesizerPruningTests: XCTestCase {
-    private let hash = "meeting|standup"
+    private let semanticHash = "meeting|standup"
     private let now = Date(timeIntervalSince1970: 1_720_000_000)
 
     func testImmediateCapitulationIsProvisionalNotLocked() {
         var vault = BehavioralVaultEnvelope.empty(now: now)
-        vault.upsert(.seededBaseline(hash: hash, constraint: .anchored, now: now), now: now)
-        XCTAssertEqual(vault.signature(for: hash)?.meanConfidence ?? 1, 0.2, accuracy: 0.001)
+        vault.upsert(.seededBaseline(hash: semanticHash, constraint: .anchored, now: now), now: now)
+        XCTAssertEqual(vault.signature(for: semanticHash)?.meanConfidence ?? 1, 0.2, accuracy: 0.001)
 
         var log = TelemetryLogEnvelope.empty(dayKey: "2024_01_01", now: now)
         log.append(
             ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "t1",
                 originalConstraint: .anchored,
                 newConstraint: .flexible,
@@ -136,24 +136,24 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
             now: now
         )
         let result = TelemetrySynthesizer.synthesizeDailyTelemetry(log: log, vault: vault, now: now)
-        let sig = result.vault.signature(for: hash)
+        let sig = result.vault.signature(for: semanticHash)
         XCTAssertEqual(sig?.learnedConstraint, .flexible)
         // Single swipe rewrites constraint but stays provisional (~0.45), not 0.8 locked truth.
         XCTAssertEqual(sig?.meanConfidence ?? 0, 0.45, accuracy: 0.001)
         XCTAssertLessThan(sig?.meanConfidence ?? 1, 0.8)
         XCTAssertFalse(sig?.isSeededBaseline ?? true)
-        XCTAssertTrue(result.flippedHashes.contains(hash))
+        XCTAssertTrue(result.flippedHashes.contains(semanticHash))
     }
 
     func testSecondAgreeingSwipeConfirmsProvisionalOverride() {
         var vault = BehavioralVaultEnvelope.empty(now: now)
-        vault.upsert(.seededBaseline(hash: hash, constraint: .anchored, now: now), now: now)
+        vault.upsert(.seededBaseline(hash: semanticHash, constraint: .anchored, now: now), now: now)
 
         var log = TelemetryLogEnvelope.empty(dayKey: "d", now: now)
         // First contradicting swipe → provisional flip
         log.append(
             ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "t1",
                 originalConstraint: .anchored,
                 newConstraint: .flexible,
@@ -166,7 +166,7 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
         // Second swipe that *agrees* with new baseline → confirm to 0.8
         log.append(
             ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "t2",
                 originalConstraint: .flexible,
                 newConstraint: .flexible,
@@ -177,7 +177,7 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
             now: now
         )
         let result = TelemetrySynthesizer.synthesizeDailyTelemetry(log: log, vault: vault, now: now)
-        let sig = result.vault.signature(for: hash)
+        let sig = result.vault.signature(for: semanticHash)
         XCTAssertEqual(sig?.learnedConstraint, .flexible)
         XCTAssertEqual(sig?.meanConfidence ?? 0, 0.8, accuracy: 0.001)
     }
@@ -186,7 +186,7 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
         // Provisional confidence still ≤ high-conf flip threshold band —
         // reversing back toward original must not require 3 EMA overrides.
         var vault = BehavioralVaultEnvelope.empty(now: now)
-        var sig = BehavioralSignature.seededBaseline(hash: hash, constraint: .anchored, now: now)
+        var sig = BehavioralSignature.seededBaseline(hash: semanticHash, constraint: .anchored, now: now)
         // Simulate already-provisional wrong state after accident
         sig.learnedConstraint = .fluid
         sig.confidence = TemporalConfidence(morning: 0.45, afternoon: 0.45, evening: 0.45)
@@ -196,7 +196,7 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
         var log = TelemetryLogEnvelope.empty(dayKey: "d", now: now)
         log.append(
             ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "fix",
                 originalConstraint: .fluid,
                 newConstraint: .anchored, // harden back
@@ -215,8 +215,8 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
         vault.signatures[0].learnedConstraint = .fluid
         let result = TelemetrySynthesizer.synthesizeDailyTelemetry(log: log, vault: vault, now: now)
         // With conf ≤0.2 again, immediate rewrite to .anchored provisional
-        XCTAssertEqual(result.vault.signature(for: hash)?.learnedConstraint, .anchored)
-        XCTAssertEqual(result.vault.signature(for: hash)?.meanConfidence ?? 0, 0.45, accuracy: 0.001)
+        XCTAssertEqual(result.vault.signature(for: semanticHash)?.learnedConstraint, .anchored)
+        XCTAssertEqual(result.vault.signature(for: semanticHash)?.meanConfidence ?? 0, 0.45, accuracy: 0.001)
     }
 
     func testDormancyAt30DaysAndDeleteAt45() {
@@ -251,7 +251,7 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
         var vault = BehavioralVaultEnvelope.empty(now: now)
         vault.upsert(
             BehavioralSignature(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 learnedConstraint: .flexible,
                 confidence: TemporalConfidence(morning: 0.6, afternoon: 0.6, evening: 0.6),
                 lastUpdated: now.addingTimeInterval(-40 * 86_400),
@@ -263,7 +263,7 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
         var log = TelemetryLogEnvelope.empty(dayKey: "d", now: now)
         log.append(
             ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "t",
                 originalConstraint: .flexible,
                 newConstraint: .flexible,
@@ -273,7 +273,7 @@ final class TelemetrySynthesizerPruningTests: XCTestCase {
             now: now
         )
         let result = TelemetrySynthesizer.synthesizeDailyTelemetry(log: log, vault: vault, now: now)
-        XCTAssertEqual(result.vault.signature(for: hash)?.state, .active)
+        XCTAssertEqual(result.vault.signature(for: semanticHash)?.state, .active)
     }
 
     func testSeederWritesLowConfidence() {

@@ -123,10 +123,10 @@ final class BriefingPayloadTests: XCTestCase {
             flexibleCount: 1,
             focusMinutes: 90,
             remainingTaskCount: 4,
-            mutations: [.init(code: "shift_later", count: 2)],
-            somedayDecayCount: 5,
             nextEventCategory: "meeting",
-            minutesUntilNextEvent: 30
+            minutesUntilNextEvent: 30,
+            mutations: [.init(code: "shift_later", count: 2)],
+            somedayDecayCount: 5
         )
         let text = payload.deterministicNarrative(userName: "Sam")
         let sentences = text.components(separatedBy: ". ").filter { !$0.isEmpty }

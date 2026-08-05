@@ -3,14 +3,14 @@ import XCTest
 
 final class TelemetrySynthesizerTests: XCTestCase {
 
-    private let hash = "physicalactivity|gym_push_day"
+    private let semanticHash = "physicalactivity|gym_push_day"
     private let now = Date(timeIntervalSince1970: 1_720_000_000)
 
     func testSofteningOverridesFlipBaselineAcrossSealedDays() {
         var vault = BehavioralVaultEnvelope.empty(now: now)
         vault.upsert(
             BehavioralSignature(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 learnedConstraint: .anchored,
                 confidence: .high,
                 lastUpdated: now.addingTimeInterval(-200_000)
@@ -22,7 +22,7 @@ final class TelemetrySynthesizerTests: XCTestCase {
         var dayB = TelemetryLogEnvelope.empty(dayKey: "2024_01_03", now: now)
         for i in 0..<5 {
             let event = ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "task-\(i)",
                 originalConstraint: .anchored,
                 newConstraint: .flexible,
@@ -39,8 +39,8 @@ final class TelemetrySynthesizerTests: XCTestCase {
             now: now
         )
 
-        XCTAssertEqual(result.vault.signature(for: hash)?.learnedConstraint, .flexible)
-        XCTAssertTrue(result.flippedHashes.contains(hash))
+        XCTAssertEqual(result.vault.signature(for: semanticHash)?.learnedConstraint, .flexible)
+        XCTAssertTrue(result.flippedHashes.contains(semanticHash))
         XCTAssertEqual(result.processedEventCount, 5)
         XCTAssertEqual(result.consumedDayKeys, ["2024_01_01", "2024_01_03"])
     }
@@ -49,7 +49,7 @@ final class TelemetrySynthesizerTests: XCTestCase {
         var vault = BehavioralVaultEnvelope.empty(now: now)
         vault.upsert(
             BehavioralSignature(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 learnedConstraint: .anchored,
                 confidence: TemporalConfidence(morning: 0.8, afternoon: 0.8, evening: 0.8)
             ),
@@ -58,7 +58,7 @@ final class TelemetrySynthesizerTests: XCTestCase {
         var log = TelemetryLogEnvelope.empty(dayKey: "2024_01_01", now: now)
         log.append(
             ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "t1",
                 originalConstraint: .anchored,
                 newConstraint: .flexible,
@@ -70,10 +70,10 @@ final class TelemetrySynthesizerTests: XCTestCase {
         )
 
         let result = TelemetrySynthesizer.synthesizeDailyTelemetry(log: log, vault: vault, now: now)
-        let conf = result.vault.signature(for: hash)!.confidence
+        let conf = result.vault.signature(for: semanticHash)!.confidence
         XCTAssertLessThan(conf.afternoon, conf.morning)
         XCTAssertEqual(conf.morning, conf.evening, accuracy: 0.001)
-        XCTAssertEqual(result.vault.signature(for: hash)?.learnedConstraint, .anchored)
+        XCTAssertEqual(result.vault.signature(for: semanticHash)?.learnedConstraint, .anchored)
     }
 
     func testPrunesAbandonedSignaturesAfter45Days() {
@@ -92,7 +92,7 @@ final class TelemetrySynthesizerTests: XCTestCase {
         )
         vault.upsert(
             BehavioralSignature(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 learnedConstraint: .anchored,
                 lastUpdated: now,
                 lastSeenInSchedule: now,
@@ -104,11 +104,11 @@ final class TelemetrySynthesizerTests: XCTestCase {
         let result = TelemetrySynthesizer.synthesizeDailyTelemetry(
             sealedLogs: [],
             vault: vault,
-            activeScheduleHashes: [hash],
+            activeScheduleHashes: [semanticHash],
             now: now
         )
         XCTAssertNil(result.vault.signature(for: "creative|morning_pilates"))
-        XCTAssertNotNil(result.vault.signature(for: hash))
+        XCTAssertNotNil(result.vault.signature(for: semanticHash))
         XCTAssertTrue(result.prunedHashes.contains("creative|morning_pilates"))
     }
 
@@ -117,7 +117,7 @@ final class TelemetrySynthesizerTests: XCTestCase {
         var sealed = TelemetryLogEnvelope.empty(dayKey: "2024_06_09", now: now)
         sealed.append(
             ConstraintTelemetryEvent(
-                semanticHash: hash,
+                semanticHash: semanticHash,
                 taskID: "t",
                 originalConstraint: .flexible,
                 newConstraint: .fluid,
@@ -145,8 +145,8 @@ final class TelemetrySynthesizerTests: XCTestCase {
 
     func testAmnesiaResetsSignature() {
         var vault = BehavioralVaultEnvelope.empty(now: now)
-        vault.upsert(BehavioralSignature(semanticHash: hash, learnedConstraint: .fluid), now: now)
-        XCTAssertTrue(BehavioralAmnesia.resetSignature(for: hash, envelope: &vault, now: now))
-        XCTAssertNil(vault.signature(for: hash))
+        vault.upsert(BehavioralSignature(semanticHash: semanticHash, learnedConstraint: .fluid), now: now)
+        XCTAssertTrue(BehavioralAmnesia.resetSignature(for: semanticHash, envelope: &vault, now: now))
+        XCTAssertNil(vault.signature(for: semanticHash))
     }
 }
