@@ -23,8 +23,14 @@ public extension LifeTask {
         schedulingMode ?? .flexible
     }
 
+    /// Resolved semantic time lock (defaults from schedulingMode when unset).
+    var timeConstraintValue: TimeConstraint {
+        timeConstraint ?? TimeConstraint.from(schedulingMode: schedulingMode)
+    }
+
     var isFixedTimeEvent: Bool {
-        schedulingModeValue == .fixedTime && scheduledTime != nil
+        timeConstraintValue == .anchored && scheduledTime != nil
+            || (schedulingModeValue == .fixedTime && scheduledTime != nil && timeConstraint == nil)
     }
 
     /// Task materialized from compiled LifeModel commitments (gym, music, etc.).
@@ -32,9 +38,49 @@ public extension LifeTask {
         tags.contains(LifeModel.commitmentTaskTag)
     }
 
-    /// Life commitments and fixed blocks should not be moved by the day scheduler.
+    /// Life commitments and anchored blocks should not be moved by the day scheduler.
     var isSchedulerMovable: Bool {
-        !isFixedTimeEvent && !isLifeCommitmentTask
+        timeConstraintValue.isSchedulerMovable && !isLifeCommitmentTask && !isFixedTimeEvent
+    }
+
+    /// Apply a user-driven constraint mutation and keep schedulingMode aligned.
+    mutating func applyTimeConstraint(_ constraint: TimeConstraint) {
+        timeConstraint = constraint
+        schedulingMode = constraint.asSchedulingMode
+        updatedAt = Date()
+    }
+
+    /// Effective compress floor for the conflict cascade.
+    /// Explicit property > vault-learned floor > semantic defaults.
+    func minimumViableDurationValue(
+        vaultFloorMinutes: Int? = nil
+    ) -> Int {
+        if let minimumViableDuration {
+            return max(TaskDurationPolicy.minimumMinutes, min(minimumViableDuration, estimatedMinutes))
+        }
+        if let vaultFloorMinutes {
+            // Learned personal floor — still never above full duration.
+            return max(TaskDurationPolicy.minimumMinutes, min(vaultFloorMinutes, estimatedMinutes))
+        }
+        let inferred: Int
+        switch semanticProfile?.semanticType {
+        case .deepWork, .learning, .creative:
+            inferred = min(estimatedMinutes, max(45, estimatedMinutes * 2 / 3))
+        case .physicalActivity:
+            inferred = min(estimatedMinutes, max(30, estimatedMinutes * 2 / 3))
+        case .selfCare, .medication:
+            inferred = estimatedMinutes // never compress care/meds
+        case .communication:
+            inferred = min(estimatedMinutes, max(20, estimatedMinutes * 3 / 4))
+        case .errand, .administrative, .generic, .none:
+            inferred = min(estimatedMinutes, max(15, estimatedMinutes / 2))
+        }
+        return max(TaskDurationPolicy.minimumMinutes, inferred)
+    }
+
+    /// Convenience — static semantic floor without vault.
+    var minimumViableDurationValue: Int {
+        minimumViableDurationValue(vaultFloorMinutes: nil)
     }
 
     /// Calendar weekday integers (1 = Sunday … 7 = Saturday).
