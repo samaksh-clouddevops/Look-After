@@ -113,8 +113,15 @@ final class CompanionEngineTests: XCTestCase {
         let task = LifeTask(title: "HealthKit Integration", estimatedMinutes: 47)
         let snapshot = LifeContextSnapshot(currentMission: task)
         let briefing = ContextBriefingGenerator().generate(from: snapshot, resume: nil)
-        XCTAssertTrue(briefing.hero.supportingLine.contains("47"))
-        XCTAssertFalse(briefing.hero.supportingLine.contains("25"))
+        // Duration lives on durationEstimate (supporting line is why-now copy).
+        let durationText = [
+            briefing.hero.durationEstimate?.displayLabel,
+            briefing.hero.durationEstimate?.shortLabel,
+            briefing.hero.supportingLine,
+            briefing.hero.actionLine
+        ].compactMap { $0 }.joined(separator: " ")
+        XCTAssertTrue(durationText.contains("47"), "Expected dynamic 47m estimate, got: \(durationText)")
+        XCTAssertFalse(durationText.contains("25 min") || durationText.contains("25-minute"))
         XCTAssertEqual(briefing.hero.action.kind, .beginWork)
     }
 

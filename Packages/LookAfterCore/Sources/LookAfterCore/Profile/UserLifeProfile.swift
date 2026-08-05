@@ -178,7 +178,13 @@ public enum UserLifeProfileStore {
     }
 
     /// Backfills `userName` and `preferredName` for users who only defined their name in profile text.
+    /// Never overwrites a non-empty Settings override.
     public static func syncUserNameFromProfileIfNeeded(profile: UserLifeProfile? = nil) {
+        let existing = UserDefaults.standard.string(forKey: userNameDefaultsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Preserve explicit Settings override regardless of profile content.
+        guard existing.isEmpty else { return }
+
         let profile = profile ?? load()
         let resolved = {
             if !profile.preferredName.isEmpty { return profile.preferredName }
@@ -186,15 +192,19 @@ public enum UserLifeProfileStore {
         }()
 
         guard !resolved.isEmpty else { return }
-
-        let existing = UserDefaults.standard.string(forKey: userNameDefaultsKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if existing.isEmpty {
-            UserDefaults.standard.set(resolved, forKey: userNameDefaultsKey)
-        }
+        UserDefaults.standard.set(resolved, forKey: userNameDefaultsKey)
     }
 
     private static func refreshPreferredName(on profile: inout UserLifeProfile) {
+        // Prefer an existing Settings override when profile has no preferredName yet.
+        if profile.preferredName.isEmpty {
+            if let manual = UserDefaults.standard.string(forKey: userNameDefaultsKey)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !manual.isEmpty {
+                profile.preferredName = manual
+                return
+            }
+        }
         guard let extracted = LifeProfileNameExtractor.extract(profileText: profile.profileText) else { return }
         if profile.preferredName.isEmpty {
             profile.preferredName = extracted

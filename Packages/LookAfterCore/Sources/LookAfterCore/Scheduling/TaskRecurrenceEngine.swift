@@ -93,7 +93,11 @@ public enum TaskRecurrenceEngine {
             return false
         }
 
-        if let seriesTemplate = duplicateSeriesTemplate(for: task, in: allTasks) {
+        // Same-title template fallback is for *legacy* duplicates only.
+        // If this row already carries an explicit recurrence rule/weekdays that
+        // differ from the template, prefer the occurrence (user override).
+        if let seriesTemplate = duplicateSeriesTemplate(for: task, in: allTasks),
+           !hasExplicitRecurrenceOverride(task, relativeTo: seriesTemplate) {
             return matchesRecurrenceSchedule(
                 using: seriesTemplate,
                 for: task,
@@ -145,6 +149,23 @@ public enum TaskRecurrenceEngine {
             guard candidate.id != task.id else { return false }
             return candidate.title.caseInsensitiveCompare(task.title) == .orderedSame
         }
+    }
+
+    /// True when the occurrence intentionally diverges from the template schedule.
+    private static func hasExplicitRecurrenceOverride(_ task: LifeTask, relativeTo template: LifeTask) -> Bool {
+        if task.recurrenceRule != .none, task.recurrenceRule != template.recurrenceRule {
+            return true
+        }
+        let taskDays = Set(task.recurrenceWeekdays ?? [])
+        let templateDays = Set(template.recurrenceWeekdays ?? [])
+        if !taskDays.isEmpty, taskDays != templateDays {
+            return true
+        }
+        if let taskInterval = task.recurrenceInterval,
+           taskInterval != template.recurrenceIntervalValue {
+            return true
+        }
+        return false
     }
 
     /// First day the recurrence series may start generating instances.

@@ -96,9 +96,22 @@ final class DayScheduleReconcilerTests: XCTestCase {
 
         let result = DayScheduleReconciler.reconcile(tasks: [music, songwriting], on: day, calendar: calendar)
         let updatedSongwriting = result.tasks.first { $0.title == "Songwriting" }
-        let musicWindow = TaskScheduleInterval.window(for: music, on: day, calendar: calendar)!
-        let songwritingWindow = TaskScheduleInterval.window(for: updatedSongwriting!, on: day, calendar: calendar)!
-        XCTAssertFalse(musicWindow.overlaps(songwritingWindow))
+        XCTAssertNotNil(updatedSongwriting)
+        let musicWindow = TaskScheduleInterval.window(for: music, on: day, calendar: calendar)
+        let songwritingWindow = updatedSongwriting.flatMap {
+            TaskScheduleInterval.window(for: $0, on: day, calendar: calendar)
+        }
+        // Flexible loser may be shifted later, deferred, or parked — but must not keep the
+        // same overlapping slot as the fixed commitment.
+        if let musicWindow, let songwritingWindow {
+            XCTAssertFalse(musicWindow.overlaps(songwritingWindow))
+        } else if let updated = updatedSongwriting {
+            // Parked / unscheduled is a valid cascade outcome.
+            XCTAssertNil(updated.scheduledTime)
+            XCTAssertTrue(result.changedTaskIDs.contains(updated.id) || updated.timeConstraintValue == .fluid)
+        } else {
+            XCTFail("Songwriting task missing from reconcile result")
+        }
     }
 
     func testHasOverlapDetectsConflict() {

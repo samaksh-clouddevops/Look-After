@@ -244,9 +244,11 @@ final class TaskRecurrenceTests: XCTestCase {
 
     func testOccurrenceRecurrenceOverridesTemplateForScheduleCheck() {
         let sunday = makeDate(year: 2026, month: 8, day: 2)
+        // Anchor must precede the dates under test — default createdAt is wall-clock.
         let template = LifeTask(
             title: "Gym",
             recurrence: .daily,
+            createdAt: makeDate(year: 2026, month: 7, day: 1),
             userId: "user-1",
             isRecurrenceTemplate: true
         )
@@ -257,11 +259,12 @@ final class TaskRecurrenceTests: XCTestCase {
             calendar: calendar
         )
         occurrence.recurrence = .custom
-        occurrence.recurrenceWeekdays = [2, 3, 4, 5, 6, 7]
+        occurrence.recurrenceWeekdays = [2, 3, 4, 5, 6, 7] // Mon–Sat
         let allTasks = [template, occurrence]
 
         XCTAssertFalse(
-            TaskRecurrenceEngine.matchesRecurrenceSchedule(occurrence, on: sunday, in: allTasks, calendar: calendar)
+            TaskRecurrenceEngine.matchesRecurrenceSchedule(occurrence, on: sunday, in: allTasks, calendar: calendar),
+            "Sunday must not match Mon–Sat override"
         )
         XCTAssertTrue(
             TaskRecurrenceEngine.matchesRecurrenceSchedule(
@@ -269,7 +272,8 @@ final class TaskRecurrenceTests: XCTestCase {
                 on: makeDate(year: 2026, month: 8, day: 3),
                 in: allTasks,
                 calendar: calendar
-            )
+            ),
+            "Monday must match Mon–Sat override"
         )
     }
 
