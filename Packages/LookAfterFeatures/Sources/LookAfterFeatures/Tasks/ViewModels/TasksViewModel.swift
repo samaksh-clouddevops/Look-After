@@ -791,6 +791,11 @@ public final class TasksViewModel: ObservableObject {
         let wasInActive = activeIndex != nil
         let wasInCompleted = completedIndex != nil
 
+        // Capture schedule geometry before removal (auction needs the freed gap).
+        let freedGap = Self.freedGap(from: task)
+        let wasRecovery = task.tags.contains("recovery-block") || task.tags.contains("brain-locked")
+        let wasAnchored = task.timeConstraintValue == .anchored || task.isFixedTimeEvent
+
         tasks.removeAll { idsToDelete.contains($0.id) }
         completedToday.removeAll { idsToDelete.contains($0.id) }
         recurrenceTemplates.removeAll { idsToDelete.contains($0.id) }
@@ -801,6 +806,23 @@ public final class TasksViewModel: ObservableObject {
             } catch {
                 self.error = error.localizedDescription
             }
+        }
+
+        // Sabotage override learning + cool-down when user breaks a recovery lock.
+        if wasRecovery {
+            ParkedTaskRecoveryService.shared.handleRecoveryBlockOverride(task: task)
+        } else if wasAnchored, let gap = freedGap, gap.minutes >= 45 {
+            // Product trigger: freed anchored time → auction / possible sabotage.
+            let streak = HighLoadDayEvaluator.consecutiveHighLoadDays(tasks: tasks + completedToday)
+            _ = ParkedTaskRecoveryService.shared.auction(
+                gapMinutes: gap.minutes,
+                energy: .moderate,
+                consecutiveHighLoadDays: streak,
+                gapStart: gap.start,
+                day: gap.day,
+                userId: task.userId,
+                tasksVM: self
+            )
         }
 
         let undo = TaskUndoAction(
@@ -816,6 +838,20 @@ public final class TasksViewModel: ObservableObject {
         presentUndo(undo)
         NotificationCenter.default.post(name: .taskListDidChange, object: nil)
         return undo
+    }
+
+    /// Geometry of a deleted block for gap auction.
+    private static func freedGap(from task: LifeTask) -> (start: Date, day: Date, minutes: Int)? {
+        guard let start = task.scheduledTime else { return nil }
+        let cal = Calendar.current
+        let day = task.scheduledDate.map { cal.startOfDay(for: $0) } ?? cal.startOfDay(for: start)
+        let minutes: Int
+        if let end = task.scheduledEndTime {
+            minutes = max(TaskDurationPolicy.minimumMinutes, Int(end.timeIntervalSince(start) / 60.0))
+        } else {
+            minutes = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        }
+        return (start, day, minutes)
     }
 
     /// Deletes recurring occurrences together with their template so sync cannot recreate them.
@@ -892,6 +928,9 @@ public final class TasksViewModel: ObservableObject {
     ) async {
         guard !userId.isEmpty else { return }
 
+        // Day-boundary Reaper: expire/skip/supersede yesterday before today's cascade.
+        await sweepPreviousDayIfNeeded(userId: userId, now: date, calendar: calendar)
+
         let day = calendar.startOfDay(for: date)
         let activePool = tasks.filter { task in
             guard task.status.isActive, task.scheduledTime != nil, let scheduledDate = task.scheduledDate else {
@@ -922,6 +961,45 @@ public final class TasksViewModel: ObservableObject {
 
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "schedule-reconcile")
         NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+    }
+
+    /// Run once per calendar day: reaper on yesterday's incomplete tasks.
+    private func sweepPreviousDayIfNeeded(
+        userId: String,
+        now: Date,
+        calendar: Calendar
+    ) async {
+        let key = "lookafter.lastReaperSweep.\(userId)"
+        let todayKey = TelemetryLogRotation.dayKey(for: now, calendar: calendar)
+        if UserDefaults.standard.string(forKey: key) == todayKey { return }
+
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) else {
+            return
+        }
+        let pool = tasks + completedToday
+        let result = DayScheduleReconciler.sweepDayBoundary(
+            tasks: pool,
+            from: yesterday,
+            to: now,
+            now: now,
+            calendar: calendar,
+            parkedQueue: ParkedTaskQueueStore.shared
+        )
+        for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
+            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
+                if updated.status.isActive {
+                    tasks[index] = updated
+                } else {
+                    tasks.remove(at: index)
+                }
+            }
+            do {
+                try await taskRepo.update(updated)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+        UserDefaults.standard.set(todayKey, forKey: key)
     }
 
     /// Removes duplicate creative commitment tasks and recurring templates that spawn multiple music tasks per day.
