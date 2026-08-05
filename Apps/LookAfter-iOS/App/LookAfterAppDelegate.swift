@@ -3,6 +3,7 @@ import UIKit
 import UserNotifications
 import LookAfterCore
 import LookAfterData
+import LookAfterFeatures
 
 final class LookAfterAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
@@ -10,6 +11,11 @@ final class LookAfterAppDelegate: NSObject, UIApplicationDelegate, UNUserNotific
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // BG tasks must register before app finishes launching.
+        BehavioralTelemetryBackgroundTask.register()
+        BehavioralTelemetryBackgroundTask.scheduleNext()
+        // Starvation protocol: catch up if vault older than 48h (BGTask is best-effort).
+        TelemetrySynthesizerService.shared.catchUpIfStarved()
         Task { @MainActor in
             NotificationCoordinator.shared.configureOnLaunch()
             await NotificationPermissionService.shared.refreshStatus()

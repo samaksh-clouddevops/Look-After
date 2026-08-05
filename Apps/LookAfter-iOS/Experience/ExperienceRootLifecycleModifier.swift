@@ -73,6 +73,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
             BackgroundAnalyticsScheduler.shared.handleAppBackground(userId: userId)
             PostWakeSessionStore.recordBackground()
             BackgroundNotificationRefreshTask.scheduleNextRefresh()
+            BehavioralTelemetryBackgroundTask.scheduleNext()
             shell.persistResume(
                 userId: userId,
                 screen: "briefing",
