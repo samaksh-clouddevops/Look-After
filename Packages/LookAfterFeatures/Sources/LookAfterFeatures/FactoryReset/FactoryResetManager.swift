@@ -91,10 +91,6 @@ public final class FactoryResetManager {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }
-
-        if let groupDefaults = UserDefaults(suiteName: WidgetAppGroup.identifier) {
-            groupDefaults.removeObject(forKey: WidgetAppGroup.snapshotKey)
-        }
     }
 
     private func clearAllResumeSnapshots() {

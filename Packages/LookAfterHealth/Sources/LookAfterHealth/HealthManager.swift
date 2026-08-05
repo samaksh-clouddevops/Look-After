@@ -33,7 +33,7 @@ public final class HealthManager: ObservableObject {
     }
     
     /// Per-query ceiling so HealthKit callbacks cannot block sync indefinitely.
-    public var queryTimeoutSeconds: TimeInterval = 8
+    public var queryTimeoutSeconds: TimeInterval = 15
     
     public init() {}
     
@@ -242,7 +242,7 @@ public final class HealthManager: ObservableObject {
         let sleepResult = try? await sleepData
         let heartResult = try? await heartData
         let hrvResult = try? await hrvData
-        let activityResult = try? await activityData
+        let activityResult = await activityData
         let workoutResult = try? await workoutData
 
         // Apply results to summary
@@ -250,7 +250,14 @@ public final class HealthManager: ObservableObject {
             applySleep(sleep, to: &summary)
             if let progress {
                 if sleep.totalMinutes > 0 {
-                    progress(.completed(.sleep, detail: String(format: "%.1fh sleep", sleep.totalMinutes / 60)))
+                    var detail = String(format: "%.1fh sleep", sleep.totalMinutes / 60)
+                    if let source = sleep.primarySourceName, !source.isEmpty {
+                        detail += " · \(source)"
+                    }
+                    if sleep.sessionCount > 1 {
+                        detail += " · \(sleep.sessionCount) sessions"
+                    }
+                    progress(.completed(.sleep, detail: detail))
                 } else {
                     progress(.noData(.sleep, detail: "No sleep recorded last night yet"))
                 }
@@ -288,21 +295,17 @@ public final class HealthManager: ObservableObject {
             }
         }
 
-        if let activity = activityResult {
-            applyActivity(activity, to: &summary)
-            if let progress {
-                var parts: [String] = []
-                if activity.steps > 0 { parts.append("\(activity.steps) steps") }
-                if activity.calories > 0 { parts.append("\(Int(activity.calories)) kcal") }
-                if activity.exerciseMinutes > 0 { parts.append("\(activity.exerciseMinutes) min exercise") }
-                if parts.isEmpty {
-                    progress(.noData(.activity, detail: "No activity recorded yet today"))
-                } else {
-                    progress(.completed(.activity, detail: parts.joined(separator: ", ")))
-                }
+        applyActivity(activityResult, to: &summary)
+        if let progress {
+            var parts: [String] = []
+            if activityResult.steps > 0 { parts.append("\(activityResult.steps) steps") }
+            if activityResult.calories > 0 { parts.append("\(Int(activityResult.calories)) kcal") }
+            if activityResult.exerciseMinutes > 0 { parts.append("\(activityResult.exerciseMinutes) min exercise") }
+            if parts.isEmpty {
+                progress(.noData(.activity, detail: "No activity recorded yet today"))
+            } else {
+                progress(.completed(.activity, detail: parts.joined(separator: ", ")))
             }
-        } else if let progress {
-            progress(.failed(.activity, error: "Query failed"))
         }
 
         if let workout = workoutResult {
@@ -351,6 +354,9 @@ public final class HealthManager: ObservableObject {
     }
     
     // MARK: - Sleep Analysis
+    //
+    // Sleep comes from HKCategoryTypeIdentifier.sleepAnalysis only.
+    // Workouts (Motra, Apple Fitness, etc.) are fetched separately via fetchWorkoutData().
     
     private struct SleepData {
         var totalMinutes: Double = 0
@@ -361,14 +367,20 @@ public final class HealthManager: ObservableObject {
         var qualityScore: Double = 0
         var bedtime: Date?
         var wakeTime: Date?
+        var primarySourceName: String?
+        var sessionCount: Int = 0
     }
     
     private func fetchSleepData() async throws -> SleepData {
         let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
 
-        // Last ~36 hours captures last night even for late bedtimes / naps.
         let now = Date()
-        guard let windowStart = Calendar.current.date(byAdding: .hour, value: -36, to: now) else {
+        let calendar = Calendar.current
+        guard let windowStart = calendar.date(
+            byAdding: .hour,
+            value: -SleepNightAggregator.queryLookbackHours,
+            to: now
+        ) else {
             return SleepData()
         }
 
@@ -390,56 +402,29 @@ public final class HealthManager: ObservableObject {
             }
         }
 
+        let inputs = samples.map { sample in
+            SleepSampleInput(
+                start: sample.startDate,
+                end: sample.endDate,
+                categoryValue: sample.value,
+                sourceBundleId: sample.sourceRevision.source.bundleIdentifier,
+                sourceName: sample.sourceRevision.source.name
+            )
+        }
+
+        let aggregated = SleepNightAggregator.aggregate(samples: inputs, now: now, calendar: calendar)
+
         var data = SleepData()
-
-        for sample in samples {
-            let duration = sample.endDate.timeIntervalSince(sample.startDate) / 60.0
-
-            switch sample.value {
-            case HKCategoryValueSleepAnalysis.asleepDeep.rawValue:
-                data.deepMinutes += duration
-            case HKCategoryValueSleepAnalysis.asleepREM.rawValue:
-                data.remMinutes += duration
-            case HKCategoryValueSleepAnalysis.asleepCore.rawValue:
-                data.coreMinutes += duration
-            case HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue:
-                data.coreMinutes += duration
-            case HKCategoryValueSleepAnalysis.awake.rawValue:
-                data.awakeMinutes += duration
-            default:
-                break
-            }
-        }
-
-        data.totalMinutes = data.deepMinutes + data.remMinutes + data.coreMinutes
-
-        if data.totalMinutes <= 0 {
-            // Fallback: sum in-bed time when stages aren't broken out (older Watch / third-party apps).
-            let inBedMinutes = samples
-                .filter { $0.value == HKCategoryValueSleepAnalysis.inBed.rawValue }
-                .reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) / 60.0 }
-            if inBedMinutes > 0 {
-                data.coreMinutes = inBedMinutes
-                data.totalMinutes = inBedMinutes
-            }
-        }
-        
-        // Calculate quality score (0-1)
-        if data.totalMinutes > 0 {
-            let deepRatio = data.deepMinutes / data.totalMinutes
-            let remRatio = data.remMinutes / data.totalMinutes
-            let durationScore = min(data.totalMinutes / 480.0, 1.0) // 8 hours target
-            data.qualityScore = (deepRatio * 0.3 + remRatio * 0.3 + durationScore * 0.4)
-        }
-        
-        // Bedtime / wake time
-        if let firstSleep = samples.first(where: { $0.value != HKCategoryValueSleepAnalysis.awake.rawValue }) {
-            data.bedtime = firstSleep.startDate
-        }
-        if let lastSleep = samples.last(where: { $0.value != HKCategoryValueSleepAnalysis.awake.rawValue }) {
-            data.wakeTime = lastSleep.endDate
-        }
-        
+        data.totalMinutes = aggregated.totalAsleepMinutes
+        data.deepMinutes = aggregated.deepMinutes
+        data.remMinutes = aggregated.remMinutes
+        data.coreMinutes = aggregated.coreMinutes
+        data.awakeMinutes = aggregated.awakeMinutes
+        data.qualityScore = aggregated.qualityScore
+        data.bedtime = aggregated.bedtime
+        data.wakeTime = aggregated.wakeTime
+        data.primarySourceName = aggregated.primarySourceName
+        data.sessionCount = aggregated.sessionCount
         return data
     }
     
@@ -487,30 +472,59 @@ public final class HealthManager: ObservableObject {
         var exerciseMinutes: Int = 0
     }
     
-    private func fetchActivityData() async throws -> ActivityData {
+    private func fetchActivityData() async -> ActivityData {
         var data = ActivityData()
         let startOfDay = Calendar.current.startOfDay(for: Date())
-        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
-        
-        // Steps
-        let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-        if let stats = try await fetchStatistics(type: stepsType, predicate: predicate, options: .cumulativeSum) {
-            data.steps = Int(stats.sumQuantity()?.doubleValue(for: .count()) ?? 0)
-        }
-        
-        // Active calories
-        let caloriesType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
-        if let stats = try await fetchStatistics(type: caloriesType, predicate: predicate, options: .cumulativeSum) {
-            data.calories = stats.sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
-        }
-        
-        // Exercise minutes
-        let exerciseType = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime)!
-        if let stats = try await fetchStatistics(type: exerciseType, predicate: predicate, options: .cumulativeSum) {
-            data.exerciseMinutes = Int(stats.sumQuantity()?.doubleValue(for: .minute()) ?? 0)
-        }
-        
+        let now = Date()
+
+        // Fetch each metric independently — one denied type must not fail steps.
+        data.steps = await fetchTodayStepCount(from: startOfDay, to: now)
+        data.calories = await fetchTodayCumulativeSum(
+            identifier: .activeEnergyBurned,
+            unit: .kilocalorie(),
+            from: startOfDay,
+            to: now
+        )
+        data.exerciseMinutes = Int(await fetchTodayCumulativeSum(
+            identifier: .appleExerciseTime,
+            unit: .minute(),
+            from: startOfDay,
+            to: now
+        ).rounded())
+
         return data
+    }
+
+    private func fetchTodayStepCount(from start: Date, to end: Date) async -> Int {
+        guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return 0 }
+
+        for options: HKQueryOptions in [.strictStartDate, .strictEndDate, []] {
+            let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: options)
+            if let stats = try? await fetchStatistics(type: stepsType, predicate: predicate, options: .cumulativeSum),
+               let sum = stats.sumQuantity()?.doubleValue(for: .count()), sum > 0 {
+                return Int(sum.rounded())
+            }
+        }
+        return 0
+    }
+
+    private func fetchTodayCumulativeSum(
+        identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        from start: Date,
+        to end: Date
+    ) async -> Double {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return 0 }
+
+        for options: HKQueryOptions in [.strictStartDate, .strictEndDate, []] {
+            let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: options)
+            if let stats = try? await fetchStatistics(type: type, predicate: predicate, options: .cumulativeSum),
+               let quantity = stats.sumQuantity() {
+                let value = quantity.doubleValue(for: unit)
+                if value > 0 { return value }
+            }
+        }
+        return 0
     }
     
     // MARK: - Workouts
@@ -593,7 +607,9 @@ public final class HealthManager: ObservableObject {
         timeout seconds: TimeInterval,
         _ makeQuery: @escaping (@escaping (Result<T, Error>) -> Void) -> HKQuery
     ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
+        let queryBox = HealthKitQueryBox()
+
+        return try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask { @MainActor in
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
                     var finished = false
@@ -603,6 +619,7 @@ public final class HealthManager: ObservableObject {
                         continuation.resume(with: result)
                     }
                     let query = makeQuery(complete)
+                    queryBox.query = query
                     self.healthStore.execute(query)
                 }
             }
@@ -610,13 +627,23 @@ public final class HealthManager: ObservableObject {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 throw HealthManagerError.queryTimeout
             }
-            defer { group.cancelAll() }
+            defer {
+                group.cancelAll()
+                if let query = queryBox.query {
+                    self.healthStore.stop(query)
+                }
+            }
             guard let value = try await group.next() else {
                 throw HealthManagerError.queryTimeout
             }
             return value
         }
     }
+}
+
+/// Holds a running HealthKit query so it can be stopped on timeout.
+private final class HealthKitQueryBox: @unchecked Sendable {
+    var query: HKQuery?
 }
 
 // MARK: - HKWorkoutActivityType Name Extension
