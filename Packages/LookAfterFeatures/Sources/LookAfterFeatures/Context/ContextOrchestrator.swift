@@ -36,27 +36,90 @@ public final class ContextOrchestrator: ObservableObject {
         self.capacityEngine = ExecutiveCapacityEngine(glmService: glmService)
     }
 
-    public func refresh(
-        userId: String,
-        userName: String,
-        cognitiveSnapshot: CognitiveSnapshot?,
-        healthSummary: HealthSummary?,
-        flowSurface: FlowSurface?,
-        activeFlowSession: FlowSessionState?,
-        heroTask: LifeTask?,
-        topTasks: [LifeTask],
-        unpurchasedShoppingCount: Int,
-        upcomingBills: [BillItem] = [],
-        lifeTimelineEvents: [LifeTimelineEvent] = [],
-        tomorrowLifeTimelineEvents: [LifeTimelineEvent] = [],
-        isWeekend: Bool = false,
-        peakStartHour: Int = 9,
-        locationOverride: LocationContext? = nil,
-        allTasks: [LifeTask] = [],
-        completedTaskIDs: Set<String> = [],
-        flowConfidenceScore: Double? = nil,
-        capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
-    ) async {
+    public struct RefreshInput: Sendable {
+        public var userId: String
+        public var userName: String
+        public var cognitiveSnapshot: CognitiveSnapshot?
+        public var healthSummary: HealthSummary?
+        public var flowSurface: FlowSurface?
+        public var activeFlowSession: FlowSessionState?
+        public var heroTask: LifeTask?
+        public var topTasks: [LifeTask]
+        public var unpurchasedShoppingCount: Int
+        public var upcomingBills: [BillItem]
+        public var lifeTimelineEvents: [LifeTimelineEvent]
+        public var tomorrowLifeTimelineEvents: [LifeTimelineEvent]
+        public var isWeekend: Bool
+        public var peakStartHour: Int
+        public var locationOverride: LocationContext?
+        public var allTasks: [LifeTask]
+        public var completedTaskIDs: Set<String>
+        public var flowConfidenceScore: Double?
+        public var capacityLLMPolicy: ExecutiveCapacityLLMPolicy
+
+        public init(
+            userId: String,
+            userName: String,
+            cognitiveSnapshot: CognitiveSnapshot?,
+            healthSummary: HealthSummary?,
+            flowSurface: FlowSurface?,
+            activeFlowSession: FlowSessionState?,
+            heroTask: LifeTask?,
+            topTasks: [LifeTask],
+            unpurchasedShoppingCount: Int,
+            upcomingBills: [BillItem] = [],
+            lifeTimelineEvents: [LifeTimelineEvent] = [],
+            tomorrowLifeTimelineEvents: [LifeTimelineEvent] = [],
+            isWeekend: Bool = false,
+            peakStartHour: Int = 9,
+            locationOverride: LocationContext? = nil,
+            allTasks: [LifeTask] = [],
+            completedTaskIDs: Set<String> = [],
+            flowConfidenceScore: Double? = nil,
+            capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
+        ) {
+            self.userId = userId
+            self.userName = userName
+            self.cognitiveSnapshot = cognitiveSnapshot
+            self.healthSummary = healthSummary
+            self.flowSurface = flowSurface
+            self.activeFlowSession = activeFlowSession
+            self.heroTask = heroTask
+            self.topTasks = topTasks
+            self.unpurchasedShoppingCount = unpurchasedShoppingCount
+            self.upcomingBills = upcomingBills
+            self.lifeTimelineEvents = lifeTimelineEvents
+            self.tomorrowLifeTimelineEvents = tomorrowLifeTimelineEvents
+            self.isWeekend = isWeekend
+            self.peakStartHour = peakStartHour
+            self.locationOverride = locationOverride
+            self.allTasks = allTasks
+            self.completedTaskIDs = completedTaskIDs
+            self.flowConfidenceScore = flowConfidenceScore
+            self.capacityLLMPolicy = capacityLLMPolicy
+        }
+    }
+
+    public func refresh(_ input: RefreshInput) async {
+        let userId = input.userId
+        let userName = input.userName
+        let cognitiveSnapshot = input.cognitiveSnapshot
+        let healthSummary = input.healthSummary
+        let flowSurface = input.flowSurface
+        let activeFlowSession = input.activeFlowSession
+        let heroTask = input.heroTask
+        let topTasks = input.topTasks
+        let unpurchasedShoppingCount = input.unpurchasedShoppingCount
+        let upcomingBills = input.upcomingBills
+        let lifeTimelineEvents = input.lifeTimelineEvents
+        let tomorrowLifeTimelineEvents = input.tomorrowLifeTimelineEvents
+        let isWeekend = input.isWeekend
+        let peakStartHour = input.peakStartHour
+        let locationOverride = input.locationOverride
+        let allTasks = input.allTasks
+        let completedTaskIDs = input.completedTaskIDs
+        let flowConfidenceScore = input.flowConfidenceScore
+        let capacityLLMPolicy = input.capacityLLMPolicy
         // Performance optimization: Compute all values first, then batch update @Published properties
         // This reduces SwiftUI re-renders from 7 separate updates to 1 batched update
         await PerformanceMonitor.measureAsync("ContextOrchestrator.refresh", warnAfterMs: 200) {

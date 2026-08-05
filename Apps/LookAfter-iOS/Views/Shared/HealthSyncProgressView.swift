@@ -273,23 +273,23 @@ struct HealthConnectSheet: View {
                         HealthSyncProgressView(healthSync: healthSync, style: .full)
 
                         if healthSync.syncPhase == .failed, healthSync.verificationReport == nil {
-                            Button {
+                            Button(action: {
                                 Task { await runConnect() }
-                            } label: {
+                            }, label: {
                                 Label("Retry Connection", systemImage: "arrow.clockwise")
                                     .frame(maxWidth: .infinity)
-                            }
+                            })
                             .buttonStyle(.borderedProminent)
                             .tint(DesignSystem.accentPrimary)
                         } else if healthSync.syncPhase == .complete,
                                   let report = healthSync.verificationReport,
                                   !report.hasUsableData {
-                            Button {
+                            Button(action: {
                                 Task { await runConnect() }
-                            } label: {
+                            }, label: {
                                 Label("Retry After Fixing Issues", systemImage: "arrow.clockwise")
                                     .frame(maxWidth: .infinity)
-                            }
+                            })
                             .buttonStyle(.borderedProminent)
                             .tint(DesignSystem.accentPrimary)
                         }

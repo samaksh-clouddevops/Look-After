@@ -61,7 +61,7 @@ struct AllModulesGridView: View {
                         moduleLink(
                             title: "Finance & Bills",
                             subtitle: "Track what is due",
-                            badge: modulesVM.bills.filter { !$0.isPaid }.count > 0 ? "\(modulesVM.bills.filter { !$0.isPaid }.count) due" : nil,
+                            badge: modulesVM.bills.contains(where: { !$0.isPaid }) ? "\(modulesVM.bills.filter { !$0.isPaid }.count) due" : nil,
                             destination: FinanceBillsView(modulesVM: modulesVM)
                         )
 
@@ -82,7 +82,7 @@ struct AllModulesGridView: View {
                         moduleLink(
                             title: "Relationships",
                             subtitle: "People who matter",
-                            badge: modulesVM.contacts.filter { $0.needsContact }.count > 0 ? "\(modulesVM.contacts.filter { $0.needsContact }.count) reach out" : nil,
+                            badge: modulesVM.contacts.contains(where: { $0.needsContact }) ? "\(modulesVM.contacts.filter { $0.needsContact }.count) reach out" : nil,
                             destination: RelationshipsView(modulesVM: modulesVM)
                         )
 
@@ -126,11 +126,11 @@ struct AllModulesGridView: View {
 
     @ViewBuilder
     private func moduleLink<D: View>(title: String, subtitle: String, badge: String?, destination: D) -> some View {
-        NavigationLink {
+        NavigationLink(destination: {
             destination
-        } label: {
+        }, label: {
             DestinationTile(title: title, subtitle: subtitle, badge: badge)
-        }
+        })
         .buttonStyle(PremiumPressStyle())
     }
 }

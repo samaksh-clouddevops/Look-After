@@ -40,13 +40,13 @@ public struct WhyThisAffordance: View {
     public var body: some View {
         if hasContent {
             VStack(spacing: 12) {
-                Button {
+                Button(action: {
                     isExpanded.toggle()
-                } label: {
+                }, label: {
                     Text(isExpanded ? "Hide" : "Why now?")
                         .font(.dsMetadata())
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
                 .buttonStyle(.plain)
 
                 if isExpanded {

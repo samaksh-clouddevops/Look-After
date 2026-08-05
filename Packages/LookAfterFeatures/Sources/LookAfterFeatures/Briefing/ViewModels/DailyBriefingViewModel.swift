@@ -652,17 +652,19 @@ public final class DailyBriefingViewModel: ObservableObject {
         postWakeState = postWake
 
         dayBriefing = MorningDayBriefingBuilder.build(
-            postWake: postWake,
-            healthSummary: healthSummary,
-            sleep: sleep,
-            executiveCapacity: executiveCapacity,
-            lifeSnapshot: lifeSnapshot,
-            lifeTimelineEvents: lifeTimelineEvents,
-            tomorrowTimelineEvents: tomorrowLifeTimelineEvents,
-            tasks: tasksVM.tasks,
-            completedToday: tasksVM.completedToday,
-            calendarData: calendar,
-            focusWindowLabel: healthSnapshot.focusWindow
+            .init(
+                postWake: postWake,
+                healthSummary: healthSummary,
+                sleep: sleep,
+                executiveCapacity: executiveCapacity,
+                lifeSnapshot: lifeSnapshot,
+                lifeTimelineEvents: lifeTimelineEvents,
+                tomorrowTimelineEvents: tomorrowLifeTimelineEvents,
+                tasks: tasksVM.tasks,
+                completedToday: tasksVM.completedToday,
+                calendarData: calendar,
+                focusWindowLabel: healthSnapshot.focusWindow
+            )
         )
     }
 
@@ -1133,24 +1135,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             let recovery = payload.hasRecoveryBlockToday
                 || distilledActions.contains { $0.lowercased().contains("sabotage") }
             payloadWithMutations.hasRecoveryBlockToday = recovery
-            payloadWithMutations.structureFingerprint = BriefingPayload.fingerprint(
-                dayKey: payload.dayKey,
-                energyState: payload.energyState,
-                capacityBand: payload.capacityBand,
-                anchoredCount: payload.anchoredCount,
-                flexibleCount: payload.flexibleCount,
-                fluidCount: payload.fluidCount,
-                focusMinutes: payload.focusMinutes,
-                remainingTaskCount: payload.remainingTaskCount,
-                completedTaskCount: payload.completedTaskCount,
-                overdueCount: payload.overdueCount,
-                mutations: distilledMutations,
-                somedayDecayCount: payload.somedayDecayCount,
-                parkedRecoverableCount: payload.parkedRecoverableCount,
-                supersededTaskCount: payloadWithMutations.supersededTaskCount,
-                expiredTaskCount: payloadWithMutations.expiredTaskCount,
-                hasRecoveryBlockToday: recovery
-            )
+            payloadWithMutations.structureFingerprint = BriefingPayload.fingerprint(for: payloadWithMutations)
         }
         let finalPayload = distilledMutations.isEmpty ? payload : payloadWithMutations
         briefingPayload = finalPayload

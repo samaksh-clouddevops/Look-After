@@ -58,15 +58,15 @@ public struct CalmHeroSurface: View {
 
     @ViewBuilder
     private var disclosureAffordance: some View {
-        Button {
+        Button(action: {
             withAnimation(.easeInOut(duration: 0.22)) {
                 isExpanded.toggle()
             }
-        } label: {
+        }, label: {
             Text(isExpanded ? "Hide details" : "Why this?")
                 .font(.dsMetadata())
                 .foregroundColor(DesignSystem.textMuted)
-        }
+        })
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -133,10 +133,10 @@ public struct CalmHealthSnapshotLine: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Button {
+            Button(action: {
                 guard expandedBody != nil else { return }
                 withAnimation(.easeInOut(duration: 0.22)) { isExpanded.toggle() }
-            } label: {
+            }, label: {
                 VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
                     HStack(alignment: .firstTextBaseline, spacing: DesignSystem.spacingSM) {
                         Text(label)
@@ -158,7 +158,7 @@ public struct CalmHealthSnapshotLine: View {
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }
+            })
             .buttonStyle(.plain)
 
             if isExpanded, let expandedBody {
@@ -185,9 +185,9 @@ public struct CalmDisclosureSection<Content: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-            Button {
+            Button(action: {
                 withAnimation(.easeInOut(duration: 0.22)) { isExpanded.toggle() }
-            } label: {
+            }, label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
@@ -205,7 +205,7 @@ public struct CalmDisclosureSection<Content: View>: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(DesignSystem.textMuted)
                 }
-            }
+            })
             .buttonStyle(.plain)
 
             if isExpanded {

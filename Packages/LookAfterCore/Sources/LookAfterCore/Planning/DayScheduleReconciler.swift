@@ -184,8 +184,8 @@ public enum DayScheduleReconciler {
     ) -> Bool {
         let intervals = TaskScheduleInterval.intervals(from: tasks, on: day, calendar: calendar)
         guard intervals.count > 1 else { return false }
-        for i in 0..<(intervals.count - 1) {
-            if intervals[i].overlaps(intervals[i + 1]) { return true }
+        for i in 0..<(intervals.count - 1) where intervals[i].overlaps(intervals[i + 1]) {
+            return true
         }
         for i in 0..<intervals.count {
             for j in (i + 1)..<intervals.count where intervals[i].overlaps(intervals[j]) {

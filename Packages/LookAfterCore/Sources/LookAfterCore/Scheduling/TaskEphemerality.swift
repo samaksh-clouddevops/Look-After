@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Expiration
 
 /// When an incomplete task dies instead of parking / rolling forever.
-public enum TaskExpirationPolicy: Sendable, Equatable {
+public enum TaskExpirationPolicy: Sendable, Equatable, Hashable {
     /// Survives for multi-day rollover (subject to collision + horizon).
     case infinite
     /// Dies at local midnight if not completed — never rolls.
@@ -45,7 +45,7 @@ extension TaskExpirationPolicy: Codable {
 // MARK: - Bounding box
 
 /// Same-day fence so Lunch cannot slide into Dinner.
-public struct TemporalBoundingBox: Codable, Sendable, Equatable {
+public struct TemporalBoundingBox: Codable, Sendable, Equatable, Hashable {
     public var earliestStartHour: Int
     public var latestStartHour: Int
 

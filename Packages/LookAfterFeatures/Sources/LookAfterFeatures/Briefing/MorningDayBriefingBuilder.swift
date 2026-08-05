@@ -3,21 +3,66 @@ import LookAfterCore
 
 enum MorningDayBriefingBuilder {
 
-    static func build(
-        postWake: PostWakeDetector.Result,
-        healthSummary: HealthSummary?,
-        sleep: BriefingSleepData,
-        executiveCapacity: ExecutiveCapacityState,
-        lifeSnapshot: LifeContextSnapshot?,
-        lifeTimelineEvents: [LifeTimelineEvent],
-        tomorrowTimelineEvents: [LifeTimelineEvent] = [],
-        tasks: [LifeTask],
-        completedToday: [LifeTask],
-        calendarData: BriefingCalendarData,
-        focusWindowLabel: String?,
-        now: Date = Date(),
-        calendar: Calendar = .current
-    ) -> MorningDayBriefing {
+    struct BuildInput: Sendable {
+        var postWake: PostWakeDetector.Result
+        var healthSummary: HealthSummary?
+        var sleep: BriefingSleepData
+        var executiveCapacity: ExecutiveCapacityState
+        var lifeSnapshot: LifeContextSnapshot?
+        var lifeTimelineEvents: [LifeTimelineEvent]
+        var tomorrowTimelineEvents: [LifeTimelineEvent]
+        var tasks: [LifeTask]
+        var completedToday: [LifeTask]
+        var calendarData: BriefingCalendarData
+        var focusWindowLabel: String?
+        var now: Date
+        var calendar: Calendar
+
+        init(
+            postWake: PostWakeDetector.Result,
+            healthSummary: HealthSummary?,
+            sleep: BriefingSleepData,
+            executiveCapacity: ExecutiveCapacityState,
+            lifeSnapshot: LifeContextSnapshot?,
+            lifeTimelineEvents: [LifeTimelineEvent],
+            tomorrowTimelineEvents: [LifeTimelineEvent] = [],
+            tasks: [LifeTask],
+            completedToday: [LifeTask],
+            calendarData: BriefingCalendarData,
+            focusWindowLabel: String?,
+            now: Date = Date(),
+            calendar: Calendar = .current
+        ) {
+            self.postWake = postWake
+            self.healthSummary = healthSummary
+            self.sleep = sleep
+            self.executiveCapacity = executiveCapacity
+            self.lifeSnapshot = lifeSnapshot
+            self.lifeTimelineEvents = lifeTimelineEvents
+            self.tomorrowTimelineEvents = tomorrowTimelineEvents
+            self.tasks = tasks
+            self.completedToday = completedToday
+            self.calendarData = calendarData
+            self.focusWindowLabel = focusWindowLabel
+            self.now = now
+            self.calendar = calendar
+        }
+    }
+
+    static func build(_ input: BuildInput) -> MorningDayBriefing {
+        let postWake = input.postWake
+        let healthSummary = input.healthSummary
+        let sleep = input.sleep
+        let executiveCapacity = input.executiveCapacity
+        let lifeSnapshot = input.lifeSnapshot
+        let lifeTimelineEvents = input.lifeTimelineEvents
+        let tomorrowTimelineEvents = input.tomorrowTimelineEvents
+        let tasks = input.tasks
+        let completedToday = input.completedToday
+        let calendarData = input.calendarData
+        let focusWindowLabel = input.focusWindowLabel
+        let now = input.now
+        let calendar = input.calendar
         let profile = UserLifeProfileStore.load()
         let sleepLine = buildSleepLine(postWake: postWake, health: healthSummary, sleep: sleep, calendar: calendar)
         let idealSleep = IdealSleepPlanner.recommend(

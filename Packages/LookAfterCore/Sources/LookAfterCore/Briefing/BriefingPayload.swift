@@ -199,53 +199,117 @@ public struct BriefingPayload: Codable, Sendable, Equatable {
         self.expiredTaskCount = expiredTaskCount
         self.structureFingerprint = structureFingerprint.isEmpty
             ? Self.fingerprint(
-                dayKey: dayKey,
-                energyState: energyState,
-                capacityBand: capacityBand,
-                anchoredCount: anchoredCount,
-                flexibleCount: flexibleCount,
-                fluidCount: fluidCount,
-                focusMinutes: focusMinutes,
-                remainingTaskCount: remainingTaskCount,
-                completedTaskCount: completedTaskCount,
-                overdueCount: overdueCount,
-                mutations: mutations,
-                somedayDecayCount: somedayDecayCount,
-                parkedRecoverableCount: parkedRecoverableCount,
-                supersededTaskCount: supersededTaskCount,
-                expiredTaskCount: expiredTaskCount,
-                hasRecoveryBlockToday: hasRecoveryBlockToday
+                FingerprintParts(
+                    dayKey: dayKey,
+                    energyState: energyState,
+                    capacityBand: capacityBand,
+                    anchoredCount: anchoredCount,
+                    flexibleCount: flexibleCount,
+                    fluidCount: fluidCount,
+                    focusMinutes: focusMinutes,
+                    remainingTaskCount: remainingTaskCount,
+                    completedTaskCount: completedTaskCount,
+                    overdueCount: overdueCount,
+                    mutations: mutations,
+                    somedayDecayCount: somedayDecayCount,
+                    parkedRecoverableCount: parkedRecoverableCount,
+                    supersededTaskCount: supersededTaskCount,
+                    expiredTaskCount: expiredTaskCount,
+                    hasRecoveryBlockToday: hasRecoveryBlockToday
+                )
             )
             : structureFingerprint
     }
 
-    public static func fingerprint(
-        dayKey: String,
-        energyState: String,
-        capacityBand: String,
-        anchoredCount: Int,
-        flexibleCount: Int,
-        fluidCount: Int,
-        focusMinutes: Int,
-        remainingTaskCount: Int,
-        completedTaskCount: Int,
-        overdueCount: Int,
-        mutations: [BriefingMutationFact],
-        somedayDecayCount: Int,
-        parkedRecoverableCount: Int,
-        supersededTaskCount: Int = 0,
-        expiredTaskCount: Int = 0,
-        hasRecoveryBlockToday: Bool
-    ) -> String {
-        let mut = mutations.map(\.code).sorted().joined(separator: ",")
+    /// Structural facts used to compute a cache-invalidating fingerprint.
+    public struct FingerprintParts: Sendable, Equatable {
+        public var dayKey: String
+        public var energyState: String
+        public var capacityBand: String
+        public var anchoredCount: Int
+        public var flexibleCount: Int
+        public var fluidCount: Int
+        public var focusMinutes: Int
+        public var remainingTaskCount: Int
+        public var completedTaskCount: Int
+        public var overdueCount: Int
+        public var mutations: [BriefingMutationFact]
+        public var somedayDecayCount: Int
+        public var parkedRecoverableCount: Int
+        public var supersededTaskCount: Int
+        public var expiredTaskCount: Int
+        public var hasRecoveryBlockToday: Bool
+
+        public init(
+            dayKey: String,
+            energyState: String,
+            capacityBand: String,
+            anchoredCount: Int = 0,
+            flexibleCount: Int = 0,
+            fluidCount: Int = 0,
+            focusMinutes: Int = 0,
+            remainingTaskCount: Int = 0,
+            completedTaskCount: Int = 0,
+            overdueCount: Int = 0,
+            mutations: [BriefingMutationFact] = [],
+            somedayDecayCount: Int = 0,
+            parkedRecoverableCount: Int = 0,
+            supersededTaskCount: Int = 0,
+            expiredTaskCount: Int = 0,
+            hasRecoveryBlockToday: Bool = false
+        ) {
+            self.dayKey = dayKey
+            self.energyState = energyState
+            self.capacityBand = capacityBand
+            self.anchoredCount = anchoredCount
+            self.flexibleCount = flexibleCount
+            self.fluidCount = fluidCount
+            self.focusMinutes = focusMinutes
+            self.remainingTaskCount = remainingTaskCount
+            self.completedTaskCount = completedTaskCount
+            self.overdueCount = overdueCount
+            self.mutations = mutations
+            self.somedayDecayCount = somedayDecayCount
+            self.parkedRecoverableCount = parkedRecoverableCount
+            self.supersededTaskCount = supersededTaskCount
+            self.expiredTaskCount = expiredTaskCount
+            self.hasRecoveryBlockToday = hasRecoveryBlockToday
+        }
+    }
+
+    public static func fingerprint(_ parts: FingerprintParts) -> String {
+        let mut = parts.mutations.map(\.code).sorted().joined(separator: ",")
         return [
-            dayKey, energyState, capacityBand,
-            "\(anchoredCount)", "\(flexibleCount)", "\(fluidCount)",
-            "\(focusMinutes)", "\(remainingTaskCount)", "\(completedTaskCount)",
-            "\(overdueCount)", mut, "\(somedayDecayCount)",
-            "\(parkedRecoverableCount)", "\(supersededTaskCount)", "\(expiredTaskCount)",
-            "\(hasRecoveryBlockToday)"
+            parts.dayKey, parts.energyState, parts.capacityBand,
+            "\(parts.anchoredCount)", "\(parts.flexibleCount)", "\(parts.fluidCount)",
+            "\(parts.focusMinutes)", "\(parts.remainingTaskCount)", "\(parts.completedTaskCount)",
+            "\(parts.overdueCount)", mut, "\(parts.somedayDecayCount)",
+            "\(parts.parkedRecoverableCount)", "\(parts.supersededTaskCount)", "\(parts.expiredTaskCount)",
+            "\(parts.hasRecoveryBlockToday)"
         ].joined(separator: "|")
+    }
+
+    public static func fingerprint(for payload: BriefingPayload) -> String {
+        fingerprint(
+            FingerprintParts(
+                dayKey: payload.dayKey,
+                energyState: payload.energyState,
+                capacityBand: payload.capacityBand,
+                anchoredCount: payload.anchoredCount,
+                flexibleCount: payload.flexibleCount,
+                fluidCount: payload.fluidCount,
+                focusMinutes: payload.focusMinutes,
+                remainingTaskCount: payload.remainingTaskCount,
+                completedTaskCount: payload.completedTaskCount,
+                overdueCount: payload.overdueCount,
+                mutations: payload.mutations,
+                somedayDecayCount: payload.somedayDecayCount,
+                parkedRecoverableCount: payload.parkedRecoverableCount,
+                supersededTaskCount: payload.supersededTaskCount,
+                expiredTaskCount: payload.expiredTaskCount,
+                hasRecoveryBlockToday: payload.hasRecoveryBlockToday
+            )
+        )
     }
 }
 

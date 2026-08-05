@@ -109,14 +109,14 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
             hasHabitLogs: habitAdherence != nil
         )
 
-        let hasData = completedInRange.count > 0
+        let hasData = !completedInRange.isEmpty
             || !healthSummaries.isEmpty
             || focusSessionCount > 0
             || (habitAdherence ?? 0) > 0
 
         let kpis = PersonalAnalyticsKPIs(
             totalFocusMinutes: focusMinutes > 0 ? focusMinutes : nil,
-            completedTasksCount: completedInRange.count > 0 ? completedInRange.count : nil,
+            completedTasksCount: completedInRange.isEmpty ? nil : completedInRange.count,
             averageEnergyScore: avgEnergy,
             averageExecutiveFunctionScore: avgEF,
             peakProductivityWindow: peakWindow,
@@ -192,14 +192,16 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
         let focusSessionCount = buckets.reduce(0) { $0 + $1.focusSessions }
 
         return assembleReport(
-            buckets: buckets,
-            timeframe: timeframe,
-            userId: userId,
-            overdueCount: overdueCount,
-            healthCount: healthCount,
-            completedCount: completedCount,
-            focusSessionCount: focusSessionCount,
-            generatedAt: now
+            AssembleReportInput(
+                buckets: buckets,
+                timeframe: timeframe,
+                userId: userId,
+                overdueCount: overdueCount,
+                healthCount: healthCount,
+                completedCount: completedCount,
+                focusSessionCount: focusSessionCount,
+                generatedAt: now
+            )
         )
     }
 
@@ -216,16 +218,26 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
         return reports
     }
 
-    private func assembleReport(
-        buckets: [DayBucket],
-        timeframe: InsightsTimeframe,
-        userId: String,
-        overdueCount: Int,
-        healthCount: Int,
-        completedCount: Int,
-        focusSessionCount: Int,
-        generatedAt: Date
-    ) -> PersonalAnalyticsReport {
+    private struct AssembleReportInput: Sendable {
+        var buckets: [DayBucket]
+        var timeframe: InsightsTimeframe
+        var userId: String
+        var overdueCount: Int
+        var healthCount: Int
+        var completedCount: Int
+        var focusSessionCount: Int
+        var generatedAt: Date
+    }
+
+    private func assembleReport(_ input: AssembleReportInput) -> PersonalAnalyticsReport {
+        let buckets = input.buckets
+        let timeframe = input.timeframe
+        let userId = input.userId
+        let overdueCount = input.overdueCount
+        let healthCount = input.healthCount
+        let completedCount = input.completedCount
+        let focusSessionCount = input.focusSessionCount
+        let generatedAt = input.generatedAt
         let calendar = Calendar.current
 
         let focusMinutes = buckets.reduce(0) { $0 + $1.focusMinutes }

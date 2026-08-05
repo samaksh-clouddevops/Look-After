@@ -12,12 +12,12 @@ public struct FixedTimeEventRule: FlowSchedulingRuleProtocol {
 
         guard !fixedNow.isEmpty else { return }
 
-        let hero = fixedNow.sorted { lhs, rhs in
+        let hero = fixedNow.min { lhs, rhs in
             let lStart = lhs.scheduledTime ?? .distantFuture
             let rStart = rhs.scheduledTime ?? .distantFuture
             if lStart != rStart { return lStart < rStart }
             return lhs.priority.rawValue > rhs.priority.rawValue
-        }.first
+        }
 
         if let hero {
             state.heroTask = hero

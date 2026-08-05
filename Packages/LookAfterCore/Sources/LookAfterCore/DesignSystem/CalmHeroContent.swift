@@ -196,48 +196,62 @@ public enum CalmHeroContentBuilder {
 
 // Briefing bridge — keeps LookAfterFeatures types out of LookAfterCore views.
 public extension CalmHeroContentBuilder {
-    static func fromBriefingHero(
-        greeting: String,
-        actionLine: String,
-        narrative: String,
-        whyLine: String?,
-        buttonLabel: String,
-        durationLabel: String?,
-        ignoreConsequence: String?,
-        alternativeLabel: String?
-    ) -> CalmHeroContent {
+    struct BriefingHeroInput: Sendable {
+        public var greeting: String
+        public var actionLine: String
+        public var narrative: String
+        public var whyLine: String?
+        public var buttonLabel: String
+        public var durationLabel: String?
+        public var ignoreConsequence: String?
+        public var alternativeLabel: String?
+
+        public init(
+            greeting: String = "",
+            actionLine: String,
+            narrative: String,
+            whyLine: String?,
+            buttonLabel: String,
+            durationLabel: String?,
+            ignoreConsequence: String?,
+            alternativeLabel: String?
+        ) {
+            self.greeting = greeting
+            self.actionLine = actionLine
+            self.narrative = narrative
+            self.whyLine = whyLine
+            self.buttonLabel = buttonLabel
+            self.durationLabel = durationLabel
+            self.ignoreConsequence = ignoreConsequence
+            self.alternativeLabel = alternativeLabel
+        }
+    }
+
+    static func fromBriefingHero(_ input: BriefingHeroInput) -> CalmHeroContent {
         from(
-            title: actionLine,
-            buttonLabel: buttonLabel,
-            greeting: greeting,
+            title: input.actionLine,
+            buttonLabel: input.buttonLabel,
+            greeting: input.greeting,
             contextLine: nil,
             outcomeLine: nil,
-            whyLine: whyLine,
-            durationLabel: durationLabel,
-            narrative: narrative,
-            skipConsequence: ignoreConsequence,
-            alternativePrompt: alternativeLabel
+            whyLine: input.whyLine,
+            durationLabel: input.durationLabel,
+            narrative: input.narrative,
+            skipConsequence: input.ignoreConsequence,
+            alternativePrompt: input.alternativeLabel
         )
     }
 
     /// Immersive briefing — greeting shown separately; metadata is duration only.
-    static func immersiveBriefingContent(
-        actionLine: String,
-        narrative: String,
-        whyLine: String?,
-        buttonLabel: String,
-        durationLabel: String?,
-        ignoreConsequence: String?,
-        alternativeLabel: String?
-    ) -> CalmHeroContent {
+    static func immersiveBriefingContent(_ input: BriefingHeroInput) -> CalmHeroContent {
         from(
-            title: actionLine,
-            buttonLabel: buttonLabel,
-            whyLine: whyLine,
-            durationLabel: durationLabel,
-            narrative: narrative,
-            skipConsequence: ignoreConsequence,
-            alternativePrompt: alternativeLabel
+            title: input.actionLine,
+            buttonLabel: input.buttonLabel,
+            whyLine: input.whyLine,
+            durationLabel: input.durationLabel,
+            narrative: input.narrative,
+            skipConsequence: input.ignoreConsequence,
+            alternativePrompt: input.alternativeLabel
         )
     }
 }

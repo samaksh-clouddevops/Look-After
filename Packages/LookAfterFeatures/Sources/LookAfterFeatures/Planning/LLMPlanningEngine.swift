@@ -330,11 +330,9 @@ public final class LLMPlanningEngine {
             "i'm going to ", "im going to ", "i plan to ", "please ",
         ]
         var lowered = text.lowercased()
-        for prefix in stripPrefixes {
-            if lowered.hasPrefix(prefix) {
-                text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                lowered = text.lowercased()
-            }
+        for prefix in stripPrefixes where lowered.hasPrefix(prefix) {
+            text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            lowered = text.lowercased()
         }
 
         var parts = [text]

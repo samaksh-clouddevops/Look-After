@@ -3,70 +3,106 @@ import LookAfterCore
 
 enum BrainPresentationBuilder {
 
-    static func build(
-        heroBriefing: HeroBriefing?,
-        resumeSnapshot: ResumeSnapshot?,
-        executiveCapacity: ExecutiveCapacityState,
-        lifeSnapshot: LifeContextSnapshot?,
-        flowSurface: FlowSurface?,
-        cognitiveSnapshot: CognitiveSnapshot?,
-        healthSummary: HealthSummary?,
-        activeTasks: [LifeTask],
-        upcomingBills: [BillItem],
-        medications: [Medication],
-        timelineItems: [LifeTimelineEvent],
-        readinessLabel: String? = nil,
-        now: Date = Date(),
-        calendar: Calendar = .current
-    ) -> BrainPresentation {
+    struct BuildInput: Sendable {
+        var heroBriefing: HeroBriefing?
+        var resumeSnapshot: ResumeSnapshot?
+        var executiveCapacity: ExecutiveCapacityState
+        var lifeSnapshot: LifeContextSnapshot?
+        var flowSurface: FlowSurface?
+        var cognitiveSnapshot: CognitiveSnapshot?
+        var healthSummary: HealthSummary?
+        var activeTasks: [LifeTask]
+        var upcomingBills: [BillItem]
+        var medications: [Medication]
+        var timelineItems: [LifeTimelineEvent]
+        var readinessLabel: String?
+        var now: Date
+        var calendar: Calendar
+
+        init(
+            heroBriefing: HeroBriefing?,
+            resumeSnapshot: ResumeSnapshot?,
+            executiveCapacity: ExecutiveCapacityState,
+            lifeSnapshot: LifeContextSnapshot?,
+            flowSurface: FlowSurface?,
+            cognitiveSnapshot: CognitiveSnapshot?,
+            healthSummary: HealthSummary?,
+            activeTasks: [LifeTask],
+            upcomingBills: [BillItem],
+            medications: [Medication],
+            timelineItems: [LifeTimelineEvent],
+            readinessLabel: String? = nil,
+            now: Date = Date(),
+            calendar: Calendar = .current
+        ) {
+            self.heroBriefing = heroBriefing
+            self.resumeSnapshot = resumeSnapshot
+            self.executiveCapacity = executiveCapacity
+            self.lifeSnapshot = lifeSnapshot
+            self.flowSurface = flowSurface
+            self.cognitiveSnapshot = cognitiveSnapshot
+            self.healthSummary = healthSummary
+            self.activeTasks = activeTasks
+            self.upcomingBills = upcomingBills
+            self.medications = medications
+            self.timelineItems = timelineItems
+            self.readinessLabel = readinessLabel
+            self.now = now
+            self.calendar = calendar
+        }
+    }
+
+    static func build(_ input: BuildInput) -> BrainPresentation {
         let heroTask = resolveHeroTask(
-            heroBriefing: heroBriefing,
-            flowSurface: flowSurface,
-            activeTasks: activeTasks,
-            lifeSnapshot: lifeSnapshot,
-            now: now,
-            calendar: calendar
+            heroBriefing: input.heroBriefing,
+            flowSurface: input.flowSurface,
+            activeTasks: input.activeTasks,
+            lifeSnapshot: input.lifeSnapshot,
+            now: input.now,
+            calendar: input.calendar
         )
 
         let hero = buildHero(
-            task: heroTask,
-            heroBriefing: heroBriefing,
-            flowSurface: flowSurface,
-            activeTasks: activeTasks,
-            lifeSnapshot: lifeSnapshot,
-            executiveCapacity: executiveCapacity,
-            now: now,
-            calendar: calendar
+            HeroInput(
+                task: heroTask,
+                heroBriefing: input.heroBriefing,
+                flowSurface: input.flowSurface,
+                activeTasks: input.activeTasks,
+                lifeSnapshot: input.lifeSnapshot,
+                executiveCapacity: input.executiveCapacity,
+                now: input.now,
+                calendar: input.calendar
+            )
         )
 
         let backup = backupTasks(
             excludingHeroID: heroTask?.id,
-            from: activeTasks,
-            capacity: executiveCapacity
+            from: input.activeTasks,
+            capacity: input.executiveCapacity
         )
 
-        let resume = buildResume(resumeSnapshot, now: now, calendar: calendar)
+        let resume = buildResume(input.resumeSnapshot, now: input.now, calendar: input.calendar)
         let capacity = buildCapacity(
-            executiveCapacity: executiveCapacity,
-            lifeSnapshot: lifeSnapshot,
-            healthSummary: healthSummary,
-            cognitiveSnapshot: cognitiveSnapshot
+            executiveCapacity: input.executiveCapacity,
+            lifeSnapshot: input.lifeSnapshot,
+            healthSummary: input.healthSummary,
+            cognitiveSnapshot: input.cognitiveSnapshot
         )
         let headsUp = buildHeadsUp(
-            medications: medications,
-            bills: upcomingBills,
-            timelineItems: timelineItems,
-            now: now,
-            calendar: calendar
+            medications: input.medications,
+            bills: input.upcomingBills,
+            timelineItems: input.timelineItems,
+            now: input.now,
+            calendar: input.calendar
         )
 
-        let flowWindow = flowWindowLabel(flowSurface: flowSurface)
-        let coachMoment = flowSurface?.coachMoment.flatMap { moment in
+        let flowWindow = flowWindowLabel(flowSurface: input.flowSurface)
+        let coachMoment = input.flowSurface?.coachMoment.flatMap { moment in
             moment.message.isEmpty ? nil : UserFacingCopy.sanitize(moment.message)
         }
-        let confidence = confidenceLabel(from: heroBriefing)
-        let greeting = resolvedGreeting(from: heroBriefing, now: now, calendar: calendar)
-        let readiness = readinessLabel ?? resolvedReadiness(from: cognitiveSnapshot)
+        let confidence = confidenceLabel(from: input.heroBriefing)
+        let greeting = resolvedGreeting(from: input.heroBriefing, now: input.now, calendar: input.calendar)
+        let readiness = input.readinessLabel ?? resolvedReadiness(from: input.cognitiveSnapshot)
 
         return BrainPresentation(
             greeting: greeting,
@@ -131,16 +167,26 @@ enum BrainPresentationBuilder {
         return nil
     }
 
-    private static func buildHero(
-        task: LifeTask?,
-        heroBriefing: HeroBriefing?,
-        flowSurface: FlowSurface?,
-        activeTasks: [LifeTask],
-        lifeSnapshot: LifeContextSnapshot?,
-        executiveCapacity: ExecutiveCapacityState,
-        now: Date,
-        calendar: Calendar
-    ) -> BrainHeroPresentation? {
+    private struct HeroInput: Sendable {
+        var task: LifeTask?
+        var heroBriefing: HeroBriefing?
+        var flowSurface: FlowSurface?
+        var activeTasks: [LifeTask]
+        var lifeSnapshot: LifeContextSnapshot?
+        var executiveCapacity: ExecutiveCapacityState
+        var now: Date
+        var calendar: Calendar
+    }
+
+    private static func buildHero(_ input: HeroInput) -> BrainHeroPresentation? {
+        let task = input.task
+        let heroBriefing = input.heroBriefing
+        let flowSurface = input.flowSurface
+        let activeTasks = input.activeTasks
+        let lifeSnapshot = input.lifeSnapshot
+        let now = input.now
+        let calendar = input.calendar
+
         if let heroBriefing, let task {
             return BrainHeroPresentation(
                 task: task,

@@ -44,16 +44,16 @@ struct LifeProfileImportView: View {
 
                 Spacer()
 
-                Button {
+                Button(action: {
                     Task { await recompile() }
-                } label: {
+                }, label: {
                     HStack {
                         if isCompiling {
                             ProgressView().scaleEffect(0.8)
                         }
                         Text(isCompiling ? "Teaching brain…" : "Recompile brain")
                     }
-                }
+                })
                 .buttonStyle(.borderedProminent)
                 .disabled(markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCompiling)
             }

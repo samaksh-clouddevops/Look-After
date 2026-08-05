@@ -60,14 +60,16 @@ public enum DaySlotAllocator {
         for request in sorted {
             let duration = max(request.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
             let start = resolveStart(
-                preferred: request.preferredStart,
-                cursor: cursor,
-                durationMinutes: duration,
-                bufferMinutes: bufferMinutes,
-                blocked: blocked,
-                workHours: workHours,
-                now: floor,
-                calendar: calendar
+                ResolveStartInput(
+                    preferred: request.preferredStart,
+                    cursor: cursor,
+                    durationMinutes: duration,
+                    bufferMinutes: bufferMinutes,
+                    blocked: blocked,
+                    workHours: workHours,
+                    now: floor,
+                    calendar: calendar
+                )
             )
             guard let start else { continue }
 
@@ -147,29 +149,37 @@ public enum DaySlotAllocator {
 
     // MARK: - Slot search
 
-    private static func resolveStart(
-        preferred: Date?,
-        cursor: Date,
-        durationMinutes: Int,
-        bufferMinutes: Int,
-        blocked: [Interval],
-        workHours: PlanningSchedulePolicy.WorkHours,
-        now: Date,
-        calendar: Calendar
-    ) -> Date? {
-        if let preferred,
-           preferred >= now,
-           fits(preferred, durationMinutes: durationMinutes, blocked: blocked, workHours: workHours, calendar: calendar) {
+    private struct ResolveStartInput: Sendable {
+        var preferred: Date?
+        var cursor: Date
+        var durationMinutes: Int
+        var bufferMinutes: Int
+        var blocked: [Interval]
+        var workHours: PlanningSchedulePolicy.WorkHours
+        var now: Date
+        var calendar: Calendar
+    }
+
+    private static func resolveStart(_ input: ResolveStartInput) -> Date? {
+        if let preferred = input.preferred,
+           preferred >= input.now,
+           fits(
+            preferred,
+            durationMinutes: input.durationMinutes,
+            blocked: input.blocked,
+            workHours: input.workHours,
+            calendar: input.calendar
+           ) {
             return preferred
         }
         return nextOpenSlot(
-            startingAt: cursor,
-            durationMinutes: durationMinutes,
-            bufferMinutes: bufferMinutes,
-            blocked: blocked,
-            workHours: workHours,
-            now: now,
-            calendar: calendar
+            startingAt: input.cursor,
+            durationMinutes: input.durationMinutes,
+            bufferMinutes: input.bufferMinutes,
+            blocked: input.blocked,
+            workHours: input.workHours,
+            now: input.now,
+            calendar: input.calendar
         )
     }
 

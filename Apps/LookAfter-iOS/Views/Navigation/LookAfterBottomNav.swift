@@ -81,17 +81,17 @@ struct LookAfterBottomNav: View {
     }
 
     private var captureButton: some View {
-        Button {
+        Button(action: {
             HapticManager.impact(.medium)
             onCapture()
-        } label: {
+        }, label: {
             Image(systemName: "plus.circle.fill")
                 .font(.dsIconLarge())
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(DesignSystem.accentOnPrimary, DesignSystem.accentPrimary)
                 .frame(maxWidth: .infinity)
                 .offset(y: -8)
-        }
+        })
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-capture")
         .accessibilityLabel("Capture")
@@ -101,14 +101,14 @@ struct LookAfterBottomNav: View {
     private func tabButton(_ tab: LookAfterTab) -> some View {
         let isSelected = selection == tab
 
-        return Button {
+        return Button(action: {
             HapticManager.impact(.light)
             let signpost = PerformanceSignposts.beginTabTransition()
             withAnimation(.easeInOut(duration: 0.2)) {
                 selection = tab
             }
             PerformanceSignposts.endTabTransition(signpost)
-        } label: {
+        }, label: {
             VStack(spacing: 4) {
                 Image(systemName: isSelected ? tab.selectedIcon : tab.icon)
                     .font(.dsIcon(weight: isSelected ? .bold : .medium))
@@ -120,7 +120,7 @@ struct LookAfterBottomNav: View {
             .foregroundColor(isSelected ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
-        }
+        })
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-\(tab.title.lowercased())")
         .accessibilityLabel(tab.title)

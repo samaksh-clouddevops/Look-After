@@ -345,30 +345,32 @@ final class AppShellState: ObservableObject {
         let timeline = lifeEvents
         let isWeekend = Calendar.current.isDateInWeekend(Date())
         await contextOrchestrator.refresh(
-            userId: uid,
-            userName: resolvedName,
-            cognitiveSnapshot: brainVM.cognitiveSnapshot,
-            healthSummary: brainVM.healthSummary,
-            flowSurface: brainVM.flowSurface,
-            activeFlowSession: activeFlowSessionState(),
-            heroTask: brainVM.flowSurface?.heroTask
-                ?? brainVM.topTasks.first
-                ?? tasksVM.tasks.first(where: { $0.status.isActive }),
-            topTasks: {
-                let brainTasks = brainVM.topTasks.filter(\.status.isActive)
-                if !brainTasks.isEmpty { return brainTasks }
-                return Array(tasksVM.tasks.filter(\.status.isActive).prefix(8))
-            }(),
-            unpurchasedShoppingCount: shoppingCount,
-            upcomingBills: bills,
-            lifeTimelineEvents: lifeEvents,
-            tomorrowLifeTimelineEvents: tomorrowEvents,
-            isWeekend: isWeekend,
-            peakStartHour: peakStartHour,
-            allTasks: tasksVM.tasks,
-            completedTaskIDs: Set(tasksVM.completedToday.map(\.id)),
-            flowConfidenceScore: brainVM.flowSurface?.confidence,
-            capacityLLMPolicy: capacityLLMPolicy
+            .init(
+                userId: uid,
+                userName: resolvedName,
+                cognitiveSnapshot: brainVM.cognitiveSnapshot,
+                healthSummary: brainVM.healthSummary,
+                flowSurface: brainVM.flowSurface,
+                activeFlowSession: activeFlowSessionState(),
+                heroTask: brainVM.flowSurface?.heroTask
+                    ?? brainVM.topTasks.first
+                    ?? tasksVM.tasks.first(where: { $0.status.isActive }),
+                topTasks: {
+                    let brainTasks = brainVM.topTasks.filter(\.status.isActive)
+                    if !brainTasks.isEmpty { return brainTasks }
+                    return Array(tasksVM.tasks.filter(\.status.isActive).prefix(8))
+                }(),
+                unpurchasedShoppingCount: shoppingCount,
+                upcomingBills: bills,
+                lifeTimelineEvents: lifeEvents,
+                tomorrowLifeTimelineEvents: tomorrowEvents,
+                isWeekend: isWeekend,
+                peakStartHour: peakStartHour,
+                allTasks: tasksVM.tasks,
+                completedTaskIDs: Set(tasksVM.completedToday.map(\.id)),
+                flowConfidenceScore: brainVM.flowSurface?.confidence,
+                capacityLLMPolicy: capacityLLMPolicy
+            )
         )
         briefingVM.updateGreeting(
             userName: resolvedName,

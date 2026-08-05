@@ -64,7 +64,6 @@ public final class LifeModulesViewModel: ObservableObject {
             )
             self.contacts = try await loadedRel
             self.journalEntries = try await loadedJournal
-            
         } catch {
             self.error = error.localizedDescription
         }

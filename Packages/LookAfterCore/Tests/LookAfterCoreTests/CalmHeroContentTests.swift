@@ -5,14 +5,16 @@ final class CalmHeroContentTests: XCTestCase {
 
     func testVisibleSurfaceUsesSingleSupportingLine() {
         let content = CalmHeroContentBuilder.fromBriefingHero(
-            greeting: "Good evening, Alex",
-            actionLine: "Review Azure deployment",
-            narrative: "You've already finished the hardest part of today. Before dinner, pay your electricity bill—it'll take about three minutes.",
-            whyLine: "You still have 45 minutes before dinner.",
-            buttonLabel: "Start now",
-            durationLabel: "About 30 minutes",
-            ignoreConsequence: "Tomorrow gets busier if you skip this.",
-            alternativeLabel: nil
+            .init(
+                greeting: "Good evening, Alex",
+                actionLine: "Review Azure deployment",
+                narrative: "You've already finished the hardest part of today. Before dinner, pay your electricity bill—it'll take about three minutes.",
+                whyLine: "You still have 45 minutes before dinner.",
+                buttonLabel: "Start now",
+                durationLabel: "About 30 minutes",
+                ignoreConsequence: "Tomorrow gets busier if you skip this.",
+                alternativeLabel: nil
+            )
         )
 
         XCTAssertEqual(content.title, "Review Azure deployment")

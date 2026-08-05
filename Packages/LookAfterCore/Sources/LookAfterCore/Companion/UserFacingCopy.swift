@@ -227,10 +227,8 @@ public enum UserFacingCopy {
             #"^context window\s*\d*$"#,
             #"^productivity mode$"#,
         ]
-        for pattern in patterns {
-            if normalized.range(of: pattern, options: .regularExpression) != nil {
-                return true
-            }
+        for pattern in patterns where normalized.range(of: pattern, options: .regularExpression) != nil {
+            return true
         }
 
         return internalExecutionLabels.contains { normalized.contains($0) }

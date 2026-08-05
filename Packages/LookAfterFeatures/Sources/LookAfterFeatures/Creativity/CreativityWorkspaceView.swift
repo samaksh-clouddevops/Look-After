@@ -184,12 +184,12 @@ public struct CreativityWorkspaceView: View {
                                 .cornerRadius(16)
                                 .padding(.horizontal)
                                 .contextMenu {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         HapticManager.notification(.warning)
                                         viewModel.deleteProject(project)
-                                    } label: {
+                                    }, label: {
                                         Label("Remove", systemImage: "trash")
-                                    }
+                                    })
                                 }
                             }
                         }

@@ -55,9 +55,9 @@ struct BrainInspectorView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(InspectorSection.allCases) { section in
-                    Button {
+                    Button(action: {
                         selectedSection = section
-                    } label: {
+                    }, label: {
                         Text(section.rawValue)
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .padding(.horizontal, 10)
@@ -72,7 +72,7 @@ struct BrainInspectorView: View {
                             .foregroundColor(
                                 selectedSection == section ? DesignSystem.success : DesignSystem.textSecondary
                             )
-                    }
+                    })
                     .buttonStyle(.plain)
                 }
             }

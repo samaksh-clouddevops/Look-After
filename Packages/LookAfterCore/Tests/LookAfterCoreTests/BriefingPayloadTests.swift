@@ -86,22 +86,7 @@ final class BriefingPayloadTests: XCTestCase {
         )
         var b = a
         b.mutations = [.init(code: "park", count: 1)]
-        b.structureFingerprint = BriefingPayload.fingerprint(
-            dayKey: b.dayKey,
-            energyState: b.energyState,
-            capacityBand: b.capacityBand,
-            anchoredCount: b.anchoredCount,
-            flexibleCount: b.flexibleCount,
-            fluidCount: b.fluidCount,
-            focusMinutes: b.focusMinutes,
-            remainingTaskCount: b.remainingTaskCount,
-            completedTaskCount: b.completedTaskCount,
-            overdueCount: b.overdueCount,
-            mutations: b.mutations,
-            somedayDecayCount: b.somedayDecayCount,
-            parkedRecoverableCount: b.parkedRecoverableCount,
-            hasRecoveryBlockToday: b.hasRecoveryBlockToday
-        )
+        b.structureFingerprint = BriefingPayload.fingerprint(for: b)
         XCTAssertNotEqual(a.structureFingerprint, b.structureFingerprint)
     }
 

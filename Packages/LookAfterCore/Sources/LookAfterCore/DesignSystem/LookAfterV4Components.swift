@@ -485,9 +485,9 @@ public struct LAWeekDateStrip: View {
         HStack(spacing: DesignSystem.spacingXS) {
             ForEach(days, id: \.self) { day in
                 let isSelected = calendar.isDate(day, inSameDayAs: selectedDate)
-                Button {
+                Button(action: {
                     selectedDate = day
-                } label: {
+                }, label: {
                     VStack(spacing: 4) {
                         Text(Self.weekdayFormatter.string(from: day))
                             .textStyleCaption(color: isSelected ? DesignSystem.textPrimary : DesignSystem.textSecondary)
@@ -505,7 +505,7 @@ public struct LAWeekDateStrip: View {
                         RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
                             .stroke(isSelected ? DesignSystem.border : Color.clear, lineWidth: 1)
                     )
-                }
+                })
                 .buttonStyle(.plain)
             }
         }
@@ -518,7 +518,7 @@ public struct LAWeekDateStrip: View {
 public struct LAPriorityRow: View {
     let title: String
     let category: String
-    var detail: String? = nil
+    var detail: String?
     var ringColor: Color
     var isComplete: Bool
     var isActionsExpanded: Bool = false
@@ -823,8 +823,8 @@ public struct LABrainVoiceOrb: View {
 
 public struct LASectionCard<Content: View>: View {
     let title: String
-    var subtitle: String? = nil
-    var icon: String? = nil
+    var subtitle: String?
+    var icon: String?
     @ViewBuilder let content: Content
 
     @Environment(\.colorScheme) private var colorScheme

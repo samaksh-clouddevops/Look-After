@@ -2,9 +2,6 @@ import Foundation
 import FirebaseFirestore
 import LookAfterCore
 
-/// Repositories for all 16 major LifeOS modules.
-/// Includes automatic on-device JSON fallback when Firebase authentication or network connectivity is unavailable.
-
 // MARK: - Finance & Bills Repository
 
 @MainActor

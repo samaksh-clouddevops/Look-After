@@ -5,8 +5,8 @@ import LookAfterData
 import LookAfterFeatures
 import LookAfterHealth
 
-/// LifeOS WWDC Master Canvas — The Zero-Surface Ambient Cognitive OS.
-public struct LookAfterMasterCanvas: View {
+/// LifeOS WWDC Root Canvas — The Zero-Surface Ambient Cognitive OS.
+public struct LookAfterRootCanvas: View {
     @EnvironmentObject private var shell: AppShellState
     @EnvironmentObject private var featureTour: AppFeatureTourCoordinator
     @State private var showModules = false

@@ -12,10 +12,8 @@ public enum TaskDuplicateMatcher {
         let needle = normalize(title)
         guard !needle.isEmpty else { return nil }
 
-        for task in tasks {
-            if isStrongMatch(needle: title, hay: task.title) {
-                return task
-            }
+        for task in tasks where isStrongMatch(needle: title, hay: task.title) {
+            return task
         }
         return nil
     }
@@ -78,11 +76,9 @@ public enum TaskDuplicateMatcher {
             "schedule ", "remind me to ", "i need to ", "today i need to "
         ]
         var lowered = text.lowercased()
-        for prefix in prefixes {
-            if lowered.hasPrefix(prefix) {
-                text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                lowered = text.lowercased()
-            }
+        for prefix in prefixes where lowered.hasPrefix(prefix) {
+            text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            lowered = text.lowercased()
         }
         if text.count >= 4 {
             return [text]

@@ -119,7 +119,6 @@ public final class SpeechRecognitionManager: ObservableObject {
             try audioEngine.start()
             isListening = true
             startLevelAnimation()
-            
         } catch {
             errorMessage = "Could not start recording: \(error.localizedDescription)"
             stopListening()

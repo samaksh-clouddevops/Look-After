@@ -5,8 +5,8 @@ public struct EmptyStateView: View {
     let icon: String
     let title: String
     let subtitle: String
-    var actionTitle: String? = nil
-    var onAction: (() -> Void)? = nil
+    var actionTitle: String?
+    var onAction: (() -> Void)?
     
     public init(
         icon: String,

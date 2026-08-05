@@ -111,7 +111,7 @@ public final class CognitiveModel: @unchecked Sendable {
         }
         
         // Factor 3: Self-reported energy (30% weight)
-        if let latestReport = reports.sorted(by: { $0.timestamp > $1.timestamp }).first {
+        if let latestReport = reports.min(by: { $0.timestamp > $1.timestamp }) {
             score += 0.3 * latestReport.energy.numericValue
         } else {
             score += 0.15 // no report, assume moderate
@@ -133,16 +133,12 @@ public final class CognitiveModel: @unchecked Sendable {
         
         if let hrv = health.hrvAverage {
             // Low HRV = high stress
-            if hrv < 20 { stress = 0.9 }
-            else if hrv < 30 { stress = 0.7 }
-            else if hrv < 50 { stress = 0.4 }
-            else { stress = 0.2 }
+            if hrv < 20 { stress = 0.9 } else if hrv < 30 { stress = 0.7 } else if hrv < 50 { stress = 0.4 } else { stress = 0.2 }
         }
         
         if let rhr = health.restingHeartRate {
             // Elevated resting HR can indicate stress
-            if rhr > 80 { stress += 0.1 }
-            else if rhr > 90 { stress += 0.2 }
+            if rhr > 80 { stress += 0.1 } else if rhr > 90 { stress += 0.2 }
         }
         
         return max(0, min(1, stress))

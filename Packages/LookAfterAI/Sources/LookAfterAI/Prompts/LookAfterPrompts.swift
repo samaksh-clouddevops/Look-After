@@ -229,16 +229,12 @@ public enum LookAfterPrompts {
             if let sleep = health.totalSleepMinutes {
                 let hours = sleep / 60.0
                 prompt += "- Sleep: \(String(format: "%.1f", hours)) hours"
-                if hours < 6 { prompt += " (POOR — reduce workload)" }
-                else if hours < 7 { prompt += " (below target)" }
-                else { prompt += " (good)" }
+                if hours < 6 { prompt += " (POOR — reduce workload)" } else if hours < 7 { prompt += " (below target)" } else { prompt += " (good)" }
                 prompt += "\n"
             }
             if let hrv = health.hrvAverage {
                 prompt += "- HRV: \(Int(hrv))ms"
-                if hrv < 30 { prompt += " (stressed/fatigued)" }
-                else if hrv < 50 { prompt += " (moderate)" }
-                else { prompt += " (good recovery)" }
+                if hrv < 30 { prompt += " (stressed/fatigued)" } else if hrv < 50 { prompt += " (moderate)" } else { prompt += " (good recovery)" }
                 prompt += "\n"
             }
             if let rhr = health.restingHeartRate {
@@ -520,7 +516,6 @@ public enum LookAfterPrompts {
         if LifeModelStore.hasCompiledModel || !lifeProfile.promptBlock.isEmpty {
             prompt += """
 
-
             USER LIFE PROFILE:
             \(PlanningPromptContextBuilder.combinedLifeContextBlock(profile: lifeProfile))
             """
@@ -530,7 +525,6 @@ public enum LookAfterPrompts {
         if !meds.isEmpty {
             prompt += """
 
-
             MEDICATION SCHEDULE (reference only — never invent times):
             \(MedicationStore.promptBlock())
             """
@@ -538,7 +532,6 @@ public enum LookAfterPrompts {
 
         if let progress = liveProgress, !progress.isEmpty {
             prompt += """
-
 
             LIVE REAL-TIME USER PROGRESS & STATE TODAY:
             \(progress)
@@ -554,7 +547,6 @@ public enum LookAfterPrompts {
             )
             if !cycleBlock.isEmpty {
                 prompt += """
-
 
                 CYCLE CONTEXT (opt-in tracking — reference only when relevant):
                 \(cycleBlock)

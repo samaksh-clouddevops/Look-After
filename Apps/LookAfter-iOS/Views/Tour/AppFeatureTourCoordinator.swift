@@ -15,7 +15,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
     /// Rich anchor registry (frame + corner radius + visibility).
     @Published var anchors: [AppFeatureTourAnchorID: TourAnchorGeometry] = [:]
 
-    /// Compatibility bridge used by MasterCanvas preference collector.
+    /// Compatibility bridge used by RootCanvas preference collector.
     var anchorFrames: [AppFeatureTourAnchorID: CGRect] {
         get {
             anchors.mapValues(\.frame)

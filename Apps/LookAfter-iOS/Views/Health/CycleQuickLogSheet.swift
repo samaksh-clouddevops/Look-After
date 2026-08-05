@@ -66,9 +66,9 @@ struct CycleQuickLogSheet: View {
                 .foregroundColor(DesignSystem.textMuted)
             FlowLayout(spacing: 8) {
                 ForEach(CycleFlowLevel.allCases, id: \.self) { level in
-                    Button {
+                    Button(action: {
                         flow = level
-                    } label: {
+                    }, label: {
                         Text(level.displayLabel)
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 12)
@@ -76,7 +76,7 @@ struct CycleQuickLogSheet: View {
                             .background(
                                 Capsule().fill(flow == level ? DesignSystem.accentPrimary.opacity(0.25) : DesignSystem.backgroundElevated)
                             )
-                    }
+                    })
                     .buttonStyle(.plain)
                 }
             }
@@ -90,13 +90,13 @@ struct CycleQuickLogSheet: View {
                 .foregroundColor(DesignSystem.textMuted)
             FlowLayout(spacing: 8) {
                 ForEach(CycleSymptomCatalog.common, id: \.self) { symptom in
-                    Button {
+                    Button(action: {
                         if selectedSymptoms.contains(symptom) {
                             selectedSymptoms.remove(symptom)
                         } else {
                             selectedSymptoms.insert(symptom)
                         }
-                    } label: {
+                    }, label: {
                         Text(symptom)
                             .font(.system(size: 12))
                             .padding(.horizontal, 10)
@@ -104,7 +104,7 @@ struct CycleQuickLogSheet: View {
                             .background(
                                 Capsule().fill(selectedSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.backgroundElevated)
                             )
-                    }
+                    })
                     .buttonStyle(.plain)
                 }
             }

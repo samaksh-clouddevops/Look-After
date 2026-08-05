@@ -88,7 +88,7 @@ struct BrainDashboardView: View {
 
             Spacer()
 
-            Menu {
+            Menu(content: {
                 Button(action: onNavigateToTasks) {
                     Label("All tasks", systemImage: "checklist")
                 }
@@ -98,27 +98,27 @@ struct BrainDashboardView: View {
                 Button(action: onDecideForMe) {
                     Label("Decide for me", systemImage: "sparkles")
                 }
-                Button {
+                Button(action: {
                     adhdVM.startBodyDoubling()
-                } label: {
+                }, label: {
                     Label("Body doubling", systemImage: "person.2.fill")
-                }
+                })
                 if adhdVM.lastInterruptedTask != nil {
-                    Button {
+                    Button(action: {
                         onResume(adhdVM.lastInterruptedTask?.id)
-                    } label: {
+                    }, label: {
                         Label("Resume last session", systemImage: "play.circle")
-                    }
+                    })
                 }
                 Button(action: onReset) {
                     Label("Reset", systemImage: "heart.flow.fill")
                 }
-            } label: {
+            }, label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.dsIcon())
                     .foregroundColor(DesignSystem.textSecondary)
                     .frame(width: 44, height: 44)
-            }
+            })
             .accessibilityLabel("Brain actions")
         }
     }

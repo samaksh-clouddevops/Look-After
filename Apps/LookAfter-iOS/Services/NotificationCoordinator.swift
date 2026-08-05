@@ -74,7 +74,7 @@ final class NotificationCoordinator {
 
     func refresh(input: NotificationRefreshInput) async {
         let preferences = NotificationPreferencesStore.load()
-        guard preferences.masterEnabled else {
+        guard preferences.globallyEnabled else {
             await NotificationScheduler.shared.cancelAllManaged()
             return
         }

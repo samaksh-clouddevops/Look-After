@@ -319,7 +319,7 @@ public final class TasksViewModel: ObservableObject {
         from tasks: [LifeTask],
         on date: Date = Date(),
         calendar: Calendar = .current
-    ) -> (title: String, dayIndex: Int, dayCount: Int, sliceTitle: String)? {
+    ) -> MultiDayBannerData? {
         let dayStart = calendar.startOfDay(for: date)
         let roots = tasks.filter { MultiDayTaskTags.isRoot($0) && $0.status.isActive }
         for root in roots {
@@ -335,7 +335,12 @@ public final class TasksViewModel: ObservableObject {
                 return calendar.isDate(scheduled, inSameDayAs: dayStart)
             }) {
                 let index = slices.firstIndex(where: { $0.id == todaySlice.id }) ?? 0
-                return (root.title, index + 1, max(dayCount, slices.count), todaySlice.title)
+                return MultiDayBannerData(
+                    title: root.title,
+                    dayIndex: index + 1,
+                    dayCount: max(dayCount, slices.count),
+                    sliceTitle: todaySlice.title
+                )
             }
         }
         return nil
@@ -1048,7 +1053,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         for (_, group) in grouped where group.count > 1 {
-            let keeper = group.sorted { lhs, rhs in
+            let keeper = group.min { lhs, rhs in
                 if MultiDayTaskTags.isSlice(lhs) != MultiDayTaskTags.isSlice(rhs) {
                     return MultiDayTaskTags.isSlice(lhs) && !MultiDayTaskTags.isSlice(rhs)
                 }
@@ -1058,7 +1063,7 @@ public final class TasksViewModel: ObservableObject {
                 if lhs.isFixedTimeEvent != rhs.isFixedTimeEvent { return lhs.isFixedTimeEvent && !rhs.isFixedTimeEvent }
                 if lhs.priority != rhs.priority { return lhs.priority > rhs.priority }
                 return lhs.createdAt < rhs.createdAt
-            }.first
+            }
             for task in group where task.id != keeper?.id {
                 idsToDelete.insert(task.id)
             }

@@ -759,9 +759,9 @@ private struct TodayWhyAffordance: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Button {
+            Button(action: {
                 withAnimation(.easeInOut(duration: 0.22)) { isExpanded.toggle() }
-            } label: {
+            }, label: {
                 HStack(spacing: DesignSystem.spacingSM) {
                     Image(systemName: "questionmark.circle")
                         .font(.system(size: 14, weight: .medium))
@@ -772,7 +772,7 @@ private struct TodayWhyAffordance: View {
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(DesignSystem.textMuted)
-            }
+            })
             .buttonStyle(.plain)
 
             if isExpanded, let disclosure = content.disclosure {

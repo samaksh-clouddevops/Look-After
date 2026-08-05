@@ -39,7 +39,7 @@ enum BackgroundNotificationRefreshTask {
     @MainActor
     private static func performDeterministicRefresh() async {
         guard NotificationPermissionService.shared.isAuthorized else { return }
-        guard NotificationPreferencesStore.load().masterEnabled else { return }
+        guard NotificationPreferencesStore.load().globallyEnabled else { return }
 
         let now = Date()
         let calendarProvider = EventKitCalendarEnvironmentSignalProvider()

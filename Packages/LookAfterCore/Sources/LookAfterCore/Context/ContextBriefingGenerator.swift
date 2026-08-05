@@ -268,7 +268,7 @@ public struct ContextBriefingGenerator: Sendable {
         let active = context.tasks.filter(\.status.isActive)
         guard !active.isEmpty else { return nil }
 
-        if let overdue = active.filter(\.isOverdue).sorted(by: { $0.priority > $1.priority }).first {
+        if let overdue = active.filter(\.isOverdue).min(by: { $0.priority > $1.priority }) {
             return overdue
         }
 
@@ -305,10 +305,10 @@ public struct ContextBriefingGenerator: Sendable {
                     allTasks: active
                 )
             }
-            .sorted {
+            .min {
                 if $0.priority != $1.priority { return $0.priority > $1.priority }
                 return $0.estimatedMinutes < $1.estimatedMinutes
-            }.first
+            }
     }
 
     private func continueCore(

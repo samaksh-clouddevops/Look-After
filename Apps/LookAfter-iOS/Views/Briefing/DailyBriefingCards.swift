@@ -368,9 +368,9 @@ struct BriefingHabitsCard: View {
         BriefingCardContainer(title: "Habits", icon: "checkmark.circle.fill", compact: compact) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.spacingSM) {
                 ForEach(habits.prefix(compact ? 4 : habits.count)) { habit in
-                    Button {
+                    Button(action: {
                         onToggle(habit)
-                    } label: {
+                    }, label: {
                         VStack(spacing: DesignSystem.spacingXS) {
                             HStack(spacing: DesignSystem.spacingXS) {
                                 Image(systemName: habit.isCompletedToday ? "checkmark.circle.fill" : "circle")
@@ -395,7 +395,7 @@ struct BriefingHabitsCard: View {
                         .padding(.horizontal, DesignSystem.spacingSM)
                         .padding(.vertical, DesignSystem.spacingSM)
                         .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
-                    }
+                    })
                     .buttonStyle(.plain)
                     .accessibilityLabel(habit.title)
                     .accessibilityValue(habit.isCompletedToday ? "Done today" : "Not done")
@@ -589,8 +589,8 @@ private func emptyHealthPrompt(onConnect: @escaping () -> Void) -> some View {
 
 struct BriefingSectionCard<Content: View>: View {
     let title: String
-    var subtitle: String? = nil
-    var icon: String? = nil
+    var subtitle: String?
+    var icon: String?
     @ViewBuilder let content: Content
 
     @Environment(\.colorScheme) private var colorScheme
@@ -921,7 +921,7 @@ struct BriefingScrollAffordance: View {
 struct BriefingChapterSection<Content: View>: View {
     let title: String
     let subtitle: String?
-    var icon: String? = nil
+    var icon: String?
     @ViewBuilder let content: () -> Content
 
     var body: some View {

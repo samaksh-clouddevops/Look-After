@@ -13,7 +13,7 @@ struct DailyBriefingCustomizationView: View {
                 PremiumBackground()
 
                 List {
-                    Section {
+                    Section(content: {
                         Picker("Layout", selection: Binding(
                             get: { briefingVM.layoutMode },
                             set: { briefingVM.setLayoutMode($0) }
@@ -23,11 +23,11 @@ struct DailyBriefingCustomizationView: View {
                             }
                         }
                         .listRowBackground(DesignSystem.backgroundSecondary)
-                    } header: {
+                    }, header: {
                         Text("Display")
-                    }
+                    })
 
-                    Section {
+                    Section(content: {
                         ForEach(briefingVM.cardOrder) { kind in
                             HStack {
                                 Image(systemName: kind.icon)
@@ -50,21 +50,21 @@ struct DailyBriefingCustomizationView: View {
                             }
                             .listRowBackground(DesignSystem.backgroundSecondary)
                             .swipeActions(edge: .leading) {
-                                Button {
+                                Button(action: {
                                     briefingVM.togglePin(kind)
-                                } label: {
+                                }, label: {
                                     Label(
                                         briefingVM.pinnedCards.contains(kind) ? "Unpin" : "Pin",
                                         systemImage: "pin.fill"
                                     )
-                                }
+                                })
                                 .tint(DesignSystem.warning)
                             }
                         }
                         .onMove(perform: briefingVM.moveCard)
-                    } header: {
+                    }, header: {
                         Text("Cards")
-                    } footer: {
+                    }) footer: {
                         Text("Drag to reorder. Pin cards to keep them at the top.")
                             .foregroundColor(DesignSystem.textMuted)
                     }

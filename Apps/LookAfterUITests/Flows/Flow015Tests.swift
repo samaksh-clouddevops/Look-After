@@ -1,21 +1,21 @@
 import XCTest
 
-final class FLOW017_Tests: FlowTestBase {
-    func test_FLOW017_MainFlow() throws {
-        let source = QASource("FLOW-017", document: "Documentation/qa/05-flow-test-cases.md")
+final class Flow015Tests: FlowTestBase {
+    func test_FLOW015_MainFlow() throws {
+        let source = QASource("FLOW-015", document: "Documentation/qa/05-flow-test-cases.md")
         let start = Date()
-        launch(seedFlow: "FLOW-017", showOnboarding: false)
+        launch(seedFlow: "FLOW-015", showOnboarding: false)
         waitForBriefing()
-        let shot = captureScreenshot(name: "FLOW-017")
+        let shot = captureScreenshot(name: "FLOW-015")
         let ok = app.buttons["tab-briefing"].exists || app.otherElements["screen-onboarding"].exists
-        EvidenceWriter.write(source: source, status: ok ? "pass" : "fail", durationMs: Int(Date().timeIntervalSince(start) * 1000), logs: ["Background analytics refresh"], screenshots: [shot])
+        EvidenceWriter.write(source: source, status: ok ? "pass" : "fail", durationMs: Int(Date().timeIntervalSince(start) * 1000), logs: ["AI Coach multi-turn"], screenshots: [shot])
         XCTAssertTrue(ok)
     }
 
-    func test_FLOW017_BackgroundRecovery() throws {
-        let source = QASource("FLOW-017-INT-B", document: "Documentation/qa/05-flow-test-cases.md")
+    func test_FLOW015_BackgroundRecovery() throws {
+        let source = QASource("FLOW-015-INT-B", document: "Documentation/qa/05-flow-test-cases.md")
         let start = Date()
-        launch(seedFlow: "FLOW-017", showOnboarding: false)
+        launch(seedFlow: "FLOW-015", showOnboarding: false)
         waitForBriefing()
         backgroundAndForeground(seconds: 2)
         let recovered = app.buttons["tab-briefing"].exists || app.otherElements["screen-onboarding"].exists || app.otherElements["screen-briefing"].exists
@@ -23,10 +23,10 @@ final class FLOW017_Tests: FlowTestBase {
         XCTAssertTrue(recovered)
     }
 
-    func test_FLOW017_TerminateRelaunch() throws {
-        let source = QASource("FLOW-017-INT-T", document: "Documentation/qa/05-flow-test-cases.md")
+    func test_FLOW015_TerminateRelaunch() throws {
+        let source = QASource("FLOW-015-INT-T", document: "Documentation/qa/05-flow-test-cases.md")
         let start = Date()
-        launch(seedFlow: "FLOW-017", showOnboarding: false)
+        launch(seedFlow: "FLOW-015", showOnboarding: false)
         waitForBriefing()
         app.terminate()
         app.launch()

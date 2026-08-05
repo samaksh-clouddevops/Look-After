@@ -65,18 +65,20 @@ public final class BrainViewModel: ObservableObject {
         readinessLabel: String? = nil
     ) {
         presentation = BrainPresentationBuilder.build(
-            heroBriefing: heroBriefing,
-            resumeSnapshot: resumeSnapshot,
-            executiveCapacity: executiveCapacity,
-            lifeSnapshot: lifeSnapshot,
-            flowSurface: flowSurface,
-            cognitiveSnapshot: cognitiveSnapshot,
-            healthSummary: healthSummary,
-            activeTasks: activeTasks,
-            upcomingBills: upcomingBills,
-            medications: medications,
-            timelineItems: timelineItems,
-            readinessLabel: readinessLabel
+            .init(
+                heroBriefing: heroBriefing,
+                resumeSnapshot: resumeSnapshot,
+                executiveCapacity: executiveCapacity,
+                lifeSnapshot: lifeSnapshot,
+                flowSurface: flowSurface,
+                cognitiveSnapshot: cognitiveSnapshot,
+                healthSummary: healthSummary,
+                activeTasks: activeTasks,
+                upcomingBills: upcomingBills,
+                medications: medications,
+                timelineItems: timelineItems,
+                readinessLabel: readinessLabel
+            )
         )
     }
 
@@ -143,7 +145,6 @@ public final class BrainViewModel: ObservableObject {
                     activeTasks: activeTasks
                 )
             }
-
         } catch {
             self.error = error.localizedDescription
             self.recommendation = "Pick one small task and start there."

@@ -457,7 +457,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         multiDayDraft = nil
         multiDayPlanning = nil
 
-        let todaySlice = draft.slices.sorted { $0.dayIndex < $1.dayIndex }.first
+        let todaySlice = draft.slices.min { $0.dayIndex < $1.dayIndex }
         let reply = "Done — \(draft.title) is spread across \(draft.dayCount) days. Today: \(todaySlice?.title ?? draft.title)."
         turns.append(PlanningConversationTurn(role: .assistant, text: appendApplyNotices(to: reply, applyResult: applyResult)))
         if inputMode == .voice {
@@ -471,12 +471,17 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     }
 
     /// Active multi-day goal banner data for Today view.
-    public var activeMultiDayBanner: (title: String, dayIndex: Int, dayCount: Int, sliceTitle: String)? {
+    public var activeMultiDayBanner: MultiDayBannerData? {
         guard let draft = multiDayDraft ?? multiDaySession?.draft else { return nil }
         let sorted = draft.slices.sorted { $0.dayIndex < $1.dayIndex }
         let todaySlice = sorted.first { $0.dayIndex == 0 } ?? sorted.first
         guard let slice = todaySlice else { return nil }
-        return (draft.title, slice.dayIndex + 1, draft.dayCount, slice.title)
+        return MultiDayBannerData(
+            title: draft.title,
+            dayIndex: slice.dayIndex + 1,
+            dayCount: draft.dayCount,
+            sliceTitle: slice.title
+        )
     }
 
     public func setInputMode(_ mode: PlanningInputMode) {
@@ -645,8 +650,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
         let nextMeeting = timelineItems
             .filter { $0.kind == .meeting && $0.date > Date() }
-            .sorted { $0.date < $1.date }
-            .first
+            .min { $0.date < $1.date }
 
         let meetingMinutes: Int?
         if let nextMeeting {

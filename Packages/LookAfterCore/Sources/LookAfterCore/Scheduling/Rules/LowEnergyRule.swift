@@ -37,13 +37,12 @@ public struct LowEnergyRule: FlowSchedulingRuleProtocol {
                     context: context.semanticSchedulerContext
                 ).isAllowed
             })
-            .sorted(by: { lhs, rhs in
+            .min(by: { lhs, rhs in
                 let lEnergy = TaskSemanticScheduler.effectiveEnergyLevel(profile: lhs.resolvedSemanticProfile)
                 let rEnergy = TaskSemanticScheduler.effectiveEnergyLevel(profile: rhs.resolvedSemanticProfile)
                 if lEnergy != rEnergy { return lEnergy.rawValue < rEnergy.rawValue }
                 return FlowTaskSelector.effectiveMinutes(for: lhs) < FlowTaskSelector.effectiveMinutes(for: rhs)
-            })
-            .first {
+            }) {
             state.rescheduledTasks.append(
                 RescheduleNotice(
                     taskID: demanding.id,

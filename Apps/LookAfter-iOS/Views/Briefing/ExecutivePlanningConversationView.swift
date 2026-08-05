@@ -10,7 +10,7 @@ struct ExecutivePlanningConversationView: View {
 
     var isExpanded: Bool = false
     /// When set, caps panel height and scrolls the middle section once content exceeds it.
-    var maxPanelHeight: CGFloat? = nil
+    var maxPanelHeight: CGFloat?
     var onSubmit: (_ text: String, _ startedWithVoice: Bool) -> Void
     var onNegotiationSelect: (String) -> Void
     var onRedesignWithAI: (String) -> Void = { _ in }
@@ -82,11 +82,11 @@ struct ExecutivePlanningConversationView: View {
 
     private func modalityButton(_ target: PlanningInputMode, icon: String, label: String) -> some View {
         let selected = mode == target
-        return Button {
+        return Button(action: {
             HapticManager.impact(.light)
             planningVM.setInputMode(target)
             if target == .text { showTextFallback = true }
-        } label: {
+        }, label: {
             HStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .semibold))
@@ -97,7 +97,7 @@ struct ExecutivePlanningConversationView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Capsule().fill(selected ? DesignSystem.accentPrimary : Color.clear))
-        }
+        })
         .buttonStyle(.plain)
     }
 
@@ -261,10 +261,10 @@ struct ExecutivePlanningConversationView: View {
     // MARK: - AI redesign
 
     private func redesignWithAIButton(userMessage: String) -> some View {
-        Button {
+        Button(action: {
             HapticManager.impact(.medium)
             onRedesignWithAI(userMessage)
-        } label: {
+        }, label: {
             HStack(spacing: DesignSystem.spacingSM) {
                 if planningVM.isRedesigningWithAI {
                     ProgressView()
@@ -284,7 +284,7 @@ struct ExecutivePlanningConversationView: View {
                     .fill(DesignSystem.accentPrimary.opacity(0.12))
                     .overlay(Capsule().stroke(DesignSystem.accentPrimary.opacity(0.35)))
             )
-        }
+        })
         .buttonStyle(.plain)
         .disabled(planningVM.isProcessing || planningVM.isRedesigningWithAI)
     }
@@ -384,7 +384,7 @@ struct ExecutivePlanningConversationView: View {
 
             HStack {
                 Spacer()
-                Button {
+                Button(action: {
                     HapticManager.impact(.medium)
                     Task {
                         if speechManager.isListening {
@@ -399,7 +399,7 @@ struct ExecutivePlanningConversationView: View {
                             await speechManager.startListening()
                         }
                     }
-                } label: {
+                }, label: {
                     ZStack {
                         Circle()
                             .fill(speechManager.isListening ? Color.red.opacity(0.85) : DesignSystem.accentPrimary)
@@ -408,7 +408,7 @@ struct ExecutivePlanningConversationView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(DesignSystem.backgroundPrimary)
                     }
-                }
+                })
                 .buttonStyle(.plain)
                 Spacer()
             }

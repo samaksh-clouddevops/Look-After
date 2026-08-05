@@ -83,9 +83,9 @@ struct StructuredLifeProfileEditor: View {
 
     @ViewBuilder
     private func organizeButton(title: String, action: @escaping () async -> Void) -> some View {
-        Button {
+        Button(action: {
             Task { await action() }
-        } label: {
+        }, label: {
             HStack {
                 if isOrganizing {
                     ProgressView().tint(DesignSystem.textPrimary)
@@ -95,7 +95,7 @@ struct StructuredLifeProfileEditor: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
-        }
+        })
         .buttonStyle(.plain)
         .disabled(isOrganizing || !sections.hasContent)
     }

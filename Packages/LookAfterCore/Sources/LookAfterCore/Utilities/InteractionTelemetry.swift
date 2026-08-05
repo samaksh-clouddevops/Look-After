@@ -34,7 +34,7 @@ public extension InteractionTelemetryServing {
     }
 }
 
-public enum ConstraintChangeSource: String, Sendable {
+public enum ConstraintChangeSource: String, Codable, Sendable, Equatable, CaseIterable {
     case swipe
     case accessibility
     case system

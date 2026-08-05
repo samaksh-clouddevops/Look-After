@@ -195,13 +195,13 @@ struct ExecutiveCapacityCard: View {
     }
 
     private var whyButton: some View {
-        Button {
+        Button(action: {
             showWhyDetails = true
-        } label: {
+        }, label: {
             Text("Why?")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(DesignSystem.accentPrimary)
-        }
+        })
         .buttonStyle(.plain)
         .padding(.top, 4)
     }

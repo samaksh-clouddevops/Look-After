@@ -74,10 +74,8 @@ public final class CalendarViewModel: ObservableObject {
                 }
                 
                 // Merge with manual events (avoid duplicate title+startDate)
-                for item in imported {
-                    if !events.contains(where: { $0.title == item.title && abs($0.startDate.timeIntervalSince(item.startDate)) < 60 }) {
-                        events.append(item)
-                    }
+                for item in imported where !events.contains(where: { $0.title == item.title && abs($0.startDate.timeIntervalSince(item.startDate)) < 60 }) {
+                    events.append(item)
                 }
                 events.sort { $0.startDate < $1.startDate }
                 saveToDisk()
@@ -214,12 +212,12 @@ public struct CalendarIntelligenceView: View {
                                 )
                                 .padding(.horizontal, DesignSystem.screenHorizontal)
                                 .contextMenu {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         HapticManager.notification(.warning)
                                         viewModel.deleteEvent(event)
-                                    } label: {
+                                    }, label: {
                                         Label("Remove", systemImage: "trash")
-                                    }
+                                    })
                                 }
                             }
                         }

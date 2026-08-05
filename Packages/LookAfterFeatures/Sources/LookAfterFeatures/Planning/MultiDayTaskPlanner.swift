@@ -52,31 +52,44 @@ public enum MultiDayTaskPlanner {
         let clamped = clampedDayCount(dayCount)
         let slices = offlineSlices(title: title, dayCount: clamped, lifeArea: lifeArea, profile: profile)
         return buildPlan(
-            title: title,
-            dayCount: clamped,
-            lifeArea: lifeArea,
-            deadline: deadline,
-            slices: slices,
-            userId: userId,
-            existingTasks: existingTasks,
-            profile: profile,
-            startDate: startDate
+            BuildPlanInput(
+                title: title,
+                dayCount: clamped,
+                lifeArea: lifeArea,
+                deadline: deadline,
+                slices: slices,
+                userId: userId,
+                existingTasks: existingTasks,
+                profile: profile,
+                startDate: startDate
+            )
         )
     }
 
     // MARK: - Build
 
-    private static func buildPlan(
-        title: String,
-        dayCount: Int,
-        lifeArea: LifeArea,
-        deadline: Date?,
-        slices: [MultiDaySliceDraft],
-        userId: String,
-        existingTasks: [LifeTask],
-        profile: UserLifeProfile,
-        startDate: Date
-    ) -> MultiDayTaskPlan {
+    private struct BuildPlanInput: Sendable {
+        var title: String
+        var dayCount: Int
+        var lifeArea: LifeArea
+        var deadline: Date?
+        var slices: [MultiDaySliceDraft]
+        var userId: String
+        var existingTasks: [LifeTask]
+        var profile: UserLifeProfile
+        var startDate: Date
+    }
+
+    private static func buildPlan(_ input: BuildPlanInput) -> MultiDayTaskPlan {
+        let title = input.title
+        let dayCount = input.dayCount
+        let lifeArea = input.lifeArea
+        let deadline = input.deadline
+        let slices = input.slices
+        let userId = input.userId
+        let existingTasks = input.existingTasks
+        let profile = input.profile
+        let startDate = input.startDate
         let parentId = UUID().uuidString
         let dayStart = calendar.startOfDay(for: startDate)
 

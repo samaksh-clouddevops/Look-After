@@ -56,7 +56,7 @@ struct ExecutiveLiveTimelineView: View {
     var showPlanButton: Bool = false
     var isPlanning: Bool = false
     var onViewAll: () -> Void
-    var onPlan: (() -> Void)? = nil
+    var onPlan: (() -> Void)?
     var onCompleteTask: ((String) -> Void)?
     var onStartTask: ((String) -> Void)?
     var onEditTask: ((String) -> Void)?

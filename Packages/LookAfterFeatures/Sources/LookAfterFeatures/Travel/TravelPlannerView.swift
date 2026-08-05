@@ -176,12 +176,12 @@ public struct TravelPlannerView: View {
                                     .cornerRadius(16)
                                     .padding(.horizontal)
                                     .contextMenu {
-                                        Button(role: .destructive) {
+                                        Button(role: .destructive, action: {
                                             HapticManager.notification(.warning)
                                             viewModel.deleteTrip(trip)
-                                        } label: {
+                                        }, label: {
                                             Label("Remove", systemImage: "trash")
-                                        }
+                                        })
                                     }
                                 }
                             }
@@ -224,14 +224,14 @@ public struct TravelPlannerView: View {
                             } else {
                                 ForEach(viewModel.packingList) { item in
                                     HStack(spacing: 16) {
-                                        Button {
+                                        Button(action: {
                                             viewModel.togglePackingItem(item)
                                             HapticManager.impact(.light)
-                                        } label: {
+                                        }, label: {
                                             Image(systemName: item.isPacked ? "checkmark.square.fill" : "square")
                                                 .font(.system(size: 22))
                                                 .foregroundColor(item.isPacked ? DesignSystem.accentPrimary : DesignSystem.textMuted)
-                                        }
+                                        })
                                         
                                         VStack(alignment: .leading) {
                                             Text(item.name)
@@ -259,12 +259,12 @@ public struct TravelPlannerView: View {
                                     .cornerRadius(12)
                                     .padding(.horizontal)
                                     .contextMenu {
-                                        Button(role: .destructive) {
+                                        Button(role: .destructive, action: {
                                             HapticManager.notification(.warning)
                                             viewModel.deletePackingItem(item)
-                                        } label: {
+                                        }, label: {
                                             Label("Remove", systemImage: "trash")
-                                        }
+                                        })
                                     }
                                 }
                             }

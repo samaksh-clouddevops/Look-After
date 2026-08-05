@@ -1,6 +1,6 @@
 import XCTest
 
-final class FLOW001_Tests: FlowTestBase {
+final class Flow001Tests: FlowTestBase {
     func test_FLOW001_MainFlow() throws {
         let source = QASource("FLOW-001", document: "Documentation/qa/05-flow-test-cases.md")
         let start = Date()

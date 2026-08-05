@@ -1,4 +1,4 @@
-﻿import XCTest
+import XCTest
 @testable import LookAfterCore
 
 final class TelemetrySynthesizerTests: XCTestCase {

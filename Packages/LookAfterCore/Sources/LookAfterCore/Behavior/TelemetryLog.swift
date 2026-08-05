@@ -122,5 +122,3 @@ public protocol ConstraintTelemetryLogging: Sendable {
     func deleteSealedLogs(dayKeys: [String])
     func replaceAll(_ envelope: TelemetryLogEnvelope)
 }
-
-

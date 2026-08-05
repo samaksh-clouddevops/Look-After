@@ -403,12 +403,12 @@ public struct PremiumModal<Content: View>: View {
                             .font(.dsTitle())
                             .foregroundColor(DesignSystem.textPrimary)
                         Spacer()
-                        Button { isPresented = false } label: {
+                        Button(action: { isPresented = false }, label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(DesignSystem.textMuted)
                                 .frame(width: 32, height: 32)
-                        }
+                        })
                         .buttonStyle(PremiumPressStyle())
                     }
 

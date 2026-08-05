@@ -104,19 +104,19 @@ public enum NotificationIdentifier {
 // MARK: - Preferences
 
 public struct NotificationPreferences: Codable, Sendable, Equatable {
-    public var masterEnabled: Bool
+    public var globallyEnabled: Bool
     public var categoryEnabled: [String: Bool]
 
     public init(
-        masterEnabled: Bool = true,
+        globallyEnabled: Bool = true,
         categoryEnabled: [String: Bool] = [:]
     ) {
-        self.masterEnabled = masterEnabled
+        self.globallyEnabled = globallyEnabled
         self.categoryEnabled = categoryEnabled
     }
 
     public func isEnabled(_ kind: NotificationKind) -> Bool {
-        guard masterEnabled else { return false }
+        guard globallyEnabled else { return false }
         return categoryEnabled[kind.rawValue, default: true]
     }
 

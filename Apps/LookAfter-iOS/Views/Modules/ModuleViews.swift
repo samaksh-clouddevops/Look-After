@@ -95,7 +95,7 @@ struct AIMemoryView: View {
 struct MemoryCardView: View {
     let entry: MemoryEntry
     let score: Double?
-    var onRemove: (() -> Void)? = nil
+    var onRemove: (() -> Void)?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -214,11 +214,11 @@ struct FinanceBillsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         Task { await modulesVM.deleteBill(bill); HapticManager.notification(.warning) }
-                                    } label: {
+                                    }, label: {
                                         Label("Delete", systemImage: "trash")
-                                    }
+                                    })
                                 }
                         }
                     }
@@ -298,11 +298,11 @@ struct FinanceBillsView: View {
         }
         .elevatedSurface()
         .contextMenu {
-            Button(role: .destructive) {
+            Button(role: .destructive, action: {
                 Task { await modulesVM.deleteBill(bill); HapticManager.notification(.warning) }
-            } label: {
+            }, label: {
                 Label("Remove", systemImage: "trash")
-            }
+            })
         }
     }
 }
@@ -467,12 +467,12 @@ struct HydrationNutritionView: View {
                                 }
                                 .listRowBackground(Color.clear)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         HapticManager.notification(.warning)
                                         modulesVM.removeWaterLog(log)
-                                    } label: {
+                                    }, label: {
                                         Label("Remove", systemImage: "trash")
-                                    }
+                                    })
                                 }
                             }
                         }
@@ -590,18 +590,18 @@ struct ShoppingInventoryView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
+                                Button(role: .destructive, action: {
                                     Task { await modulesVM.deleteShoppingItem(item); HapticManager.notification(.warning) }
-                                } label: {
+                                }, label: {
                                     Label("Remove", systemImage: "trash")
-                                }
+                                })
                             }
                             .contextMenu {
-                                Button(role: .destructive) {
+                                Button(role: .destructive, action: {
                                     Task { await modulesVM.deleteShoppingItem(item); HapticManager.notification(.warning) }
-                                } label: {
+                                }, label: {
                                     Label("Remove", systemImage: "trash")
-                                }
+                                })
                             }
                         }
                     }
@@ -790,18 +790,18 @@ struct RelationshipsView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         Task { await modulesVM.deleteContact(contact); HapticManager.notification(.warning) }
-                                    } label: {
+                                    }, label: {
                                         Label("Remove", systemImage: "trash")
-                                    }
+                                    })
                                 }
                                 .contextMenu {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         Task { await modulesVM.deleteContact(contact); HapticManager.notification(.warning) }
-                                    } label: {
+                                    }, label: {
                                         Label("Remove", systemImage: "trash")
-                                    }
+                                    })
                                 }
                         }
                     }

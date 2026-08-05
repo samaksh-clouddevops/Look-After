@@ -46,8 +46,7 @@ public final class CalendarBaselineAnalyzer {
         } else {
             granted = try await withCheckedThrowingContinuation { cont in
                 eventStore.requestAccess(to: .event) { ok, error in
-                    if let error { cont.resume(throwing: error) }
-                    else { cont.resume(returning: ok) }
+                    if let error { cont.resume(throwing: error) } else { cont.resume(returning: ok) }
                 }
             }
         }
