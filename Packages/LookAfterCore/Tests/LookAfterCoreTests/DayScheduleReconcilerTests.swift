@@ -106,9 +106,14 @@ final class DayScheduleReconcilerTests: XCTestCase {
         if let musicWindow, let songwritingWindow {
             XCTAssertFalse(musicWindow.overlaps(songwritingWindow))
         } else if let updated = updatedSongwriting {
-            // Parked / unscheduled is a valid cascade outcome.
-            XCTAssertNil(updated.scheduledTime)
-            XCTAssertTrue(result.changedTaskIDs.contains(updated.id) || updated.timeConstraintValue == .fluid)
+            if let scheduledDate = updated.scheduledDate,
+               !calendar.isDate(scheduledDate, inSameDayAs: day) {
+                XCTAssertTrue(result.changedTaskIDs.contains(updated.id))
+            } else {
+                // Parked / unscheduled is a valid cascade outcome.
+                XCTAssertNil(updated.scheduledTime)
+                XCTAssertTrue(result.changedTaskIDs.contains(updated.id) || updated.timeConstraintValue == .fluid)
+            }
         } else {
             XCTFail("Songwriting task missing from reconcile result")
         }

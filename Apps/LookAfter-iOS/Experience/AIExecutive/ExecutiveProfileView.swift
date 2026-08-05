@@ -95,7 +95,7 @@ struct ExecutiveProfileView: View {
                 .environmentObject(shell)
         }
         #endif
-        .alert("Factory Reset \(UserFacingCopy.productName)?", isPresented: $showResetAlert, content: {
+        .alert("Factory Reset \(UserFacingCopy.productName)?", isPresented: $showResetAlert, actions: {
             Button("Erase Everything", role: .destructive) {
                 Task { await performFactoryReset() }
             }
@@ -103,7 +103,7 @@ struct ExecutiveProfileView: View {
         }, message: {
             Text("Deletes all tasks, timeline, AI memory, health cache, learned behavior, and modules on this device and in the cloud. Your account and API keys are preserved. This cannot be undone.")
         })
-        .alert("Factory reset complete", isPresented: $resetComplete, content: {
+        .alert("Factory reset complete", isPresented: $resetComplete, actions: {
             Button("OK", role: .cancel) {}
         }, message: {
             Text("\(UserFacingCopy.productName) is starting fresh. Health and calendar will re-import automatically.")
@@ -412,9 +412,9 @@ struct ExecutiveProfileView: View {
             .listRowBackground(DesignSystem.backgroundSecondary)
         }, header: {
             Text("Debug Tools")
-        }) footer: {
+        }, footer: {
             Text("Inspect Life State, intent, simulations, cost, and decision history.")
-        }
+        })
     }
     #endif
 

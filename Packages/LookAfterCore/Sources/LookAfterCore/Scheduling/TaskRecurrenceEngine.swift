@@ -88,6 +88,10 @@ public enum TaskRecurrenceEngine {
     ) -> Bool {
         if isRecurrenceTemplate(task) { return false }
 
+        if duplicateSeriesTemplate(for: task, in: allTasks) != nil {
+            return false
+        }
+
         if let parentId = task.parentTaskId,
            !allTasks.contains(where: { $0.id == parentId }) {
             return false

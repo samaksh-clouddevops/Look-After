@@ -5,7 +5,7 @@ import LookAfterData
 import LookAfterHealth
 
 /// Settings View — configure GLM API key, health tracking, ADHD features, and profile.
-struct SettingsView: View(content: {
+struct SettingsView: View {
     @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
     
@@ -343,9 +343,9 @@ struct SettingsView: View(content: {
                         .font(.system(size: 12, design: .default))
                         .foregroundColor(DesignSystem.textMuted)
                         .listRowBackground(DesignSystem.backgroundSecondary)
-                }, header: {
+                } header: {
                     Text("AI Engine")
-                }) footer: {
+                } footer: {
                     Text("Keys are stored securely in the Keychain.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
@@ -393,13 +393,13 @@ struct SettingsView: View(content: {
                     .tint(DesignSystem.accentPrimary)
                 }, header: {
                     Text("Features")
-                }) footer: {
+                }, footer: {
                     if enableFlowDirector {
                         Text("Picks your next task from calendar, energy, and deadlines — without generic category labels.")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
                     }
-                }
+                })
                 
                 if enableHealth {
                     Section(content: {
@@ -460,11 +460,11 @@ struct SettingsView: View(content: {
                         .listRowBackground(DesignSystem.backgroundSecondary)
                     }, header: {
                         Text("Health Data Sync")
-                    }) footer: {
+                    }, footer: {
                         Text("\(UserFacingCopy.productName) reads from the iPhone Health app, which includes metrics recorded by your Apple Watch.")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
-                    }
+                    })
                 }
 
                 if lifeProfile.gender == .female {
@@ -517,11 +517,11 @@ struct SettingsView: View(content: {
                     }
                 }, header: {
                     Text("Cycle tracking")
-                }) footer: {
+                }, footer: {
                     Text("Optional. Includes menstrual data from Apple Health when enabled. \(UserFacingCopy.medicalDisclaimer)")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
                 }
                 
                 Section(content: {
@@ -548,11 +548,11 @@ struct SettingsView: View(content: {
                     .listRowBackground(DesignSystem.backgroundSecondary)
                 }, header: {
                     Text("Widgets & Lock Screen")
-                }) footer: {
+                }, footer: {
                     Text("The timer pins to your Lock Screen and Dynamic Island. Pin Next Step keeps your top task visible even when the app is closed.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
                 
                 // Life Profile (compiled life model)
                 Section(content: {
@@ -562,11 +562,11 @@ struct SettingsView: View(content: {
                     workTimeRow(title: "Work ends", hour: $lifeProfile.workEndHour, minute: $lifeProfile.workEndMinute)
                 }, header: {
                     Text("Brain context")
-                }) footer: {
+                }, footer: {
                     Text("Import your full life profile. The brain compiles identity, time blocks, and commitments — fixed blocks appear on Timeline automatically.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
                 // Energy Profile
                 Section(content: {

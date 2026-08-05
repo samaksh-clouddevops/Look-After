@@ -251,7 +251,7 @@ public struct AuthView: View {
         .scrollDismissesKeyboard(.interactively)
         .animation(.easeInOut(duration: 0.3), value: isLoading)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: authSuccess)
-        .alert("Sign In with Google", isPresented: $showGooglePrompt, content: {
+        .alert("Sign In with Google", isPresented: $showGooglePrompt, actions: {
             TextField("Google Email (e.g. name@gmail.com)", text: $ssoEmailInput)
             Button("Sign In") {
                 performSSOSignIn(provider: "Google")
@@ -260,7 +260,7 @@ public struct AuthView: View {
         }, message: {
             Text("Enter your Google account email to sign in and sync your \(UserFacingCopy.productName) profile.")
         })
-        .alert("Sign In with Apple", isPresented: $showApplePrompt, content: {
+        .alert("Sign In with Apple", isPresented: $showApplePrompt, actions: {
             TextField("Apple ID Email (e.g. name@icloud.com)", text: $ssoEmailInput)
             Button("Sign In") {
                 performSSOSignIn(provider: "Apple")

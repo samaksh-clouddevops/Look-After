@@ -66,11 +66,11 @@ struct GLMConfigurationSettingsView: View {
                         .listRowBackground(Color.white.opacity(0.05))
                 }, header: {
                     Text("Model tiers")
-                }) footer: {
+                }, footer: {
                     Text("Premium: coach and day planning. Standard: scheduling and inbox. Economy: task analysis and auto-fill. Failed economy/standard calls automatically retry on stronger tiers.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
                 Section(content: {
                     NavigationLink(destination: {

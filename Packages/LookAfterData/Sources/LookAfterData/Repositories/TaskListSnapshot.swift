@@ -18,7 +18,11 @@ public struct TaskListSnapshot: Sendable, Equatable {
         let startOfDay = calendar.startOfDay(for: Date())
         let templates = tasks.filter(TaskRecurrenceEngine.isRecurrenceTemplate)
         let active = tasks
-            .filter { $0.status.isActive && !TaskRecurrenceEngine.isRecurrenceTemplate($0) }
+            .filter { task in
+                guard task.status.isActive && !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
+                if task.scheduledDate == nil { return true }
+                return TaskRecurrenceEngine.isActionableToday(task, in: tasks, calendar: calendar)
+            }
             .sorted { $0.priority > $1.priority }
         let completedToday = tasks.filter { task in
             guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }

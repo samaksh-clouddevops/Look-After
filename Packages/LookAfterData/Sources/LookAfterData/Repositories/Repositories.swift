@@ -58,7 +58,10 @@ public final class TaskRepository: ObservableObject {
             let remote = try snapshot.documents.compactMap { try firebase.decode(LifeTask.self, from: $0) }
             let merged = TaskMerge.merge(local: allLocalTasks(), remote: remote)
             persistAllLocally(merged)
-            let result = tasksForUser(userId)
+            var result = tasksForUser(userId)
+            for task in localTasks where !result.contains(where: { $0.id == task.id }) {
+                result.append(task)
+            }
             TaskPersistenceLog.fetchFinished(count: result.count, merged: !remote.isEmpty)
             return result
         } catch {
@@ -78,7 +81,14 @@ public final class TaskRepository: ObservableObject {
     
     public func create(_ task: LifeTask) async throws {
         var mutableTask = task
-        mutableTask.userId = firebase.currentUserId ?? task.userId
+        let explicitUserId = task.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !explicitUserId.isEmpty {
+            mutableTask.userId = explicitUserId
+        } else if let currentUserId = firebase.currentUserId, !currentUserId.isEmpty {
+            mutableTask.userId = currentUserId
+        } else {
+            mutableTask.userId = firebase.resolvedUserId
+        }
         saveLocally(mutableTask)
         TaskPersistenceLog.create(mutableTask)
         syncTaskToFirestore(mutableTask)

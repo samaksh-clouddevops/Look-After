@@ -64,10 +64,10 @@ struct DailyBriefingCustomizationView: View {
                         .onMove(perform: briefingVM.moveCard)
                     }, header: {
                         Text("Cards")
-                    }) footer: {
+                    }, footer: {
                         Text("Drag to reorder. Pin cards to keep them at the top.")
                             .foregroundColor(DesignSystem.textMuted)
-                    }
+                    })
                 }
                 .scrollContentBackground(.hidden)
             }

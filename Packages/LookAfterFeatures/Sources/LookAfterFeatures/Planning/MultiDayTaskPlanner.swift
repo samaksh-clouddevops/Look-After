@@ -27,15 +27,17 @@ public enum MultiDayTaskPlanner {
         let dayCount = clampedDayCount(draft.dayCount)
         let slices = normalizedSlices(from: draft, dayCount: dayCount)
         return buildPlan(
-            title: draft.title,
-            dayCount: dayCount,
-            lifeArea: draft.lifeArea,
-            deadline: draft.deadline,
-            slices: slices,
-            userId: userId,
-            existingTasks: existingTasks,
-            profile: profile,
-            startDate: startDate
+            BuildPlanInput(
+                title: draft.title,
+                dayCount: dayCount,
+                lifeArea: draft.lifeArea,
+                deadline: draft.deadline,
+                slices: slices,
+                userId: userId,
+                existingTasks: existingTasks,
+                profile: profile,
+                startDate: startDate
+            )
         )
     }
 

@@ -94,17 +94,25 @@ public final class DailyBriefingViewModel: ObservableObject {
     }
 
     public var visibleCards: [BriefingCardKind] {
-        var ordered = cardOrder.filter { !hiddenCards.contains($0) }
+        var ordered = cardOrder.filter { !hiddenCards.contains($0) || pinnedCards.contains($0) }
 
         // Replace legacy metric trio with unified snapshot when snapshot is enabled.
         if !hiddenCards.contains(.healthSnapshot) {
-            ordered.removeAll { BriefingCardKind.legacyMetricCards.contains($0) }
+            ordered.removeAll { BriefingCardKind.legacyMetricCards.contains($0) && !pinnedCards.contains($0) }
             if !ordered.contains(.healthSnapshot) {
                 if let greetingIndex = ordered.firstIndex(of: .greeting) {
                     ordered.insert(.healthSnapshot, at: greetingIndex + 1)
                 } else {
                     ordered.insert(.healthSnapshot, at: 0)
                 }
+            }
+        }
+
+        for kind in pinnedCards where !ordered.contains(kind) {
+            if let greetingIndex = ordered.firstIndex(of: .greeting) {
+                ordered.insert(kind, at: greetingIndex)
+            } else {
+                ordered.insert(kind, at: 0)
             }
         }
 
@@ -239,6 +247,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             pinnedCards.remove(kind)
         } else {
             pinnedCards.insert(kind)
+            hiddenCards.remove(kind)
         }
         persistPreferences()
     }

@@ -159,7 +159,7 @@ public final class BackgroundAnalyticsService: ObservableObject {
     }
 
     public func invalidate(userId: String) {
-        cacheManager.invalidate(userId: userId)
+        cacheManager.purge(userId: userId)
         engine.invalidateCache()
     }
 

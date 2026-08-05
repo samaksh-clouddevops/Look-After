@@ -6,18 +6,22 @@ import LookAfterData
 @MainActor
 final class InsightsViewModelTests: XCTestCase {
 
-    func testLoadInsightsPopulatesRealReport() async {
+    func testLoadInsightsPopulatesRealReport() async throws {
         let userId = "insights-vm-user-\(UUID().uuidString)"
         let taskRepo = TaskRepository()
-        var task = LifeTask(title: "Analytics task", status: .completed)
-        task.completedAt = Date()
-        task.userId = userId
-        try? await taskRepo.create(task)
-        var persisted = task
-        persisted.userId = userId
-        try? await taskRepo.update(persisted)
+        let task = LifeTask(
+            title: "Analytics task",
+            status: .completed,
+            completedAt: Date(),
+            userId: userId
+        )
+        try await taskRepo.create(task)
+
+        let stored = try await taskRepo.getAll(for: userId)
+        XCTAssertTrue(stored.contains(where: { $0.id == task.id }), "Created task should round-trip for userId")
 
         let engine = PersonalAnalyticsEngine(taskRepo: taskRepo, fetchBehaviorEvents: { [] })
+        engine.invalidateCache()
         let viewModel = InsightsViewModel(analyticsEngine: engine, analyticsService: nil, userId: userId)
 
         await viewModel.loadInsights(for: .today)

@@ -213,7 +213,7 @@ final class InMemoryTaskStore: TaskStoring {
     }
 
     func getActive(for userId: String) async throws -> [LifeTask] {
-        try await getAll(for: userId).filter { $0.status.isActive && $0.isRecurrenceTemplate != true }
+        try await getTaskLists(for: userId).active
     }
 
     func getCompletedToday(for userId: String) async throws -> [LifeTask] {

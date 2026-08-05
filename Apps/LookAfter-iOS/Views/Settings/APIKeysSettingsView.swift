@@ -72,11 +72,11 @@ struct APIKeysSettingsView: View {
                     .listRowBackground(Color.white.opacity(0.05))
                 }, header: {
                     Text("API Keys")
-                }) footer: {
+                }, footer: {
                     Text("\(UserFacingCopy.productName) uses GLM 5.2 (z.ai), not Gemini. Old Gemini keys were migrated here but will not work — delete them and add a GLM key.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
                 if !viewModel.keys.isEmpty {
                     Section(content: {
