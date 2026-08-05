@@ -91,14 +91,14 @@ final class ContextEngineTests: XCTestCase {
         let snapshot = ContextEngine().calculate(ContextEngineInput(environment: .baseline, heroTask: task, topTasks: [task]))
         let briefing = ContextBriefingGenerator().generate(from: snapshot, resume: nil)
         let durationText = [
-            briefing.hero.durationEstimate?.displayLabel,
-            briefing.hero.durationEstimate?.shortLabel,
+            briefing.hero.durationEstimate.displayLabel,
+            briefing.hero.durationEstimate.shortLabel,
             briefing.hero.supportingLine
-        ].compactMap { $0 }.joined(separator: " ")
+        ].joined(separator: " ")
         XCTAssertTrue(
             durationText.localizedCaseInsensitiveContains("about")
                 || durationText.localizedCaseInsensitiveContains("min")
-                || briefing.hero.durationEstimate != nil,
+                || briefing.hero.durationEstimate.pointMinutes > 0,
             "Expected duration cue, got: \(durationText)"
         )
         XCTAssertFalse(briefing.hero.actionLine.isEmpty)

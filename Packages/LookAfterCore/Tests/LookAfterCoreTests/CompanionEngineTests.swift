@@ -115,11 +115,11 @@ final class CompanionEngineTests: XCTestCase {
         let briefing = ContextBriefingGenerator().generate(from: snapshot, resume: nil)
         // Duration lives on durationEstimate (supporting line is why-now copy).
         let durationText = [
-            briefing.hero.durationEstimate?.displayLabel,
-            briefing.hero.durationEstimate?.shortLabel,
+            briefing.hero.durationEstimate.displayLabel,
+            briefing.hero.durationEstimate.shortLabel,
             briefing.hero.supportingLine,
             briefing.hero.actionLine
-        ].compactMap { $0 }.joined(separator: " ")
+        ].joined(separator: " ")
         XCTAssertTrue(durationText.contains("47"), "Expected dynamic 47m estimate, got: \(durationText)")
         XCTAssertFalse(durationText.contains("25 min") || durationText.contains("25-minute"))
         XCTAssertEqual(briefing.hero.action.kind, .beginWork)
