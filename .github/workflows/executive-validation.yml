@@ -1,90 +1,75 @@
-name: Executive Validation Platform
+﻿# DEPRECATED — split into ci.yml + nightly.yml + release.yml + security.yml
+# Kept for manual / emergency full EVP run only.
+name: Executive Validation Platform (legacy)
 
 on:
-  push:
-    branches: [main, master, release/*]
-  pull_request:
-    branches: [main, master, release/*]
+  workflow_dispatch:
+
+concurrency:
+  group: evp-legacy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  SIM_DESTINATION_NAME: iPhone 16
 
 jobs:
   evp:
-    runs-on: macos-latest
-
+    runs-on: macos-15
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Prepare Firebase config for CI
-        run: cp Config/GoogleService-Info.plist.example Config/GoogleService-Info.plist
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Build app and tests
+      - uses: ./.github/actions/setup-ios
+      - uses: ./.github/actions/build-evp
+      - name: Build for testing
         run: |
-          DEST="$(xcodebuild -scheme LookAfter-iOS -showdestinations 2>/dev/null | grep 'platform:iOS Simulator' | grep 'iPhone' | head -1 | sed -n 's/.*id:\([^,]*\),.*/\1/p')"
-          if [ -z "$DEST" ]; then
-            echo "No iPhone simulator found; using generic iOS Simulator destination"
-            xcodebuild -scheme LookAfter-iOS -destination 'generic/platform=iOS Simulator' build-for-testing
-          else
-            xcodebuild -scheme LookAfter-iOS -destination "platform=iOS Simulator,id=$DEST" build-for-testing
-          fi
-
-      - name: Build EVP
-        run: swift build --package-path Tools/ExecutiveValidationPlatform -c release
-
-      - name: Index requirements
-        run: ./evp index
-
+          set -euo pipefail
+          xcodebuild -scheme LookAfter-iOS \
+            -destination "${DESTINATION}" \
+            -derivedDataPath DerivedData \
+            build-for-testing
       - name: Unit tests and static analysis
         run: ./evp run --tier 2 --skip-ui
-
       - name: Decision regression (blocking)
         run: ./evp decisions
-
       - name: Flow automation
         run: ./evp flows
-
       - name: Visual regression
         run: ./evp visual
-
       - name: Performance benchmarks
         run: ./evp perf
-
       - name: Accessibility audit
         run: ./evp a11y
-
       - name: Reality replay
         run: ./evp replay --fixture REPLAY-001
-
       - name: Counterfactual
         run: ./evp counterfactual CF-001
-
       - name: Production readiness
         run: ./evp readiness
-
-      - name: Release gate (release branches)
+      - name: Release gate
         if: startsWith(github.ref, 'refs/heads/release/')
         run: ./evp release
-
       - name: Upload EVP artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: evp-reports
+          retention-days: 14
           path: |
-            Documentation/qa/.engine/results.json
-            Documentation/qa/.engine/rtm.json
-            Documentation/qa/.engine/dashboard.html
-            Documentation/qa/.engine/junit.xml
-            Documentation/qa/.engine/cost-history.json
-            Documentation/qa/.engine/history.jsonl
-
+            Documentation/qa/.engine/**
+      - name: Publish JUnit
+        if: always()
+        uses: dorny/test-reporter@v1
+        continue-on-error: true
+        with:
+          name: Legacy EVP Results
+          path: Documentation/qa/.engine/junit.xml
+          reporter: java-junit
+          fail-on-error: false
       - name: GitHub Step Summary
         if: always()
         run: |

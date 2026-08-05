@@ -1,0 +1,10 @@
+﻿title = "Look After gitleaks"
+
+[allowlist]
+description = "CI stubs, docs, example plists"
+paths = [
+  '''Config/GoogleService-Info\.plist\.example''',
+  '''.*\.md$''',
+  '''Documentation/.*''',
+  '''\.swiftlint\.yml$''',
+]

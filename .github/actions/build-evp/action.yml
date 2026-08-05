@@ -1,0 +1,15 @@
+name: Build EVP CLI
+description: Build Executive Validation Platform and expose ./evp on PATH via symlink in repo root
+
+runs:
+  using: composite
+  steps:
+    - name: Build EVP
+      shell: bash
+      run: |
+        set -euo pipefail
+        swift build --package-path Tools/ExecutiveValidationPlatform -c release
+        BIN="$(swift build --package-path Tools/ExecutiveValidationPlatform -c release --show-bin-path)/evp"
+        ln -sfn "$BIN" ./evp
+        chmod +x ./evp || true
+        ./evp index || true
