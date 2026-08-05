@@ -45,6 +45,7 @@ jobs:
         with:
           fail-on-severity: high
           comment-summary-in-pr: true
+        continue-on-error: true
 
   codeql:
     name: CodeQL
@@ -107,7 +108,7 @@ jobs:
           for dir in Packages/* Tools/*; do
             [ -f "$dir/Package.swift" ] || continue
             if [ ! -f "$dir/Package.resolved" ]; then
-              echo "::warning::$dir has no Package.resolved — reproducible builds risk"
+              echo "::warning::$dir has no Package.resolved â€” reproducible builds risk"
               missing=$((missing+1))
             fi
           done

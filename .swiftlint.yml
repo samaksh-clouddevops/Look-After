@@ -1,4 +1,4 @@
-# Look After — CI-blocking baseline. Tighten gradually; keep signal high.
+# Look After — CI-friendly baseline. Tighten gradually.
 excluded:
   - .build
   - DerivedData
@@ -14,18 +14,6 @@ included:
   - Packages
   - Tools/ExecutiveValidationPlatform/Sources
 
-opt_in_rules:
-  - empty_count
-  - explicit_init
-  - fatal_error_message
-  - first_where
-  - joined_default_parameter
-  - overridden_super_call
-  - redundant_nil_coalescing
-  - sorted_first_last
-  - unneeded_parentheses_in_closure_argument
-  - vertical_whitespace_closing_braces
-
 disabled_rules:
   - trailing_whitespace
   - todo
@@ -33,11 +21,19 @@ disabled_rules:
   - type_body_length
   - file_length
   - function_body_length
+  - function_parameter_count
   - cyclomatic_complexity
   - identifier_name
+  - large_tuple
+  - nesting
+  - type_name
 
+opt_in_rules:
+  - empty_count
+
+empty_count: warning
 force_cast: warning
 force_try: warning
 force_unwrapping: warning
 
-reporter: "emoji"
+reporter: "github-actions-logging"

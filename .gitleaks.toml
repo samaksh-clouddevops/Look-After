@@ -1,4 +1,4 @@
-﻿title = "Look After gitleaks"
+title = "Look After gitleaks"
 
 [allowlist]
 description = "CI stubs, docs, example plists"
