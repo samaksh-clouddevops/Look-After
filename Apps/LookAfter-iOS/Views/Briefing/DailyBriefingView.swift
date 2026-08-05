@@ -126,16 +126,34 @@ struct DailyBriefingView: View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
             VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
                 headerBar
+                // Time greeting only — Chief narrative is the body (no chat/mic here).
                 BriefingGreetingHeader(greeting: briefingVM.greeting)
             }
 
-            LAExecutiveBriefingCard(
-                summaryLines: briefingVM.dayHeroSummaryLines,
-                isLoading: briefingVM.isLoadingDayHeroSummary,
-                onContinue: onContinue
+            // 1) AI narrative (27pt φ-scale) + 2) deterministic LifeState chips — read-only.
+            MorningBriefingView(
+                narrative: briefingVM.chiefNarrative.isEmpty
+                    ? briefingVM.dayHeroSummaryLines.joined(separator: " ")
+                    : briefingVM.chiefNarrative,
+                chips: briefingVM.snapshotChips,
+                isLoading: briefingVM.isLoadingChiefNarrative || briefingVM.isLoadingDayHeroSummary,
+                greetingName: briefingVM.greeting.userName
             )
             .featureTourAnchor(.briefingHero, cornerRadius: DesignSystem.radiusLG)
             .id(AppFeatureTourAnchorID.briefingHero.rawValue)
+
+            Button(action: onContinue) {
+                Text("Continue to today")
+                    .textStyleCardTitle(color: DesignSystem.accentOnPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.spacingMD)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(DesignSystem.accentPrimary)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("briefing-continue-cta")
 
             todayAtAGlanceSection
         }

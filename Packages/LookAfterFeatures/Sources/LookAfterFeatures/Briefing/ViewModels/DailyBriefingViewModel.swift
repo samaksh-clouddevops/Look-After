@@ -1,6 +1,7 @@
 import Foundation
 import LookAfterCore
 import LookAfterData
+import LookAfterAI
 import ExecutiveBrain
 
 /// Builds Daily Briefing presentation state from brain, task, and health data.
@@ -54,6 +55,13 @@ public final class DailyBriefingViewModel: ObservableObject {
     @Published public private(set) var dayBriefing: MorningDayBriefing?
     @Published public private(set) var dayHeroSummaryLines: [String] = []
     @Published public private(set) var isLoadingDayHeroSummary = false
+    /// Chief-of-Staff narrative (max 4 sentences) + deterministic chips.
+    @Published public private(set) var chiefNarrative: String = ""
+    @Published public private(set) var chiefNarrativeSource: String = "deterministic"
+    @Published public private(set) var chiefFromCache: Bool = false
+    @Published public private(set) var snapshotChips: [BriefingSnapshotChip] = []
+    @Published public private(set) var briefingPayload: BriefingPayload?
+    @Published public private(set) var isLoadingChiefNarrative = false
     @Published public private(set) var lifeGaps: [LifeGap] = []
     @Published public private(set) var cycleData = BriefingCycleData.disabled
     @Published public private(set) var moduleInsights: [BriefingModuleInsight] = []
@@ -180,6 +188,7 @@ public final class DailyBriefingViewModel: ObservableObject {
         buildCycleData(healthSummary: resolvedHealth)
         refreshHabitCompletions()
         await buildDayHeroSummary(userName: userName, tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
+        await buildChiefOfStaffNarrative(userName: userName, tasksVM: tasksVM)
         await buildModuleInsights(userName: userName)
         await loadWeeklyTrends(userId: userId, tasksVM: tasksVM)
     }
@@ -1076,6 +1085,117 @@ public final class DailyBriefingViewModel: ObservableObject {
             lifeTimelineEvents: lifeTimelineEvents
         )
         dayHeroSummaryLines = await BriefingDayHeroSummaryGenerator.generate(input)
+    }
+
+    /// Payload-to-Prompt Chief of Staff narrative — cached, sanitized, non-blocking.
+    private func buildChiefOfStaffNarrative(userName: String, tasksVM: TasksViewModel) async {
+        isLoadingChiefNarrative = true
+        defer { isLoadingChiefNarrative = false }
+
+        let parked = ParkedTaskQueueStore.shared
+        _ = parked.applyFluidDecay()
+        let recovery = ParkedTaskRecoveryService.shared
+        let decayedCount = parked.snapshot().decayedEntries.count
+
+        // Macro cascade actions only (CascadeDistiller → overnight log).
+        let distilledActions = CascadeActionLog.shared.systemActions()
+        let distilledMutations = CascadeDistiller.mutationFacts(from: distilledActions)
+
+        let payload = BriefingPayloadCompiler.compile(
+            .init(
+                energy: energy.energyLevel,
+                energyPercent: energy.currentEnergyPercent,
+                sleepHours: sleep.totalHours,
+                capacityBandLabel: executiveCapacity.band.displayLabel,
+                tasks: tasksVM.tasks + tasksVM.completedToday,
+                cascadeDecisions: [],
+                parkedRecoverableCount: parked.candidatesForReintegration(limit: 50).count,
+                somedayDecayCount: decayedCount,
+                telemetryLearnings: recovery.briefingNotes().map { BriefingPIISanitizer.scrub($0) },
+                nextEventTitle: calendar.nextEventTitle,
+                minutesUntilNextEvent: calendar.minutesUntilStart,
+                resurrectedTaskIDs: recovery.resurrectedIDs()
+            )
+        )
+        // Prefer distilled mutation facts when overnight cascade ran.
+        var payloadWithMutations = payload
+        if !distilledMutations.isEmpty {
+            payloadWithMutations.mutations = distilledMutations
+            // Tallies from distilled codes when statuses not yet on tasks.
+            payloadWithMutations.supersededTaskCount = max(
+                payload.supersededTaskCount,
+                distilledMutations.filter { $0.code == "superseded" }.count
+            )
+            payloadWithMutations.expiredTaskCount = max(
+                payload.expiredTaskCount,
+                distilledMutations.filter { $0.code == "expired" }.count
+            )
+            let recovery = payload.hasRecoveryBlockToday
+                || distilledActions.contains { $0.lowercased().contains("sabotage") }
+            payloadWithMutations.hasRecoveryBlockToday = recovery
+            payloadWithMutations.structureFingerprint = BriefingPayload.fingerprint(
+                dayKey: payload.dayKey,
+                energyState: payload.energyState,
+                capacityBand: payload.capacityBand,
+                anchoredCount: payload.anchoredCount,
+                flexibleCount: payload.flexibleCount,
+                fluidCount: payload.fluidCount,
+                focusMinutes: payload.focusMinutes,
+                remainingTaskCount: payload.remainingTaskCount,
+                completedTaskCount: payload.completedTaskCount,
+                overdueCount: payload.overdueCount,
+                mutations: distilledMutations,
+                somedayDecayCount: payload.somedayDecayCount,
+                parkedRecoverableCount: payload.parkedRecoverableCount,
+                supersededTaskCount: payloadWithMutations.supersededTaskCount,
+                expiredTaskCount: payloadWithMutations.expiredTaskCount,
+                hasRecoveryBlockToday: recovery
+            )
+        }
+        let finalPayload = distilledMutations.isEmpty ? payload : payloadWithMutations
+        briefingPayload = finalPayload
+        snapshotChips = finalPayload.snapshotChips()
+
+        // Instant fallback while AI may be in-flight (never looks broken).
+        if chiefNarrative.isEmpty {
+            chiefNarrative = finalPayload.deterministicNarrative(userName: userName)
+            chiefNarrativeSource = "deterministic"
+        }
+
+        let hasKey = !GLMService.shared.keyManagerAccess.allRecords().filter(\.isEnabled).isEmpty
+            || GLMService.shared.keyManagerAccess.resolveAPIKey() != nil
+
+        // AIRouter: distilled systemActions → immutable system prompt (no raw cascade spam).
+        let routerPayload = BriefingRouterPayload(from: finalPayload)
+        let compiled = BriefingPromptGenerator.compile(routerPayload)
+
+        let result = await ChiefOfStaffBriefingSynthesizer.synthesize(
+            payload: finalPayload,
+            userName: userName,
+            forceRefresh: false,
+            glmComplete: hasKey
+                ? { _, _ in
+                    try await GLMService.shared.complete(
+                        prompt: compiled.user,
+                        systemPrompt: compiled.system,
+                        tier: .economy
+                    )
+                }
+                : nil
+        )
+        chiefNarrative = result.narrative
+        chiefNarrativeSource = result.source
+        chiefFromCache = result.fromCache
+        snapshotChips = result.chips
+        // Keep dayHero lines in sync for existing LAExecutiveBriefingCard consumers.
+        if !result.narrative.isEmpty {
+            dayHeroSummaryLines = result.narrative
+                .components(separatedBy: ". ")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .prefix(3)
+                .map { $0.hasSuffix(".") ? $0 : $0 + "." }
+        }
     }
 
     private func buildModuleInsights(userName: String) async {
