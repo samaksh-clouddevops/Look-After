@@ -20,6 +20,8 @@ struct TaskListView: View {
     @State private var isCardStackMode = false
     @StateObject private var plannerVM = DailyPlannerViewModel()
     @State private var showReschedulePreview = false
+    @State private var showWhatIfSheet = false
+    @State private var simulationResult: SimulationResult?
 
     // Performance optimization: Cache filtered/sorted tasks to avoid recomputation on every render
     @State private var cachedFilteredTasks: [LifeTask] = []
@@ -85,6 +87,14 @@ struct TaskListView: View {
                             Label("Plan Tomorrow", systemImage: "sunrise")
                         })
                         .disabled(plannerVM.isScheduling)
+
+                        Button(action: {
+                            HapticManager.impact(.light)
+                            showWhatIfSheet = true
+                        }, label: {
+                            Label("What-If…", systemImage: "wand.and.stars")
+                        })
+                        .accessibilityLabel("Simulate what-if schedule")
                     }, label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 22))
@@ -160,6 +170,27 @@ struct TaskListView: View {
         }
         .sheet(item: $editingTask) { task in
             TaskFormSheet(tasksVM: tasksVM, mode: .edit(task))
+        }
+        .sheet(isPresented: $showWhatIfSheet) {
+            TaskFormSheet(tasksVM: tasksVM, mode: .hypothetical) { task in
+                let result = tasksVM.simulateSchedule(hypotheticalTask: task)
+                // Defer so the form sheet can finish dismissing first.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    simulationResult = result
+                }
+            }
+        }
+        .fullScreenCover(item: $simulationResult) { result in
+            SimulationTimelineView(
+                result: result,
+                onDiscard: {
+                    simulationResult = nil
+                },
+                onCommit: { intent in
+                    tasksVM.commitSimulation(intent)
+                    simulationResult = nil
+                }
+            )
         }
         .task {
             await tasksVM.loadTasks(userId: userId)
@@ -326,23 +357,43 @@ struct TaskFormSheet: View {
     enum Mode: Identifiable {
         case create
         case edit(LifeTask)
-        
+        /// Builds a task without persisting — used by What-If simulation.
+        case hypothetical
+
         var id: String {
             switch self {
             case .create: return "create"
             case .edit(let task): return task.id
+            case .hypothetical: return "hypothetical"
             }
         }
-        
+
         var isEditing: Bool {
             if case .edit = self { return true }
             return false
         }
+
+        var isHypothetical: Bool {
+            if case .hypothetical = self { return true }
+            return false
+        }
     }
-    
+
     @ObservedObject var tasksVM: TasksViewModel
     let mode: Mode
-    
+    /// When set (hypothetical mode), called with the drafted task instead of persisting.
+    var onHypotheticalSave: ((LifeTask) -> Void)?
+
+    init(
+        tasksVM: TasksViewModel,
+        mode: Mode,
+        onHypotheticalSave: ((LifeTask) -> Void)? = nil
+    ) {
+        self.tasksVM = tasksVM
+        self.mode = mode
+        self.onHypotheticalSave = onHypotheticalSave
+    }
+
     @State private var title = ""
     @State private var description = ""
     @State private var lifeArea: LifeArea = .personal
@@ -355,7 +406,7 @@ struct TaskFormSheet: View {
     @State private var fixedStartTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var fixedEndTime = Calendar.current.date(bySettingHour: 17, minute: 30, second: 0, of: Date()) ?? Date()
     @State private var autoFillError: String?
-    
+
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -464,7 +515,7 @@ struct TaskFormSheet: View {
                 .scrollContentBackground(.hidden)
                 .disabled(tasksVM.isAutoFilling)
             }
-            .navigationTitle(mode.isEditing ? "Edit Task" : "New Task")
+            .navigationTitle(navigationTitleText)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -474,7 +525,7 @@ struct TaskFormSheet: View {
                         .disabled(tasksVM.isAutoFilling)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(mode.isEditing ? "Save" : "Create", action: saveTask)
+                    Button(confirmationTitle, action: saveTask)
                         .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || tasksVM.isAutoFilling)
                 }
             }
@@ -526,6 +577,16 @@ struct TaskFormSheet: View {
         }
     }
     
+    private var navigationTitleText: String {
+        if mode.isHypothetical { return "What-If Task" }
+        return mode.isEditing ? "Edit Task" : "New Task"
+    }
+
+    private var confirmationTitle: String {
+        if mode.isHypothetical { return "Simulate" }
+        return mode.isEditing ? "Save" : "Create"
+    }
+
     private func saveTask() {
         KeyboardDismiss.dismiss()
         guard recurrence != .custom || !selectedWeekdays.isEmpty else {
@@ -544,22 +605,23 @@ struct TaskFormSheet: View {
 
         switch self.mode {
         case .create:
-            let task = LifeTask(
-                title: title,
-                description: description,
-                lifeArea: lifeArea,
-                priority: priority,
-                difficulty: difficulty,
-                estimatedMinutes: estimatedMinutes,
-                requiredEnergy: difficulty.minimumEnergy,
-                scheduledTime: startTime,
-                recurrence: recurrence == .none ? nil : recurrence,
-                recurrenceWeekdays: weekdays,
-                schedulingMode: scheduling,
-                scheduledEndTime: endTime
+            let task = makeDraftTask(
+                scheduling: scheduling,
+                startTime: startTime,
+                endTime: endTime,
+                weekdays: weekdays
             )
             HapticManager.impact(.medium)
             tasksVM.createTask(task)
+        case .hypothetical:
+            let task = makeDraftTask(
+                scheduling: scheduling,
+                startTime: startTime,
+                endTime: endTime,
+                weekdays: weekdays
+            )
+            HapticManager.impact(.medium)
+            onHypotheticalSave?(task)
         case .edit(let existing):
             var updated = existing
             updated.title = title
@@ -580,6 +642,52 @@ struct TaskFormSheet: View {
         }
         HapticManager.notification(.success)
         dismiss()
+    }
+
+    private func makeDraftTask(
+        scheduling: TaskSchedulingMode,
+        startTime: Date?,
+        endTime: Date?,
+        weekdays: [Int]?
+    ) -> LifeTask {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: Date())
+        // Flexible what-if tasks still need a proposed window so cascade can rank/shift them.
+        let resolvedStart: Date? = {
+            if let startTime { return startTime }
+            if mode.isHypothetical {
+                return calendar.date(bySettingHour: 10, minute: 0, second: 0, of: dayStart)
+            }
+            return nil
+        }()
+        let resolvedEnd: Date? = {
+            if let endTime { return endTime }
+            guard let resolvedStart else { return nil }
+            return resolvedStart.addingTimeInterval(TimeInterval(max(estimatedMinutes, 1) * 60))
+        }()
+
+        var task = LifeTask(
+            title: title,
+            description: description,
+            lifeArea: lifeArea,
+            priority: priority,
+            difficulty: difficulty,
+            estimatedMinutes: estimatedMinutes,
+            requiredEnergy: difficulty.minimumEnergy,
+            scheduledDate: dayStart,
+            scheduledTime: resolvedStart,
+            recurrence: recurrence == .none ? nil : recurrence,
+            recurrenceWeekdays: weekdays,
+            schedulingMode: scheduling,
+            scheduledEndTime: resolvedEnd
+        )
+        // Fluid when flexible so cascade can absorb/reposition during dry-run.
+        if scheduling != .fixedTime {
+            task.timeConstraint = .fluid
+        } else {
+            task.timeConstraint = .anchored
+        }
+        return task
     }
     
     private func deleteTask() {

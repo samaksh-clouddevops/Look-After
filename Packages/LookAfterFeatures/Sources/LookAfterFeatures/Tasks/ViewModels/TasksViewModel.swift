@@ -374,7 +374,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         tasks.insert(task, at: 0)
-        
+
         Task {
             do {
                 var enriched = task
@@ -383,7 +383,7 @@ public final class TasksViewModel: ObservableObject {
                     tasks[index] = enriched
                 }
                 try await taskRepo.create(enriched)
-                
+
                 if enriched.steps.isEmpty {
                     await decomposeTask(enriched)
                 }
@@ -391,6 +391,59 @@ public final class TasksViewModel: ObservableObject {
                 tasks.removeAll { $0.id == task.id }
                 self.error = error.localizedDescription
             }
+        }
+    }
+
+    // MARK: - What-If Simulation
+
+    /// Snapshot of live operational state for dry-run simulation (value copy).
+    public func currentLifeState(now: Date = Date(), calendar: Calendar = .current) -> LifeState {
+        LifeEngine.shared.lifeState(
+            tasks: tasks + completedToday,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    /// Pure in-memory what-if — does not touch the task repo or parked queue.
+    public func simulateSchedule(
+        hypotheticalTasks: [LifeTask],
+        day: Date = Date(),
+        model: LifeModel? = LifeModelStore.load(),
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> SimulationResult {
+        LookAfterCore.SimulationEngine.simulate(
+            baselineState: currentLifeState(now: now, calendar: calendar),
+            hypotheticalTasks: hypotheticalTasks,
+            day: day,
+            model: model,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    /// Convenience single-task what-if.
+    public func simulateSchedule(
+        hypotheticalTask: LifeTask,
+        day: Date = Date(),
+        model: LifeModel? = LifeModelStore.load(),
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> SimulationResult {
+        simulateSchedule(
+            hypotheticalTasks: [hypotheticalTask],
+            day: day,
+            model: model,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    /// Apply a simulation commit intent — officially ingest the hypothetical tasks.
+    public func commitSimulation(_ intent: SimulationCommitIntent) {
+        for task in intent.tasksToIngest {
+            createTask(task)
         }
     }
 

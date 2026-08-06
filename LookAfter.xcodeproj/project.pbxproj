@@ -35,6 +35,7 @@
 		1F4A179125AAC7DDF96DA2E4 /* LookAfterCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425144593800699C52357460 /* LookAfterCoreTests.swift */; };
 		210B0DAC2396023D1B529811 /* LookAfterBottomNav.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE586C5429F94C0CF3913CFD /* LookAfterBottomNav.swift */; };
 			A7B8C9D0E1F2031425364758 /* WeeklyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C9D0E1F203142536475869 /* WeeklyReviewView.swift */; };
+		E2F3A405162738495A6B8D9E /* SimulationTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A405162738495A6B8D /* SimulationTimelineView.swift */; };
 		227DCAB17261A95DE088E8BD /* OnboardingTaskSeederTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB7B6E923DF26883B88B4D2D /* OnboardingTaskSeederTests.swift */; };
 		22DC8EFED0C8CA1071D167CD /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF89BD7141F11978B624F40 /* NotificationScheduler.swift */; };
 		2353500D6707ABFEA6328842 /* LookAfterMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F48B9B0CFCA26F6E06EF9F2 /* LookAfterMacApp.swift */; };
@@ -440,6 +441,7 @@
 		C9B171C3FF5215B7AB956F5E /* TaskHeroEligibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskHeroEligibilityTests.swift; sourceTree = "<group>"; };
 		CE586C5429F94C0CF3913CFD /* LookAfterBottomNav.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookAfterBottomNav.swift; sourceTree = "<group>"; };
 		B8C9D0E1F203142536475869 /* WeeklyReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyReviewView.swift; sourceTree = "<group>"; };
+		D1E2F3A405162738495A6B8D /* SimulationTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulationTimelineView.swift; sourceTree = "<group>"; };
 		CEFED34A2D2926D36D8263C7 /* ProductivityTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductivityTracker.swift; sourceTree = "<group>"; };
 		D02F0C52B250D68FED6C161C /* FlowSchedulingRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSchedulingRuleTests.swift; sourceTree = "<group>"; };
 		D376A83048C88E5AFC8028C8 /* LookAfter-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "LookAfter-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -882,6 +884,7 @@
 				B3B3959BBDC76FC1119512A5 /* Navigation */,
 				249E40C49EB002307C369DBD /* Onboarding */,
 				C9D0E1F203142536475869A7 /* Review */,
+				F0A1B2C3D4E5F60718293A4B /* Simulation */,
 				8602F80FFA2FFDB3197AC99D /* Settings */,
 				E9281D03CE72C2869DC10947 /* Shared */,
 				A6E2B844DCF92C6C23284FCE /* Tasks */,
@@ -898,6 +901,14 @@
 				path = Review;
 				sourceTree = "<group>";
 			};
+		F0A1B2C3D4E5F60718293A4B /* Simulation */ = {
+			isa = PBXGroup;
+			children = (
+				D1E2F3A405162738495A6B8D /* SimulationTimelineView.swift */,
+			);
+			path = Simulation;
+			sourceTree = "<group>";
+		};
 		7C6ACCB55915FE55E6857751 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
@@ -1724,6 +1735,7 @@
 				98ECF19BF103F6CD20D862E1 /* LookAfterAppDelegate.swift in Sources */,
 				210B0DAC2396023D1B529811 /* LookAfterBottomNav.swift in Sources */,
 				A7B8C9D0E1F2031425364758 /* WeeklyReviewView.swift in Sources */,
+				E2F3A405162738495A6B8D9E /* SimulationTimelineView.swift in Sources */,
 				4FB4363D1A1C9DE957BC6B3F /* LookAfterRootCanvas.swift in Sources */,
 				6F4793169041F374726E653D /* ModuleViews.swift in Sources */,
 				81912AC1FFB070CCD1315B8A /* NotificationCoordinator.swift in Sources */,

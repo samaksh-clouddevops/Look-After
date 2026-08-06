@@ -3,19 +3,55 @@ import Foundation
 /// Validates and repairs same-day task schedules so no two tasks overlap.
 public enum DayScheduleReconciler {
 
-    public struct Result: Sendable {
+    public struct Result: Sendable, Equatable {
         public var tasks: [LifeTask]
         public var changedTaskIDs: Set<String>
         public var conflictTaskIDs: Set<String>
+        /// Full cascade payload (decisions, parked IDs). Always populated by reconcile paths.
+        public var cascade: ConflictCascadeResult
 
         public init(
             tasks: [LifeTask] = [],
             changedTaskIDs: Set<String> = [],
-            conflictTaskIDs: Set<String> = []
+            conflictTaskIDs: Set<String> = [],
+            cascade: ConflictCascadeResult? = nil
         ) {
             self.tasks = tasks
             self.changedTaskIDs = changedTaskIDs
             self.conflictTaskIDs = conflictTaskIDs
+            self.cascade = cascade ?? ConflictCascadeResult(tasks: tasks, changedTaskIDs: changedTaskIDs)
+        }
+    }
+
+    /// Controls side effects when reconciling a day.
+    public struct Options: Sendable {
+        /// When non-nil, parked tasks are enqueued here. Pass `nil` for pure dry-runs.
+        public var parkedQueue: ParkedTaskQueueStore?
+        /// When true, cascade decisions are written to `CascadeActionLog`.
+        public var recordActions: Bool
+
+        public init(
+            parkedQueue: ParkedTaskQueueStore? = ParkedTaskQueueStore.shared,
+            recordActions: Bool = true
+        ) {
+            self.parkedQueue = parkedQueue
+            self.recordActions = recordActions
+        }
+
+        /// Live path used by operational scheduling.
+        public static var live: Options {
+            Options(
+                parkedQueue: ParkedTaskQueueStore.shared,
+                recordActions: true
+            )
+        }
+
+        /// Pure in-memory path — no shared stores mutated.
+        public static var dryRun: Options {
+            Options(
+                parkedQueue: nil,
+                recordActions: false
+            )
         }
     }
 
@@ -27,7 +63,8 @@ public enum DayScheduleReconciler {
         model: LifeModel? = nil,
         now: Date = Date(),
         calendar: Calendar = .current,
-        bufferMinutes: Int = 5
+        bufferMinutes: Int = 5,
+        options: Options = .live
     ) -> Result {
         let dayStart = calendar.startOfDay(for: day)
 
@@ -55,24 +92,48 @@ public enum DayScheduleReconciler {
             now: now,
             calendar: calendar,
             bufferMinutes: bufferMinutes,
-            parkedQueue: ParkedTaskQueueStore.shared,
+            parkedQueue: options.parkedQueue,
             remainingTasks: synced
         )
         changedIDs.formUnion(cascade.changedTaskIDs)
 
         // Forest-not-trees: distill macro actions for Morning Briefing (never raw decision spam).
-        CascadeActionLog.shared.record(
-            result: cascade,
-            resurrectedCount: ResurrectedTaskRegistry.shared.activeIDs(now: now).count,
-            now: now,
-            calendar: calendar
-        )
+        if options.recordActions {
+            CascadeActionLog.shared.record(
+                result: cascade,
+                resurrectedCount: ResurrectedTaskRegistry.shared.activeIDs(now: now).count,
+                now: now,
+                calendar: calendar
+            )
+        }
 
         // Cascade guarantees a clean day — never surface manual conflict IDs.
         return Result(
             tasks: cascade.tasks,
             changedTaskIDs: changedIDs,
-            conflictTaskIDs: []
+            conflictTaskIDs: [],
+            cascade: cascade
+        )
+    }
+
+    /// Convenience: reconcile a `LifeState` snapshot (value copy — never mutates the input).
+    public static func reconcile(
+        state: LifeState,
+        on day: Date,
+        model: LifeModel? = nil,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        bufferMinutes: Int = 5,
+        options: Options = .live
+    ) -> Result {
+        reconcile(
+            tasks: state.activeTasks,
+            on: day,
+            model: model,
+            now: now,
+            calendar: calendar,
+            bufferMinutes: bufferMinutes,
+            options: options
         )
     }
 
