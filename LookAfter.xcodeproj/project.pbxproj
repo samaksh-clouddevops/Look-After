@@ -177,6 +177,10 @@
 		BA4A8FC964ADC7FE975876D3 /* ExecutiveCapacityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2517348759419C8DE6FBF122 /* ExecutiveCapacityCard.swift */; };
 		BAA105EFF38CD3932455A6FB /* Flow018Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC6683641A97313316959300 /* Flow018Tests.swift */; };
 		BBC3BCE3D74ABCC9CBDCA53A /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FF2E7B7BCD92BF3A44D652 /* LiveActivityManager.swift */; };
+		E1A2B3C4D5E6F708192A3B4C /* ExecutionEnvironmentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F708192A3B4D /* ExecutionEnvironmentCoordinator.swift */; };
+		E1A2B3C4D5E6F708192A3B4E /* ActivityStateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F708192A3B4F /* ActivityStateController.swift */; };
+		E1A2B3C4D5E6F708192A3B50 /* ExecutionFocusCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F708192A3B51 /* ExecutionFocusCoordinator.swift */; };
+		E1A2B3C4D5E6F708192A3B52 /* LookAfterFocusIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F708192A3B53 /* LookAfterFocusIntent.swift */; };
 		BCB7B5AD8A77ECCC83C8006C /* TaskCardUIContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF9B08DAE93B5D6702F4308 /* TaskCardUIContractTests.swift */; };
 		BEFAE706D9CEA70B0C67D253 /* TodayCompactMetricsStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31DDA63450F8BC6B582DDA03 /* TodayCompactMetricsStrip.swift */; };
 		C0156769724429F702C3B1E7 /* ReschedulePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B34D1287984A2C00D54D7F1 /* ReschedulePreviewSheet.swift */; };
@@ -376,6 +380,10 @@
 		73957DEFB1D64205EA202D40 /* Flow016Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Flow016Tests.swift; sourceTree = "<group>"; };
 		741FECD3E771F92512DB7427 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		74FF2E7B7BCD92BF3A44D652 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		E1A2B3C4D5E6F708192A3B4D /* ExecutionEnvironmentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionEnvironmentCoordinator.swift; sourceTree = "<group>"; };
+		E1A2B3C4D5E6F708192A3B4F /* ActivityStateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStateController.swift; sourceTree = "<group>"; };
+		E1A2B3C4D5E6F708192A3B51 /* ExecutionFocusCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionFocusCoordinator.swift; sourceTree = "<group>"; };
+		E1A2B3C4D5E6F708192A3B53 /* LookAfterFocusIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookAfterFocusIntent.swift; sourceTree = "<group>"; };
 		75F44AA1CB90B054F65A39EB /* Flow022Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Flow022Tests.swift; sourceTree = "<group>"; };
 		76C909909D33759B337DE2EE /* DailyPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyPlanView.swift; sourceTree = "<group>"; };
 		7A7665B09521ACCA91C650B0 /* AppFeatureTourModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureTourModels.swift; sourceTree = "<group>"; };
@@ -1044,6 +1052,7 @@
 				1203076F75A84FD4C2F23187 /* HealthSyncLogger.swift */,
 				F145D35587CD0D4541819335 /* HealthSyncService.swift */,
 				74FF2E7B7BCD92BF3A44D652 /* LiveActivityManager.swift */,
+				E1A2B3C4D5E6F708192A3B54 /* Execution */,
 				9D9F1FE5EB3296CEAC7E321C /* NotificationCoordinator.swift */,
 				99AE3B080C846FC1EC8A9D10 /* NotificationPermissionService.swift */,
 				100A4BC934F94D2C5B55E95F /* NotificationRouter.swift */,
@@ -1056,6 +1065,17 @@
 				A05C1E2552993C94D5B750A6 /* WidgetSyncService.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		E1A2B3C4D5E6F708192A3B54 /* Execution */ = {
+			isa = PBXGroup;
+			children = (
+				E1A2B3C4D5E6F708192A3B4F /* ActivityStateController.swift */,
+				E1A2B3C4D5E6F708192A3B4D /* ExecutionEnvironmentCoordinator.swift */,
+				E1A2B3C4D5E6F708192A3B51 /* ExecutionFocusCoordinator.swift */,
+				E1A2B3C4D5E6F708192A3B53 /* LookAfterFocusIntent.swift */,
+			);
+			path = Execution;
 			sourceTree = "<group>";
 		};
 		D0933A307C54575241CB2528 /* Accessibility */ = {
@@ -1711,6 +1731,10 @@
 				2EC4DE3085D90A79A1ADFA5F /* LifeGapsCard.swift in Sources */,
 				E10F17AB3048A0134417AE5B /* LifeProfileImportView.swift in Sources */,
 				BBC3BCE3D74ABCC9CBDCA53A /* LiveActivityManager.swift in Sources */,
+				E1A2B3C4D5E6F708192A3B4C /* ExecutionEnvironmentCoordinator.swift in Sources */,
+				E1A2B3C4D5E6F708192A3B4E /* ActivityStateController.swift in Sources */,
+				E1A2B3C4D5E6F708192A3B50 /* ExecutionFocusCoordinator.swift in Sources */,
+				E1A2B3C4D5E6F708192A3B52 /* LookAfterFocusIntent.swift in Sources */,
 				5A12AA165F86BD3822DD4ADE /* LookAfterApp.swift in Sources */,
 				98ECF19BF103F6CD20D862E1 /* LookAfterAppDelegate.swift in Sources */,
 				210B0DAC2396023D1B529811 /* LookAfterBottomNav.swift in Sources */,

@@ -13,6 +13,10 @@ final class LiveActivityManager {
     /// When true, schedule-driven execution owns the focus activity slot.
     private(set) var isExecutionDriven = false
 
+    /// Serializes start/update/end so async `Activity.end` cannot race a new `Activity.request`.
+    private var focusOperationChain: Task<Void, Never>?
+    private var nowPinEndTask: Task<Void, Never>?
+
     private init() {}
 
     var isNowPinned: Bool {
@@ -32,49 +36,33 @@ final class LiveActivityManager {
         isOnBreak: Bool,
         sessionLabel: String,
         remainingLabel: String,
-        isPaused: Bool
+        isPaused: Bool,
+        progressFraction: Double
     ) {
         isExecutionDriven = false
-        // Performance: defer ActivityKit until after focus UI paints.
-        // Activity.request is MainActor and can block for hundreds of ms on device.
-        Task { @MainActor in
-            // Let FocusSessionView layout/paint first.
-            await Task.yield()
-            await Task.yield()
-            // Brief pause so the first frame is committed before ActivityKit work.
-            try? await Task.sleep(nanoseconds: 250_000_000)
-
+        enqueueFocusOperation(deferStartup: true) { [weak self] in
+            guard let self else { return }
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
-            if let existing = focusActivity {
-                focusActivity = nil
-                Task {
-                    await existing.end(nil, dismissalPolicy: .immediate)
-                }
-            }
+            await self.endFocusActivityIfNeeded()
 
             let attributes = FocusActivityAttributes(
                 taskTitle: taskTitle,
                 sessionNumber: sessionNumber,
                 categoryIcon: "brain.head.profile"
             )
-            let state = FocusActivityAttributes.ContentState(
+            let state = Self.manualContentState(
                 taskTitle: taskTitle,
                 sessionEndDate: sessionEndDate,
-                isPaused: isPaused,
                 isOnBreak: isOnBreak,
                 sessionLabel: sessionLabel,
                 remainingLabel: remainingLabel,
-                constraintType: "Flexible",
-                progressFraction: 0,
-                nextUpSummary: "",
-                categoryRaw: FocusTaskCategory.deepWork.rawValue,
-                surfaceModeRaw: ExecutionSurfaceMode.flexible.rawValue,
-                showsStrictCountdown: true
+                isPaused: isPaused,
+                progressFraction: progressFraction
             )
 
             do {
-                focusActivity = try Activity.request(
+                self.focusActivity = try Activity.request(
                     attributes: attributes,
                     content: .init(state: state, staleDate: sessionEndDate),
                     pushType: nil
@@ -92,9 +80,9 @@ final class LiveActivityManager {
         isOnBreak: Bool,
         sessionLabel: String,
         remainingLabel: String,
-        isPaused: Bool
+        isPaused: Bool,
+        progressFraction: Double
     ) {
-        // Manual focus takes ownership over schedule-driven projection.
         isExecutionDriven = false
         if focusActivity == nil {
             startFocusActivity(
@@ -104,40 +92,36 @@ final class LiveActivityManager {
                 isOnBreak: isOnBreak,
                 sessionLabel: sessionLabel,
                 remainingLabel: remainingLabel,
-                isPaused: isPaused
+                isPaused: isPaused,
+                progressFraction: progressFraction
             )
             return
         }
 
-        guard let focusActivity else { return }
-        let state = FocusActivityAttributes.ContentState(
-            taskTitle: taskTitle,
-            sessionEndDate: sessionEndDate,
-            isPaused: isPaused,
-            isOnBreak: isOnBreak,
-            sessionLabel: sessionLabel,
-            remainingLabel: remainingLabel,
-            constraintType: isOnBreak ? "Recovery" : "Flexible",
-            progressFraction: 0,
-            nextUpSummary: "",
-            categoryRaw: FocusTaskCategory.deepWork.rawValue,
-            surfaceModeRaw: isOnBreak
-                ? ExecutionSurfaceMode.recovery.rawValue
-                : ExecutionSurfaceMode.flexible.rawValue,
-            showsStrictCountdown: !isPaused
-        )
-        Task {
+        enqueueFocusOperation(deferStartup: false) { [weak self] in
+            guard let self, let focusActivity = self.focusActivity else { return }
+            let state = Self.manualContentState(
+                taskTitle: taskTitle,
+                sessionEndDate: sessionEndDate,
+                isOnBreak: isOnBreak,
+                sessionLabel: sessionLabel,
+                remainingLabel: remainingLabel,
+                isPaused: isPaused,
+                progressFraction: progressFraction
+            )
             await focusActivity.update(.init(state: state, staleDate: sessionEndDate))
         }
     }
 
     func endFocusActivity() {
-        guard let focusActivity else { return }
-        Task {
-            await focusActivity.end(nil, dismissalPolicy: .immediate)
+        enqueueFocusOperation(deferStartup: false) { [weak self] in
+            await self?.endFocusActivityIfNeeded()
         }
-        self.focusActivity = nil
-        isExecutionDriven = false
+    }
+
+    func endFocusActivityAndWait() async {
+        endFocusActivity()
+        await focusOperationChain?.value
     }
 
     // MARK: - Execution Layer (schedule-driven)
@@ -147,6 +131,7 @@ final class LiveActivityManager {
     func applyExecutionBlock(_ snapshot: ExecutionBlockSnapshot, manualFocusActive: Bool) {
         guard !manualFocusActive else { return }
         guard !UITestLaunchConfiguration.shouldSkipLiveActivity else { return }
+
         guard snapshot.surfaceMode.projectsLiveActivity,
               ExecutionBlockResolver.shouldProjectEnvironment(for: snapshot) else {
             if isExecutionDriven {
@@ -155,38 +140,39 @@ final class LiveActivityManager {
             return
         }
 
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-
         let state = Self.contentState(from: snapshot)
         let icon = snapshot.category.systemImage
+        let staleDate = snapshot.windowEnd
 
         if let focusActivity, isExecutionDriven {
-            Task {
-                await focusActivity.update(.init(state: state, staleDate: snapshot.windowEnd))
+            enqueueFocusOperation(deferStartup: false) { [weak self] in
+                guard let self, let current = self.focusActivity, current.id == focusActivity.id else { return }
+                await current.update(.init(state: state, staleDate: staleDate))
             }
             return
         }
 
-        // Replace any stale activity.
-        if let existing = focusActivity {
-            focusActivity = nil
-            Task { await existing.end(nil, dismissalPolicy: .immediate) }
-        }
+        enqueueFocusOperation(deferStartup: true) { [weak self] in
+            guard let self else { return }
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
-        let attributes = FocusActivityAttributes(
-            taskTitle: snapshot.taskTitle,
-            sessionNumber: 1,
-            categoryIcon: icon
-        )
-        do {
-            focusActivity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: state, staleDate: snapshot.windowEnd),
-                pushType: nil
+            await self.endFocusActivityIfNeeded()
+
+            let attributes = FocusActivityAttributes(
+                taskTitle: snapshot.taskTitle,
+                sessionNumber: 1,
+                categoryIcon: icon
             )
-            isExecutionDriven = true
-        } catch {
-            print("Execution Live Activity failed: \(error.localizedDescription)")
+            do {
+                self.focusActivity = try Activity.request(
+                    attributes: attributes,
+                    content: .init(state: state, staleDate: staleDate),
+                    pushType: nil
+                )
+                self.isExecutionDriven = true
+            } catch {
+                print("Execution Live Activity failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -219,39 +205,41 @@ final class LiveActivityManager {
             showsStrictCountdown: snapshot.surfaceMode.showsStrictCountdown
         )
     }
-    
+
     // MARK: - Pinned Now
-    
+
     func startNowPin(from snapshot: WidgetSnapshot) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         guard let title = snapshot.topTaskTitle, !title.isEmpty else { return }
-        
-        endNowPin()
-        
-        let attributes = NowPinActivityAttributes(pinnedAt: Date())
-        let state = NowPinActivityAttributes.ContentState(
-            topTaskTitle: title,
-            energyScore: snapshot.energyScore,
-            energyLevel: snapshot.energyLevel,
-            recommendation: snapshot.recommendation,
-            estimatedMinutes: snapshot.topTaskMinutes ?? 25
-        )
-        
-        do {
-            nowPinActivity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: state, staleDate: nil),
-                pushType: nil
+
+        Task { @MainActor in
+            await endNowPinIfNeeded()
+
+            let attributes = NowPinActivityAttributes(pinnedAt: Date())
+            let state = NowPinActivityAttributes.ContentState(
+                topTaskTitle: title,
+                energyScore: snapshot.energyScore,
+                energyLevel: snapshot.energyLevel,
+                recommendation: snapshot.recommendation,
+                estimatedMinutes: snapshot.topTaskMinutes ?? 25
             )
-        } catch {
-            print("Now pin Live Activity failed: \(error.localizedDescription)")
+
+            do {
+                nowPinActivity = try Activity.request(
+                    attributes: attributes,
+                    content: .init(state: state, staleDate: nil),
+                    pushType: nil
+                )
+            } catch {
+                print("Now pin Live Activity failed: \(error.localizedDescription)")
+            }
         }
     }
-    
+
     func updateNowPin(from snapshot: WidgetSnapshot) {
         guard let nowPinActivity else { return }
         guard let title = snapshot.topTaskTitle, !title.isEmpty else { return }
-        
+
         let state = NowPinActivityAttributes.ContentState(
             topTaskTitle: title,
             energyScore: snapshot.energyScore,
@@ -263,18 +251,78 @@ final class LiveActivityManager {
             await nowPinActivity.update(.init(state: state, staleDate: nil))
         }
     }
-    
+
     func endNowPin() {
-        guard let nowPinActivity else { return }
-        Task {
-            await nowPinActivity.end(nil, dismissalPolicy: .immediate)
+        Task { @MainActor in
+            await endNowPinIfNeeded()
         }
-        self.nowPinActivity = nil
     }
 
     /// Ends every live activity after factory reset.
     func endAllActivities() {
         endFocusActivity()
         endNowPin()
+    }
+
+    // MARK: - Private
+
+    private static func manualContentState(
+        taskTitle: String,
+        sessionEndDate: Date,
+        isOnBreak: Bool,
+        sessionLabel: String,
+        remainingLabel: String,
+        isPaused: Bool,
+        progressFraction: Double
+    ) -> FocusActivityAttributes.ContentState {
+        FocusActivityAttributes.ContentState(
+            taskTitle: taskTitle,
+            sessionEndDate: sessionEndDate,
+            isPaused: isPaused,
+            isOnBreak: isOnBreak,
+            sessionLabel: sessionLabel,
+            remainingLabel: remainingLabel,
+            constraintType: isOnBreak ? "Recovery" : "Flexible",
+            progressFraction: progressFraction,
+            nextUpSummary: "",
+            categoryRaw: FocusTaskCategory.deepWork.rawValue,
+            surfaceModeRaw: isOnBreak
+                ? ExecutionSurfaceMode.recovery.rawValue
+                : ExecutionSurfaceMode.flexible.rawValue,
+            showsStrictCountdown: !isPaused
+        )
+    }
+
+    private func enqueueFocusOperation(
+        deferStartup: Bool,
+        _ operation: @escaping @MainActor () async -> Void
+    ) {
+        let previous = focusOperationChain
+        focusOperationChain = Task { @MainActor in
+            if let previous { await previous.value }
+            if deferStartup {
+                await Task.yield()
+                await Task.yield()
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+            await operation()
+        }
+    }
+
+    private func endFocusActivityIfNeeded() async {
+        guard let activity = focusActivity else { return }
+        focusActivity = nil
+        isExecutionDriven = false
+        await activity.end(nil, dismissalPolicy: .immediate)
+    }
+
+    private func endNowPinIfNeeded() async {
+        if let endTask = nowPinEndTask {
+            await endTask.value
+            nowPinEndTask = nil
+        }
+        guard let activity = nowPinActivity else { return }
+        nowPinActivity = nil
+        await activity.end(nil, dismissalPolicy: .immediate)
     }
 }

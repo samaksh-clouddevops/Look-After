@@ -52,7 +52,7 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
     func updateTasks(_ tasks: [LifeTask]) {
         self.tasks = tasks
         if isRunning {
-            resolveAndProject(now: Date())
+            resolveAndProject(now: Date(), forceLiveActivity: false)
         }
     }
 
@@ -63,19 +63,25 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
             // Manual path owns Live Activity via WidgetSyncService.
             lastResolutionIdentity = nil
         } else if isRunning {
-            resolveAndProject(now: Date())
+            resolveAndProject(now: Date(), forceLiveActivity: false)
         }
     }
 
     /// Force an immediate resolve (scene become-active, task list change).
-    func refresh(now: Date = Date()) {
+    func refresh(now: Date = Date(), forceLiveActivity: Bool = false) {
         guard isRunning else { return }
-        resolveAndProject(now: now)
+        resolveAndProject(now: now, forceLiveActivity: forceLiveActivity)
+    }
+
+    /// Push a final Live Activity update before the app suspends.
+    func prepareForBackground(now: Date = Date()) {
+        guard isRunning else { return }
+        resolveAndProject(now: now, forceLiveActivity: true)
     }
 
     // MARK: - Resolve
 
-    private func resolveAndProject(now: Date) {
+    private func resolveAndProject(now: Date, forceLiveActivity: Bool = false) {
         let snapshot = ExecutionBlockResolver.resolve(tasks: tasks, now: now)
         activeSnapshot = snapshot
 
@@ -85,10 +91,11 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
 
         ActivityStateController.shared.apply(
             snapshot: snapshot,
-            manualFocusActive: manualFocusActive
+            manualFocusActive: manualFocusActive,
+            force: forceLiveActivity
         )
 
-        if identityChanged {
+        if identityChanged || forceLiveActivity {
             Task {
                 await ExecutionFocusCoordinator.shared.apply(snapshot: snapshot)
             }
@@ -108,12 +115,12 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
             guard !Task.isCancelled, self.isRunning else { return }
-            self.resolveAndProject(now: Date())
+            self.resolveAndProject(now: Date(), forceLiveActivity: false)
             // Align next tick to upcoming block boundary when useful.
             if let delay = self.secondsUntilBoundary(from: Date()), delay > 0, delay < self.activeTickInterval {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard !Task.isCancelled, self.isRunning else { return }
-                self.resolveAndProject(now: Date())
+                self.resolveAndProject(now: Date(), forceLiveActivity: false)
             }
             self.scheduleNextTick(immediate: false)
         }

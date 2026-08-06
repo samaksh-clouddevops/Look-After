@@ -70,6 +70,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
         guard firebase.isAuthenticated else { return }
         let userId = firebase.currentUserId ?? ""
         if phase == .background {
+            shell.prepareExecutionEnvironmentForBackground()
             BackgroundAnalyticsScheduler.shared.handleAppBackground(userId: userId)
             PostWakeSessionStore.recordBackground()
             BackgroundNotificationRefreshTask.scheduleNextRefresh()
@@ -184,6 +185,12 @@ private struct ExperienceRootFocusModifier: ViewModifier {
                 }
             }
             .onChange(of: shell.adhdVM.focusSessionTarget) { _, _ in
+                Task { @MainActor in
+                    await Task.yield()
+                    WidgetSyncService.shared.syncFocusActivity(adhdVM: shell.adhdVM)
+                }
+            }
+            .onChange(of: shell.adhdVM.focusProgressBucket) { _, _ in
                 Task { @MainActor in
                     await Task.yield()
                     WidgetSyncService.shared.syncFocusActivity(adhdVM: shell.adhdVM)

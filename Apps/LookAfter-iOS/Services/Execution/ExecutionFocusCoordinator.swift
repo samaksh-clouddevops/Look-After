@@ -33,10 +33,11 @@ final class ExecutionFocusCoordinator {
         let key = filterKey(for: snapshot)
         guard key != lastAppliedKey else { return }
 
-        ExecutionFocusFilterStore.shared.record(
+        await publishFocusContext(
             category: snapshot.category,
             taskTitle: snapshot.taskTitle,
-            suppressLowPriority: snapshot.category.suppressesLowPriorityNotifications
+            suppressLowPriority: snapshot.category.suppressesLowPriorityNotifications,
+            constraintLabel: snapshot.constraintLabel
         )
         lastAppliedKey = key
         isFilterActive = true
@@ -65,6 +66,29 @@ final class ExecutionFocusCoordinator {
 
     private func filterKey(for snapshot: ExecutionBlockSnapshot) -> String {
         "\(snapshot.taskID ?? snapshot.id)|\(snapshot.category.rawValue)|\(snapshot.surfaceMode.rawValue)"
+    }
+
+    private func publishFocusContext(
+        category: FocusTaskCategory,
+        taskTitle: String,
+        suppressLowPriority: Bool,
+        constraintLabel: String
+    ) async {
+        if #available(iOS 17.0, *) {
+            let intent = LookAfterFocusIntent(
+                category: category,
+                taskTitle: taskTitle,
+                suppressLowPriority: suppressLowPriority,
+                constraintLabel: constraintLabel
+            )
+            _ = try? await intent.perform()
+        } else {
+            ExecutionFocusFilterStore.shared.record(
+                category: category,
+                taskTitle: taskTitle,
+                suppressLowPriority: suppressLowPriority
+            )
+        }
     }
 
     private func clearFilterIfNeeded() {

@@ -57,12 +57,12 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         activeVoiceName = voice?.name ?? "System"
 
         // Map 0.35…0.65 preference into a calm AVSpeech band around default.
-        let prefRate = SpeechVoiceSettings.rate
+        let prefRate = Float(SpeechVoiceSettings.rate)
         let minRate = AVSpeechUtteranceMinimumSpeechRate
         let maxRate = AVSpeechUtteranceMaximumSpeechRate
         let defaultRate = AVSpeechUtteranceDefaultSpeechRate
-        // Prefer slightly under default for executive warmth.
-        let target = defaultRate * CGFloat(0.85 + (prefRate - 0.35) / 0.30 * 0.30)
+        let rateBlend = (prefRate - 0.35) / 0.30 * 0.30
+        let target = defaultRate * (0.85 + rateBlend)
         utterance.rate = min(max(target, minRate), maxRate)
         utterance.pitchMultiplier = Float(SpeechVoiceSettings.pitch)
         utterance.preUtteranceDelay = 0.05

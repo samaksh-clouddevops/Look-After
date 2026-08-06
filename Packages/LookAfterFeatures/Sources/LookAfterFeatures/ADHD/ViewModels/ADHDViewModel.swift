@@ -16,6 +16,10 @@ public final class ADHDViewModel: ObservableObject {
     @Published public var isFocusSessionActive: Bool = false
     @Published public var focusSessionElapsed: TimeInterval = 0
     @Published public var focusSessionTarget: TimeInterval = 25 * 60
+    /// Bumps when Live Activity should refresh progress (bucket boundaries).
+    @Published public private(set) var focusProgressBucket: Int = -1
+
+    private static let liveActivityProgressBuckets: Set<Int> = [0, 25, 50, 65, 75, 90, 95]
     @Published public var focusBreakReminder: Bool = false
     @Published public var currentFocusTask: LifeTask?
     @Published public var isPaused: Bool = false
@@ -137,6 +141,7 @@ public final class ADHDViewModel: ObservableObject {
             stopFocusTick()
             focusSessionElapsed = 0
             focusSessionTarget = TimeInterval(duration * 60)
+            focusProgressBucket = -1
             focusBreakReminder = false
             currentFocusTask = task
             isPaused = false
@@ -172,6 +177,12 @@ public final class ADHDViewModel: ObservableObject {
         focusTickTask = nil
     }
 
+    private func publishFocusProgressBucketIfNeeded() {
+        let bucket = Int((focusProgress * 100).rounded(.down))
+        guard Self.liveActivityProgressBuckets.contains(bucket), bucket != focusProgressBucket else { return }
+        focusProgressBucket = bucket
+    }
+
     private func startFocusTimer() {
         stopFocusTick()
         focusTickTask = Task { @MainActor in
@@ -181,6 +192,7 @@ public final class ADHDViewModel: ObservableObject {
                 guard !isPaused else { continue }
 
                 focusSessionElapsed += 1
+                publishFocusProgressBucketIfNeeded()
 
                 if focusSessionElapsed >= focusSessionTarget {
                     stopFocusTick()
@@ -207,6 +219,7 @@ public final class ADHDViewModel: ObservableObject {
     private func startBreak() {
         isOnBreak = true
         focusSessionElapsed = 0
+        focusProgressBucket = -1
         
         // Long break every N sessions
         let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
@@ -252,18 +265,21 @@ public final class ADHDViewModel: ObservableObject {
     /// Add time to current session.
     public func addTime(minutes: Int) {
         focusSessionTarget += TimeInterval(minutes * 60)
+        publishFocusProgressBucketIfNeeded()
     }
     
     /// Reduce time from current session.
     public func reduceTime(minutes: Int) {
         let reduction = TimeInterval(minutes * 60)
         focusSessionTarget = max(focusSessionElapsed + 60, focusSessionTarget - reduction) // Keep at least 1 min remaining
+        publishFocusProgressBucketIfNeeded()
     }
     
     /// Reset current session timer to full configured duration.
     public func resetTimer() {
         stopFocusTick()
         focusSessionElapsed = 0
+        focusProgressBucket = -1
         if isOnBreak {
             let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
             focusSessionTarget = TimeInterval((isLongBreak ? longBreakMinutes : breakDurationMinutes) * 60)
@@ -285,6 +301,7 @@ public final class ADHDViewModel: ObservableObject {
         cancelCountdownIfNeeded()
         isFocusSessionActive = false
         focusSessionElapsed = 0
+        focusProgressBucket = -1
         focusBreakReminder = false
         currentFocusTask = nil
         isPaused = false

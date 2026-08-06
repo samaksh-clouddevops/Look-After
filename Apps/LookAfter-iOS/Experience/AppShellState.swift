@@ -328,6 +328,13 @@ final class AppShellState: ObservableObject {
         coordinator.refresh()
     }
 
+    func prepareExecutionEnvironmentForBackground() {
+        let coordinator = ExecutionEnvironmentCoordinator.shared
+        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
+        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.prepareForBackground()
+    }
+
     func stopExecutionEnvironment() {
         ExecutionEnvironmentCoordinator.shared.stop()
     }

@@ -20,7 +20,8 @@ final class ActivityStateController {
 
     /// Project snapshot onto Dynamic Island / Lock Screen.
     /// - Parameter manualFocusActive: When true, ADHD pomodoro owns the slot.
-    func apply(snapshot: ExecutionBlockSnapshot, manualFocusActive: Bool) {
+    /// - Parameter force: When true, bypass throttling (e.g. app entering background).
+    func apply(snapshot: ExecutionBlockSnapshot, manualFocusActive: Bool, force: Bool = false) {
         if manualFocusActive {
             lastProjectedKey = nil
             lastProgressBucket = -1
@@ -42,7 +43,7 @@ final class ActivityStateController {
         let identityChanged = key != lastProjectedKey
         let criticalTick = criticalProgressBuckets.contains(bucket) && bucket != lastProgressBucket
 
-        guard identityChanged || criticalTick || lastProjectedKey == nil else { return }
+        guard force || identityChanged || criticalTick || lastProjectedKey == nil else { return }
 
         LiveActivityManager.shared.applyExecutionBlock(snapshot, manualFocusActive: false)
         lastProjectedKey = key

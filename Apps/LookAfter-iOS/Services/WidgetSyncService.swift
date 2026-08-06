@@ -68,7 +68,8 @@ final class WidgetSyncService {
                 isOnBreak: adhdVM.isOnBreak,
                 sessionLabel: adhdVM.sessionLabel,
                 remainingLabel: adhdVM.focusRemainingString,
-                isPaused: adhdVM.isPaused
+                isPaused: adhdVM.isPaused,
+                progressFraction: adhdVM.focusProgress
             )
         }
     }
@@ -90,7 +91,8 @@ final class WidgetSyncService {
                 isOnBreak: adhdVM.isOnBreak,
                 sessionLabel: adhdVM.sessionLabel,
                 remainingLabel: adhdVM.focusRemainingString,
-                isPaused: adhdVM.isPaused
+                isPaused: adhdVM.isPaused,
+                progressFraction: adhdVM.focusProgress
             )
         }
     }
