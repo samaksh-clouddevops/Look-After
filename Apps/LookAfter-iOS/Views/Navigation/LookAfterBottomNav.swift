@@ -4,6 +4,7 @@ import LookAfterCore
 enum LookAfterTab: Int, CaseIterable, Identifiable {
     case briefing
     case today
+    case review
     case brain
     case you
 
@@ -13,6 +14,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
         switch self {
         case .briefing: return "Briefing"
         case .today: return "Today"
+        case .review: return "Review"
         case .brain: return "Brain"
         case .you: return "You"
         }
@@ -22,6 +24,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
         switch self {
         case .briefing: return "doc.text"
         case .today: return "calendar"
+        case .review: return "chart.bar"
         case .brain: return "brain.head.profile"
         case .you: return "person"
         }
@@ -31,6 +34,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
         switch self {
         case .briefing: return "doc.text.fill"
         case .today: return "calendar"
+        case .review: return "chart.bar.fill"
         case .brain: return "brain.head.profile"
         case .you: return "person.fill"
         }
@@ -46,6 +50,7 @@ struct LookAfterBottomNav: View {
         HStack(spacing: 0) {
             tabButton(.briefing)
             tabButton(.today)
+            tabButton(.review)
             captureButton
             tabButton(.brain)
             tabButton(.you)
@@ -120,6 +125,7 @@ struct LookAfterBottomNav: View {
         switch tab {
         case .briefing: return .tabBriefing
         case .today: return .tabToday
+        case .review: return .tabReview
         case .brain: return .tabBrain
         case .you: return .tabYou
         }

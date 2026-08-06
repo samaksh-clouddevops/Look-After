@@ -7,6 +7,7 @@ import LookAfterCore
 enum AppFeatureTourAnchorID: String, Hashable, CaseIterable, Sendable {
     case tabBriefing
     case tabToday
+    case tabReview
     case tabCapture
     case tabBrain
     case tabYou

@@ -465,6 +465,8 @@ public struct LookAfterRootCanvas: View {
                 },
                 isPlanningTomorrow: tomorrowPlannerVM.isScheduling
             )
+        case .review:
+            WeeklyReviewView(summary: weeklyReviewSummary)
         case .brain:
             BrainDashboardView(
                 brainVM: shell.brainVM,
@@ -494,6 +496,12 @@ public struct LookAfterRootCanvas: View {
         case .you:
             ExecutiveProfileView(userId: firebase.resolvedUserId)
         }
+    }
+
+    /// Pull cascade history from BehavioralVault-adjacent `CascadeActionLog` via `LifeEngine`.
+    private var weeklyReviewSummary: WeeklyReviewSummary {
+        let tasks = shell.taskStore.allTasks.isEmpty ? shell.tasksVM.tasks : shell.taskStore.allTasks
+        return LifeEngine.shared.weeklyReview(tasks: tasks)
     }
 
     private func activeFlowSessionState() -> FlowSessionState? {

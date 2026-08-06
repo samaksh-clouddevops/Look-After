@@ -84,6 +84,7 @@ public final class ParkedTaskRecoveryService {
                     ],
                     triggeredRecoveryLock: true
                 ),
+                recoveryDurationMinutes: gapMinutes,
                 now: now
             )
             return .recoveryLocked(block)
@@ -126,6 +127,7 @@ public final class ParkedTaskRecoveryService {
                         ],
                         triggeredRecoveryLock: true
                     ),
+                    recoveryDurationMinutes: gapMinutes,
                     now: now
                 )
                 return .recoveryLocked(block)
