@@ -55,6 +55,11 @@ final class NotificationCoordinator {
             focusToken = shell.adhdVM.sessionLabel
         }
 
+        // Schedule-driven deep work / creative / health blocks suppress low-priority noise
+        // the same way a manual ADHD focus session does.
+        let executionSuppresses = ExecutionFocusFilterStore.shared.suppressLowPriority
+        let focusActive = shell.adhdVM.isFocusSessionActive || executionSuppresses
+
         let input = NotificationRefreshInput(
             now: now,
             medications: MedicationStore.load(),
@@ -63,7 +68,7 @@ final class NotificationCoordinator {
             postWake: postWake,
             heroTaskTitle: heroTask.map(\.title),
             heroTaskId: heroTask?.id,
-            focusSessionActive: shell.adhdVM.isFocusSessionActive,
+            focusSessionActive: focusActive,
             focusBreakFireDate: focusBreakDate,
             focusSessionToken: focusToken,
             userDisplayName: UserLifeProfileStore.resolvedDisplayName()

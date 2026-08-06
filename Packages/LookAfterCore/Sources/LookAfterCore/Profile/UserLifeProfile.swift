@@ -136,12 +136,18 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
 public enum UserLifeProfileStore {
     public static let storageKey = "lifeos.userLifeProfile"
     private static let userNameDefaultsKey = "userName"
+    /// Avoids repeated UserDefaults JSON decode on hot paths (refreshContext, context loop).
+    private static var cachedProfile: UserLifeProfile?
 
     public static func load() -> UserLifeProfile {
+        if let cachedProfile { return cachedProfile }
         guard let data = UserDefaults.standard.data(forKey: storageKey),
               let profile = try? JSONDecoder().decode(UserLifeProfile.self, from: data) else {
-            return migratedLegacyProfile()
+            let migrated = migratedLegacyProfile()
+            cachedProfile = migrated
+            return migrated
         }
+        cachedProfile = profile
         return profile
     }
 
@@ -154,6 +160,7 @@ public enum UserLifeProfileStore {
         }
         UserDefaults.standard.set(updated.peakStartHour, forKey: "peakStartHour")
         UserDefaults.standard.set(updated.peakEndHour, forKey: "peakEndHour")
+        cachedProfile = updated
         syncUserNameFromProfileIfNeeded(profile: updated)
     }
 
@@ -216,7 +223,14 @@ public enum UserLifeProfileStore {
     }
 
     public static func reset() {
+        cachedProfile = nil
         UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+
+    /// Drops the in-memory cache so the next `load()` re-reads UserDefaults.
+    /// Call after bulk UserDefaults wipes (factory reset) that bypass `reset()`.
+    public static func invalidateCache() {
+        cachedProfile = nil
     }
 
     public static func loadUserProfile(displayName: String = "User") -> UserProfile {

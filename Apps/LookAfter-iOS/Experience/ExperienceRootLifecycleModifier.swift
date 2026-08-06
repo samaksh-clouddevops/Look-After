@@ -27,7 +27,8 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
             .modifier(
                 ExperienceRootFocusModifier(
                     firebase: firebase,
-                    shell: shell
+                    shell: shell,
+                    adhdVM: shell.adhdVM
                 )
             )
             .modifier(
@@ -70,6 +71,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
         guard firebase.isAuthenticated else { return }
         let userId = firebase.currentUserId ?? ""
         if phase == .background {
+            shell.prepareExecutionEnvironmentForBackground()
             BackgroundAnalyticsScheduler.shared.handleAppBackground(userId: userId)
             PostWakeSessionStore.recordBackground()
             BackgroundNotificationRefreshTask.scheduleNextRefresh()
@@ -81,6 +83,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
                 aiPreview: shell.brain.chatHistory.last?.content
             )
         } else if phase == .active {
+            shell.syncExecutionEnvironment()
             let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
             if healthEnabled, !userId.isEmpty, healthSync.isAvailable {
                 Task {
@@ -123,7 +126,7 @@ private struct ExperienceRootSyncModifier: ViewModifier {
                         userId: userId,
                         userName: UserLifeProfileStore.resolvedDisplayName(),
                         peakStartHour: UserLifeProfileStore.load().peakStartHour,
-                        capacityLLMPolicy: .llmIfDue
+                        capacityLLMPolicy: .deterministicOnly
                     )
                 }
             }
@@ -142,13 +145,14 @@ private struct ExperienceRootSyncModifier: ViewModifier {
 private struct ExperienceRootFocusModifier: ViewModifier {
     @ObservedObject var firebase: FirebaseManager
     @ObservedObject var shell: AppShellState
+    @ObservedObject var adhdVM: ADHDViewModel
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: shell.adhdVM.showContextRecovery) { _, show in
-                guard show, let task = shell.adhdVM.lastInterruptedTask else { return }
+            .onChange(of: adhdVM.showContextRecovery) { _, show in
+                guard show, let task = adhdVM.lastInterruptedTask else { return }
                 let userId = firebase.currentUserId ?? ""
-                let elapsed = Int(shell.adhdVM.focusSessionElapsed)
+                let elapsed = Int(adhdVM.focusSessionElapsed)
                 Task { @MainActor in
                     await Task.yield()
                     ResumeEngine.shared.captureFocusSession(
@@ -158,32 +162,40 @@ private struct ExperienceRootFocusModifier: ViewModifier {
                     )
                 }
             }
-            .onChange(of: shell.adhdVM.isFocusSessionActive) { _, active in
+            .onChange(of: adhdVM.isFocusSessionActive) { _, active in
                 Task { @MainActor in
                     await Task.yield()
+                    ExecutionEnvironmentCoordinator.shared.setManualFocusActive(active)
                     if active {
-                        WidgetSyncService.shared.startFocusActivity(adhdVM: shell.adhdVM)
+                        WidgetSyncService.shared.startFocusActivity(adhdVM: adhdVM)
                     } else {
                         LiveActivityManager.shared.endFocusActivity()
+                        shell.syncExecutionEnvironment()
                     }
                 }
             }
-            .onChange(of: shell.adhdVM.isPaused) { _, _ in
+            .onChange(of: adhdVM.isPaused) { _, _ in
                 Task { @MainActor in
                     await Task.yield()
-                    WidgetSyncService.shared.syncFocusActivity(adhdVM: shell.adhdVM)
+                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
                 }
             }
-            .onChange(of: shell.adhdVM.isOnBreak) { _, _ in
+            .onChange(of: adhdVM.isOnBreak) { _, _ in
                 Task { @MainActor in
                     await Task.yield()
-                    WidgetSyncService.shared.syncFocusActivity(adhdVM: shell.adhdVM)
+                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
                 }
             }
-            .onChange(of: shell.adhdVM.focusSessionTarget) { _, _ in
+            .onChange(of: adhdVM.focusSessionTarget) { _, _ in
                 Task { @MainActor in
                     await Task.yield()
-                    WidgetSyncService.shared.syncFocusActivity(adhdVM: shell.adhdVM)
+                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
+                }
+            }
+            .onChange(of: adhdVM.focusProgressBucket) { _, _ in
+                Task { @MainActor in
+                    await Task.yield()
+                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
                 }
             }
     }
@@ -216,12 +228,22 @@ private struct ExperienceRootDataModifier: ViewModifier {
                 guard !shell.isPerformingFactoryReset else { return }
                 let userId = firebase.resolvedUserId
                 // Rebuild gaps before local snapshot refresh — optimistic completions live in memory first.
+                if !userId.isEmpty {
+                    shell.tasksVM.syncFromTaskStore()
+                    shell.rebuildTimelineFromTasks()
+                }
                 shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
                 if !userId.isEmpty {
-                    shell.tasksVM.refreshFromLocal(userId: userId)
-                    shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
+                    shell.briefingVM.refreshTaskProgress(
+                        tasksVM: shell.tasksVM,
+                        cognitiveSnapshot: shell.brainVM.cognitiveSnapshot,
+                        lifeTimelineEvents: shell.timelineService.snapshot.today
+                    )
+                    shell.syncBrainLiveProgress(userId: userId)
                 }
                 shell.refreshWidgetData()
+                shell.syncExecutionEnvironment()
+                shell.scheduleAppleCalendarSync()
             }
     }
 }
@@ -251,6 +273,10 @@ private struct ExperienceRootNotificationModifier: ViewModifier {
             }
             .onChange(of: shell.adhdVM.isOnBreak) { _, _ in
                 guard !shell.isPerformingFactoryReset, shell.adhdVM.isFocusSessionActive else { return }
+                Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: ExecutionFocusCoordinator.didChangeNotification)) { _ in
+                guard !shell.isPerformingFactoryReset else { return }
                 Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
             }
     }

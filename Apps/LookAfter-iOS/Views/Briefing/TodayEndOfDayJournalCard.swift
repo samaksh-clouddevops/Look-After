@@ -96,7 +96,7 @@ struct TodayEndOfDayJournalCard: View {
                             .font(.system(size: 12))
                             .foregroundColor(DesignSystem.accentPrimary)
                             .padding(.top, 2)
-                        Text(entry.summary)
+                        Text(JournalCalibrationSanitizer.plainText(from: entry.summary))
                             .font(.system(size: 12))
                             .foregroundColor(DesignSystem.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -254,10 +254,10 @@ struct TodayEndOfDayJournalCard: View {
 
             if let calibration = try? await GLMService.shared.complete(
                 prompt: prompt,
-                systemPrompt: LookAfterPrompts.structuredOutputSystem,
+                systemPrompt: LookAfterPrompts.journalCalibrationSystem,
                 tier: .economy
             ) {
-                let trimmed = calibration.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmed = JournalCalibrationSanitizer.plainText(from: calibration)
                 UserCalibrationStore.append(summary: trimmed, source: .journal, rawInput: text)
                 calibrationBadge = trimmed
                 HapticManager.notification(.success)

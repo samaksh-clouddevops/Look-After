@@ -19,6 +19,7 @@ public final class ExecutiveCapacityEngine {
     private let calendar = Calendar.current
     private let throttleLock = NSLock()
     private var lastLLMEnrichmentAt: Date?
+    private var llmEnrichmentInFlight = false
 
     public init(glmService: GLMService? = nil) {
         self.glm = glmService
@@ -30,14 +31,39 @@ public final class ExecutiveCapacityEngine {
     ) async -> ExecutiveCapacityState {
         let deterministic = inferDeterministic(input)
         guard llmPolicy == .llmIfDue, let glm, isLLMDue() else { return deterministic }
+        guard beginLLMEnrichment() else { return deterministic }
+
+        defer { endLLMEnrichment() }
 
         do {
             let enriched = try await enrichViaLLM(input: input, baseline: deterministic, glm: glm)
             markLLMEnrichment()
             return enriched
         } catch {
+            markLLMEnrichmentAttempt()
             return deterministic
         }
+    }
+
+    private func beginLLMEnrichment() -> Bool {
+        throttleLock.lock()
+        defer { throttleLock.unlock() }
+        guard !llmEnrichmentInFlight else { return false }
+        llmEnrichmentInFlight = true
+        return true
+    }
+
+    private func endLLMEnrichment() {
+        throttleLock.lock()
+        llmEnrichmentInFlight = false
+        throttleLock.unlock()
+    }
+
+    private func markLLMEnrichmentAttempt() {
+        throttleLock.lock()
+        // Back off retries after failures so health-driven refreshes stay fast.
+        lastLLMEnrichmentAt = Date().addingTimeInterval(-Self.minimumLLMInterval + 5 * 60)
+        throttleLock.unlock()
     }
 
     private func isLLMDue() -> Bool {

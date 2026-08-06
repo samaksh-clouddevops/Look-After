@@ -36,6 +36,7 @@ struct TodayView: View {
     var onOpenHealthDetail: () -> Void = {}
     var onOpenMedication: () -> Void = {}
     var onCompleteTimelineTask: (String) -> Void = { _ in }
+    var onUncompleteTimelineTask: (String) -> Void = { _ in }
     var onRescheduleTimelineTask: (String) -> Void = { _ in }
     var onStartTask: (LifeTask) -> Void = { _ in }
     var onEditTask: (LifeTask) -> Void = { _ in }
@@ -169,6 +170,7 @@ struct TodayView: View {
                             onViewTimeline: onViewTimeline,
                             onPlanTomorrow: onPlanTomorrow,
                             onCompleteTimelineTask: onCompleteTimelineTask,
+                            onUncompleteTimelineTask: onUncompleteTimelineTask,
                             onRescheduleTimelineTask: onRescheduleTimelineTask,
                             onStartTask: onStartTask,
                             onEditTask: onEditTask
@@ -189,6 +191,7 @@ struct TodayView: View {
                             onViewTimeline: onViewTimeline,
                             onPlanTomorrow: onPlanTomorrow,
                             onCompleteTimelineTask: onCompleteTimelineTask,
+                            onUncompleteTimelineTask: onUncompleteTimelineTask,
                             onRescheduleTimelineTask: onRescheduleTimelineTask,
                             onStartTask: onStartTask,
                             onEditTask: onEditTask
@@ -559,6 +562,7 @@ private struct TodayScheduleSection: View {
     var onViewTimeline: () -> Void
     var onPlanTomorrow: () -> Void
     var onCompleteTimelineTask: (String) -> Void
+    var onUncompleteTimelineTask: (String) -> Void
     var onRescheduleTimelineTask: (String) -> Void
     var onStartTask: (LifeTask) -> Void
     var onEditTask: (LifeTask) -> Void
@@ -591,6 +595,7 @@ private struct TodayScheduleSection: View {
                     emptyMessage: "Your day fills in as you add tasks and commitments.",
                     onViewAll: onViewTimeline,
                     onCompleteTask: onCompleteTimelineTask,
+                    onUncompleteTask: onUncompleteTimelineTask,
                     onStartTask: { taskId in
                         if let task = task(for: taskId) { onStartTask(task) }
                     },

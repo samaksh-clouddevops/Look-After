@@ -3,12 +3,17 @@ import Foundation
 /// Single source of truth for the user's medication schedule.
 public enum MedicationStore {
     public static let userDefaultsKey = "lifeos_medications_list"
+    /// Avoids repeated UserDefaults JSON decode on hot paths (refreshContext, notifications).
+    private static var cachedMedications: [Medication]?
 
     public static func load() -> [Medication] {
+        if let cachedMedications { return cachedMedications }
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
               let medications = try? JSONDecoder().decode([Medication].self, from: data) else {
+            cachedMedications = []
             return []
         }
+        cachedMedications = medications
         return medications
     }
 
@@ -16,6 +21,19 @@ public enum MedicationStore {
         if let data = try? JSONEncoder().encode(medications) {
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         }
+        cachedMedications = medications
+    }
+
+    /// Clears persistence and the in-memory cache.
+    public static func reset() {
+        cachedMedications = nil
+        UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+    }
+
+    /// Drops the in-memory cache so the next `load()` re-reads UserDefaults.
+    /// Call after bulk UserDefaults wipes (factory reset) that bypass `reset()`.
+    public static func invalidateCache() {
+        cachedMedications = nil
     }
 
     /// Prompt block for semantic analysis and planning — never invent times outside this list.

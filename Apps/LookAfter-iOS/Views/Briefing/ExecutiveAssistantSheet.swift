@@ -62,10 +62,13 @@ struct ExecutiveAssistantSheet: View {
                 }
             }
         }
-        .onChange(of: planningVM.isProcessing) { _, processing in
-            if processing { expand() }
-        }
         .onChange(of: planningVM.isProcessing) { wasProcessing, processing in
+            if processing { expand() }
+            if processing, planningVM.inputMode == .voice {
+                VoiceSessionKeepAlive.begin("planning-voice-processing")
+            } else if !processing {
+                VoiceSessionKeepAlive.end("planning-voice-processing")
+            }
             guard wasProcessing, !processing else { return }
             scheduleAutoCollapse()
         }

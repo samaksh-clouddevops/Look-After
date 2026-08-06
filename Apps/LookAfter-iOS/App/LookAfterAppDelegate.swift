@@ -6,10 +6,16 @@ import LookAfterData
 import LookAfterFeatures
 
 final class LookAfterAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    override init() {
+        super.init()
+        LookAfterFirebaseConfiguration.configureIfNeeded()
+    }
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        LookAfterFirebaseConfiguration.configureIfNeeded()
         UNUserNotificationCenter.current().delegate = self
         // BG tasks must register before app finishes launching.
         BehavioralTelemetryBackgroundTask.register()
@@ -19,6 +25,7 @@ final class LookAfterAppDelegate: NSObject, UIApplicationDelegate, UNUserNotific
         Task { @MainActor in
             NotificationCoordinator.shared.configureOnLaunch()
             await NotificationPermissionService.shared.refreshStatus()
+            AppleSpeechVoiceBootstrap.startIfNeeded()
             if PushCapabilities.hasRemotePushEntitlement {
                 FirebaseMessagingService.shared.configureIfAvailable()
             }

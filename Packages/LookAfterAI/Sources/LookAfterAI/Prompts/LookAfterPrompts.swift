@@ -13,6 +13,12 @@ public enum LookAfterPrompts {
     Use values from the user's actual data — never copy placeholder examples literally.
     """
 
+    /// Plain-text system prompt for journal → calibration (never JSON).
+    public static let journalCalibrationSystem = """
+    You extract short personalized calibrations from nightly journal reflections for an ADHD planning app.
+    Return ONLY 1–2 plain sentences of human-readable prose. No JSON. No markdown fences. No bullet lists.
+    """
+
     public static let profileOrganizeSystem = """
     You organize user life profiles for an ADHD day-planning assistant.
     Preserve ALL facts and preferences — do NOT summarize away detail.
@@ -561,7 +567,7 @@ public enum LookAfterPrompts {
         Match this tone consistently in every reply.
         """
 
-        if SpeechVoiceSettings.preferSpokenStyle {
+        if SpeechVoiceSettings.autoSpeakReplies || SpeechVoiceSettings.preferSpokenStyle {
             prompt += """
 
             \(SpeechVoiceSettings.spokenDeliveryInstruction)

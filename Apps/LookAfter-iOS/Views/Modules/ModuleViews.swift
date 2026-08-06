@@ -1221,13 +1221,14 @@ struct ReflectionJournalView: View {
 
             if let calibration = try? await glm.complete(
                 prompt: prompt,
-                systemPrompt: LookAfterPrompts.structuredOutputSystem,
+                systemPrompt: LookAfterPrompts.journalCalibrationSystem,
                 tier: .economy
             ) {
                 await MainActor.run {
-                    calibrationBadge = calibration.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmed = JournalCalibrationSanitizer.plainText(from: calibration)
+                    calibrationBadge = trimmed
                     UserCalibrationStore.append(
-                        summary: calibrationBadge ?? "",
+                        summary: trimmed,
                         source: .journal,
                         rawInput: text
                     )

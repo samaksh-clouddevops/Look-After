@@ -18,6 +18,7 @@ public struct TimelineSnapshot: Sendable, Equatable {
 /// Optimistic timeline patch applied before the next full rebuild.
 public enum TimelinePatch: Sendable, Equatable {
     case completed(taskId: String)
+    case uncompleted(taskId: String)
     case rescheduled(taskId: String, to: Date)
 }
 
@@ -27,8 +28,8 @@ public enum TimelineRowProjector {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
 
-        let sorted = events.sorted(by: timelineEventSortOrder)
-        let currentIndex = currentEventIndex(in: sorted, now: now)
+        let sorted = TimelineNowResolver.sortedEvents(events)
+        let currentIndex = TimelineNowResolver.currentEventIndex(in: sorted, now: now)
 
         return sorted.enumerated().map { index, event in
             row(from: event, index: index, currentIndex: currentIndex, now: now, formatter: formatter, isPreview: false)
@@ -38,7 +39,7 @@ public enum TimelineRowProjector {
     public static func previewRows(from events: [LifeTimelineEvent]) -> [ExecutivePlanningTimelineRow] {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        let sorted = events.sorted(by: timelineEventSortOrder)
+        let sorted = TimelineNowResolver.sortedEvents(events)
         return sorted.enumerated().map { index, event in
             row(from: event, index: index, currentIndex: nil, now: Date(), formatter: formatter, isPreview: true)
         }
@@ -54,6 +55,13 @@ public enum TimelineRowProjector {
             updated[index].isPast = false
             updated[index].subtitle = "Done"
             updated[index].completedAt = Date()
+        case .uncompleted(let taskId):
+            guard let index = updated.firstIndex(where: { $0.taskId == taskId && $0.isCompleted }) else { return rows }
+            updated[index].isCompleted = false
+            updated[index].completedAt = nil
+            updated[index].subtitle = "Planned"
+            updated[index].isPast = false
+            updated[index].isNow = false
         case .rescheduled(let taskId, let newTime):
             guard let index = updated.firstIndex(where: { $0.taskId == taskId }) else { return rows }
             let formatter = DateFormatter()
@@ -68,8 +76,41 @@ public enum TimelineRowProjector {
             updated[index].isPast = false
             updated[index].isNow = false
             updated[index].change = .moved
+            return resortRows(updated)
         }
         return updated
+    }
+
+    private static func resortRows(_ rows: [ExecutivePlanningTimelineRow], now: Date = Date()) -> [ExecutivePlanningTimelineRow] {
+        var sorted = rows.sorted { lhs, rhs in
+            let lhsFlex = lhs.timeLabel == "Flexible"
+            let rhsFlex = rhs.timeLabel == "Flexible"
+            if lhsFlex != rhsFlex { return !lhsFlex }
+            if lhsFlex {
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+            return lhs.sortDate < rhs.sortDate
+        }
+
+        var currentIndex: Int?
+        for (index, row) in sorted.enumerated() {
+            guard !row.isCompleted, row.timeLabel != "Flexible" else { continue }
+            let minutes = row.estimatedMinutes ?? 30
+            let end = row.sortDate.addingTimeInterval(TimeInterval(minutes * 60))
+            if row.sortDate <= now, now <= end {
+                currentIndex = index
+                break
+            }
+        }
+        if currentIndex == nil {
+            currentIndex = sorted.firstIndex {
+                !$0.isCompleted && $0.timeLabel != "Flexible" && $0.sortDate > now
+            }
+        }
+        for index in sorted.indices {
+            sorted[index].isNow = currentIndex == index && !sorted[index].isCompleted
+        }
+        return sorted
     }
 
     // MARK: - Private
@@ -108,11 +149,11 @@ public enum TimelineRowProjector {
             isNow: isNow,
             isCompleted: isCompleted,
             isPast: isPast,
-            taskId: taskId(from: event.id),
+            taskId: TimelineNowResolver.taskId(from: event.id),
             estimatedMinutes: event.estimatedMinutes,
             completedAt: event.completedAt,
             isFixedEvent: event.isFixed,
-            timeConstraint: event.isFixed ? .anchored : .flexible
+            timeConstraint: event.resolvedTimeConstraint
         )
     }
 
@@ -135,33 +176,6 @@ public enum TimelineRowProjector {
         return event.subtitle
     }
 
-    private static func taskId(from eventId: String) -> String? {
-        guard eventId.hasPrefix("task-") else { return nil }
-        let id = String(eventId.dropFirst(5))
-        return id.isEmpty ? nil : id
-    }
-
-    private static func currentEventIndex(in events: [LifeTimelineEvent], now: Date) -> Int? {
-        for (index, event) in events.enumerated() {
-            guard !event.isCompleted else { continue }
-            let end = event.resolvedEndDate()
-            if event.date <= now, now <= end { return index }
-        }
-        return events.firstIndex { !$0.isCompleted && $0.date > now }
-    }
-
-    private static func timelineEventSortOrder(_ lhs: LifeTimelineEvent, _ rhs: LifeTimelineEvent) -> Bool {
-        if lhs.id.hasPrefix("sleep-boundary") != rhs.id.hasPrefix("sleep-boundary") {
-            return !lhs.id.hasPrefix("sleep-boundary")
-        }
-        if lhs.isFlexibleToday != rhs.isFlexibleToday {
-            return !lhs.isFlexibleToday
-        }
-        if lhs.isFlexibleToday {
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-        }
-        return lhs.date < rhs.date
-    }
 }
 
 /// Single owner for day timelines — builds events once and projects UI rows.
