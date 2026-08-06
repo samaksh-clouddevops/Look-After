@@ -470,7 +470,7 @@ struct BriefingProgressCard: View {
                 stat("Completed", value: "\(progress.completedCount)")
                 stat("Remaining", value: "\(progress.remainingCount)")
                 stat("Overdue", value: "\(progress.overdueCount)", highlight: progress.overdueCount > 0 ? DesignSystem.error : nil)
-                stat(UserFacingCopy.taskTimeTitle, value: "\(progress.deepWorkMinutes)m")
+                stat(UserFacingCopy.taskTimeTitle, value: progress.deepWorkMinutes.durationString)
             }
             HStack {
                 Text(UserFacingCopy.dayScoreTitle)
@@ -791,15 +791,15 @@ struct BriefingSnapshotStrip: View {
             snapshotMetric(
                 icon: "bolt.fill",
                 title: "Energy",
-                value: "\(snapshot.energyPercent)%",
-                band: energyBand,
-                bandIsPositive: snapshot.energyPercent >= 60
+                value: snapshot.hasOvernightHealthSignal ? "\(snapshot.energyPercent)%" : "—",
+                band: snapshot.hasOvernightHealthSignal ? energyBand : "No data yet",
+                bandIsPositive: snapshot.hasOvernightHealthSignal && snapshot.energyPercent >= 60
             )
             snapshotMetric(
                 icon: "scope",
                 title: "Recovery",
-                value: snapshot.recoveryLabel,
-                band: "\(snapshot.recoveryPercent)%",
+                value: snapshot.hasOvernightHealthSignal ? snapshot.recoveryLabel : "—",
+                band: snapshot.hasOvernightHealthSignal ? "\(snapshot.recoveryPercent)%" : "No data yet",
                 bandIsPositive: false
             )
             snapshotMetric(

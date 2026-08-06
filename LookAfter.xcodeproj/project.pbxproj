@@ -147,6 +147,8 @@
 		96A5D2F24C9F1F566748F83F /* InsightsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D843222E594D3D9232375F3 /* InsightsViewModelTests.swift */; };
 		96D417D45EE91009ECC44D8A /* Flow016Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73957DEFB1D64205EA202D40 /* Flow016Tests.swift */; };
 		974FF18348F635F7762A64C0 /* PlanningSpeechSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73211A808013B51F79D2B0E2 /* PlanningSpeechSynthesizer.swift */; };
+		8A3F2E1D4C5B6A7980E1F2A3 /* OpenAICloudTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2E1D4C5A6B7980E1F2A3B4 /* OpenAICloudTTSService.swift */; };
+		9C4E5F6A7B8C9012345678DE /* AppleSpeechVoiceBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5F6A7B8C90123456789EF0 /* AppleSpeechVoiceBootstrap.swift */; };
 		97AFCFB730C5B29DFE0A65AC /* FlowTestBase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC64C5F6E1AD5B0A7FD3DBB /* FlowTestBase.swift */; };
 		97DEE436EBBBB1E358CB9E42 /* TaskRecurrenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68B3898782BBEA7B888B353E /* TaskRecurrenceTests.swift */; };
 		982E48EDF1B58DEB2DF15E30 /* TaskImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F378C92D0B2E5A9D86FF92 /* TaskImportSheet.swift */; };
@@ -373,6 +375,8 @@
 		6C79D0175A36727D929A0455 /* LifeTimelinePresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeTimelinePresenterTests.swift; sourceTree = "<group>"; };
 		6E01BDFB1BC3F390338FFE90 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
 		73211A808013B51F79D2B0E2 /* PlanningSpeechSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningSpeechSynthesizer.swift; sourceTree = "<group>"; };
+		7B2E1D4C5A6B7980E1F2A3B4 /* OpenAICloudTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICloudTTSService.swift; sourceTree = "<group>"; };
+		8D5F6A7B8C90123456789EF0 /* AppleSpeechVoiceBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechVoiceBootstrap.swift; sourceTree = "<group>"; };
 		73957DEFB1D64205EA202D40 /* Flow016Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Flow016Tests.swift; sourceTree = "<group>"; };
 		741FECD3E771F92512DB7427 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		74FF2E7B7BCD92BF3A44D652 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
@@ -1049,6 +1053,8 @@
 				3FF89BD7141F11978B624F40 /* NotificationScheduler.swift */,
 				4B3AFCE05726FAFC622BC120 /* PerformanceSignposts.swift */,
 				73211A808013B51F79D2B0E2 /* PlanningSpeechSynthesizer.swift */,
+				7B2E1D4C5A6B7980E1F2A3B4 /* OpenAICloudTTSService.swift */,
+				8D5F6A7B8C90123456789EF0 /* AppleSpeechVoiceBootstrap.swift */,
 				A2355A3C4836E9CB92D892E1 /* PushCapabilities.swift */,
 				B747C23608DE63FF8C337250 /* SpeechRecognitionManager.swift */,
 				46B252A8D4C9743366CDCF76 /* WeatherDisplayService.swift */,
@@ -1722,6 +1728,8 @@
 				3FC571E8A7D6B237690252EA /* PerformanceSignposts.swift in Sources */,
 				B3719D3092525A921AB3E2E7 /* PhysiologicalResetView.swift in Sources */,
 				974FF18348F635F7762A64C0 /* PlanningSpeechSynthesizer.swift in Sources */,
+				8A3F2E1D4C5B6A7980E1F2A3 /* OpenAICloudTTSService.swift in Sources */,
+				9C4E5F6A7B8C9012345678DE /* AppleSpeechVoiceBootstrap.swift in Sources */,
 				084FCB4D24F20741D05E48B3 /* PushCapabilities.swift in Sources */,
 				C0156769724429F702C3B1E7 /* ReschedulePreviewSheet.swift in Sources */,
 				74111910A3D2B6BB816B9E96 /* SettingsView.swift in Sources */,

@@ -264,6 +264,54 @@ public final class TaskRepository: ObservableObject {
         guard !userId.isEmpty else { return visible }
         return visible.filter { $0.userId.isEmpty || $0.userId == userId }
     }
+
+    /// Drops terminal recurrence rows and duplicate same-day instances that bloat local storage.
+    @discardableResult
+    public func compactRecurrenceStorage(
+        for userId: String,
+        retentionDays: Int
+    ) -> Int {
+        let all = allLocalTasks()
+        let (pruned, removed) = TaskRecurrenceCompactor.compact(all, retentionDays: retentionDays)
+        guard removed > 0 else { return 0 }
+        persistAllLocally(pruned)
+        print("[Tasks] compacted \(removed) recurrence rows (\(all.count) → \(pruned.count))")
+        return removed
+    }
+
+    /// Background-safe compaction — loads/saves off the main actor's critical path.
+    @discardableResult
+    public func compactRecurrenceStorageAsync(
+        for userId: String,
+        retentionDays: Int
+    ) async -> Int {
+        let all: [LifeTask]
+        if let cached = Self.cachedAll {
+            all = cached
+        } else {
+            all = await local.loadAsync([LifeTask].self, filename: collection)
+            Self.cachedAll = all
+        }
+
+        let before = all.count
+        let (pruned, removed) = await Task.detached(priority: .utility) {
+            TaskRecurrenceCompactor.compact(all, retentionDays: retentionDays)
+        }.value
+        guard removed > 0 else { return 0 }
+        await local.saveAsync(pruned, filename: collection)
+        Self.cachedAll = pruned
+        print("[Tasks] compacted \(removed) recurrence rows (\(before) → \(pruned.count))")
+        return removed
+    }
+
+    /// Backward-compatible alias.
+    @discardableResult
+    public func pruneTerminalRecurrenceOccurrences(
+        for userId: String,
+        retentionDays: Int
+    ) -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
+    }
 }
 
 /// Repository for managing inbox items in Firestore.

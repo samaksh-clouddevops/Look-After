@@ -38,6 +38,19 @@ public enum TaskScheduleQuery {
         return resolveSeriesConflicts(in: stored + additions, on: dayStart, calendar: calendar)
     }
 
+    /// Non-keeper ids when multiple occurrence rows share template + scheduled day.
+    public static func redundantOccurrenceIDs(
+        in group: [LifeTask],
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> [String] {
+        guard group.count > 1 else { return [] }
+        guard let keeper = preferredKeeper(in: group, on: day, calendar: calendar) else {
+            return group.dropFirst().map(\.id)
+        }
+        return group.filter { $0.id != keeper.id }.map(\.id)
+    }
+
     /// Active tasks for today's list — one instance per series, recurrence-aware.
     public static func activeTasksForToday(
         from tasks: [LifeTask],
@@ -137,5 +150,48 @@ public enum TaskScheduleQuery {
         if task.schedulingMode == .fixedTime { score += 10 }
         if task.tags.contains("daily-routine") { score += 5 }
         return score
+    }
+}
+
+/// Pure compaction for recurrence occurrence rows — safe to run off the main thread.
+public enum TaskRecurrenceCompactor {
+    public static func compact(
+        _ tasks: [LifeTask],
+        retentionDays: Int = 7,
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> (tasks: [LifeTask], removedCount: Int) {
+        let before = tasks.count
+        let dayStart = calendar.startOfDay(for: referenceDate)
+        let cutoff = calendar.date(byAdding: .day, value: -retentionDays, to: dayStart) ?? dayStart
+
+        var idsToRemove = Set<String>()
+        for task in tasks where task.parentTaskId != nil {
+            switch task.status {
+            case .superseded, .expired:
+                idsToRemove.insert(task.id)
+            case .skipped:
+                let anchor = task.scheduledDate ?? task.updatedAt
+                if anchor < cutoff { idsToRemove.insert(task.id) }
+            default:
+                break
+            }
+        }
+
+        var groups: [String: [LifeTask]] = [:]
+        for task in tasks where task.parentTaskId != nil && !idsToRemove.contains(task.id) {
+            guard let scheduledDate = task.scheduledDate else { continue }
+            let key = "\(task.parentTaskId!)|\(Int(calendar.startOfDay(for: scheduledDate).timeIntervalSince1970))"
+            groups[key, default: []].append(task)
+        }
+        for (_, group) in groups where group.count > 1 {
+            let stale = TaskScheduleQuery.redundantOccurrenceIDs(in: group, on: dayStart, calendar: calendar)
+            idsToRemove.formUnion(stale)
+        }
+
+        guard !idsToRemove.isEmpty else { return (tasks, 0) }
+        var pruned = tasks
+        pruned.removeAll { idsToRemove.contains($0.id) }
+        return (pruned, before - pruned.count)
     }
 }

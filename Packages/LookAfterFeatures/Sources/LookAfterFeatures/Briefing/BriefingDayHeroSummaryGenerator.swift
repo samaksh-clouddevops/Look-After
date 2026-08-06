@@ -70,9 +70,9 @@ enum BriefingDayHeroSummaryGenerator {
                 lines.append(String(format: "Hey %@. You got %@ (%.1f hours). %@", name, sleepPhrase, hours, capacityPhrase(input)))
             }
         } else if name.isEmpty {
-            lines.append("Here's today. \(capacityPhrase(input))")
+            lines.append("Here's today. \(missingSleepPrefix(input))\(capacityPhrase(input))")
         } else {
-            lines.append("Hey \(name). \(capacityPhrase(input))")
+            lines.append("Hey \(name). \(missingSleepPrefix(input))\(capacityPhrase(input))")
         }
 
         // Line 2 — task plan
@@ -87,13 +87,24 @@ enum BriefingDayHeroSummaryGenerator {
                 taskLine += ", and \(input.progress.overdueCount) \(input.progress.overdueCount == 1 ? "is" : "are") overdue"
             }
             if let minutes = input.dayBriefing?.plannedMinutesRemaining, minutes > 0 {
-                taskLine += ". About \(minutes) minutes of work lined up"
+                taskLine += ". About \(formatWorkMinutes(minutes)) of work lined up"
             }
             taskLine += ". The main ones: \(top)."
             lines.append(taskLine)
         }
 
-        // Line 3 — gentle nudge
+        // Line 3 — ongoing work, then next plan
+        if let ongoing = input.tasks.first(where: { $0.status == .inProgress }) {
+            lines.append("You're in the middle of \"\(ongoing.title)\" — pick up where you left off.")
+            return Array(lines.prefix(3))
+        }
+
+        let now = Date()
+        if let currentEvent = ongoingTimelineEvent(in: input.lifeTimelineEvents, now: now) {
+            lines.append("\(currentEvent.title) is underway right now. Stay with it if you can.")
+            return Array(lines.prefix(3))
+        }
+
         if let plan = input.dayBriefing, !plan.planItems.isEmpty {
             let upcoming = plan.planItems.filter { !$0.isCompleted }.prefix(2)
             if let first = upcoming.first {
@@ -117,6 +128,30 @@ enum BriefingDayHeroSummaryGenerator {
         }
 
         return Array(lines.prefix(3))
+    }
+
+    private static func ongoingTimelineEvent(in events: [LifeTimelineEvent], now: Date) -> LifeTimelineEvent? {
+        events
+            .filter { !$0.isCompleted && $0.id.hasPrefix("task-") }
+            .sorted { $0.date < $1.date }
+            .last { event in
+                guard event.date <= now else { return false }
+                let durationMinutes = max(event.estimatedMinutes ?? 30, 1)
+                let blockEnd = event.date.addingTimeInterval(TimeInterval(durationMinutes * 60))
+                return now <= blockEnd.addingTimeInterval(30 * 60)
+            }
+    }
+
+    private static func formatWorkMinutes(_ minutes: Int) -> String {
+        if minutes < 60 { return "\(max(1, minutes)) min" }
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if remainder == 0 { return "\(hours)h" }
+        return "\(hours)h \(remainder)m"
+    }
+
+    private static func missingSleepPrefix(_ input: Input) -> String {
+        input.sleep.isAvailable ? "" : "No sleep data from last night — "
     }
 
     private static func capacityPhrase(_ input: Input) -> String {

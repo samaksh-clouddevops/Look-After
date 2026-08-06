@@ -93,7 +93,8 @@ public struct TodayMetricsInput: Sendable {
             energyLevel: EnergyLevel.moderate.rawValue,
             recoveryLabel: "—",
             focusWindow: "—",
-            isHealthConnected: false
+            isHealthConnected: false,
+            hasOvernightHealthSignal: false
         ),
         calendar: BriefingCalendarData = BriefingCalendarData(isConnected: false),
         weather: TodayWeatherMetricsInput = TodayWeatherMetricsInput(),
@@ -192,7 +193,8 @@ public enum TodayExecutiveMetricsEngine {
     }
 
     private static func recoveryMetric(_ input: TodayMetricsInput) -> TodayExecutiveMetric? {
-        guard input.healthSnapshot.isHealthConnected else { return nil }
+        guard input.healthSnapshot.isHealthConnected,
+              input.healthSnapshot.hasOvernightHealthSignal else { return nil }
         let label = shortRecoveryLabel(input.healthSnapshot.recoveryLabel)
         var relevance = 68.0
         if input.healthSnapshot.recoveryPercent >= 75 { relevance = 78 }

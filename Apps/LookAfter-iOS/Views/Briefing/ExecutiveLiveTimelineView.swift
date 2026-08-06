@@ -22,6 +22,7 @@ private enum ExecutiveTimelineVisuals {
 
 private enum TimelineEventPhase {
     case completed
+    case passed
     case current
     case upcoming
 }
@@ -58,6 +59,7 @@ struct ExecutiveLiveTimelineView: View {
     var onViewAll: () -> Void
     var onPlan: (() -> Void)?
     var onCompleteTask: ((String) -> Void)?
+    var onUncompleteTask: ((String) -> Void)?
     var onStartTask: ((String) -> Void)?
     var onEditTask: ((String) -> Void)?
     var onRescheduleTask: ((String) -> Void)?
@@ -65,6 +67,7 @@ struct ExecutiveLiveTimelineView: View {
     @State private var dotCenters: [String: CGFloat] = [:]
     @State private var railHeight: CGFloat = 0
     @State private var completingTaskIds: Set<String> = []
+    @State private var uncompletingTaskIds: Set<String> = []
     @State private var reschedulingTaskIds: Set<String> = []
     @State private var expandedRowId: String?
     @StateObject private var constraintVM = TimelineConstraintViewModel()
@@ -175,6 +178,7 @@ struct ExecutiveLiveTimelineView: View {
         isLast: Bool
     ) -> some View {
         let isCompleting = row.taskId.map { completingTaskIds.contains($0) } ?? false
+        let isUncompleting = row.taskId.map { uncompletingTaskIds.contains($0) } ?? false
         let isRescheduling = row.taskId.map { reschedulingTaskIds.contains($0) } ?? false
 
         HStack(alignment: .top, spacing: ExecutiveTimelineVisuals.cardLeadingInset) {
@@ -197,6 +201,7 @@ struct ExecutiveLiveTimelineView: View {
                         row: row,
                         phase: phase,
                         isCompleting: isCompleting,
+                        isUncompleting: isUncompleting,
                         isRescheduling: isRescheduling,
                         isActionsExpanded: expandedRowId == row.id,
                         showsTaskActions: row.taskId != nil && !row.isCompleted,
@@ -220,10 +225,21 @@ struct ExecutiveLiveTimelineView: View {
                             }
                         },
                         onDoubleTapComplete: row.taskId.flatMap { taskId in
-                            guard !row.isCompleted else { return nil }
+                            if row.isCompleted {
+                                guard let onUncompleteTask else { return nil }
+                                return {
+                                    uncompletingTaskIds.insert(taskId)
+                                    onUncompleteTask(taskId)
+                                    Task {
+                                        try? await Task.sleep(nanoseconds: 600_000_000)
+                                        uncompletingTaskIds.remove(taskId)
+                                    }
+                                }
+                            }
+                            guard let onCompleteTask else { return nil }
                             return {
                                 completingTaskIds.insert(taskId)
-                                onCompleteTask?(taskId)
+                                onCompleteTask(taskId)
                                 Task {
                                     try? await Task.sleep(nanoseconds: 600_000_000)
                                     completingTaskIds.remove(taskId)
@@ -288,18 +304,20 @@ struct ExecutiveLiveTimelineView: View {
 
     private func dotPhase(for row: ExecutivePlanningTimelineRow, uiPhase: TimelineEventPhase) -> TimelineEventPhase {
         if row.isCompleted { return .completed }
+        if uiPhase == .passed { return .passed }
         if uiPhase == .current { return .current }
         return .upcoming
     }
 
     private func railSegmentColor(for row: ExecutivePlanningTimelineRow, phase: TimelineEventPhase) -> Color {
-        if row.isCompleted || phase == .completed {
+        switch phase {
+        case .completed, .passed:
             return ExecutiveTimelineVisuals.lime.opacity(0.85)
-        }
-        if phase == .current {
+        case .current:
             return ExecutiveTimelineVisuals.lime.opacity(0.45)
+        case .upcoming:
+            return ExecutiveTimelineVisuals.trackMuted
         }
-        return ExecutiveTimelineVisuals.trackMuted
     }
 
     // MARK: - Phase logic
@@ -309,7 +327,7 @@ struct ExecutiveLiveTimelineView: View {
 
         var phases = rows.map { row -> TimelineEventPhase in
             if row.isCompleted { return .completed }
-            if row.isPast { return .upcoming }
+            if row.isPast { return .passed }
             return .upcoming
         }
 
@@ -329,8 +347,8 @@ struct ExecutiveLiveTimelineView: View {
             return center
         }
 
-        if let lastCompleted = phases.lastIndex(of: .completed),
-           let center = dotCenters[rows[lastCompleted].id] {
+        if let lastPassed = phases.lastIndex(where: { $0 == .completed || $0 == .passed }),
+           let center = dotCenters[rows[lastPassed].id] {
             return center + ExecutiveTimelineVisuals.dotCompleted
         }
 
@@ -399,6 +417,11 @@ private struct TimelineDotView: View {
                     .font(.system(size: 6, weight: .black))
                     .foregroundColor(Color.black.opacity(0.85))
 
+            case .passed:
+                Circle()
+                    .fill(ExecutiveTimelineVisuals.lime.opacity(0.55))
+                    .frame(width: ExecutiveTimelineVisuals.dotCompleted, height: ExecutiveTimelineVisuals.dotCompleted)
+
             case .current:
                 Circle()
                     .fill(ExecutiveTimelineVisuals.lime.opacity(0.25))
@@ -430,6 +453,7 @@ private struct EventTimelineCard: View {
     let row: ExecutivePlanningTimelineRow
     let phase: TimelineEventPhase
     var isCompleting: Bool = false
+    var isUncompleting: Bool = false
     var isRescheduling: Bool = false
     var isActionsExpanded: Bool = false
     var showsTaskActions: Bool = false
@@ -475,10 +499,17 @@ private struct EventTimelineCard: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(ExecutiveTimelineVisuals.lime.opacity(0.15)))
+                } else if phase == .passed {
+                    Text("Passed")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(ExecutiveTimelineVisuals.lime.opacity(0.85))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(ExecutiveTimelineVisuals.lime.opacity(0.12)))
                 } else if phase != .completed {
-                    Text(row.isPast ? "Passed" : (row.scheduleRangeLabel.isEmpty ? row.timeLabel : row.scheduleRangeLabel))
+                    Text(row.scheduleRangeLabel.isEmpty ? row.timeLabel : row.scheduleRangeLabel)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(row.isPast ? DesignSystem.warning.opacity(0.85) : DesignSystem.textMuted)
+                        .foregroundColor(DesignSystem.textMuted)
                 }
 
                 Spacer(minLength: 0)
@@ -600,8 +631,8 @@ private struct EventTimelineCard: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
-        .opacity(row.isCompleted ? 0.72 : ((isCompleting || isRescheduling) ? 0.55 : 1))
-        .scaleEffect((isCompleting || isRescheduling) ? 0.98 : 1)
+        .opacity(row.isCompleted ? 0.72 : ((isCompleting || isUncompleting || isRescheduling) ? 0.55 : 1))
+        .scaleEffect((isCompleting || isUncompleting || isRescheduling) ? 0.98 : 1)
         .contentShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
         .onTapGesture(count: 1) {
             if showsTaskActions {
@@ -612,13 +643,15 @@ private struct EventTimelineCard: View {
             onDoubleTapComplete?()
         }
         .accessibilityIdentifier(row.taskId.map { "timeline-event-card-\($0)" } ?? "timeline-event-card")
-        .accessibilityAction(named: "Mark complete") {
+        .accessibilityAction(named: row.isCompleted ? "Mark incomplete" : "Mark complete") {
             onDoubleTapComplete?()
         }
         .accessibilityHint(
             onDoubleTapComplete == nil
                 ? ""
-                : "Double tap to mark this task complete."
+                : row.isCompleted
+                    ? "Double tap to mark this task incomplete."
+                    : "Double tap to mark this task complete."
         )
     }
 
@@ -673,6 +706,7 @@ private struct EventTimelineCard: View {
         if row.isPast { return DesignSystem.textPrimary.opacity(0.75) }
         switch phase {
         case .completed: return DesignSystem.textMuted
+        case .passed: return DesignSystem.textPrimary.opacity(0.75)
         case .current: return DesignSystem.textPrimary
         case .upcoming: return DesignSystem.textPrimary.opacity(0.92)
         }
@@ -683,7 +717,7 @@ private struct EventTimelineCard: View {
         switch phase {
         case .current:
             return AnyShapeStyle(DesignSystem.backgroundElevated.opacity(0.95))
-        case .completed:
+        case .completed, .passed:
             return AnyShapeStyle(DesignSystem.backgroundSecondary.opacity(0.35))
         case .upcoming:
             return AnyShapeStyle(DesignSystem.backgroundElevated.opacity(0.65))

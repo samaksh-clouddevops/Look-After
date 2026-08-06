@@ -45,7 +45,8 @@ struct LifeBlockView<Content: View>: View {
             .modifier(FluidDragVisualEffect(
                 active: isDraggingVertically && constraint == .fluid && !reduceMotion
             ))
-            .highPriorityGesture(dragGesture, including: isEnabled ? .all : .subviews)
+            // `.subviews` lets double-tap on the card reach EventTimelineCard; drag still wins on movement.
+            .highPriorityGesture(dragGesture, including: .subviews)
             .sensoryFeedback(.impact(weight: .heavy), trigger: thresholdPulse)
             .accessibilityElement(children: .combine)
             .accessibilityValue(constraint.accessibilityDescription)

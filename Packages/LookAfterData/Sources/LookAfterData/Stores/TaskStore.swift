@@ -120,6 +120,31 @@ public final class TaskStore: ObservableObject, TaskStoring {
         republishAfterMutation(userId: lastUserId)
     }
 
+    @discardableResult
+    public func pruneTerminalRecurrenceOccurrences(for userId: String, retentionDays: Int = 7) -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
+    }
+
+    @discardableResult
+    public func compactRecurrenceStorage(for userId: String, retentionDays: Int = 7) -> Int {
+        let removed = taskRepo.compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
+        if removed > 0, !userId.isEmpty {
+            refreshLocal(userId: userId)
+            notifyChange()
+        }
+        return removed
+    }
+
+    @discardableResult
+    public func compactRecurrenceStorageAsync(for userId: String, retentionDays: Int = 7) async -> Int {
+        let removed = await taskRepo.compactRecurrenceStorageAsync(for: userId, retentionDays: retentionDays)
+        if removed > 0, !userId.isEmpty {
+            refreshLocal(userId: userId)
+            notifyChange()
+        }
+        return removed
+    }
+
     // MARK: - Private
 
     private func republishAfterMutation(userId: String) {

@@ -34,6 +34,7 @@ public final class TasksViewModel: ObservableObject {
     private let focusStretchRefiner = TaskFocusStretchRefiner()
     private var undoDismissTask: Task<Void, Never>?
     private var loadGeneration = 0
+    private var didCompactTaskStorage = false
     
     /// Active, completed-today, and recurrence templates for schedule validation.
     public var schedulingContext: [LifeTask] {
@@ -81,6 +82,9 @@ public final class TasksViewModel: ObservableObject {
         await taskRepo.warmLocalCache(for: userId)
         guard generation == loadGeneration else { return }
 
+        await compactTaskStorageIfNeeded(userId: userId)
+        guard generation == loadGeneration else { return }
+
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "launch-cache")
 
         let showSpinner = tasks.isEmpty && completedToday.isEmpty
@@ -114,6 +118,12 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    /// Applies the in-memory TaskStore snapshot without re-reading disk.
+    public func syncFromTaskStore() {
+        guard let taskStore else { return }
+        applySnapshot(taskStore.snapshot, logSource: "task-store-sync")
+    }
+
     private func notifyTaskListDidChange() {
         guard taskStore == nil else { return }
         NotificationCenter.default.post(name: .taskListDidChange, object: nil)
@@ -127,15 +137,24 @@ public final class TasksViewModel: ObservableObject {
     }
 
     /// Normalize legacy recurring tasks, remove invalid day instances, and materialize today's occurrences.
-    public func syncRecurringSchedule(userId: String) async {
+    public func syncRecurringSchedule(userId: String, force: Bool = false) async {
         guard !userId.isEmpty else { return }
+        if !force,
+           let lastRecurrenceSyncAt,
+           Date().timeIntervalSince(lastRecurrenceSyncAt) < Self.recurrenceSyncMinimumInterval {
+            return
+        }
         do {
             try await syncRecurringOccurrences(userId: userId)
+            lastRecurrenceSyncAt = Date()
             applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "recurrence-sync")
         } catch {
             print("[Tasks] recurrence sync failed: \(error.localizedDescription)")
         }
     }
+
+    private static let recurrenceSyncMinimumInterval: TimeInterval = 45
+    private var lastRecurrenceSyncAt: Date?
 
     /// Normalize legacy recurring tasks and materialize today's occurrences.
     private func syncRecurringOccurrences(userId: String) async throws {
@@ -215,6 +234,31 @@ public final class TasksViewModel: ObservableObject {
         if let model = LifeModelStore.load(), model.hasContent {
             await dedupeLifeCommitmentTasks(userId: userId, model: model)
         }
+    }
+
+    /// Shrinks bloated local recurrence history off the main thread — once per session unless count stays high.
+    @discardableResult
+    public func compactTaskStorageIfNeeded(userId: String) async -> Int {
+        guard !userId.isEmpty else { return 0 }
+        let localCount = taskRepo.localAllTasks(for: userId).count
+        guard !didCompactTaskStorage || localCount > 80 else { return 0 }
+        let removed = await taskRepo.compactRecurrenceStorageAsync(for: userId, retentionDays: 7)
+        didCompactTaskStorage = true
+        if removed > 0 {
+            applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "compact")
+        }
+        return removed
+    }
+
+    /// Synchronous compaction — tests and explicit maintenance only; avoid on refresh paths.
+    @discardableResult
+    public func compactTaskStorage(userId: String) -> Int {
+        guard !userId.isEmpty else { return 0 }
+        let removed = taskRepo.compactRecurrenceStorage(for: userId, retentionDays: 7)
+        if removed > 0 {
+            applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "compact")
+        }
+        return removed
     }
 
     /// Reuse midnight-superseded rows instead of creating duplicate occurrences every refresh.
@@ -522,6 +566,31 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    /// Persists EventKit identifiers returned from calendar sync.
+    public func applyCalendarEventIdentifiers(_ updates: [LifeTask]) async {
+        guard !updates.isEmpty else { return }
+        for update in updates {
+            if let index = tasks.firstIndex(where: { $0.id == update.id }) {
+                guard tasks[index].calendarEventIdentifier != update.calendarEventIdentifier else { continue }
+                tasks[index].calendarEventIdentifier = update.calendarEventIdentifier
+                do {
+                    try await taskRepo.update(tasks[index])
+                } catch {
+                    self.error = error.localizedDescription
+                }
+                continue
+            }
+            if let index = completedToday.firstIndex(where: { $0.id == update.id }) {
+                completedToday[index].calendarEventIdentifier = update.calendarEventIdentifier
+                do {
+                    try await taskRepo.update(completedToday[index])
+                } catch {
+                    self.error = error.localizedDescription
+                }
+            }
+        }
+    }
+
     /// Finds the next open slot from now and moves an incomplete task there.
     public func rescheduleTaskFromNow(_ task: LifeTask) async -> Date? {
         guard task.status.isActive else { return nil }
@@ -783,6 +852,127 @@ public final class TasksViewModel: ObservableObject {
         loadingTimeDisplayTaskIds.contains(taskId)
     }
     
+    /// Resolves a timeline task id from active lists, storage, or today's in-memory projections.
+    public func resolveTimelineTask(
+        id: String,
+        titleHint: String? = nil,
+        referenceDate: Date = Date()
+    ) -> LifeTask? {
+        if let task = tasks.first(where: { $0.id == id }) { return task }
+        if let task = completedToday.first(where: { $0.id == id }) { return task }
+        let all = schedulingContext
+        if let task = all.first(where: { $0.id == id }) { return task }
+
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: referenceDate)
+        let projected = TaskRecurrenceEngine.timelineProjections(for: all, on: day, calendar: calendar)
+        if let match = projected.first(where: { $0.id == id }) {
+            return match
+        }
+
+        if let titleHint,
+           !titleHint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return projected.first {
+                $0.title.caseInsensitiveCompare(titleHint) == .orderedSame
+            } ?? all.first {
+                $0.status.isActive && $0.title.caseInsensitiveCompare(titleHint) == .orderedSame
+            }
+        }
+
+        return nil
+    }
+
+    /// Persists a projected occurrence or reactivates a superseded row for the same template/day.
+    public func materializeTimelineTask(_ task: LifeTask, userId: String) async throws -> LifeTask {
+        var all = try await taskRepo.getAll(for: userId)
+
+        if let stored = all.first(where: { $0.id == task.id }) {
+            if stored.status.isActive { return stored }
+            if stored.status == .superseded {
+                var reactivated = stored
+                reactivated.status = .pending
+                reactivated.updatedAt = Date()
+                try await taskRepo.update(reactivated)
+                print("[Tasks] reactivated materialized projection id=\(reactivated.id.prefix(8))")
+                return reactivated
+            }
+            return stored
+        }
+
+        let calendar = Calendar.current
+        if let parentId = task.parentTaskId,
+           let day = task.scheduledDate,
+           var stale = all.first(where: { candidate in
+               candidate.parentTaskId == parentId
+                   && candidate.status == .superseded
+                   && candidate.scheduledDate.map { calendar.isDate($0, inSameDayAs: day) } == true
+           }) {
+            stale.status = .pending
+            stale.updatedAt = Date()
+            try await taskRepo.update(stale)
+            print("[Tasks] reactivated superseded for timeline complete id=\(stale.id.prefix(8))")
+            return stale
+        }
+
+        var occurrence = task
+        occurrence.userId = userId
+        occurrence.status = .pending
+        try await taskRepo.create(occurrence)
+        print("[Tasks] materialized timeline projection id=\(occurrence.id.prefix(8)) title=\"\(occurrence.title)\"")
+        return occurrence
+    }
+
+    /// Complete a task tapped on the live timeline — materializes projections first when needed.
+    @discardableResult
+    public func completeTimelineTask(id: String, userId: String, titleHint: String? = nil) async -> TaskUndoAction? {
+        guard !userId.isEmpty else { return nil }
+        guard var task = resolveTimelineTask(id: id, titleHint: titleHint) else {
+            return nil
+        }
+
+        let needsMaterialize = !schedulingContext.contains(where: { $0.id == task.id && $0.status.isActive })
+        if needsMaterialize {
+            do {
+                task = try await materializeTimelineTask(task, userId: userId)
+                refreshFromLocal(userId: userId)
+            } catch {
+                self.error = error.localizedDescription
+                return nil
+            }
+        }
+
+        guard task.status.isActive else {
+            return nil
+        }
+
+        return await completeTask(task)
+    }
+
+    /// Mark a timeline task incomplete — resolves from completedToday or storage.
+    @discardableResult
+    public func uncompleteTimelineTask(id: String, userId: String, titleHint: String? = nil) async -> Bool {
+        guard !userId.isEmpty else { return false }
+
+        if let task = completedToday.first(where: { $0.id == id }) {
+            await markIncomplete(task)
+            return true
+        }
+
+        if let titleHint,
+           !titleHint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let task = completedToday.first(where: { $0.title.caseInsensitiveCompare(titleHint) == .orderedSame }) {
+            await markIncomplete(task)
+            return true
+        }
+
+        if let task = resolveTimelineTask(id: id, titleHint: titleHint), task.status == .completed {
+            await markIncomplete(task)
+            return true
+        }
+
+        return false
+    }
+
     /// Mark a task as completed and schedule the next recurring occurrence when applicable.
     @discardableResult
     public func completeTask(_ task: LifeTask) async -> TaskUndoAction? {
@@ -838,6 +1028,7 @@ public final class TasksViewModel: ObservableObject {
             if !tasks.contains(where: { $0.id == task.id }) {
                 tasks.insert(updated, at: 0)
             }
+            notifyTaskListDidChange()
         } catch {
             self.error = error.localizedDescription
         }

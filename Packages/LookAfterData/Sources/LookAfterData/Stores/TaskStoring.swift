@@ -15,6 +15,29 @@ public protocol TaskStoring {
     func create(_ task: LifeTask) async throws
     func update(_ task: LifeTask) async throws
     func delete(_ id: String) async throws
+    @discardableResult
+    func pruneTerminalRecurrenceOccurrences(for userId: String, retentionDays: Int) -> Int
+    @discardableResult
+    func compactRecurrenceStorage(for userId: String, retentionDays: Int) -> Int
+    @discardableResult
+    func compactRecurrenceStorageAsync(for userId: String, retentionDays: Int) async -> Int
+}
+
+extension TaskStoring {
+    @discardableResult
+    func compactRecurrenceStorage(for userId: String) -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: 7)
+    }
+
+    @discardableResult
+    func compactRecurrenceStorageAsync(for userId: String) async -> Int {
+        await compactRecurrenceStorageAsync(for: userId, retentionDays: 7)
+    }
+
+    @discardableResult
+    func pruneTerminalRecurrenceOccurrences(for userId: String) -> Int {
+        pruneTerminalRecurrenceOccurrences(for: userId, retentionDays: 7)
+    }
 }
 
 extension TaskRepository: TaskStoring {

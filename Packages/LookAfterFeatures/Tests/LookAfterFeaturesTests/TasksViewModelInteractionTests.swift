@@ -246,6 +246,20 @@ final class InMemoryTaskStore: TaskStoring {
     func delete(_ id: String) async throws {
         tasks.removeAll { $0.id == id }
     }
+
+    func pruneTerminalRecurrenceOccurrences(for userId: String, retentionDays: Int) -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
+    }
+
+    func compactRecurrenceStorage(for userId: String, retentionDays: Int) -> Int {
+        _ = userId
+        _ = retentionDays
+        return 0
+    }
+
+    func compactRecurrenceStorageAsync(for userId: String, retentionDays: Int) async -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
+    }
 }
 
 private func mockGLMService() -> GLMService {
