@@ -245,12 +245,16 @@ struct BrainDashboardView: View {
                     return
                 }
                 responseSubtitle = reply
-                orbState = .speaking
                 statusLine = nil
-                speechSynthesizer.speak(reply)
-                if !speechSynthesizer.isSpeaking {
+                if SpeechVoiceSettings.autoSpeakReplies {
+                    orbState = .speaking
+                    speechSynthesizer.speak(reply)
+                    if !speechSynthesizer.isSpeaking {
+                        orbState = .ready
+                        statusLine = "Couldn't play voice reply."
+                    }
+                } else {
                     orbState = .ready
-                    statusLine = "Couldn't play voice reply."
                 }
             }
         }

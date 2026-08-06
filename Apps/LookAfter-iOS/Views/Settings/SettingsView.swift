@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import LookAfterCore
 import LookAfterAI
 import LookAfterData
@@ -8,7 +9,7 @@ import LookAfterHealth
 struct SettingsView: View {
     @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
-    
+
     @AppStorage("enableHealth") private var enableHealth: Bool = true
     @State private var lifeProfile = UserLifeProfileStore.load()
     @State private var lifeProfileMarkdown: String = ""
@@ -28,6 +29,13 @@ struct SettingsView: View {
     @AppStorage("pinNowToLockScreen") private var pinNowToLockScreen = false
     @AppStorage(FlowDirectorFeature.userDefaultsKey) private var enableFlowDirector = false
     @AppStorage(AppAppearanceMode.storageKey) private var appearanceRaw = AppAppearanceMode.system.rawValue
+    @AppStorage(SpeechVoiceSettings.providerKey) private var speechProviderRaw = SpeechVoiceProvider.appleEnhanced.rawValue
+    @AppStorage(SpeechVoiceSettings.voiceIdentifierKey) private var speechVoiceIdentifier = ""
+    @AppStorage(SpeechVoiceSettings.rateKey) private var speechRate = 0.48
+    @AppStorage(SpeechVoiceSettings.pitchKey) private var speechPitch = 1.0
+    @AppStorage(SpeechVoiceSettings.autoSpeakRepliesKey) private var autoSpeakReplies = true
+    @AppStorage(SpeechVoiceSettings.spokenStyleKey) private var preferSpokenStyle = true
+    @StateObject private var speechPreview = PlanningSpeechSynthesizer()
     @StateObject private var notificationPermission = NotificationPermissionService.shared
     @State private var notificationPreferences = NotificationPreferencesStore.load()
 
@@ -274,7 +282,73 @@ struct SettingsView: View {
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 })
-                
+
+                // Voice & Speech
+                Section(content: {
+                    Picker("Voice engine", selection: $speechProviderRaw) {
+                        ForEach(SpeechVoiceProvider.allCases.filter { $0 != .cloud }) { provider in
+                            Text(provider.title).tag(provider.rawValue)
+                        }
+                        Text(SpeechVoiceProvider.cloud.title)
+                            .tag(SpeechVoiceProvider.cloud.rawValue)
+                    }
+
+                    Picker("Voice", selection: $speechVoiceIdentifier) {
+                        Text("Automatic (best available)").tag("")
+                        ForEach(PlanningSpeechSynthesizer.availableEnglishVoices(), id: \.identifier) { voice in
+                            Text(voicePickerLabel(voice)).tag(voice.identifier)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Speaking rate")
+                            Spacer()
+                            Text(speechRateLabel)
+                                .foregroundColor(DesignSystem.textSecondary)
+                                .font(.system(size: 13))
+                        }
+                        Slider(value: $speechRate, in: 0.35...0.65, step: 0.01)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Pitch")
+                            Spacer()
+                            Text(String(format: "%.2f", speechPitch))
+                                .foregroundColor(DesignSystem.textSecondary)
+                                .font(.system(size: 13))
+                        }
+                        Slider(value: $speechPitch, in: 0.75...1.25, step: 0.01)
+                    }
+
+                    Toggle("Auto-speak AI replies", isOn: $autoSpeakReplies)
+                    Toggle("Write replies for speech", isOn: $preferSpokenStyle)
+
+                    Button {
+                        HapticManager.impact(.light)
+                        speechPreview.previewSample()
+                    } label: {
+                        Label(
+                            speechPreview.isSpeaking ? "Speaking…" : "Preview voice",
+                            systemImage: speechPreview.isSpeaking ? "speaker.wave.2.fill" : "play.circle.fill"
+                        )
+                    }
+                    .disabled(speechPreview.isSpeaking)
+
+                    if !speechPreview.activeVoiceName.isEmpty {
+                        Text("Active: \(speechPreview.activeVoiceName)")
+                            .font(.system(size: 12))
+                            .foregroundColor(DesignSystem.textMuted)
+                    }
+                }, header: {
+                    Text("Voice & Speech")
+                }, footer: {
+                    Text("Enhanced Apple voices sound more natural when downloaded in Settings → Accessibility → Spoken Content → Voices. Cloud voices are reserved for a future provider.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.textMuted)
+                })
+
                 // AI Configuration
                 Section {
                     HStack {
@@ -647,6 +721,24 @@ struct SettingsView: View {
             return "No AI usage logged today"
         }
         return "Today: \(GLMUsageSummary.formatTokenCount(aiUsageSummary.dailyTotalTokens)) tokens · \(String(format: "$%.4f", aiUsageSummary.dailyTotalUSD))"
+    }
+
+    private var speechRateLabel: String {
+        if speechRate < 0.42 { return "Slower" }
+        if speechRate > 0.55 { return "Faster" }
+        return "Natural"
+    }
+
+    private func voicePickerLabel(_ voice: AVSpeechSynthesisVoice) -> String {
+        var quality = ""
+        if #available(iOS 16.0, *) {
+            switch voice.quality {
+            case .premium: quality = " · Premium"
+            case .enhanced: quality = " · Enhanced"
+            default: break
+            }
+        }
+        return "\(voice.name) (\(voice.language))\(quality)"
     }
 
     private func refreshAIUsageSummary() {

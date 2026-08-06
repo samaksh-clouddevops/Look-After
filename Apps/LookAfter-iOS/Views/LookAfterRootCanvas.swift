@@ -367,6 +367,7 @@ public struct LookAfterRootCanvas: View {
             await weatherService.refresh()
             planningVM.bind(timelineService: shell.timelineService)
             planningVM.onSpeakReply = { text in
+                guard SpeechVoiceSettings.autoSpeakReplies else { return }
                 planningSpeech.speak(text)
             }
         }
