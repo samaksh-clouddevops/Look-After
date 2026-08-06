@@ -1,4 +1,4 @@
-import ActivityKit
+﻿import ActivityKit
 import WidgetKit
 import SwiftUI
 import LookAfterCore
@@ -9,6 +9,16 @@ private enum LiveActivityStyle {
     static let textSecondary = DesignSystem.textSecondary
     static let textMuted = DesignSystem.textMuted
     static let background = DesignSystem.backgroundPrimary
+
+    static func accent(for mode: String, isOnBreak: Bool) -> Color {
+        if isOnBreak { return textSecondary }
+        switch mode {
+        case "anchored": return accent
+        case "recovery": return Color(red: 0.45, green: 0.72, blue: 0.62)
+        case "fluidGap": return textMuted
+        default: return accent
+        }
+    }
 }
 
 struct FocusLiveActivity: Widget {
@@ -18,62 +28,109 @@ struct FocusLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: context.state.isOnBreak ? "cup.and.saucer.fill" : "brain.head.profile")
-                        .foregroundColor(context.state.isOnBreak ? LiveActivityStyle.textSecondary : LiveActivityStyle.accent)
+                    Image(systemName: leadingIcon(context: context))
+                        .foregroundColor(islandAccent(context: context))
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(context.state.sessionLabel)
-                            .font(.dsMetadata())
-                            .foregroundColor(LiveActivityStyle.textMuted)
+                        HStack(spacing: 6) {
+                            Text(context.state.sessionLabel)
+                                .font(.dsMetadata())
+                                .foregroundColor(LiveActivityStyle.textMuted)
+                            Text(context.state.constraintType)
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(LiveActivityStyle.textMuted.opacity(0.2))
+                                .clipShape(Capsule())
+                                .foregroundColor(LiveActivityStyle.textSecondary)
+                        }
                         Text(context.state.taskTitle)
                             .font(.dsCaption(weight: .semibold))
                             .lineLimit(1)
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if context.state.isPaused {
-                        Text(context.state.remainingLabel)
-                            .font(.dsCaption(weight: .semibold).monospacedDigit())
-                            .foregroundColor(LiveActivityStyle.accent)
-                    } else {
-                        Text(timerInterval: Date()...context.state.sessionEndDate, countsDown: true)
-                            .font(.dsCaption(weight: .semibold).monospacedDigit())
-                            .multilineTextAlignment(.trailing)
-                            .foregroundColor(LiveActivityStyle.accent)
+                    trailingTimer(context: context)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: context.state.progressFraction)
+                            .tint(islandAccent(context: context))
+                        if !context.state.nextUpSummary.isEmpty {
+                            Text(context.state.nextUpSummary)
+                                .font(.dsMetadata())
+                                .foregroundColor(LiveActivityStyle.textMuted)
+                                .lineLimit(1)
+                        }
                     }
                 }
             } compactLeading: {
-                Image(systemName: context.state.isOnBreak ? "cup.and.saucer.fill" : "timer")
-                    .foregroundColor(LiveActivityStyle.textSecondary)
+                Image(systemName: leadingIcon(context: context))
+                    .foregroundColor(islandAccent(context: context))
             } compactTrailing: {
-                if context.state.isPaused {
-                    Text(context.state.remainingLabel)
-                        .font(.dsMetadata().monospacedDigit())
-                        .foregroundColor(LiveActivityStyle.accent)
-                } else {
-                    Text(timerInterval: Date()...context.state.sessionEndDate, countsDown: true)
-                        .font(.dsMetadata().monospacedDigit())
-                        .frame(width: 40)
-                        .foregroundColor(LiveActivityStyle.accent)
-                }
+                compactTrailing(context: context)
             } minimal: {
-                Image(systemName: "timer")
-                    .foregroundColor(LiveActivityStyle.accent)
+                Image(systemName: leadingIcon(context: context))
+                    .foregroundColor(islandAccent(context: context))
             }
+        }
+    }
+
+    private func leadingIcon(context: ActivityViewContext<FocusActivityAttributes>) -> String {
+        if context.state.isOnBreak { return "cup.and.saucer.fill" }
+        if context.state.surfaceModeRaw == "recovery" { return "figure.mind.and.body" }
+        if context.state.surfaceModeRaw == "fluidGap" { return "hourglass" }
+        return context.attributes.categoryIcon.isEmpty ? "brain.head.profile" : context.attributes.categoryIcon
+    }
+
+    private func islandAccent(context: ActivityViewContext<FocusActivityAttributes>) -> Color {
+        LiveActivityStyle.accent(for: context.state.surfaceModeRaw, isOnBreak: context.state.isOnBreak)
+    }
+
+    private func endDate(for context: ActivityViewContext<FocusActivityAttributes>) -> Date {
+        max(Date().addingTimeInterval(1), context.state.sessionEndDate)
+    }
+
+    @ViewBuilder
+    private func trailingTimer(context: ActivityViewContext<FocusActivityAttributes>) -> some View {
+        if context.state.isPaused || !context.state.showsStrictCountdown {
+            Text(context.state.remainingLabel.isEmpty ? "—" : context.state.remainingLabel)
+                .font(.dsCaption(weight: .semibold).monospacedDigit())
+                .foregroundColor(islandAccent(context: context))
+        } else {
+            Text(timerInterval: Date()...endDate(for: context), countsDown: true)
+                .font(.dsCaption(weight: .semibold).monospacedDigit())
+                .multilineTextAlignment(.trailing)
+                .foregroundColor(islandAccent(context: context))
+        }
+    }
+
+    @ViewBuilder
+    private func compactTrailing(context: ActivityViewContext<FocusActivityAttributes>) -> some View {
+        if context.state.isPaused || !context.state.showsStrictCountdown {
+            Text(context.state.remainingLabel.isEmpty ? "·" : context.state.remainingLabel)
+                .font(.dsMetadata().monospacedDigit())
+                .foregroundColor(islandAccent(context: context))
+        } else {
+            Text(timerInterval: Date()...endDate(for: context), countsDown: true)
+                .font(.dsMetadata().monospacedDigit())
+                .frame(width: 40)
+                .foregroundColor(islandAccent(context: context))
         }
     }
 
     @ViewBuilder
     private func focusLockScreen(context: ActivityViewContext<FocusActivityAttributes>) -> some View {
+        let accent = islandAccent(context: context)
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(context.state.sessionLabel, systemImage: context.state.isOnBreak ? "cup.and.saucer.fill" : "brain.head.profile")
+                Label(context.state.sessionLabel, systemImage: leadingIcon(context: context))
                     .font(.dsMetadata(weight: .bold))
-                    .foregroundColor(context.state.isOnBreak ? LiveActivityStyle.textSecondary : LiveActivityStyle.accent)
+                    .foregroundColor(accent)
                 Spacer()
-                Text("Session \(context.attributes.sessionNumber)")
-                    .font(.dsMetadata())
+                Text(context.state.constraintType)
+                    .font(.dsMetadata(weight: .semibold))
                     .foregroundColor(LiveActivityStyle.textMuted)
             }
 
@@ -82,27 +139,35 @@ struct FocusLiveActivity: Widget {
                 .foregroundColor(LiveActivityStyle.textPrimary)
                 .lineLimit(2)
 
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 if context.state.isPaused {
-                    Text("Paused • \(context.state.remainingLabel) left")
+                    Text("Paused • \(context.state.remainingLabel)")
+                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .foregroundColor(accent)
+                } else if context.state.showsStrictCountdown {
+                    Text(timerInterval: Date()...endDate(for: context), countsDown: true)
                         .font(.system(size: 28, weight: .bold, design: .monospaced))
-                        .foregroundColor(LiveActivityStyle.accent)
+                        .foregroundColor(accent)
                 } else {
-                    Text(timerInterval: Date()...context.state.sessionEndDate, countsDown: true)
-                        .font(.system(size: 32, weight: .bold, design: .monospaced))
-                        .foregroundColor(LiveActivityStyle.accent)
+                    Text(context.state.remainingLabel.isEmpty ? context.state.constraintType : context.state.remainingLabel)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundColor(accent)
                 }
                 Spacer()
-                if context.state.isPaused {
-                    Image(systemName: "pause.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(LiveActivityStyle.textSecondary)
-                }
+                Text("\(Int(context.state.progressFraction * 100))%")
+                    .font(.dsCaption(weight: .semibold).monospacedDigit())
+                    .foregroundColor(LiveActivityStyle.textMuted)
             }
 
-            Text("Timer pinned — open \(UserFacingCopy.productName) to control.")
-                .font(.dsMetadata())
-                .foregroundColor(LiveActivityStyle.textMuted)
+            ProgressView(value: context.state.progressFraction)
+                .tint(accent)
+
+            if !context.state.nextUpSummary.isEmpty {
+                Text(context.state.nextUpSummary)
+                    .font(.dsMetadata())
+                    .foregroundColor(LiveActivityStyle.textSecondary)
+                    .lineLimit(2)
+            }
         }
         .padding(16)
         .activityBackgroundTint(LiveActivityStyle.background)

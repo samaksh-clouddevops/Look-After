@@ -115,6 +115,7 @@ final class AppShellState: ObservableObject {
                 actualFocusMinutes: focusMins
             )
             WidgetSyncService.shared.sync(brainVM: brainVM, taskStore: taskStore, healthStore: healthStore)
+            startExecutionEnvironment()
 
             await seedUITestFocusTaskIfNeeded(userId: userId)
 
@@ -309,6 +310,26 @@ final class AppShellState: ObservableObject {
             taskStore: taskStore,
             healthStore: healthStore
         )
+        syncExecutionEnvironment()
+    }
+
+    /// Starts schedule-driven Focus Filters + Live Activities.
+    func startExecutionEnvironment() {
+        let coordinator = ExecutionEnvironmentCoordinator.shared
+        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
+        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.start()
+    }
+
+    func syncExecutionEnvironment() {
+        let coordinator = ExecutionEnvironmentCoordinator.shared
+        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
+        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.refresh()
+    }
+
+    func stopExecutionEnvironment() {
+        ExecutionEnvironmentCoordinator.shared.stop()
     }
 
     func orchestrateBrain(userId: String) async {
@@ -472,6 +493,7 @@ final class AppShellState: ObservableObject {
         FactoryResetManager.shared.performLocalReset(userId: userId)
         clearInMemoryState(userId: userId)
         healthSync.resetForFactoryReset()
+        stopExecutionEnvironment()
         LiveActivityManager.shared.endAllActivities()
         await NotificationCoordinator.shared.resetForFactoryReset()
         refreshWidgetData()
@@ -515,6 +537,7 @@ final class AppShellState: ObservableObject {
             actualFocusMinutes: focusMins
         )
         refreshWidgetData()
+        startExecutionEnvironment()
 
         UserLifeProfileStore.syncUserNameFromProfileIfNeeded()
 

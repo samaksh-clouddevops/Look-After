@@ -1,4 +1,4 @@
-// !$*UTF8*$!
+﻿// !$*UTF8*$!
 {
 	archiveVersion = 1;
 	classes = {
@@ -697,6 +697,7 @@
 				AC2665E3955B1F8C647A2576 /* LifeProfileNameExtractorTests.swift */,
 				6C79D0175A36727D929A0455 /* LifeTimelinePresenterTests.swift */,
 				425144593800699C52357460 /* LookAfterCoreTests.swift */,
+				E10000000000000000000005 /* ExecutionBlockResolverTests.swift */,
 				BB76903C7CD801FD0EF85BBA /* NotificationPolicyEngineTests.swift */,
 				BB7B6E923DF26883B88B4D2D /* OnboardingTaskSeederTests.swift */,
 				B4842E0EDE0BAC9329088ABC /* PostWakeDetectorTests.swift */,
@@ -1618,6 +1619,7 @@
 				282B92ED3B963296B86D1326 /* TaskSemanticProfileTests.swift in Sources */,
 				D810CE6E8228FFD5A8EA56BA /* TasksViewModelInteractionTests.swift in Sources */,
 				56797A2756849E51380F92D0 /* TestCalendarFixtures.swift in Sources */,
+				E10000000000000000000015 /* ExecutionBlockResolverTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

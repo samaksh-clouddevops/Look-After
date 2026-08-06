@@ -81,6 +81,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
                 aiPreview: shell.brain.chatHistory.last?.content
             )
         } else if phase == .active {
+            shell.syncExecutionEnvironment()
             let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
             if healthEnabled, !userId.isEmpty, healthSync.isAvailable {
                 Task {
@@ -161,10 +162,12 @@ private struct ExperienceRootFocusModifier: ViewModifier {
             .onChange(of: shell.adhdVM.isFocusSessionActive) { _, active in
                 Task { @MainActor in
                     await Task.yield()
+                    ExecutionEnvironmentCoordinator.shared.setManualFocusActive(active)
                     if active {
                         WidgetSyncService.shared.startFocusActivity(adhdVM: shell.adhdVM)
                     } else {
                         LiveActivityManager.shared.endFocusActivity()
+                        shell.syncExecutionEnvironment()
                     }
                 }
             }
@@ -222,6 +225,7 @@ private struct ExperienceRootDataModifier: ViewModifier {
                     shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
                 }
                 shell.refreshWidgetData()
+                shell.syncExecutionEnvironment()
             }
     }
 }
@@ -251,6 +255,10 @@ private struct ExperienceRootNotificationModifier: ViewModifier {
             }
             .onChange(of: shell.adhdVM.isOnBreak) { _, _ in
                 guard !shell.isPerformingFactoryReset, shell.adhdVM.isFocusSessionActive else { return }
+                Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: ExecutionFocusCoordinator.didChangeNotification)) { _ in
+                guard !shell.isPerformingFactoryReset else { return }
                 Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
             }
     }
