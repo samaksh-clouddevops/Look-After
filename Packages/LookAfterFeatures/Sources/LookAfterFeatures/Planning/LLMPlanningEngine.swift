@@ -77,6 +77,7 @@ public final class LLMPlanningEngine {
         Return ONLY valid JSON — no markdown fences, no prose outside JSON.
         The app executes your mutations automatically (creates tasks, updates timeline, shopping, medications).
         The "reply" field is the ONLY text the user sees — write warm plain English, never JSON or code.
+        \(SpeechVoiceSettings.preferSpokenStyle ? "\n        \(SpeechVoiceSettings.spokenDeliveryInstruction)\n        Apply SPOKEN DELIVERY rules to the \"reply\" field only." : "")
         """
     }
 

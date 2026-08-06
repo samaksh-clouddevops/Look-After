@@ -554,6 +554,20 @@ public enum LookAfterPrompts {
             }
         }
 
+        let tone = UserDefaults.standard.string(forKey: "aiCoachTone") ?? "Encouraging & Gentle"
+        prompt += """
+
+        CONVERSATION TONE: \(tone)
+        Match this tone consistently in every reply.
+        """
+
+        if SpeechVoiceSettings.preferSpokenStyle {
+            prompt += """
+
+            \(SpeechVoiceSettings.spokenDeliveryInstruction)
+            """
+        }
+
         return prompt
     }
 
