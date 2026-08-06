@@ -20,7 +20,7 @@ struct SettingsView: View {
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("userEmail") private var userEmail: String = ""
-    @AppStorage("adhdFocusChallenge") private var adhdFocusChallenge: String = "Task Initiation"
+    @AppStorage(ADHDFocusChallenge.storageKey) private var adhdFocusChallengeRaw = ADHDFocusChallenge.taskInitiation.rawValue
     @AppStorage("aiCoachTone") private var aiCoachTone: String = "Encouraging & Gentle"
     @AppStorage("userKeyGoals") private var userKeyGoals: String = ""
     @AppStorage("appCurrencySymbol") private var appCurrencySymbol: String = "₹"
@@ -61,12 +61,7 @@ struct SettingsView: View {
     @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
     @State private var aiUsageSummary = GLMUsageSummary()
     
-    private let focusChallenges = [
-        "Task Initiation",
-        "Time Blindness",
-        "Task Paralysis / Overwhelm",
-        "Hyperfocus Context Switching"
-    ]
+    private let focusChallenges = ADHDFocusChallenge.allCases
     
     private let coachTones = [
         "Encouraging & Gentle",
@@ -251,9 +246,9 @@ struct SettingsView: View {
 
                 // AI Executive Profile & Personalization
                 Section(content: {
-                    Picker("Primary Focus Challenge", selection: $adhdFocusChallenge) {
-                        ForEach(focusChallenges, id: \.self) { challenge in
-                            Text(challenge).tag(challenge)
+                    Picker("Primary Focus Challenge", selection: $adhdFocusChallengeRaw) {
+                        ForEach(focusChallenges) { challenge in
+                            Text(challenge.label).tag(challenge.rawValue)
                         }
                     }
                     
@@ -623,6 +618,7 @@ struct SettingsView: View {
                 if userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     userName = UserLifeProfileStore.resolvedDisplayName()
                 }
+                adhdFocusChallengeRaw = ADHDFocusChallenge.normalizeStorage().rawValue
                 Task { await notificationPermission.refreshStatus() }
             }
             .onChange(of: structuredProfileSections.personality) { _, _ in syncStructuredProfileToStore() }

@@ -157,8 +157,21 @@ public enum DayScheduleReconciler {
                 break
             }
 
+            // Recurrence occurrences are re-materialized on sync — never park stale series rows.
+            if task.parentTaskId != nil {
+                task.status = .superseded
+                task.scheduledTime = nil
+                task.scheduledEndTime = nil
+                task.updatedAt = now
+                byID[task.id] = task
+                changed.insert(task.id)
+                decisions.append(.init(taskID: task.id, action: .superseded, reason: "midnight_series_refresh"))
+                continue
+            }
+
             task.scheduledTime = nil
             task.scheduledEndTime = nil
+            task.scheduledDate = nil
             task.applyTimeConstraint(.fluid)
             task.updatedAt = now
             parkedQueue?.enqueue(from: task, reason: "midnight_rollover_park", now: now)

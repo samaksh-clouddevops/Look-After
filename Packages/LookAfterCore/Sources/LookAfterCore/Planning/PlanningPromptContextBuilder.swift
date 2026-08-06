@@ -482,6 +482,21 @@ public enum PlanningPromptContextBuilder {
         - Medication: use MEDICATIONS list — never invent times
         - Morning review: 10 min flexible block after breakfast when capacity allows
         - End-of-day reflection lives on the Timeline screen (not a schedulable task)
+        - Sleep fence: nothing new after ideal bedtime — wind-down marks end of actionable day
+        - Missed hygiene/meals from yesterday do NOT duplicate today's occurrence; add ONE catch-up task with a clear title (e.g. "Brush teeth — catch-up from last night") only when context warrants it
+        """
+    }
+
+    public static func sleepBoundaryBlock(now: Date = Date(), profile: UserLifeProfile = UserLifeProfileStore.load()) -> String {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: now)
+        let bedtime = DayBoundaryPlanner.actionableDayEnd(on: day, now: now, calendar: calendar)
+        let label = ScheduleTimeFormatting.timeLabel(bedtime, calendar: calendar)
+        return """
+        SLEEP BOUNDARY:
+        - Ideal wind-down begins by \(label)
+        - Do not schedule flexible work after this time
+        - Keep meals in their windows (Breakfast before 11 AM, Dinner before 9 PM)
         """
     }
 

@@ -46,7 +46,7 @@ enum BackgroundNotificationRefreshTask {
         let calendarSignals = await calendarProvider.currentSignals(at: now)
         let medications = MedicationStore.load()
         let userId = FirebaseManager.shared.resolvedUserId
-        let snapshot = TaskRepository().localSnapshot(for: userId)
+        let snapshot = TaskStore.shared.localSnapshot(for: userId)
         let tasks = snapshot.active
 
         let postWake = PostWakeDetector.evaluate(

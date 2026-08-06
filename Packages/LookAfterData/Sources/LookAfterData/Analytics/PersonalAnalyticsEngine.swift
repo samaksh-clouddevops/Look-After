@@ -11,19 +11,19 @@ public typealias BehaviorEventsFetcher = @Sendable () async -> [BehaviorEvent]
 @MainActor
 public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
 
-    private let taskRepo: TaskRepository
+    private let taskStore: TaskStore
     private let healthRepo: HealthSummaryRepository
     private let cognitiveModel: CognitiveModel
     private let fetchBehaviorEvents: BehaviorEventsFetcher
     private var cache: [String: PersonalAnalyticsReport] = [:]
 
     public init(
-        taskRepo: TaskRepository? = nil,
+        taskStore: TaskStore = .shared,
         healthRepo: HealthSummaryRepository? = nil,
         cognitiveModel: CognitiveModel = CognitiveModel(),
         fetchBehaviorEvents: @escaping BehaviorEventsFetcher = { [] }
     ) {
-        self.taskRepo = taskRepo ?? TaskRepository()
+        self.taskStore = taskStore
         self.healthRepo = healthRepo ?? HealthSummaryRepository()
         self.cognitiveModel = cognitiveModel
         self.fetchBehaviorEvents = fetchBehaviorEvents
@@ -39,7 +39,7 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
         let now = Date()
         let range = timeframe.dateRange(calendar: calendar, now: now)
 
-        let allTasks = (try? await taskRepo.getAll(for: userId)) ?? []
+        let allTasks = (try? await taskStore.getAll(for: userId)) ?? []
         let userTasks = allTasks.filter { task in
             guard !userId.isEmpty else { return true }
             return task.userId == userId
@@ -890,16 +890,7 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
     }
 
     private static func loadHabitCompletions() -> [String: [String]] {
-        guard let data = UserDefaults.standard.data(forKey: BriefingHabitCatalog.storageKey),
-              let decoded = try? JSONDecoder().decode([String: String].self, from: data) else {
-            return [:]
-        }
-
-        var byHabit: [String: [String]] = [:]
-        for (habitID, dateKey) in decoded {
-            byHabit[habitID, default: []].append(dateKey)
-        }
-        return byHabit
+        HabitCompletionStore.load()
     }
 
     private static func dayKey(for date: Date) -> String {

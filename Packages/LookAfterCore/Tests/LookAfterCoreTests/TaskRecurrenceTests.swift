@@ -76,6 +76,40 @@ final class TaskRecurrenceTests: XCTestCase {
         XCTAssertTrue(missing.isEmpty)
     }
 
+    func testMissingOccurrencesSkipsWhenSupersededRowExists() {
+        let template = LifeTask(
+            title: "Brush teeth — morning",
+            scheduledTime: makeDate(year: 2026, month: 1, day: 1, hour: 7, minute: 30),
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let today = makeDate(year: 2026, month: 8, day: 6)
+        var superseded = TaskRecurrenceEngine.makeOccurrence(from: template, template: template, scheduledDate: today, calendar: calendar)
+        superseded.status = .superseded
+
+        let missing = TaskRecurrenceEngine.missingOccurrences(for: [template, superseded], on: today, calendar: calendar)
+        XCTAssertTrue(missing.isEmpty)
+    }
+
+    func testTimelineProjectionsAfterSupersededOccurrence() {
+        let template = LifeTask(
+            title: "Brush teeth — morning",
+            scheduledTime: makeDate(year: 2026, month: 1, day: 1, hour: 7, minute: 30),
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let today = makeDate(year: 2026, month: 8, day: 6)
+        var superseded = TaskRecurrenceEngine.makeOccurrence(from: template, template: template, scheduledDate: today, calendar: calendar)
+        superseded.status = .superseded
+
+        let projected = TaskRecurrenceEngine.timelineProjections(for: [template, superseded], on: today, calendar: calendar)
+        XCTAssertEqual(projected.count, 1)
+        XCTAssertEqual(projected.first?.title, template.title)
+        XCTAssertEqual(projected.first?.parentTaskId, template.id)
+    }
+
     func testRecurrenceEngineCreatesNextOccurrenceAfterCompletion() {
         var template = LifeTask(
             title: "Take Thyroid Medication",

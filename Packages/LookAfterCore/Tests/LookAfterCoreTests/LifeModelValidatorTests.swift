@@ -44,14 +44,117 @@ final class LifeModelValidatorTests: XCTestCase {
         let weekday = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 4))!
         let gaps = LifeGapDetector.detect(
             model: model,
-            completedTasks: [],
-            activeTasks: [],
+            allTasks: [],
             now: weekday,
             lookbackDays: 7
         )
 
         XCTAssertFalse(gaps.isEmpty)
         XCTAssertTrue(gaps.contains { $0.commitmentTitle == "Gym" || $0.commitmentTitle.lowercased().contains("creative") })
+        XCTAssertTrue(gaps.contains { $0.message.contains("Not logged recently") })
+    }
+
+    func testLifeGapDetectorSkipsRecentlyCompletedCommitment() {
+        let model = LifeModelValidator.compileLocally(from: fixtureMarkdown)
+        let today = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 4, hour: 18))!
+        var gym = LifeTask(
+            title: "Gym",
+            lifeArea: .health,
+            status: .completed,
+            tags: [LifeModel.commitmentTaskTag, model.commitmentID(for: "Gym")],
+            userId: "user-1"
+        )
+        gym.completedAt = today
+
+        let gaps = LifeGapDetector.detect(
+            model: model,
+            allTasks: [gym],
+            now: today
+        )
+
+        XCTAssertFalse(gaps.contains { $0.commitmentTitle == "Gym" })
+    }
+
+    func testLifeGapDetectorRecognizesInformalCompletionTitles() {
+        let model = LifeModelValidator.compileLocally(from: fixtureMarkdown)
+        let today = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 4, hour: 18))!
+        var gym = LifeTask(
+            title: "Gym workout",
+            lifeArea: .health,
+            status: .completed,
+            userId: "user-1"
+        )
+        gym.completedAt = today
+
+        let gaps = LifeGapDetector.detect(
+            model: model,
+            allTasks: [gym],
+            now: today
+        )
+
+        XCTAssertFalse(gaps.contains { $0.commitmentTitle == "Gym" })
+    }
+
+    func testLifeGapDetectorStillFlagsScheduledButIncompleteCommitment() {
+        let model = LifeModelValidator.compileLocally(from: fixtureMarkdown)
+        let today = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 4, hour: 18))!
+        let day = Calendar.current.startOfDay(for: today)
+        let gym = LifeTask(
+            title: "Gym",
+            lifeArea: .health,
+            scheduledDate: day,
+            tags: [LifeModel.commitmentTaskTag, model.commitmentID(for: "Gym")],
+            userId: "user-1"
+        )
+
+        let gaps = LifeGapDetector.detect(
+            model: model,
+            allTasks: [gym],
+            now: today
+        )
+
+        XCTAssertTrue(gaps.contains { $0.commitmentTitle == "Gym" })
+    }
+
+    func testLifeGapDetectorMatchesMusicProductionByKeyword() {
+        let model = LifeModelValidator.compileLocally(from: fixtureMarkdown)
+        let today = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 4, hour: 21))!
+        var music = LifeTask(
+            title: "Music production session",
+            lifeArea: .creativity,
+            status: .completed,
+            userId: "user-1"
+        )
+        music.completedAt = today
+
+        let gaps = LifeGapDetector.detect(
+            model: model,
+            allTasks: [music],
+            now: today
+        )
+
+        XCTAssertTrue(gaps.filter { $0.commitmentTitle.lowercased().contains("creative") || $0.commitmentTitle.lowercased().contains("music") }.isEmpty)
+    }
+
+    func testLifeGapDetectorSkipsWhenCompletedAtComesFromUpdatedAt() {
+        let model = LifeModelValidator.compileLocally(from: fixtureMarkdown)
+        let today = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 4, hour: 19))!
+        var gym = LifeTask(
+            title: "Gym",
+            lifeArea: .health,
+            status: .completed,
+            tags: [LifeModel.commitmentTaskTag, model.commitmentID(for: "Gym")],
+            userId: "user-1"
+        )
+        gym.updatedAt = today
+
+        let gaps = LifeGapDetector.detect(
+            model: model,
+            allTasks: [gym],
+            now: today
+        )
+
+        XCTAssertFalse(gaps.contains { $0.commitmentTitle == "Gym" })
     }
 
     private static let inlineFixture = """

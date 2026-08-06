@@ -51,101 +51,57 @@ public struct LookAfterRootCanvas: View {
         return shell.brainVM.flowSurface?.heroTask ?? shell.brainVM.topTasks.first
     }
 
-    private var orchestratorHero: HeroBriefing? {
-        shell.contextOrchestrator.briefing?.hero
+    private var briefingHeroInput: BriefingProjectorInput {
+        BriefingProjectorInput(
+            userName: UserLifeProfileStore.resolvedDisplayName(),
+            heroBriefing: shell.contextOrchestrator.briefing?.hero,
+            brainDecision: shell.contextOrchestrator.brainState?.decision,
+            flowSurface: shell.brainVM.flowSurface,
+            recommendation: shell.brainVM.recommendation,
+            topTasks: shell.brainVM.topTasks,
+            resumeSnapshot: shell.contextOrchestrator.resumeSnapshot,
+            executiveCapacity: shell.contextOrchestrator.executiveCapacity,
+            lifeSnapshot: shell.contextOrchestrator.snapshot,
+            cognitiveSnapshot: shell.brainVM.cognitiveSnapshot,
+            healthSummary: shell.brainVM.healthSummary,
+            activeTasks: shell.tasksVM.tasks.filter(\.status.isActive),
+            upcomingBills: shell.modulesVM.bills.filter { !$0.isPaid },
+            medications: MedicationStore.load(),
+            timelineItems: shell.timelineService.snapshot.today
+        )
     }
 
-    private var heroTitle: String {
-        if let hero = orchestratorHero, !hero.actionLine.isEmpty {
-            return UserFacingCopy.sanitize(hero.actionLine)
-        }
-        if let task = heroTask {
-            return HumanLanguage.outcomeHeadline(task: task)
-        }
-        return "Pick up where you left off"
-    }
-
-    private var heroSubtitle: String {
-        if let hero = orchestratorHero {
-            var parts: [String] = []
-            if let context = hero.contextLine, !context.isEmpty {
-                parts.append(UserFacingCopy.sanitize(context))
-            }
-            if !hero.outcomeLine.isEmpty {
-                parts.append(UserFacingCopy.sanitize(hero.outcomeLine))
-            }
-            if !parts.isEmpty { return parts.joined(separator: " ") }
-        }
-        if let line = shell.brainVM.flowSurface?.briefingLines.first {
-            return UserFacingCopy.sanitize(line)
-        }
-        if let reasoning = shell.brainVM.flowSurface?.prediction?.reasoning, !reasoning.isEmpty {
-            return UserFacingCopy.sanitize(reasoning)
-        }
-        return UserFacingCopy.sanitize(shell.brainVM.recommendation)
-    }
-
-    private var heroWhyLine: String? {
-        orchestratorHero?.primaryWhyLine.map { UserFacingCopy.sanitize($0) }
-    }
-
-    private var heroDurationLabel: String? {
-        if let hero = orchestratorHero, hero.durationEstimate.pointMinutes > 0 {
-            return hero.durationEstimate.displayLabel
-        }
-        if let minutes = shell.brainVM.flowSurface?.prediction?.suggestedDurationMinutes, minutes > 0 {
-            return UserFacingCopy.actionDurationSubtitle(minutes: minutes)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
-        }
-        return nil
-    }
-
-    private var heroButtonLabel: String {
-        if let hero = orchestratorHero, !hero.buttonLabel.isEmpty {
-            return UserFacingCopy.sanitize(hero.buttonLabel)
-        }
-        if let label = shell.brainVM.flowSurface?.prediction?.buttonLabel {
-            return UserFacingCopy.sanitize(label)
-        }
-        if let task = heroTask {
-            return HumanLanguage.outcomeHeadline(task: task)
-        }
-        return "Start now"
-    }
-
-    private var heroWindowLabel: String? {
-        if let interval = shell.brainVM.flowSurface?.flowWindow {
-            let label = FocusWindowFormatter.displayLabel(for: interval)
-            return label == FocusWindowFormatter.noStrongWindow ? nil : label
-        }
-        let peak = shell.briefingVM.energy.peakFocusWindow
-        return peak == UserFacingCopy.noFocusWindowToday ? nil : peak
+    private var heroDisplay: BriefingHeroDisplayContent {
+        BriefingProjector.heroDisplayContent(
+            from: briefingHeroInput,
+            peakFocusWindow: shell.briefingVM.energy.peakFocusWindow
+        )
     }
 
     private var calmHeroContent: CalmHeroContent {
-        if let hero = orchestratorHero {
+        if let hero = shell.contextOrchestrator.briefing?.hero {
             return CalmHeroContentBuilder.from(
-                title: heroTitle,
-                buttonLabel: heroButtonLabel,
+                title: heroDisplay.title,
+                buttonLabel: heroDisplay.buttonLabel,
                 greeting: hero.greeting,
                 contextLine: hero.contextLine,
                 outcomeLine: hero.outcomeLine,
-                whyLine: heroWhyLine,
-                durationLabel: heroDurationLabel,
-                windowLabel: heroWindowLabel,
-                narrative: heroSubtitle,
+                whyLine: heroDisplay.whyLine,
+                durationLabel: heroDisplay.durationLabel,
+                windowLabel: heroDisplay.windowLabel,
+                narrative: heroDisplay.subtitle,
                 skipConsequence: nil,
                 alternativePrompt: hero.lowConfidencePrompt,
                 whyNowReasons: hero.whyNowReasons
             )
         }
         return CalmHeroContentBuilder.from(
-            title: heroTitle,
-            buttonLabel: heroButtonLabel,
-            whyLine: heroWhyLine,
-            durationLabel: heroDurationLabel,
-            windowLabel: heroWindowLabel,
-            narrative: heroSubtitle
+            title: heroDisplay.title,
+            buttonLabel: heroDisplay.buttonLabel,
+            whyLine: heroDisplay.whyLine,
+            durationLabel: heroDisplay.durationLabel,
+            windowLabel: heroDisplay.windowLabel,
+            narrative: heroDisplay.subtitle
         )
     }
 
@@ -220,20 +176,6 @@ public struct LookAfterRootCanvas: View {
             if featureTour.isActive {
                 AppFeatureTourOverlay(coordinator: featureTour)
                     .zIndex(200)
-            }
-        }
-        .onPreferenceChange(AppFeatureTourFramePreferenceKey.self) { payloads in
-            featureTour.replaceAnchors(payloads)
-        }
-        .onPreferenceChange(TourTabBarFramePreferenceKey.self) { frame in
-            guard frame.isValidObstacle else { return }
-            let old = featureTour.tabBarFrame
-            let changed = abs(frame.minY - old.minY) > 2
-                || abs(frame.height - old.height) > 2
-                || abs(frame.minX - old.minX) > 2
-            if changed {
-                featureTour.tabBarFrame = frame
-                featureTour.scheduleLayoutRecomputeIfActive()
             }
         }
         .onChange(of: featureTour.requestedTab) { _, tab in
@@ -423,6 +365,7 @@ public struct LookAfterRootCanvas: View {
         }
         .task {
             await weatherService.refresh()
+            planningVM.bind(timelineService: shell.timelineService)
             planningVM.onSpeakReply = { text in
                 planningSpeech.speak(text)
             }
@@ -487,8 +430,8 @@ public struct LookAfterRootCanvas: View {
                 speechSynthesizer: planningSpeech,
                 modulesVM: shell.modulesVM,
                 tasksVM: shell.tasksVM,
-                lifeTimelineEvents: shell.contextOrchestrator.lifeTimelineEvents,
-                tomorrowLifeTimelineEvents: shell.contextOrchestrator.tomorrowLifeTimelineEvents,
+                lifeTimelineEvents: shell.timelineService.snapshot.today,
+                tomorrowLifeTimelineEvents: shell.timelineService.snapshot.tomorrow,
                 weatherSnapshot: weatherService.snapshot,
                 onSettings: {
                     if firebase.isAuthenticated { showSettings = true } else { showAuth = true }
@@ -601,7 +544,7 @@ public struct LookAfterRootCanvas: View {
                     peakStartHour: peak
                 )
                 await MainActor.run {
-                    planningVM.refreshTimeline(from: shell.contextOrchestrator.lifeTimelineEvents)
+                    planningVM.refreshTimeline(from: shell.timelineService.snapshot.today)
                 }
             }
         )
@@ -614,7 +557,7 @@ public struct LookAfterRootCanvas: View {
         return ExecutivePlanningViewModel.buildContext(
             userName: userName.isEmpty ? "there" : userName,
             tasksVM: shell.tasksVM,
-            timelineItems: shell.contextOrchestrator.lifeTimelineEvents,
+            timelineItems: shell.timelineService.snapshot.today,
             snapshot: shell.contextOrchestrator.snapshot,
             healthSummary: shell.brainVM.healthSummary,
             executiveCapacity: shell.contextOrchestrator.executiveCapacity,
@@ -663,10 +606,6 @@ public struct LookAfterRootCanvas: View {
             userName: name,
             peakStartHour: peak
         )
-        await MainActor.run {
-            planningVM.refreshTimeline(from: shell.contextOrchestrator.lifeTimelineEvents)
-            planningVM.refreshTomorrowTimeline(from: shell.contextOrchestrator.tomorrowLifeTimelineEvents)
-        }
     }
 
     private func triggerPlanTomorrow(userId: String) async {
@@ -689,8 +628,8 @@ public struct LookAfterRootCanvas: View {
             return
         }
         HapticManager.notification(.success)
+        guard await shell.tasksVM.completeTask(task) != nil else { return }
         planningVM.markTimelineTaskCompleted(taskId: taskId)
-        _ = await shell.tasksVM.completeTask(task)
         await refreshTimelinePage(userId: userId)
     }
 

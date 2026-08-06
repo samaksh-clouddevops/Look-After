@@ -96,30 +96,89 @@ public enum TaskEphemeralityDefaults {
         case .selfCare, .physicalActivity:
             return .endOfDay
         case .errand:
-            // Meals / coffee-like errands often title-tagged — end of day default for short errands
             return task.estimatedMinutes <= 45 ? .endOfDay : .infinite
         default:
             return .infinite
         }
     }
 
+    /// Applies semantic-derived scheduling policy to a task record (templates + occurrences).
+    public static func enrich(_ task: LifeTask) -> LifeTask {
+        var enriched = task
+        enriched.semanticProfile = TaskSemanticProfileBuilder.classificationProfile(for: enriched)
+        if enriched.expirationPolicy == nil {
+            enriched.expirationPolicy = expiration(for: enriched)
+        }
+        if enriched.collisionStrategy == nil {
+            enriched.collisionStrategy = collisionStrategy(for: enriched)
+        }
+        if enriched.temporalBoundingBox == nil {
+            enriched.temporalBoundingBox = boundingBox(for: enriched)
+        }
+        return enriched
+    }
+
+    /// Copies template scheduling policy onto a materialized occurrence.
+    public static func applyTemplatePolicy(_ occurrence: LifeTask, from template: LifeTask) -> LifeTask {
+        let enrichedTemplate = enrich(template)
+        var enrichedOccurrence = occurrence
+        enrichedOccurrence.semanticProfile = enrichedTemplate.semanticProfile
+        enrichedOccurrence.expirationPolicy = enrichedTemplate.expirationPolicy
+        enrichedOccurrence.collisionStrategy = enrichedTemplate.collisionStrategy
+        enrichedOccurrence.temporalBoundingBox = enrichedTemplate.temporalBoundingBox
+        return enrichedOccurrence
+    }
+
     public static func boundingBox(for task: LifeTask) -> TemporalBoundingBox? {
         if let box = task.temporalBoundingBox { return box }
+        switch task.semanticProfile?.semanticType {
+        case .selfCare:
+            let title = task.title.lowercased()
+            if title.contains("evening") || title.contains("night") {
+                return TemporalBoundingBox(earliestStartHour: 17, latestStartHour: 23)
+            }
+            if title.contains("morning") {
+                return TemporalBoundingBox(earliestStartHour: 5, latestStartHour: 12)
+            }
+            return TemporalBoundingBox(earliestStartHour: 6, latestStartHour: 23)
+        case .errand where task.semanticProfile?.subtype == "meal":
+            return mealBoundingBox(title: task.title.lowercased())
+        default:
+            break
+        }
         let title = task.title.lowercased()
         if title.contains("lunch") || title.contains("brunch") {
             return TemporalBoundingBox(earliestStartHour: 11, latestStartHour: 15)
         }
-        if title.contains("breakfast") || title.contains("coffee") || title.contains("morning") {
+        if title.contains("breakfast") || title.contains("coffee") {
             return TemporalBoundingBox(earliestStartHour: 5, latestStartHour: 11)
+        }
+        if title.contains("snack") {
+            return TemporalBoundingBox(earliestStartHour: 14, latestStartHour: 18)
         }
         if title.contains("dinner") || title.contains("supper") {
             return TemporalBoundingBox(earliestStartHour: 17, latestStartHour: 21)
         }
         if task.semanticProfile?.semanticType == .medication {
-            // Default: allow within ±3h of morning if unscheduled hour unknown
             return TemporalBoundingBox(earliestStartHour: 6, latestStartHour: 22)
         }
         return nil
+    }
+
+    private static func mealBoundingBox(title: String) -> TemporalBoundingBox {
+        if title.contains("lunch") || title.contains("brunch") {
+            return TemporalBoundingBox(earliestStartHour: 11, latestStartHour: 15)
+        }
+        if title.contains("breakfast") || title.contains("coffee") {
+            return TemporalBoundingBox(earliestStartHour: 5, latestStartHour: 11)
+        }
+        if title.contains("snack") {
+            return TemporalBoundingBox(earliestStartHour: 14, latestStartHour: 18)
+        }
+        if title.contains("dinner") || title.contains("supper") {
+            return TemporalBoundingBox(earliestStartHour: 17, latestStartHour: 21)
+        }
+        return TemporalBoundingBox(earliestStartHour: 7, latestStartHour: 21)
     }
 
     public static func collisionStrategy(for task: LifeTask) -> SemanticCollisionStrategy {

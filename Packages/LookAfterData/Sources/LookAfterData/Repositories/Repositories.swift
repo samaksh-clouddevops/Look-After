@@ -10,7 +10,12 @@ public final class TaskRepository: ObservableObject {
     private let collection = "tasks"
     private let local = LocalPersistenceManager.shared
     private static let cloudReadTimeoutSeconds: TimeInterval = 8
-    private var cachedAll: [LifeTask]?
+    /// Shared across instances — migration/reassign must not leave stale per-instance caches.
+    private static var cachedAll: [LifeTask]?
+
+    public static func invalidateLocalCache() {
+        cachedAll = nil
+    }
     
     public init(firebase: FirebaseManager? = nil) {
         self.firebase = firebase ?? FirebaseManager.shared
@@ -25,6 +30,42 @@ public final class TaskRepository: ObservableObject {
         let snapshot = TaskListSnapshot.make(from: tasks)
         TaskPersistenceLog.filterApplied(active: snapshot.active.count, completedToday: snapshot.completedToday.count)
         return snapshot
+    }
+
+    /// All locally persisted tasks for a user — includes completed history beyond today.
+    public func localAllTasks(for userId: String) -> [LifeTask] {
+        migrateAllTasksToCanonicalUserId()
+        return tasksForUser(userId)
+    }
+
+    /// Moves tasks saved under a pre-auth fallback id to the real Firebase UID.
+    public func reassignTasks(from oldUserId: String, to newUserId: String) {
+        guard !oldUserId.isEmpty, !newUserId.isEmpty, oldUserId != newUserId else { return }
+
+        var tasks = allLocalTasks()
+        var changed = false
+
+        for index in tasks.indices {
+            guard tasks[index].userId == oldUserId else { continue }
+            tasks[index].userId = newUserId
+            changed = true
+        }
+
+        if changed {
+            persistAllLocally(tasks)
+        }
+    }
+
+    /// Reassigns any orphaned tasks to the current Firebase Auth UID.
+    public func migrateAllTasksToCanonicalUserId() {
+        let canonicalId = firebase.resolvedUserId
+        guard !canonicalId.isEmpty else { return }
+
+        let all = allLocalTasks()
+        let staleIds = Set(all.map(\.userId).filter { !$0.isEmpty && $0 != canonicalId })
+        for staleId in staleIds {
+            reassignTasks(from: staleId, to: canonicalId)
+        }
     }
 
     /// Single fetch for active + completed-today lists (avoids duplicate Firestore reads).
@@ -152,15 +193,15 @@ public final class TaskRepository: ObservableObject {
     }
 
     private func allLocalTasks() -> [LifeTask] {
-        if let cachedAll { return cachedAll }
+        if let cached = Self.cachedAll { return cached }
         let loaded = local.load([LifeTask].self, filename: collection)
-        cachedAll = loaded
+        Self.cachedAll = loaded
         return loaded
     }
 
     private func persistAllLocally(_ tasks: [LifeTask]) {
         local.save(tasks, filename: collection)
-        cachedAll = tasks
+        Self.cachedAll = tasks
         TaskPersistenceLog.localSave(count: tasks.count)
     }
 
@@ -173,7 +214,7 @@ public final class TaskRepository: ObservableObject {
     /// Skips Firestore merge until cloud wipe completes — prevents old data reappearing.
     public func enterFreshInstallMode() {
         FreshInstallGuard.enter()
-        cachedAll = []
+        Self.cachedAll = []
         persistAllLocally([])
     }
 

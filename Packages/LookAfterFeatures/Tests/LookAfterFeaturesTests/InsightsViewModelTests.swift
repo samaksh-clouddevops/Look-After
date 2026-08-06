@@ -8,19 +8,19 @@ final class InsightsViewModelTests: XCTestCase {
 
     func testLoadInsightsPopulatesRealReport() async throws {
         let userId = "insights-vm-user-\(UUID().uuidString)"
-        let taskRepo = TaskRepository()
+        let taskStore = TaskStore(taskRepo: TaskRepository())
         let task = LifeTask(
             title: "Analytics task",
             status: .completed,
             completedAt: Date(),
             userId: userId
         )
-        try await taskRepo.create(task)
+        try await taskStore.create(task)
 
-        let stored = try await taskRepo.getAll(for: userId)
+        let stored = try await taskStore.getAll(for: userId)
         XCTAssertTrue(stored.contains(where: { $0.id == task.id }), "Created task should round-trip for userId")
 
-        let engine = PersonalAnalyticsEngine(taskRepo: taskRepo, fetchBehaviorEvents: { [] })
+        let engine = PersonalAnalyticsEngine(taskStore: taskStore, fetchBehaviorEvents: { [] })
         engine.invalidateCache()
         let viewModel = InsightsViewModel(analyticsEngine: engine, analyticsService: nil, userId: userId)
 

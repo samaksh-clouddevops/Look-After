@@ -1,6 +1,7 @@
 import Foundation
 import LookAfterCore
 import LookAfterData
+import LookAfterFeatures
 import LookAfterHealth
 
 /// Overall sync outcome shown in Settings and progress UI.
@@ -419,6 +420,7 @@ final class HealthSyncService: ObservableObject {
                     try await self.healthRepo.save(summaryToSave)
                 }
             }
+            HealthStore.shared.applySaved(summaryToSave)
             
             lastSyncDate = Date()
             UserDefaults.standard.set(lastSyncDate, forKey: "healthLastSyncDate")

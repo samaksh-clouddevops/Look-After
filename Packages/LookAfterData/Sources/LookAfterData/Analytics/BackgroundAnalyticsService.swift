@@ -16,7 +16,7 @@ public final class BackgroundAnalyticsService: ObservableObject {
 
     private let cacheManager = AnalyticsCacheManager.shared
     private let engine: PersonalAnalyticsEngine
-    private let taskRepo: TaskRepository
+    private let taskStore: TaskStore
     private let healthRepo: HealthSummaryRepository
     private let fetchBehaviorEvents: BehaviorEventsFetcher
     private var refreshTask: Task<Void, Never>?
@@ -24,12 +24,12 @@ public final class BackgroundAnalyticsService: ObservableObject {
 
     public init(
         engine: PersonalAnalyticsEngine? = nil,
-        taskRepo: TaskRepository? = nil,
+        taskStore: TaskStore = .shared,
         healthRepo: HealthSummaryRepository? = nil,
         fetchBehaviorEvents: @escaping BehaviorEventsFetcher = { await PersonalAnalyticsBehaviorLoader.fetchEvents() }
     ) {
-        self.engine = engine ?? PersonalAnalyticsEngine(fetchBehaviorEvents: fetchBehaviorEvents)
-        self.taskRepo = taskRepo ?? TaskRepository()
+        self.engine = engine ?? PersonalAnalyticsEngine(taskStore: taskStore)
+        self.taskStore = taskStore
         self.healthRepo = healthRepo ?? HealthSummaryRepository()
         self.fetchBehaviorEvents = fetchBehaviorEvents
     }
@@ -82,7 +82,7 @@ public final class BackgroundAnalyticsService: ObservableObject {
 
         // Single batch fetch — never repeated per timeframe
         let lookbackStart = calendar.date(byAdding: .day, value: -Self.defaultLookbackDays, to: today) ?? today
-        let allTasks = (try? await taskRepo.getAll(for: userId)) ?? []
+        let allTasks = (try? await taskStore.getAll(for: userId)) ?? []
         let userTasks = allTasks.filter { !$0.userId.isEmpty ? $0.userId == userId : true }
         let healthSummaries = (try? await healthRepo.getForDateRange(from: lookbackStart, to: now, userId: userId)) ?? []
         let behaviorEvents = await fetchBehaviorEvents()
@@ -261,15 +261,7 @@ public final class BackgroundAnalyticsService: ObservableObject {
     }
 
     private static func loadHabitCompletions() -> [String: [String]] {
-        guard let data = UserDefaults.standard.data(forKey: "briefingHabitCompletions"),
-              let decoded = try? JSONDecoder().decode([String: String].self, from: data) else {
-            return [:]
-        }
-        var byHabit: [String: [String]] = [:]
-        for (habitID, dateKey) in decoded {
-            byHabit[habitID, default: []].append(dateKey)
-        }
-        return byHabit
+        HabitCompletionStore.load()
     }
 
     /// Cancels in-flight refresh and clears session state after factory reset.

@@ -1,10 +1,11 @@
 import Foundation
 import LookAfterCore
-import LookAfterData
 
+/// Persistence contract for task lists — implemented by `TaskRepository` and `TaskStore`.
 @MainActor
-protocol TaskStoring {
+public protocol TaskStoring {
     func localSnapshot(for userId: String) -> TaskListSnapshot
+    func localAllTasks(for userId: String) -> [LifeTask]
     func getTaskLists(for userId: String) async throws -> TaskListSnapshot
     func getActive(for userId: String) async throws -> [LifeTask]
     func getCompletedToday(for userId: String) async throws -> [LifeTask]

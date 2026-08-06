@@ -132,11 +132,10 @@ public enum LifeTimelinePresenter {
         let isToday = calendar.isDate(dayAnchor, inSameDayAs: now)
         var events: [LifeTimelineEvent] = []
         let allTasks = tasks + completedToday + recurrenceTemplates
-        let timelineTasks = tasksForDayTimeline(
+        let timelineTasks = TaskScheduleQuery.tasksForDay(
             from: tasks,
             allTasks: allTasks,
             day: dayAnchor,
-            referenceNow: now,
             calendar: calendar
         )
         let timelineCompleted = isToday
@@ -155,7 +154,7 @@ public enum LifeTimelinePresenter {
 
         for task in nonFinanceTasks {
             guard !OnboardingTaskSeeder.isJunkOnboardingTask(title: task.title, description: task.description) else { continue }
-            guard let event = taskEvent(from: task, allTasks: allTasks, now: now) else { continue }
+            guard let event = taskEvent(from: task, allTasks: allTasks, now: now, referenceDay: dayAnchor, calendar: calendar) else { continue }
             events.append(event)
             eventTaskIds.insert(task.id)
         }
@@ -171,8 +170,8 @@ public enum LifeTimelinePresenter {
         }
 
         if isToday {
-            for med in medications where calendar.isDateInToday(med.scheduledTime) || med.isTaken {
-                events.append(medicationEvent(from: med, calendar: calendar))
+            for med in medications {
+                events.append(medicationEvent(from: med, referenceDay: dayAnchor, calendar: calendar))
             }
         }
 
@@ -213,49 +212,56 @@ public enum LifeTimelinePresenter {
 
         for task in timelineCompleted {
             guard !eventTaskIds.contains(task.id) else { continue }
-            guard let event = taskEvent(from: task, allTasks: allTasks, now: now, forceCompleted: true) else { continue }
+            guard let event = taskEvent(from: task, allTasks: allTasks, now: now, referenceDay: dayAnchor, calendar: calendar, forceCompleted: true) else { continue }
             events.append(event)
+        }
+
+        if isToday {
+            let boundaryContext = DayBoundaryPlanner.Context(
+                tasks: tasks + completedToday,
+                timelineEvents: events
+            )
+            if let sleepEvent = DayBoundaryPlanner.sleepTimelineEvent(
+                on: dayAnchor,
+                now: now,
+                calendar: calendar,
+                context: boundaryContext
+            ) {
+                events.append(sleepEvent)
+            }
         }
 
         return events
             .filter { calendar.isDate($0.date, inSameDayAs: dayAnchor) || $0.date >= dayAnchor }
-            .sorted { $0.date < $1.date }
+            .sorted(by: timelineSortOrder)
+    }
+
+    private static func timelineSortOrder(_ lhs: LifeTimelineEvent, _ rhs: LifeTimelineEvent) -> Bool {
+        if lhs.id.hasPrefix("sleep-boundary") != rhs.id.hasPrefix("sleep-boundary") {
+            return !lhs.id.hasPrefix("sleep-boundary")
+        }
+        if lhs.isFlexibleToday != rhs.isFlexibleToday {
+            return !lhs.isFlexibleToday
+        }
+        if lhs.isFlexibleToday {
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+        return lhs.date < rhs.date
     }
 
     // MARK: - Task → event
 
-    /// Tasks that belong on a specific day's timeline — respects recurrence rules and scheduled days.
-    private static func tasksForDayTimeline(
-        from tasks: [LifeTask],
-        allTasks: [LifeTask],
-        day: Date,
-        referenceNow: Date,
-        calendar: Calendar
-    ) -> [LifeTask] {
-        let isToday = calendar.isDate(day, inSameDayAs: referenceNow)
-        return tasks.filter { task in
-            guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
-            guard !MultiDayTaskTags.isRoot(task) else { return false }
-
-            if task.scheduledDate != nil || task.scheduledTime != nil {
-                return TaskRecurrenceEngine.isActionable(on: day, task: task, in: allTasks, calendar: calendar)
-            }
-
-            return isToday && (task.status.isActive || task.status == .completed) && task.recurrenceRule == .none
-        }
-    }
-
-    /// Active tasks scheduled for today — same rules as the life timeline.
+    /// Active tasks scheduled for today — delegates to `TaskScheduleQuery`.
     public static func tasksScheduledForToday(
         from tasks: [LifeTask],
         allTasks: [LifeTask],
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [LifeTask] {
-        tasksForTodayTimeline(
+        TaskScheduleQuery.tasksForDay(
             from: tasks,
             allTasks: allTasks,
-            now: now,
+            day: calendar.startOfDay(for: now),
             calendar: calendar
         )
     }
@@ -271,22 +277,6 @@ public enum LifeTimelinePresenter {
             from: completedToday,
             allTasks: allTasks,
             now: now,
-            calendar: calendar
-        )
-    }
-
-    /// Tasks that belong on today's timeline — respects recurrence rules and scheduled days.
-    private static func tasksForTodayTimeline(
-        from tasks: [LifeTask],
-        allTasks: [LifeTask],
-        now: Date,
-        calendar: Calendar
-    ) -> [LifeTask] {
-        tasksForDayTimeline(
-            from: tasks,
-            allTasks: allTasks,
-            day: calendar.startOfDay(for: now),
-            referenceNow: now,
             calendar: calendar
         )
     }
@@ -322,10 +312,25 @@ public enum LifeTimelinePresenter {
         }
     }
 
-    private static func taskEvent(from task: LifeTask, allTasks: [LifeTask], now: Date, forceCompleted: Bool = false) -> LifeTimelineEvent? {
+    private static func taskEvent(
+        from task: LifeTask,
+        allTasks: [LifeTask],
+        now: Date,
+        referenceDay: Date,
+        calendar: Calendar,
+        forceCompleted: Bool = false
+    ) -> LifeTimelineEvent? {
         let title = timelineTitle(for: task)
         guard !title.isEmpty else { return nil }
-        return makeTaskEvent(task: task, title: title, allTasks: allTasks, now: now, forceCompleted: forceCompleted)
+        return makeTaskEvent(
+            task: task,
+            title: title,
+            allTasks: allTasks,
+            now: now,
+            referenceDay: referenceDay,
+            calendar: calendar,
+            forceCompleted: forceCompleted
+        )
     }
 
     private static func timelineTitle(for task: LifeTask) -> String {
@@ -347,31 +352,53 @@ public enum LifeTimelinePresenter {
         return ""
     }
 
-    private static func makeTaskEvent(task: LifeTask, title: String, allTasks: [LifeTask], now: Date, forceCompleted: Bool) -> LifeTimelineEvent {
-        let when = task.scheduledTime ?? task.scheduledDate ?? task.deadline ?? task.createdAt
-        let kind = kindForTask(task)
-        let calendar = Calendar.current
-        let day = calendar.startOfDay(for: when)
+    private static func makeTaskEvent(
+        task: LifeTask,
+        title: String,
+        allTasks: [LifeTask],
+        now: Date,
+        referenceDay: Date,
+        calendar: Calendar,
+        forceCompleted: Bool
+    ) -> LifeTimelineEvent {
+        let day = calendar.startOfDay(for: referenceDay)
+        let hasTimedWindow = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) != nil
+        let isFlexibleDay = TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: day, calendar: calendar)
+        let isFloatingFlexible = !hasTimedWindow && !isFlexibleDay
+            && (task.schedulingMode == .flexible || task.timeConstraint == .flexible)
+
+        let when: Date
+        if let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar) {
+            when = start
+        } else if isFlexibleDay || isFloatingFlexible {
+            when = day
+        } else {
+            when = task.deadline ?? task.createdAt
+        }
+        let kind = LifeTimelineKindResolver.kind(for: task)
 
         var duration = task.estimatedMinutes > 0 ? task.estimatedMinutes : nil
-        if let start = task.scheduledTime,
-           let window = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) {
+        if let window = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) {
             duration = window.durationMinutes
+        } else if isFlexibleDay,
+                  let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),
+                  let end = TaskScheduleInterval.resolvedEnd(for: task, on: day, calendar: calendar) {
+            duration = max(Int(end.timeIntervalSince(start) / 60), TaskDurationPolicy.minimumMinutes)
         }
 
         let subtitle: String
         if forceCompleted || task.status == .completed {
             subtitle = "Done"
+        } else if isFlexibleDay || isFloatingFlexible {
+            subtitle = "Flexible today"
+        } else if let window = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) {
+            subtitle = ScheduleTimeFormatting.rangeLabel(from: window.start, to: window.end, calendar: calendar)
+        } else if let duration,
+                  let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),
+                  let end = TaskScheduleInterval.resolvedEnd(for: task, on: day, calendar: calendar) {
+            subtitle = ScheduleTimeFormatting.rangeLabel(from: start, to: end, calendar: calendar)
         } else if let duration {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "h:mm a"
-            if let start = task.scheduledTime {
-                let end = TaskScheduleInterval.endDate(for: task, on: day, calendar: calendar)
-                    ?? start.addingTimeInterval(TimeInterval(duration * 60))
-                subtitle = ScheduleTimeFormatting.rangeLabel(from: start, to: end)
-            } else {
-                subtitle = "About \(duration) min"
-            }
+            subtitle = "About \(duration) min"
         } else {
             subtitle = kind.sectionLabel
         }
@@ -397,44 +424,7 @@ public enum LifeTimelinePresenter {
     }
 
     public static func kindForTask(_ task: LifeTask) -> LifeTimelineEventKind {
-        let base = baseKindForTask(task)
-        // Fixed work blocks (standup, meetings) use the calendar icon — not gym, meds, etc.
-        if task.isFixedTimeEvent, base == .work {
-            return .meeting
-        }
-        return base
-    }
-
-    private static func baseKindForTask(_ task: LifeTask) -> LifeTimelineEventKind {
-        let lower = task.title.lowercased()
-        if lower.contains("gym") || lower.contains("workout") || lower.contains("yoga") || lower.contains("run") {
-            return .exercise
-        }
-
-        switch task.resolvedSemanticProfile.semanticType {
-        case .medication: return .medication
-        case .physicalActivity: return .exercise
-        case .errand: return .shopping
-        case .creative: return .creative
-        case .communication: return .work
-        case .selfCare: return .recovery
-        case .learning: return .personal
-        default: break
-        }
-        switch task.lifeArea {
-        case .work: return .work
-        case .health: return .health
-        case .finance: return .finance
-        case .shopping: return .shopping
-        case .travel: return .travel
-        case .medication: return .medication
-        case .creativity: return .creative
-        case .personal, .reflection: return .personal
-        case .relationships: return .relationship
-        case .home: return .personal
-        case .learning: return .personal
-        case .hydration: return .health
-        }
+        LifeTimelineKindResolver.kind(for: task)
     }
 
     // MARK: - Grouped shopping
@@ -447,8 +437,11 @@ public enum LifeTimelinePresenter {
     ) -> LifeTimelineEvent {
         let names = items.map(\.name).sorted()
         let when: Date
-        if let task = scheduledTask, let time = task.scheduledTime {
-            when = time
+        if let task = scheduledTask,
+           let day = task.scheduledDate.map({ calendar.startOfDay(for: $0) }),
+           let time = task.scheduledTime,
+           let combined = calendar.combine(date: day, timeFrom: time) {
+            when = combined
         } else if let task = scheduledTask, let date = task.scheduledDate {
             let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
             let slot = PlanningSchedulePolicy.nextAvailableSlot(workHours: workHours)
@@ -495,8 +488,10 @@ public enum LifeTimelinePresenter {
 
     // MARK: - Medication
 
-    private static func medicationEvent(from med: Medication, calendar: Calendar) -> LifeTimelineEvent {
-        let hour = calendar.component(.hour, from: med.scheduledTime)
+    private static func medicationEvent(from med: Medication, referenceDay: Date, calendar: Calendar) -> LifeTimelineEvent {
+        let day = calendar.startOfDay(for: referenceDay)
+        let scheduledToday = calendar.combine(date: day, timeFrom: med.scheduledTime) ?? med.scheduledTime
+        let hour = calendar.component(.hour, from: scheduledToday)
         let period: String
         switch hour {
         case ..<12: period = "Morning"
@@ -506,14 +501,14 @@ public enum LifeTimelinePresenter {
         let instruction = medicationInstruction(name: med.name, dosage: med.dosage)
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        let timeLabel = formatter.string(from: med.scheduledTime)
+        let timeLabel = formatter.string(from: scheduledToday)
 
         return LifeTimelineEvent(
             id: "med-\(med.id)",
             kind: .medication,
             title: "\(period) medication",
             subtitle: med.isTaken ? "Taken · \(instruction)" : "\(timeLabel) · \(instruction)",
-            date: med.isTaken ? (med.lastTakenAt ?? med.scheduledTime) : med.scheduledTime,
+            date: med.isTaken ? (med.lastTakenAt ?? scheduledToday) : scheduledToday,
             isCompleted: med.isTaken,
             isFixed: true
         )
@@ -538,8 +533,10 @@ public enum LifeTimelinePresenter {
     }
 
     private static func isShoppingErrandTask(_ task: LifeTask) -> Bool {
-        task.lifeArea == .shopping
-            || task.resolvedSemanticProfile.semanticType == .errand
+        let profile = task.resolvedSemanticProfile
+        if profile.subtype == "meal" { return false }
+        return task.lifeArea == .shopping
+            || profile.semanticType == .errand
             || task.title.lowercased().contains("grocery")
             || task.title.lowercased().contains("shopping")
     }

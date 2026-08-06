@@ -21,7 +21,7 @@ struct OnboardingView: View {
     @State private var workEndTime = Self.defaultWorkEnd
     @State private var focusPreference: FocusTimePreference = .notSure
     @State private var targetSleepHours: Double = 8.0
-    @State private var adhdFocusChallenge = "Task initiation"
+    @State private var adhdFocusChallenge = ADHDFocusChallenge.defaultValue.rawValue
     @State private var userKeyGoals = ""
     @State private var enableHealth = true
     @State private var trackCycle = false
@@ -38,14 +38,7 @@ struct OnboardingView: View {
 
     private var aiAvailable: Bool { GLMService.shared.hasConfiguredAPIKey }
 
-    private let adhdChallenges = [
-        "Task initiation",
-        "Time blindness",
-        "Hyperfocus",
-        "Overwhelm",
-        "Working memory",
-        "Emotional regulation"
-    ]
+    private let adhdChallenges = ADHDFocusChallenge.allCases
 
     var body: some View {
         ZStack {
@@ -166,8 +159,8 @@ struct OnboardingView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(DesignSystem.textSecondary)
                 Picker("Focus challenge", selection: $adhdFocusChallenge) {
-                    ForEach(adhdChallenges, id: \.self) { challenge in
-                        Text(challenge).tag(challenge)
+                    ForEach(adhdChallenges) { challenge in
+                        Text(challenge.label).tag(challenge.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
@@ -598,7 +591,7 @@ struct OnboardingView: View {
             userName = UserLifeProfileStore.load().preferredName
         }
         targetSleepHours = UserDefaults.standard.object(forKey: "targetSleepHours") as? Double ?? 8.0
-        adhdFocusChallenge = UserDefaults.standard.string(forKey: "adhdFocusChallenge") ?? adhdFocusChallenge
+        adhdFocusChallenge = ADHDFocusChallenge.load().rawValue
         userKeyGoals = UserDefaults.standard.string(forKey: "userKeyGoals") ?? ""
         enableHealth = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
 
@@ -634,7 +627,7 @@ struct OnboardingView: View {
     private func persistName() {
         let trimmed = userName.trimmingCharacters(in: .whitespacesAndNewlines)
         UserDefaults.standard.set(trimmed, forKey: "userName")
-        UserDefaults.standard.set(adhdFocusChallenge, forKey: "adhdFocusChallenge")
+        ADHDFocusChallenge.resolve(adhdFocusChallenge).persist()
         UserDefaults.standard.set(userKeyGoals.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "userKeyGoals")
     }
 

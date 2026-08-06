@@ -11,7 +11,7 @@ public final class FactoryResetManager {
 
     private let local = LocalPersistenceManager.shared
     private let firebase = FirebaseManager.shared
-    private let taskRepo = TaskRepository()
+    private let taskStore = TaskStore.shared
 
     private static let firestoreCollections = [
         "tasks",
@@ -41,7 +41,7 @@ public final class FactoryResetManager {
     /// Phase 1 — synchronous local wipe. UI should update immediately after this.
     public func performLocalReset(userId: String) {
         FreshInstallGuard.enter()
-        taskRepo.resetLocalStore()
+        taskStore.resetLocalStore()
         local.deleteAllJSONFiles()
         local.deleteBehaviorMemoryDirectory()
         local.clearApplicationCaches()

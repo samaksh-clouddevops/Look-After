@@ -30,8 +30,8 @@ final class WidgetSyncService {
         }
     }
     
-    func sync(brainVM: BrainViewModel, tasksVM: TasksViewModel) {
-        let snapshot = makeSnapshot(brainVM: brainVM, tasksVM: tasksVM)
+    func sync(brainVM: BrainViewModel, taskStore: TaskStore, healthStore: HealthStore = .shared) {
+        let snapshot = makeSnapshot(brainVM: brainVM, taskStore: taskStore, healthStore: healthStore)
         WidgetDataStore.save(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
         
@@ -94,12 +94,17 @@ final class WidgetSyncService {
             )
         }
     }
-    
-    private func makeSnapshot(brainVM: BrainViewModel, tasksVM: TasksViewModel) -> WidgetSnapshot {
+
+    private func makeSnapshot(
+        brainVM: BrainViewModel,
+        taskStore: TaskStore,
+        healthStore: HealthStore
+    ) -> WidgetSnapshot {
         let surface = brainVM.flowSurface
         let topTask = surface?.heroTask ?? brainVM.topTasks.first
         let snapshot = brainVM.cognitiveSnapshot
-        let health = brainVM.healthSummary
+        let health = healthStore.latest ?? brainVM.healthSummary
+        let taskSnapshot = taskStore.snapshot
 
         let recommendation: String
         if let surface, brainVM.isUsingFlowDirector {
@@ -123,8 +128,8 @@ final class WidgetSyncService {
             energyScore: Int((surface?.energyScore ?? snapshot?.energyScore ?? 0.5) * 100),
             energyLevel: snapshot?.energy.rawValue ?? EnergyLevel.moderate.rawValue,
             recommendation: recommendation,
-            completedTodayCount: tasksVM.completedToday.count,
-            activeTaskCount: tasksVM.tasks.filter { $0.status.isActive }.count,
+            completedTodayCount: taskSnapshot.completedToday.count,
+            activeTaskCount: taskSnapshot.active.filter { $0.status.isActive }.count,
             sleepHours: health?.totalSleepMinutes.map { $0 / 60 },
             stepCount: health?.stepCount,
             hrvMs: health?.hrvAverage.map { Int($0) },

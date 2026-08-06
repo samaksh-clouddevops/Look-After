@@ -153,6 +153,7 @@ public struct PlanMutationApplier {
                 let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
                 task.scheduledDate = tomorrow
                 task.scheduledTime = nil
+                task.scheduledEndTime = nil
                 tasksVM.updateTask(task)
                 result.appliedCount += 1
 
@@ -308,13 +309,16 @@ public struct PlanMutationApplier {
     }
 
     private func matchMedicationID(title: String?, medications: [Medication]) -> String? {
-        guard let title else { return medications.first?.id }
+        guard !medications.isEmpty else { return nil }
+        guard let title else { return medications.count == 1 ? medications.first?.id : nil }
         let needle = title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard needle.count >= 3 else { return medications.first?.id }
-        return medications.first {
+        guard needle.count >= 3 else { return medications.count == 1 ? medications.first?.id : nil }
+        let matches = medications.filter {
             let name = $0.name.lowercased()
             return name == needle || name.contains(needle) || needle.contains(name)
-        }?.id
+        }
+        guard matches.count == 1 else { return nil }
+        return matches[0].id
     }
 
     private func persistMedications(_ medications: [Medication]) {

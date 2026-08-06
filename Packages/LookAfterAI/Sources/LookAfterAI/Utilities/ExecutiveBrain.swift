@@ -58,7 +58,7 @@ public final class ExecutiveBrain: ObservableObject {
         let completedTitles = completedTasks.prefix(8).map { "✓ \($0.title)" }.joined(separator: "\n")
         let pendingTitles = pendingTasks.prefix(8).map { "• \($0.title)" }.joined(separator: "\n")
 
-        let focusChallenge = UserDefaults.standard.string(forKey: "adhdFocusChallenge") ?? "Task Initiation"
+        let focusChallenge = ADHDFocusChallenge.load().label
         let aiTone = UserDefaults.standard.string(forKey: "aiCoachTone") ?? "Encouraging & Gentle"
         let keyGoals = UserDefaults.standard.string(forKey: "userKeyGoals") ?? "Focus & Consistent Flow"
         let profile = UserLifeProfileStore.load()

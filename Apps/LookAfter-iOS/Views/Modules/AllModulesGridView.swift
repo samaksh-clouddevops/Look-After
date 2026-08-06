@@ -90,7 +90,7 @@ struct AllModulesGridView: View {
                             title: "Journaling",
                             subtitle: "Daily reflection",
                             badge: "Daily",
-                            destination: ReflectionJournalView(modulesVM: modulesVM)
+                            destination: ReflectionJournalView(modulesVM: modulesVM, tasksVM: shell.tasksVM)
                         )
 
                         moduleLink(title: "Calendar", subtitle: "Events and focus windows", badge: nil, destination: CalendarIntelligenceView())

@@ -42,7 +42,6 @@ struct ExecutivePlanningConversationView: View {
         .frame(maxHeight: maxPanelHeight, alignment: .top)
         .padding(.horizontal, DesignSystem.screenHorizontal)
         .padding(.bottom, DesignSystem.spacingSM)
-        .keyboardDismissToolbar(label: "Send", onDone: submitText)
         .accessibilityIdentifier("screen-planning-conversation")
     }
 

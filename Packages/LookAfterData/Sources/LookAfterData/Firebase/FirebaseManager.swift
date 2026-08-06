@@ -63,6 +63,7 @@ public final class FirebaseManager: ObservableObject {
 
                     if let previous, !previous.isEmpty, previous != user.uid {
                         HealthSummaryRepository().reassignSummaries(from: previous, to: user.uid)
+                        TaskStore.shared.reassignTasks(from: previous, to: user.uid)
                     }
                 }
             }
@@ -92,6 +93,7 @@ public final class FirebaseManager: ObservableObject {
                         UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
                         if let previous, !previous.isEmpty, previous != result.user.uid {
                             HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
+                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
                         }
                     }
                 }
@@ -119,6 +121,7 @@ public final class FirebaseManager: ObservableObject {
                         UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
                         if let previous, !previous.isEmpty, previous != result.user.uid {
                             HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
+                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
                         }
                     }
                 }
@@ -146,6 +149,7 @@ public final class FirebaseManager: ObservableObject {
                         UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
                         if let previous, !previous.isEmpty, previous != result.user.uid {
                             HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
+                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
                         }
                     }
                 }

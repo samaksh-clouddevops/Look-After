@@ -26,6 +26,8 @@ public final class BrainViewModel: ObservableObject {
 
     private let brain: ExecutiveBrain
     private let cognitiveModel: CognitiveModel
+    private let taskStore: TaskStore?
+    private let healthStore: HealthStore?
     private let taskRepo: TaskRepository
     private let healthRepo: HealthSummaryRepository
     private let energyRepo: EnergyReportRepository
@@ -35,13 +37,17 @@ public final class BrainViewModel: ObservableObject {
         brain: ExecutiveBrain,
         flowDirector: FlowDirector? = nil,
         cognitiveModel: CognitiveModel = CognitiveModel(),
+        taskStore: TaskStore? = nil,
         taskRepo: TaskRepository? = nil,
+        healthStore: HealthStore? = nil,
         healthRepo: HealthSummaryRepository? = nil,
         energyRepo: EnergyReportRepository? = nil
     ) {
         self.brain = brain
         self.flowDirector = flowDirector
         self.cognitiveModel = cognitiveModel
+        self.taskStore = taskStore
+        self.healthStore = healthStore
         self.taskRepo = taskRepo ?? TaskRepository()
         self.healthRepo = healthRepo ?? HealthSummaryRepository()
         self.energyRepo = energyRepo ?? EnergyReportRepository()
@@ -50,6 +56,11 @@ public final class BrainViewModel: ObservableObject {
     /// Attach or replace the Flow Director instance (async factory wiring from app layer).
     public func configure(flowDirector: FlowDirector) {
         self.flowDirector = flowDirector
+    }
+
+    /// Applies a pre-built Brain tab presentation from `BriefingProjector`.
+    public func applyPresentation(_ presentation: BrainPresentation) {
+        self.presentation = presentation
     }
 
     /// Builds structured Brain tab presentation from orchestrator output.
@@ -107,20 +118,28 @@ public final class BrainViewModel: ObservableObject {
         error = nil
 
         do {
-            async let tasks = taskRepo.getActive(for: userId)
-            async let completed = taskRepo.getCompletedToday(for: userId)
-            async let health = healthRepo.getLatest(for: userId)
+            let activeTasks: [LifeTask]
+            let completedTasks: [LifeTask]
+            if let taskStore {
+                taskStore.refreshLocal(userId: userId)
+                activeTasks = taskStore.snapshot.active
+                completedTasks = taskStore.snapshot.completedToday
+            } else {
+                async let tasks = taskRepo.getActive(for: userId)
+                async let completed = taskRepo.getCompletedToday(for: userId)
+                activeTasks = try await tasks
+                completedTasks = try await completed
+            }
+            async let health = loadHealth(for: userId)
             async let energyReports = energyRepo.getToday(for: userId)
 
-            let activeTasks = try await tasks
-            let completedTasks = try await completed
-            let latestHealth = try await health
+            let latestHealth = await health
             let todaysEnergy = try await energyReports
 
             self.healthSummary = latestHealth
 
-            let userName = UserDefaults.standard.string(forKey: "userName") ?? "User"
-            let profile = UserLifeProfileStore.loadUserProfile(displayName: userName)
+            let userName = ProfileCoordinator.displayName
+            let profile = UserLifeProfileStore.loadUserProfile(displayName: userName.isEmpty ? "User" : userName)
             let snapshot = cognitiveModel.generateSnapshot(
                 healthSummary: latestHealth,
                 recentEnergyReports: todaysEnergy,
@@ -176,6 +195,13 @@ public final class BrainViewModel: ObservableObject {
 
     // MARK: - Private
 
+    private func loadHealth(for userId: String) async -> HealthSummary? {
+        if let healthStore {
+            return await healthStore.refresh(userId: userId)
+        }
+        return try? await healthRepo.getLatest(for: userId)
+    }
+
     private func refreshViaExecutiveBrain(
         snapshot: CognitiveSnapshot,
         health: HealthSummary?,
@@ -207,7 +233,7 @@ public final class BrainViewModel: ObservableObject {
     ) async {
         isUsingFlowDirector = true
         lastOrchestrationDurationMs = 0
-        let userName = UserDefaults.standard.string(forKey: "userName") ?? ""
+        let userName = ProfileCoordinator.displayName
 
         director.session = FlowDirectorSession(
             cognitiveSnapshot: snapshot,

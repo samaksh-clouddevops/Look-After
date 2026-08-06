@@ -65,8 +65,14 @@ struct DailyBriefingCustomizationView: View {
                     }, header: {
                         Text("Cards")
                     }, footer: {
-                        Text("Drag to reorder. Pin cards to keep them at the top.")
-                            .foregroundColor(DesignSystem.textMuted)
+                        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+                            Text("Drag to reorder. Pin cards to keep them at the top.")
+                                .foregroundColor(DesignSystem.textMuted)
+                            Button("Reset to Default") {
+                                briefingVM.resetCardLayout()
+                            }
+                            .foregroundColor(DesignSystem.textSecondary)
+                        }
                     })
                 }
                 .scrollContentBackground(.hidden)
@@ -81,12 +87,6 @@ struct DailyBriefingCustomizationView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                         .foregroundColor(DesignSystem.accentPrimary)
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    Button("Reset to Default") {
-                        briefingVM.resetCardLayout()
-                    }
-                    .foregroundColor(DesignSystem.textSecondary)
                 }
             }
         }

@@ -130,30 +130,15 @@ struct DailyBriefingView: View {
                 BriefingGreetingHeader(greeting: briefingVM.greeting)
             }
 
-            // 1) AI narrative (27pt φ-scale) + 2) deterministic LifeState chips — read-only.
-            MorningBriefingView(
-                narrative: briefingVM.chiefNarrative.isEmpty
-                    ? briefingVM.dayHeroSummaryLines.joined(separator: " ")
-                    : briefingVM.chiefNarrative,
-                chips: briefingVM.snapshotChips,
-                isLoading: briefingVM.isLoadingChiefNarrative || briefingVM.isLoadingDayHeroSummary,
-                greetingName: briefingVM.greeting.userName
+            // Hero — bullet summary lines (body size), same as main.
+            LAExecutiveBriefingCard(
+                summaryLines: briefingVM.dayHeroSummaryLines,
+                buttonTitle: "Continue to today",
+                isLoading: briefingVM.isLoadingDayHeroSummary,
+                onContinue: onContinue
             )
             .featureTourAnchor(.briefingHero, cornerRadius: DesignSystem.radiusLG)
             .id(AppFeatureTourAnchorID.briefingHero.rawValue)
-
-            Button(action: onContinue) {
-                Text("Continue to today")
-                    .textStyleCardTitle(color: DesignSystem.accentOnPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.spacingMD)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(DesignSystem.accentPrimary)
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("briefing-continue-cta")
 
             todayAtAGlanceSection
         }
@@ -212,7 +197,7 @@ struct DailyBriefingView: View {
     }
 
     private var glanceEvents: [GlanceEvent] {
-        shell.contextOrchestrator.lifeTimelineEvents
+        shell.timelineService.snapshot.today
             .filter(\.isImportantCommitment)
             .sorted { $0.date < $1.date }
             .prefix(3)
@@ -388,7 +373,7 @@ struct DailyBriefingView: View {
             }
             if isVisible(.habits) {
                 BriefingHabitsCard(habits: briefingVM.habits, compact: true) { habit in
-                    briefingVM.toggleHabit(habit)
+                    briefingVM.toggleHabit(habit, tasksVM: tasksVM, userId: userId)
                 }
             }
             if isVisible(.weeklyTrends) {
@@ -537,26 +522,13 @@ struct DailyBriefingView: View {
         if enableHealth, !resolvedId.isEmpty {
             await healthSync.ensureSynced(userId: resolvedId)
         }
-        let peakStart = UserDefaults.standard.integer(forKey: "peakStartHour")
+        let peakStart = UserLifeProfileStore.load().peakStartHour
         let resolvedName = UserLifeProfileStore.resolvedDisplayName()
         await shell.refreshContext(
             userId: resolvedId,
             userName: resolvedName,
             peakStartHour: peakStart > 0 ? peakStart : 9
         )
-        await briefingVM.refresh(
-            brainVM: brainVM,
-            tasksVM: tasksVM,
-            userId: resolvedId,
-            userName: resolvedName,
-            healthKitAvailable: enableHealth && HealthManager().isAvailable,
-            heroBriefing: shell.contextOrchestrator.briefing?.hero,
-            brainDecision: shell.contextOrchestrator.brainState?.decision,
-            lifeSnapshot: shell.contextOrchestrator.snapshot,
-            lifeTimelineEvents: shell.contextOrchestrator.lifeTimelineEvents,
-            tomorrowLifeTimelineEvents: shell.contextOrchestrator.tomorrowLifeTimelineEvents
-        )
-        briefingVM.updateExecutiveCapacity(shell.contextOrchestrator.executiveCapacity)
     }
 }
 

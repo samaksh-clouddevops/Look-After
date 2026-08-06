@@ -37,15 +37,8 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
     }
 }
 
-struct TourTabBarFramePreferenceKey: PreferenceKey {
-    static var defaultValue: CGRect = .null
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        let next = nextValue()
-        if next.isValidObstacle { value = next }
-    }
-}
-
 struct LookAfterBottomNav: View {
+    @EnvironmentObject private var featureTour: AppFeatureTourCoordinator
     @Binding var selection: LookAfterTab
     var onCapture: () -> Void
 
@@ -69,14 +62,9 @@ struct LookAfterBottomNav: View {
                         .frame(height: 1)
                 }
         )
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: TourTabBarFramePreferenceKey.self,
-                    value: geo.frame(in: .global)
-                )
-            }
-        )
+        .background {
+            TourTabBarFrameReader()
+        }
         .accessibilityElement(children: .contain)
     }
 
@@ -135,5 +123,19 @@ struct LookAfterBottomNav: View {
         case .brain: return .tabBrain
         case .you: return .tabYou
         }
+    }
+}
+
+/// Reports tab bar frame directly to the tour coordinator.
+private struct TourTabBarFrameReader: View {
+    @EnvironmentObject private var tour: AppFeatureTourCoordinator
+
+    var body: some View {
+        Color.clear
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { newFrame in
+                tour.reportTabBarFrame(newFrame)
+            }
     }
 }

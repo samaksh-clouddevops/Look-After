@@ -17,18 +17,13 @@ public struct TaskListSnapshot: Sendable, Equatable {
     public static func make(from tasks: [LifeTask], calendar: Calendar = .current) -> TaskListSnapshot {
         let startOfDay = calendar.startOfDay(for: Date())
         let templates = tasks.filter(TaskRecurrenceEngine.isRecurrenceTemplate)
-        let active = tasks
-            .filter { task in
-                guard task.status.isActive && !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
-                if task.scheduledDate == nil { return true }
-                return TaskRecurrenceEngine.isActionableToday(task, in: tasks, calendar: calendar)
-            }
+        let active = TaskScheduleQuery.activeTasksForToday(from: tasks, calendar: calendar)
             .sorted { $0.priority > $1.priority }
         let completedToday = tasks.filter { task in
             guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
             guard task.status == .completed else { return false }
-            guard let completedAt = task.completedAt else { return false }
-            return completedAt >= startOfDay
+            let completionMoment = task.completedAt ?? task.updatedAt
+            return completionMoment >= startOfDay
         }
         return TaskListSnapshot(active: active, completedToday: completedToday, templates: templates)
     }

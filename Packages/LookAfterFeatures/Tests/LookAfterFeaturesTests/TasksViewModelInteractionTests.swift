@@ -204,6 +204,10 @@ final class InMemoryTaskStore: TaskStoring {
         TaskListSnapshot.make(from: tasks.filter { $0.userId == userId || userId.isEmpty })
     }
 
+    func localAllTasks(for userId: String) -> [LifeTask] {
+        tasks.filter { $0.userId == userId || userId.isEmpty }
+    }
+
     func getTaskLists(for userId: String) async throws -> TaskListSnapshot {
         localSnapshot(for: userId)
     }

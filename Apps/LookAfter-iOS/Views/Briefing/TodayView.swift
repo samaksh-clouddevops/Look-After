@@ -127,11 +127,15 @@ struct TodayView: View {
     }
 
     private var lifeTimelineSignature: String {
-        "\(lifeTimelineEvents.count)|\(lifeTimelineEvents.first?.id ?? "")|\(lifeTimelineEvents.last?.id ?? "")"
+        lifeTimelineEvents
+            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))|\($0.isCompleted)|\($0.subtitle)" }
+            .joined(separator: ";")
     }
 
     private var tomorrowLifeTimelineSignature: String {
-        "\(tomorrowLifeTimelineEvents.count)|\(tomorrowLifeTimelineEvents.first?.id ?? "")|\(tomorrowLifeTimelineEvents.last?.id ?? "")"
+        tomorrowLifeTimelineEvents
+            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))|\($0.isCompleted)|\($0.subtitle)" }
+            .joined(separator: ";")
     }
 
     private var timelineSection: some View {

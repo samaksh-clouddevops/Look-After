@@ -7,16 +7,16 @@ final class PersonalAnalyticsEngineTests: XCTestCase {
     @MainActor
     func testBuildReportUsesRealTaskCounts() async {
         let userId = "analytics-test-user-\(UUID().uuidString)"
-        let taskRepo = TaskRepository()
+        let taskStore = TaskStore(taskRepo: TaskRepository())
         var completed = LifeTask(title: "Ship feature", status: .completed)
         completed.completedAt = Date()
         completed.userId = userId
-        try? await taskRepo.create(completed)
+        try? await taskStore.create(completed)
         var persisted = completed
         persisted.userId = userId
-        try? await taskRepo.update(persisted)
+        try? await taskStore.update(persisted)
 
-        let engine = PersonalAnalyticsEngine(taskRepo: taskRepo, fetchBehaviorEvents: { [] })
+        let engine = PersonalAnalyticsEngine(taskStore: taskStore, fetchBehaviorEvents: { [] })
         let report = await engine.buildReport(timeframe: .today, userId: userId)
 
         XCTAssertEqual(report.kpis.completedTasksCount, 1)
@@ -27,7 +27,7 @@ final class PersonalAnalyticsEngineTests: XCTestCase {
     @MainActor
     func testEmptyReportDoesNotFabricateKPIs() async {
         let engine = PersonalAnalyticsEngine(
-            taskRepo: TaskRepository(),
+            taskStore: TaskStore(taskRepo: TaskRepository()),
             healthRepo: HealthSummaryRepository(),
             fetchBehaviorEvents: { [] }
         )

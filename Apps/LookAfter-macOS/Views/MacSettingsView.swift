@@ -7,7 +7,7 @@ import LookAfterData
 struct MacSettingsView: View {
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
-    @AppStorage("adhdFocusChallenge") private var adhdFocusChallenge: String = "Task Initiation"
+    @AppStorage(ADHDFocusChallenge.storageKey) private var adhdFocusChallengeRaw = ADHDFocusChallenge.taskInitiation.rawValue
     @AppStorage("aiCoachTone") private var aiCoachTone: String = "Encouraging & Gentle"
     @AppStorage("userKeyGoals") private var userKeyGoals: String = ""
     @AppStorage("appCurrencySymbol") private var appCurrencySymbol: String = "₹"
@@ -16,12 +16,7 @@ struct MacSettingsView: View {
     @State private var lifeProfile = UserLifeProfileStore.load()
     @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
 
-    private let focusChallenges = [
-        "Task Initiation",
-        "Time Blindness",
-        "Task Paralysis / Overwhelm",
-        "Hyperfocus Context Switching"
-    ]
+    private let focusChallenges = ADHDFocusChallenge.allCases
 
     private let coachTones = [
         "Encouraging & Gentle",
@@ -74,9 +69,9 @@ struct MacSettingsView: View {
                 })
 
                 Section(content: {
-                    Picker("Primary Focus Challenge", selection: $adhdFocusChallenge) {
-                        ForEach(focusChallenges, id: \.self) { challenge in
-                            Text(challenge).tag(challenge)
+                    Picker("Primary Focus Challenge", selection: $adhdFocusChallengeRaw) {
+                        ForEach(focusChallenges) { challenge in
+                            Text(challenge.label).tag(challenge.rawValue)
                         }
                     }
 

@@ -104,6 +104,7 @@ public final class LLMPlanningEngine {
         \(PlanningPromptContextBuilder.temporalBlock(now: now, profile: profile))
         \(PlanningPromptContextBuilder.schedulingRulesBlock())
         \(PlanningPromptContextBuilder.dailyRoutineBlock())
+        \(PlanningPromptContextBuilder.sleepBoundaryBlock(now: now, profile: profile))
         \(PlanningPromptContextBuilder.duplicateReuseRulesBlock())
 
         PRE-ANALYSIS (deterministic — follow this):

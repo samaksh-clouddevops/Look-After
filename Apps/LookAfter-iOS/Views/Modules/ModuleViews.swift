@@ -1050,7 +1050,7 @@ struct ContactPickerViewController: UIViewControllerRepresentable {
 
 struct ReflectionJournalView: View {
     @ObservedObject var modulesVM: LifeModulesViewModel
-    @StateObject private var tasksVM = TasksViewModel(decomposer: TaskDecomposer())
+    @ObservedObject var tasksVM: TasksViewModel
     
     @State private var entryText = ""
     @State private var calibrationBadge: String? = nil
@@ -1108,9 +1108,6 @@ struct ReflectionJournalView: View {
                 .padding(.top, DesignSystem.spacingMD)
                 .padding(.bottom, DesignSystem.spacingXL)
             }
-        }
-        .task {
-            await tasksVM.loadTasks(userId: FirebaseManager.shared.resolvedUserId)
         }
         .keyboardDismissToolbar(label: "Done")
     }

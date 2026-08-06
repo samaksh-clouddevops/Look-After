@@ -152,22 +152,22 @@ public enum OnboardingTaskSeeder {
             ) else { continue }
 
             let end = start.addingTimeInterval(TimeInterval(slot.durationMinutes * 60))
-            fixed.append(
-                LifeTask(
-                    title: slot.title,
-                    description: "",
-                    lifeArea: slot.lifeArea,
-                    priority: .medium,
-                    difficulty: .easy,
-                    estimatedMinutes: slot.durationMinutes,
-                    scheduledDate: anchorDay,
-                    scheduledTime: start,
-                    tags: ["onboarding", "fixed", dailyRoutineTag],
-                    recurrence: .daily,
-                    schedulingMode: .fixedTime,
-                    scheduledEndTime: end
-                )
+            var task = LifeTask(
+                title: slot.title,
+                description: "",
+                lifeArea: slot.lifeArea,
+                priority: .medium,
+                difficulty: .easy,
+                estimatedMinutes: slot.durationMinutes,
+                scheduledDate: anchorDay,
+                scheduledTime: start,
+                tags: ["onboarding", "fixed", dailyRoutineTag],
+                recurrence: .daily,
+                schedulingMode: .fixedTime,
+                scheduledEndTime: end
             )
+            task = TaskEphemeralityDefaults.enrich(task)
+            fixed.append(task)
         }
     }
 
