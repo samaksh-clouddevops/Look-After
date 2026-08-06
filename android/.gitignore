@@ -1,0 +1,29 @@
+# Build
+.gradle/
+build/
+**/build/
+
+# Kotlin / IDE
+.kotlin/
+.idea/
+*.iml
+*.ipr
+*.iws
+local.properties
+.DS_Store
+
+# Captures / profiling
+captures/
+*.hprof
+*.log
+
+# Android Studio / Studio3
+/.cxx/
+*.apk
+*.ap_
+*.aab
+*.dex
+
+# Test reports (keep sources only)
+**/test-results/
+**/reports/
