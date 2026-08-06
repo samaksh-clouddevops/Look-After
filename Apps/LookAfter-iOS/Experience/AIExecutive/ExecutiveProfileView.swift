@@ -144,15 +144,26 @@ struct ExecutiveProfileView: View {
 
     // MARK: - Life state
 
+    private var lifeStateProgress: LifeStateProgressResolver.Progress {
+        LifeStateProgressResolver.resolve(
+            healthSnapshot: shell.briefingVM.healthSnapshot,
+            sleep: shell.briefingVM.sleep
+        )
+    }
+
     private var lifeStateCard: some View {
         ElevatedSurface(padding: DesignSystem.cardPaddingMin) {
             VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
                 Text("Life State")
                     .textStyleSectionLabel()
 
-                LAProgressBar(label: "Energy", progress: energyProgress)
-                LAProgressBar(label: "Focus", progress: focusProgress)
-                LAProgressBar(label: "Wellbeing", progress: wellbeingProgress)
+                LAProgressBar(label: "Energy", progress: lifeStateProgress.energy)
+                LAProgressBar(label: "Focus", progress: lifeStateProgress.focus)
+                LAProgressBar(label: "Wellbeing", progress: lifeStateProgress.wellbeing)
+
+                Text(lifeStateCaption)
+                    .textStyleCaption(color: DesignSystem.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Button(action: {
                     showInsights = true
@@ -165,31 +176,15 @@ struct ExecutiveProfileView: View {
         }
     }
 
-    private var energyProgress: Double {
-        bandProgress(shell.briefingVM.executiveCapacity.band)
-    }
-
-    private var focusProgress: Double {
-        let pct = shell.briefingVM.progress.dayCompletionPercent
-        if pct > 0 { return Double(pct) / 100.0 }
-        return max(0.35, energyProgress - 0.08)
-    }
-
-    private var wellbeingProgress: Double {
+    private var lifeStateCaption: String {
+        let snapshot = shell.briefingVM.healthSnapshot
+        if snapshot.hasOvernightHealthSignal {
+            return "\(snapshot.readinessLabel) · \(snapshot.recoveryLabel) · \(snapshot.energyPercent)% energy"
+        }
         if shell.briefingVM.sleep.isAvailable, let hours = shell.briefingVM.sleep.totalHours {
-            return min(max(hours / 8.0, 0.2), 1.0)
+            return "\(snapshot.readinessLabel) · \(String(format: "%.1fh", hours)) sleep logged"
         }
-        return max(0.4, energyProgress)
-    }
-
-    private func bandProgress(_ band: ExecutiveCapacityBand) -> Double {
-        switch band {
-        case .peakFocus: return 0.92
-        case .goodCapacity: return 0.78
-        case .moderateCapacity: return 0.62
-        case .lowCapacity: return 0.42
-        case .recoveryMode: return 0.28
-        }
+        return snapshot.readinessLabel
     }
 
     // MARK: - Life areas
