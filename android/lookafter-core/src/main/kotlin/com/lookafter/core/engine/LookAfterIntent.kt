@@ -1,0 +1,63 @@
+package com.lookafter.core.engine
+
+import com.lookafter.core.models.LifeTask
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.UUID
+
+/**
+ * User and system actions that [LifeEngine] can reduce into a new [LifeState].
+ * Pure intent descriptors — no side effects.
+ */
+sealed interface LookAfterIntent {
+
+    /** Insert or replace a task in the active pool. */
+    data class AddTask(val task: LifeTask) : LookAfterIntent
+
+    /** Remove a task from all buckets by id. */
+    data class DeleteTask(val id: String) : LookAfterIntent {
+        constructor(id: UUID) : this(id.toString())
+    }
+
+    /** Replace an existing task (matched by [LifeTask.id]) with an updated copy. */
+    data class UpdateTask(val task: LifeTask) : LookAfterIntent
+
+    /** Move a task into the parked recovery queue and clear its clock. */
+    data class ParkTask(val id: String, val reason: String = "manual_park") : LookAfterIntent
+
+    /** Move a task into the someday vault. */
+    data class MoveToSomeday(val id: String) : LookAfterIntent
+
+    /** Resurrect a parked task back into the active pool. */
+    data class UnparkTask(val id: String) : LookAfterIntent
+
+    /**
+     * Midnight / day-boundary Reaper sweep.
+     * Rolls [previousDay] incompletes against [nextDay] actives via
+     * [com.lookafter.core.planning.DayScheduleReconciler.sweepDayBoundary].
+     */
+    data class TriggerMidnightSweep(
+        val previousDay: LocalDate,
+        val nextDay: LocalDate,
+        val now: Instant = Instant.now(),
+        val zone: ZoneId = ZoneId.of("UTC"),
+    ) : LookAfterIntent
+
+    /**
+     * Run the conflict cascade over active tasks on [day].
+     * Emits a new state with resolved tasks + cascade action logs.
+     */
+    data class RunCascadeReconciliation(
+        val day: LocalDate,
+        val now: Instant = Instant.now(),
+        val zone: ZoneId = ZoneId.of("UTC"),
+        val bufferMinutes: Int = 5,
+    ) : LookAfterIntent
+
+    /** Replace the entire universe (hydrate / factory reset). */
+    data class ReplaceState(val state: LifeState) : LookAfterIntent
+
+    /** Update the consecutive high-load day counter. */
+    data class SetHighLoadStreak(val days: Int) : LookAfterIntent
+}
