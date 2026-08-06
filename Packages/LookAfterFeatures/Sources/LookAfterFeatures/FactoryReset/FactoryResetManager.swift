@@ -47,6 +47,10 @@ public final class FactoryResetManager {
         local.clearApplicationCaches()
 
         wipeUserDefaultsExceptPreserved()
+        // Bulk defaults wipe bypasses store.reset() — drop in-memory caches so loads re-read disk.
+        UserLifeProfileStore.invalidateCache()
+        LifeModelStore.invalidateCache()
+        MedicationStore.invalidateCache()
         clearAllResumeSnapshots()
         DecisionHistoryStore.shared.clearAll()
         AnalyticsCacheManager.shared.invalidateAll()

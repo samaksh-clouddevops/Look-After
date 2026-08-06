@@ -209,6 +209,9 @@ public struct LookAfterRootCanvas: View {
                         onCompleteTask: { taskId in
                             Task { await completeTimelineTask(taskId: taskId) }
                         },
+                        onUncompleteTask: { taskId in
+                            Task { await uncompleteTimelineTask(taskId: taskId) }
+                        },
                         onStartTask: { taskId in
                             if let task = resolveTimelineTask(id: taskId) {
                                 showFullTimeline = false
@@ -455,6 +458,9 @@ public struct LookAfterRootCanvas: View {
                 onCompleteTimelineTask: { taskId in
                     Task { await completeTimelineTask(taskId: taskId) }
                 },
+                onUncompleteTimelineTask: { taskId in
+                    Task { await uncompleteTimelineTask(taskId: taskId) }
+                },
                 onRescheduleTimelineTask: { taskId in
                     Task { await rescheduleTimelineTask(taskId: taskId) }
                 },
@@ -618,20 +624,39 @@ public struct LookAfterRootCanvas: View {
     }
 
     private func resolveTimelineTask(id: String) -> LifeTask? {
-        shell.tasksVM.tasks.first { $0.id == id }
-            ?? shell.tasksVM.completedToday.first { $0.id == id }
+        shell.tasksVM.resolveTimelineTask(id: id)
     }
 
     private func completeTimelineTask(taskId: String) async {
         let userId = firebase.resolvedUserId
-        guard !userId.isEmpty,
-              let task = shell.tasksVM.tasks.first(where: { $0.id == taskId && $0.status.isActive }) else {
+        guard !userId.isEmpty else { return }
+        let titleHint = planningVM.timelineRows.first(where: { $0.taskId == taskId })?.title
+
+        HapticManager.notification(.success)
+        guard await shell.tasksVM.completeTimelineTask(id: taskId, userId: userId, titleHint: titleHint) != nil else {
+            print("[Tasks] completeTimelineTask missed taskId=\(taskId.prefix(8))")
             return
         }
-        HapticManager.notification(.success)
-        guard await shell.tasksVM.completeTask(task) != nil else { return }
         planningVM.markTimelineTaskCompleted(taskId: taskId)
-        await refreshTimelinePage(userId: userId)
+        shell.rebuildTimelineFromTasks()
+        planningVM.refreshTimeline(from: shell.timelineService.snapshot.today)
+        shell.refreshWidgetData()
+    }
+
+    private func uncompleteTimelineTask(taskId: String) async {
+        let userId = firebase.resolvedUserId
+        guard !userId.isEmpty else { return }
+        let titleHint = planningVM.timelineRows.first(where: { $0.taskId == taskId })?.title
+
+        HapticManager.impact(.light)
+        guard await shell.tasksVM.uncompleteTimelineTask(id: taskId, userId: userId, titleHint: titleHint) else {
+            print("[Tasks] uncompleteTimelineTask missed taskId=\(taskId.prefix(8))")
+            return
+        }
+        planningVM.markTimelineTaskUncompleted(taskId: taskId)
+        shell.rebuildTimelineFromTasks()
+        planningVM.refreshTimeline(from: shell.timelineService.snapshot.today)
+        shell.refreshWidgetData()
     }
 
     private func rescheduleTimelineTask(taskId: String) async {

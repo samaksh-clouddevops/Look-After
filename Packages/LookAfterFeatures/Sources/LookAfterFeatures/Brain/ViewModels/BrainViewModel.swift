@@ -136,12 +136,13 @@ public final class BrainViewModel: ObservableObject {
             let latestHealth = await health
             let todaysEnergy = try await energyReports
 
-            self.healthSummary = latestHealth
+            let briefingHealth = HealthSummaryFreshness.forBriefingMetrics(from: latestHealth)
+            self.healthSummary = briefingHealth ?? latestHealth
 
             let userName = ProfileCoordinator.displayName
             let profile = UserLifeProfileStore.loadUserProfile(displayName: userName.isEmpty ? "User" : userName)
             let snapshot = cognitiveModel.generateSnapshot(
-                healthSummary: latestHealth,
+                healthSummary: briefingHealth,
                 recentEnergyReports: todaysEnergy,
                 completedTasksToday: completedTasks,
                 profile: profile

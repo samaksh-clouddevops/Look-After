@@ -35,6 +35,8 @@ struct SettingsView: View {
     @AppStorage(SpeechVoiceSettings.pitchKey) private var speechPitch = 1.0
     @AppStorage(SpeechVoiceSettings.autoSpeakRepliesKey) private var autoSpeakReplies = true
     @AppStorage(SpeechVoiceSettings.spokenStyleKey) private var preferSpokenStyle = true
+    @AppStorage(SpeechVoiceSettings.cloudVoiceKey) private var cloudVoice = "nova"
+    @State private var cloudAPIKeyDraft = SpeechVoiceSettings.cloudAPIKey ?? ""
     @StateObject private var speechPreview = PlanningSpeechSynthesizer()
     @StateObject private var notificationPermission = NotificationPermissionService.shared
     @State private var notificationPreferences = NotificationPreferencesStore.load()
@@ -286,17 +288,40 @@ struct SettingsView: View {
                 // Voice & Speech
                 Section(content: {
                     Picker("Voice engine", selection: $speechProviderRaw) {
-                        ForEach(SpeechVoiceProvider.allCases.filter { $0 != .cloud }) { provider in
+                        ForEach(SpeechVoiceProvider.allCases) { provider in
                             Text(provider.title).tag(provider.rawValue)
                         }
-                        Text(SpeechVoiceProvider.cloud.title)
-                            .tag(SpeechVoiceProvider.cloud.rawValue)
+                    }
+                    .onChange(of: speechProviderRaw) { _, _ in
+                        SpeechVoiceSettings.provider = SpeechVoiceProvider(rawValue: speechProviderRaw) ?? .appleEnhanced
                     }
 
-                    Picker("Voice", selection: $speechVoiceIdentifier) {
-                        Text("Automatic (best available)").tag("")
-                        ForEach(PlanningSpeechSynthesizer.availableEnglishVoices(), id: \.identifier) { voice in
-                            Text(voicePickerLabel(voice)).tag(voice.identifier)
+                    if speechProviderRaw == SpeechVoiceProvider.cloud.rawValue {
+                        SecureField("OpenAI API key", text: $cloudAPIKeyDraft)
+                            .textContentType(.password)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onChange(of: cloudAPIKeyDraft) { _, newValue in
+                                SpeechVoiceSettings.cloudAPIKey = newValue
+                            }
+
+                        Picker("Cloud voice", selection: $cloudVoice) {
+                            ForEach(SpeechVoiceSettings.cloudVoices, id: \.id) { voice in
+                                Text(voice.label).tag(voice.id)
+                            }
+                        }
+
+                        if SpeechVoiceSettings.cloudAPIKey == nil {
+                            Text("Add a key above, or set \(SpeechVoiceSettings.cloudAPIKeyEnvVar) in your environment.")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.warning)
+                        }
+                    } else {
+                        Picker("Voice", selection: $speechVoiceIdentifier) {
+                            Text("Automatic (best available)").tag("")
+                            ForEach(PlanningSpeechSynthesizer.availableEnglishVoices(), id: \.identifier) { voice in
+                                Text(voicePickerLabel(voice)).tag(voice.identifier)
+                            }
                         }
                     }
 
@@ -344,9 +369,15 @@ struct SettingsView: View {
                 }, header: {
                     Text("Voice & Speech")
                 }, footer: {
-                    Text("Enhanced Apple voices sound more natural when downloaded in Settings → Accessibility → Spoken Content → Voices. Cloud voices are reserved for a future provider.")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.textMuted)
+                    if speechProviderRaw == SpeechVoiceProvider.cloud.rawValue {
+                        Text("Cloud uses OpenAI's neural TTS (tts-1-hd) — much more natural than on-device Apple voices. Requires a separate OpenAI API key (not your GLM key). Falls back to Apple if the request fails.")
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.textMuted)
+                    } else {
+                        Text("Voice quality improves automatically when Enhanced or Premium English voices are available on this device.")
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.textMuted)
+                    }
                 })
 
                 // AI Configuration

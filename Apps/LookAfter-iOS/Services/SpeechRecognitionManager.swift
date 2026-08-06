@@ -87,18 +87,26 @@ public final class SpeechRecognitionManager: ObservableObject {
             
             let inputNode = audioEngine.inputNode
             let recordingFormat = inputNode.outputFormat(forBus: 0)
-            
+
+            guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+                errorMessage = "Microphone is not available right now."
+                stopListening()
+                return
+            }
+
+            inputNode.removeTap(onBus: 0)
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+                guard buffer.frameLength > 0 else { return }
                 self?.recognitionRequest?.append(buffer)
-                
-                // Compute audio level for waveform
+
                 guard let channelData = buffer.floatChannelData?[0] else { return }
                 let frameLength = Int(buffer.frameLength)
+                guard frameLength > 0 else { return }
                 var sum: Float = 0
                 for i in 0..<frameLength {
                     sum += abs(channelData[i])
                 }
-                let avg = sum / Float(max(frameLength, 1))
+                let avg = sum / Float(frameLength)
                 Task { @MainActor in
                     self?.updateAudioLevels(level: CGFloat(min(avg * 8, 1.0)))
                 }
@@ -129,20 +137,20 @@ public final class SpeechRecognitionManager: ObservableObject {
     public func stopListening() {
         levelTimer?.invalidate()
         levelTimer = nil
-        
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
-        
+
         recognitionRequest?.endAudio()
         recognitionRequest = nil
         recognitionTask?.cancel()
         recognitionTask = nil
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        audioEngine.inputNode.removeTap(onBus: 0)
+
         isListening = false
-        
         audioLevels = Array(repeating: 0.1, count: 20)
-        
+
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif

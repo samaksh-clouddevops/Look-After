@@ -82,10 +82,35 @@ public enum TaskRecurrenceEngine {
             guard template.recurrenceOccurs(on: day, calendar: calendar) else { continue }
             guard !hasActionableOccurrence(for: template, on: day, index: index, calendar: calendar) else { continue }
             guard !template.isLifeCommitmentTask else { continue }
-            results.append(makeOccurrence(from: template, template: template, scheduledDate: day, calendar: calendar))
+            results.append(timelineProjectionOccurrence(from: template, on: day, calendar: calendar))
         }
 
         return results
+    }
+
+    /// Stable id for in-memory timeline projections — matches across rebuilds until materialized.
+    public static func stableProjectionID(
+        templateId: String,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> String {
+        let dayStart = calendar.startOfDay(for: day)
+        let components = calendar.dateComponents([.year, .month, .day], from: dayStart)
+        let y = components.year ?? 0
+        let m = components.month ?? 0
+        let d = components.day ?? 0
+        return "proj-\(templateId)-\(y)\(String(format: "%02d", m))\(String(format: "%02d", d))"
+    }
+
+    /// In-memory occurrence for timeline display — id is stable until persisted.
+    public static func timelineProjectionOccurrence(
+        from template: LifeTask,
+        on date: Date,
+        calendar: Calendar = .current
+    ) -> LifeTask {
+        var occurrence = makeOccurrence(from: template, template: template, scheduledDate: date, calendar: calendar)
+        occurrence.id = stableProjectionID(templateId: template.id, on: date, calendar: calendar)
+        return occurrence
     }
 
     /// Any stored row for template+day — prevents duplicate DB materialization.

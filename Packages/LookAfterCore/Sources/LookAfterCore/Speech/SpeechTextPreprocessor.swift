@@ -60,7 +60,7 @@ public enum SpeechTextPreprocessor {
             if listBuffer.count == 1 {
                 out.append(ensureSentence(listBuffer[0]))
             } else if listBuffer.count == 2 {
-                out.append("\(ensureClause(listBuffer[0])}, and \(ensureClause(listBuffer[1])).")
+                out.append("\(ensureClause(listBuffer[0])), and \(ensureClause(listBuffer[1])).")
             } else {
                 let head = listBuffer.dropLast().map(ensureClause).joined(separator: ", ")
                 let last = ensureClause(listBuffer.last ?? "")

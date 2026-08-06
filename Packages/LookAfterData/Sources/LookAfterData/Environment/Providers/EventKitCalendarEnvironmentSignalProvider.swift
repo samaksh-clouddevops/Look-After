@@ -22,11 +22,23 @@ public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSign
         self.horizonHours = horizonHours
     }
 
-    private var eventStore: EKEventStore { eventStoreBox.store }
-
     public func currentSignals(at date: Date) async -> CalendarEnvironmentSignals {
+        return await Task.detached(priority: .utility) { [eventStoreBox, horizonHours] in
+            Self.collectSignals(
+                eventStore: eventStoreBox.store,
+                horizonHours: horizonHours,
+                date: date
+            )
+        }.value
+    }
+
+    private static func collectSignals(
+        eventStore: EKEventStore,
+        horizonHours: Int,
+        date: Date
+    ) -> CalendarEnvironmentSignals {
         let status = EKEventStore.authorizationStatus(for: .event)
-        guard isAuthorized(status) else {
+        guard Self.isAuthorized(status) else {
             return CalendarEnvironmentSignals(
                 freeBlockMinutes: 0,
                 isAvailable: false,
@@ -50,8 +62,8 @@ public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSign
             )
         }
 
-        let freeBlockMinutes = computeFreeBlockMinutes(from: date, to: end, events: events)
-        let flowWindow = computeFlowWindow(from: date, events: events)
+        let freeBlockMinutes = Self.computeFreeBlockMinutes(from: date, to: end, events: events)
+        let flowWindow = Self.computeFlowWindow(from: date, events: events)
 
         return CalendarEnvironmentSignals(
             nextEvent: nextEvent,
@@ -62,15 +74,14 @@ public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSign
         )
     }
 
-    private func isAuthorized(_ status: EKAuthorizationStatus) -> Bool {
+    private static func isAuthorized(_ status: EKAuthorizationStatus) -> Bool {
         if #available(iOS 17.0, macOS 14.0, *) {
             return status == .fullAccess || status == .writeOnly
         }
-        // Legacy authorization value before iOS 17 full/write-only access levels.
         return status.rawValue == 3
     }
 
-    private func computeFreeBlockMinutes(from start: Date, to end: Date, events: [EKEvent]) -> Int {
+    private static func computeFreeBlockMinutes(from start: Date, to end: Date, events: [EKEvent]) -> Int {
         guard events.isEmpty else {
             var cursor = start
             var free = 0
@@ -88,7 +99,7 @@ public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSign
         return max(0, Int(end.timeIntervalSince(start) / 60))
     }
 
-    private func computeFlowWindow(from date: Date, events: [EKEvent]) -> DateInterval? {
+    private static func computeFlowWindow(from date: Date, events: [EKEvent]) -> DateInterval? {
         var cursor = date
         for event in events where event.endDate > date {
             let gapStart = max(cursor, date)

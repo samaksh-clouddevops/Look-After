@@ -27,7 +27,8 @@ public final class DailyBriefingViewModel: ObservableObject {
         energyLevel: EnergyLevel.moderate.rawValue,
         recoveryLabel: UserFacingCopy.recoveryLabel(percent: 50),
         focusWindow: UserFacingCopy.noFocusWindowToday,
-        isHealthConnected: false
+        isHealthConnected: false,
+        hasOvernightHealthSignal: false
     )
     @Published public private(set) var highlightedCard: BriefingCardKind?
     @Published public private(set) var dailySummary = BriefingDailySummary(score: 0, narrative: "")
@@ -205,26 +206,33 @@ public final class DailyBriefingViewModel: ObservableObject {
         await loadWeeklyTrends(userId: userId, tasksVM: tasksVM)
     }
 
-    /// Prefers brain cache, then health store, then repository fallback.
+    /// Prefers brain cache, then health store, then repository fallback — strips stale overnight data.
     private func resolveHealthSummary(brainSummary: HealthSummary?, userId: String) async -> HealthSummary? {
+        let raw: HealthSummary?
         if let brainSummary, healthHasVisibleMetrics(brainSummary) {
-            return brainSummary
-        }
-        if let storeSummary = HealthStore.shared.latest, healthHasVisibleMetrics(storeSummary) {
-            return storeSummary
-        }
-        if let refreshed = await HealthStore.shared.refresh(userId: userId), healthHasVisibleMetrics(refreshed) {
-            return refreshed
-        }
-        let canonicalId = FirebaseManager.shared.resolvedUserId
-        let candidates = [canonicalId, userId].filter { !$0.isEmpty }
-        for candidate in candidates {
-            if let summary = try? await healthRepo.getLatest(for: candidate),
-               healthHasVisibleMetrics(summary) {
-                return summary
+            raw = brainSummary
+        } else if let storeSummary = HealthStore.shared.latest, healthHasVisibleMetrics(storeSummary) {
+            raw = storeSummary
+        } else if let refreshed = await HealthStore.shared.refresh(userId: userId), healthHasVisibleMetrics(refreshed) {
+            raw = refreshed
+        } else {
+            let canonicalId = FirebaseManager.shared.resolvedUserId
+            let candidates = [canonicalId, userId].filter { !$0.isEmpty }
+            var resolved: HealthSummary?
+            for candidate in candidates {
+                if let summary = try? await healthRepo.getLatest(for: candidate),
+                   healthHasVisibleMetrics(summary) {
+                    resolved = summary
+                    break
+                }
             }
+            if resolved == nil {
+                resolved = try? await healthRepo.getLatest(for: "")
+            }
+            raw = resolved
         }
-        return try? await healthRepo.getLatest(for: "")
+
+        return HealthSummaryFreshness.forBriefingMetrics(from: raw)
     }
 
     public func toggleHabit(_ habit: BriefingHabit, tasksVM: TasksViewModel? = nil, userId: String = "") {
@@ -319,7 +327,8 @@ public final class DailyBriefingViewModel: ObservableObject {
             energyLevel: EnergyLevel.moderate.rawValue,
             recoveryLabel: UserFacingCopy.recoveryLabel(percent: 50),
             focusWindow: UserFacingCopy.noFocusWindowToday,
-            isHealthConnected: false
+            isHealthConnected: false,
+            hasOvernightHealthSignal: false
         )
     }
 
@@ -528,11 +537,16 @@ public final class DailyBriefingViewModel: ObservableObject {
         healthKitAvailable: Bool,
         healthSummary: HealthSummary?
     ) {
+        let hasOvernight = healthSummary.map { HealthSummaryFreshness.hasLastNightSleep($0) } ?? false
         let score = snapshot?.executiveFunctionScore ?? Int((flowSurface?.energyScore ?? 0.5) * 100)
-        let energyPercent = Int((snapshot?.energyScore ?? flowSurface?.energyScore ?? 0.5) * 100)
-        let recoveryPercent = Int((snapshot?.recoveryScore ?? 0.5) * 100)
+        let energyPercent = hasOvernight
+            ? Int((snapshot?.energyScore ?? flowSurface?.energyScore ?? 0.5) * 100)
+            : 0
+        let recoveryPercent = hasOvernight
+            ? Int((snapshot?.recoveryScore ?? 0.5) * 100)
+            : 0
         let sleepLabel = sleep.isAvailable ? sleep.totalHours.map { String(format: "%.1fh", $0) } : nil
-        let focusWindow = resolveFocusWindow(flowSurface: flowSurface)
+        let focusWindow = resolveFocusWindow(flowSurface: flowSurface, hasOvernightHealth: hasOvernight)
 
         let sleepQuality = sleepQualityLabel(score: score)
         let hasImportedHealth = sleep.isAvailable
@@ -546,10 +560,13 @@ public final class DailyBriefingViewModel: ObservableObject {
             sleepQuality: sleepQuality,
             energyPercent: energyPercent,
             energyLevel: (snapshot?.energy ?? energy.energyLevel).rawValue,
-            recoveryLabel: UserFacingCopy.recoveryLabel(percent: recoveryPercent),
+            recoveryLabel: hasOvernight
+                ? UserFacingCopy.recoveryLabel(percent: recoveryPercent)
+                : "No data",
             recoveryPercent: recoveryPercent,
             focusWindow: focusWindow,
-            isHealthConnected: healthKitAvailable && hasImportedHealth
+            isHealthConnected: healthKitAvailable && hasImportedHealth,
+            hasOvernightHealthSignal: hasOvernight
         )
     }
 
@@ -585,12 +602,29 @@ public final class DailyBriefingViewModel: ObservableObject {
         highlightedCard = .aiCoach
     }
 
-    private func resolveFocusWindow(flowSurface: FlowSurface?) -> String {
+    private func resolveFocusWindow(flowSurface: FlowSurface?, hasOvernightHealth: Bool) -> String {
         if let interval = flowSurface?.flowWindow {
             return Self.formatInterval(interval)
         }
+
         let lifeProfile = UserLifeProfileStore.load()
-        return FocusWindowFormatter.displayLabel(startHour: lifeProfile.peakStartHour, endHour: lifeProfile.peakEndHour)
+        let now = Date()
+        let hour = Calendar.current.component(.hour, from: now)
+        let peakLabel = FocusWindowFormatter.displayLabel(
+            startHour: lifeProfile.peakStartHour,
+            endHour: lifeProfile.peakEndHour
+        )
+
+        if hour >= lifeProfile.peakStartHour && hour < lifeProfile.peakEndHour {
+            return "Now · \(peakLabel)"
+        }
+
+        if hour < lifeProfile.peakStartHour {
+            let prefix = hasOvernightHealth ? "Up next" : "Typical"
+            return "\(prefix) · \(peakLabel)"
+        }
+
+        return hasOvernightHealth ? peakLabel : "Typical · \(peakLabel)"
     }
 
     private func buildDailySummary(snapshot: CognitiveSnapshot?, flowSurface: FlowSurface?) {
@@ -1091,6 +1125,16 @@ public final class DailyBriefingViewModel: ObservableObject {
     public func refreshLifeGaps(tasksVM: TasksViewModel, userId: String) {
         refreshHabitCompletions()
         buildLifeGaps(tasksVM: tasksVM, userId: userId)
+    }
+
+    /// Lightweight progress + mission refresh after task completion — avoids a full briefing reload.
+    public func refreshTaskProgress(
+        tasksVM: TasksViewModel,
+        cognitiveSnapshot: CognitiveSnapshot?,
+        lifeTimelineEvents: [LifeTimelineEvent] = []
+    ) {
+        buildProgress(tasksVM: tasksVM, snapshot: cognitiveSnapshot)
+        buildMission(tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
     }
 
     private func buildLifeGaps(tasksVM: TasksViewModel, userId: String) {

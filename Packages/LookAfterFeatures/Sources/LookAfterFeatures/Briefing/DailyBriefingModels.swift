@@ -200,6 +200,8 @@ public struct BriefingHealthSnapshot: Sendable, Equatable {
     public var recoveryPercent: Int
     public var focusWindow: String
     public var isHealthConnected: Bool
+    /// False when last night's sleep was not recorded — energy tile should show unavailable, not a guess.
+    public var hasOvernightHealthSignal: Bool
 
     public init(
         readinessLabel: String,
@@ -212,7 +214,8 @@ public struct BriefingHealthSnapshot: Sendable, Equatable {
         recoveryLabel: String,
         recoveryPercent: Int = 50,
         focusWindow: String,
-        isHealthConnected: Bool
+        isHealthConnected: Bool,
+        hasOvernightHealthSignal: Bool = true
     ) {
         self.readinessLabel = readinessLabel
         self.readinessScore = readinessScore
@@ -225,6 +228,7 @@ public struct BriefingHealthSnapshot: Sendable, Equatable {
         self.recoveryPercent = recoveryPercent
         self.focusWindow = focusWindow
         self.isHealthConnected = isHealthConnected
+        self.hasOvernightHealthSignal = hasOvernightHealthSignal
     }
 }
 

@@ -116,6 +116,22 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         }
     }
 
+    /// Instant timeline feedback when the user marks a completed task incomplete.
+    public func markTimelineTaskUncompleted(taskId: String) {
+        if let timelineService {
+            timelineService.applyPatch(.uncompleted(taskId: taskId))
+            return
+        }
+        guard let index = timelineRows.firstIndex(where: { $0.taskId == taskId && $0.isCompleted }) else { return }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+            timelineRows[index].isCompleted = false
+            timelineRows[index].completedAt = nil
+            timelineRows[index].subtitle = "Planned"
+            timelineRows[index].isPast = false
+            timelineRows[index].isNow = false
+        }
+    }
+
     /// Instant timeline feedback when a task is rescheduled from the live timeline.
     public func markTimelineTaskRescheduled(taskId: String, to newTime: Date) {
         if let timelineService {

@@ -108,6 +108,10 @@ final class TaskRecurrenceTests: XCTestCase {
         XCTAssertEqual(projected.count, 1)
         XCTAssertEqual(projected.first?.title, template.title)
         XCTAssertEqual(projected.first?.parentTaskId, template.id)
+        XCTAssertEqual(
+            projected.first?.id,
+            TaskRecurrenceEngine.stableProjectionID(templateId: template.id, on: today, calendar: calendar)
+        )
     }
 
     func testRecurrenceEngineCreatesNextOccurrenceAfterCompletion() {
@@ -363,6 +367,49 @@ final class TaskRecurrenceTests: XCTestCase {
             TaskRecurrenceEngine.invalidScheduledTaskIDs(in: allTasks, calendar: calendar),
             [legacyDaily.id]
         )
+    }
+
+    func testRecurrenceCompactorDropsSupersededAndDuplicateSameDayRows() {
+        let day = makeDate(year: 2026, month: 8, day: 6)
+        let template = LifeTask(
+            id: "tmpl-brush",
+            title: "Brush teeth",
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let keeper = LifeTask(
+            id: "occ-keeper",
+            title: "Brush teeth",
+            status: .pending,
+            scheduledDate: day,
+            parentTaskId: template.id,
+            userId: "user-1"
+        )
+        let duplicate = LifeTask(
+            id: "occ-dup",
+            title: "Brush teeth",
+            status: .pending,
+            scheduledDate: day,
+            parentTaskId: template.id,
+            userId: "user-1"
+        )
+        let superseded = LifeTask(
+            id: "occ-old",
+            title: "Brush teeth",
+            status: .superseded,
+            scheduledDate: calendar.date(byAdding: .day, value: -1, to: day),
+            parentTaskId: template.id,
+            userId: "user-1"
+        )
+        let input = [template, keeper, duplicate, superseded]
+        let (pruned, removed) = TaskRecurrenceCompactor.compact(input, referenceDate: day)
+        XCTAssertEqual(removed, 2)
+        XCTAssertEqual(pruned.count, 2)
+        XCTAssertTrue(pruned.contains(where: { $0.id == template.id }))
+        let occurrenceIDs = Set(pruned.map { $0.id })
+        XCTAssertTrue(occurrenceIDs.contains(keeper.id) || occurrenceIDs.contains(duplicate.id))
+        XCTAssertFalse(occurrenceIDs.contains(superseded.id))
     }
 
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {

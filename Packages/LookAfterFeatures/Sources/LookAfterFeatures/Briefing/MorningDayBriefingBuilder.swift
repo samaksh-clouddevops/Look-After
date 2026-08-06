@@ -150,8 +150,6 @@ enum MorningDayBriefingBuilder {
 
         if let hours = sleep.totalHours {
             parts.append(String(format: "%.1fh sleep", hours))
-        } else if let minutes = health?.totalSleepMinutes, minutes > 0 {
-            parts.append(String(format: "%.1fh sleep", minutes / 60.0))
         }
 
         if let wake = postWake.wakeTime ?? health?.wakeTime {
@@ -255,11 +253,18 @@ enum MorningDayBriefingBuilder {
             .sorted { $0.date < $1.date }
             .prefix(8)
             .map { event in
-                MorningPlanItem(
+                let isOngoing = !event.isCompleted && event.date <= now
+                let timeText: String?
+                if event.isCompleted {
+                    timeText = formatter.string(from: event.date)
+                } else if isOngoing {
+                    timeText = "Now"
+                } else {
+                    timeText = formatter.string(from: event.date)
+                }
+                return MorningPlanItem(
                     id: event.id,
-                    timeLabel: event.isFixed || event.date > now.addingTimeInterval(-3600)
-                        ? formatter.string(from: event.date)
-                        : "Now",
+                    timeLabel: timeText,
                     title: event.title,
                     subtitle: event.subtitle.isEmpty ? nil : event.subtitle,
                     isCompleted: event.isCompleted,

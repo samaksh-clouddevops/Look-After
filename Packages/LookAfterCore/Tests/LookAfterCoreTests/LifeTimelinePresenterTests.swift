@@ -450,10 +450,10 @@ final class LifeTimelinePresenterTests: XCTestCase {
         )
 
         XCTAssertEqual(events.filter { $0.title == "Breakfast" }.count, 1)
-        XCTAssertTrue(events.filter { $0.id.hasPrefix("sleep-boundary") }.isEmpty)
+        XCTAssertEqual(events.filter { $0.id.hasPrefix("sleep-boundary") }.count, 1)
     }
 
-    func testMorningTimelineHasNoSleepBoundary() {
+    func testMorningTimelineIncludesSleepBoundary() {
         let now = makeDate(year: 2026, month: 8, day: 6, hour: 7, minute: 0)
         let day = calendar.startOfDay(for: now)
         let breakfast = LifeTask(
@@ -475,7 +475,8 @@ final class LifeTimelinePresenterTests: XCTestCase {
         )
 
         XCTAssertEqual(events.filter { $0.title == "Breakfast" }.count, 1)
-        XCTAssertTrue(events.filter { $0.id.hasPrefix("sleep-boundary") }.isEmpty)
+        XCTAssertEqual(events.filter { $0.id.hasPrefix("sleep-boundary") }.count, 1)
+        XCTAssertTrue(events.last?.id.hasPrefix("sleep-boundary") == true)
     }
 
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {
