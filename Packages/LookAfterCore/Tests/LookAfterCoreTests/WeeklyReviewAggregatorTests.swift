@@ -136,6 +136,47 @@ final class WeeklyReviewAggregatorTests: XCTestCase {
         XCTAssertEqual(summary.equilibriumScore, 0.60, accuracy: 0.0001)
     }
 
+    func testMaxConsecutiveHighLoadDaysWithinWeek() {
+        let bounds = WeeklyReviewAggregator.weekBounds(ending: weekEnding, calendar: calendar)
+        var tasks: [LifeTask] = []
+        for offset in 0..<7 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: bounds.start) else { continue }
+            let isHighLoad = (2...4).contains(offset)
+            let start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day)!
+            tasks.append(
+                LifeTask(
+                    title: "Block \(offset)",
+                    status: .completed,
+                    estimatedMinutes: 120,
+                    scheduledDate: day,
+                    scheduledTime: start,
+                    timeConstraint: .anchored,
+                    userId: "u"
+                )
+            )
+            if !isHighLoad {
+                tasks.append(
+                    LifeTask(
+                        title: "Fluid \(offset)",
+                        status: .completed,
+                        estimatedMinutes: 60,
+                        scheduledDate: day,
+                        scheduledTime: start,
+                        timeConstraint: .fluid,
+                        userId: "u"
+                    )
+                )
+            }
+        }
+
+        let streak = HighLoadDayEvaluator.maxConsecutiveHighLoadDays(
+            inWeekEnding: weekEnding,
+            tasks: tasks,
+            calendar: calendar
+        )
+        XCTAssertEqual(streak, 3)
+    }
+
     func testRecordBuilderMapsDecisions() {
         let decisions = [
             ConflictCascadeDecision(taskID: "a", action: .shiftLater, reason: "clash", shiftMinutes: 45),

@@ -16,9 +16,13 @@ struct WeeklyReviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
                 header
-                heroCard
-                metricsGrid
-                executiveSummaryCard
+                if hasWeeklyActivity {
+                    heroCard
+                    metricsGrid
+                    executiveSummaryCard
+                } else {
+                    emptyStateCard
+                }
             }
             .padding(.horizontal, DesignSystem.spacingMD)
             .padding(.top, DesignSystem.spacingMD)
@@ -122,7 +126,40 @@ struct WeeklyReviewView: View {
                 icon: "clock.badge.xmark",
                 tint: DesignSystem.textMuted
             )
+            MetricTile(
+                title: "Flexible Shifts",
+                value: "\(summary.flexibleShiftsExecuted)",
+                icon: "arrow.right.circle",
+                tint: DesignSystem.accentPrimary
+            )
         }
+    }
+
+    private var emptyStateCard: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            Text("Your first debrief is building")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(DesignSystem.textPrimary)
+            Text("Complete tasks and let the schedule engine run for a few days. Cascade actions and focus hours will appear here automatically.")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(DesignSystem.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(DesignSystem.spacingLG)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                .fill(DesignSystem.backgroundSecondary)
+        )
+    }
+
+    private var hasWeeklyActivity: Bool {
+        summary.totalFocusHoursCompleted > 0
+            || summary.timeReclaimedHours > 0
+            || summary.sabotageAuctionsTriggered > 0
+            || summary.tasksSupersededCount > 0
+            || summary.tasksExpiredCount > 0
+            || summary.flexibleShiftsExecuted > 0
     }
 
     // MARK: - Executive Summary

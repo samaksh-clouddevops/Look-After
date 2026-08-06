@@ -11,7 +11,6 @@ public final class LifeEngine: @unchecked Sendable {
     public static let shared = LifeEngine()
 
     private let cascadeLog: CascadeActionLog
-    private let lock = NSLock()
 
     public init(cascadeLog: CascadeActionLog = .shared) {
         self.cascadeLog = cascadeLog
@@ -22,15 +21,15 @@ public final class LifeEngine: @unchecked Sendable {
         cascadeLog.historyRecords()
     }
 
-    /// Build a `LifeState` from operational tasks + high-load streak.
+    /// Build a `LifeState` from task history + the week's high-load streak.
     public func lifeState(
         tasks: [LifeTask],
-        now: Date = Date(),
+        weekEnding: Date = Date(),
         calendar: Calendar = .current
     ) -> LifeState {
-        let streak = HighLoadDayEvaluator.consecutiveHighLoadDays(
+        let streak = HighLoadDayEvaluator.maxConsecutiveHighLoadDays(
+            inWeekEnding: weekEnding,
             tasks: tasks,
-            now: now,
             calendar: calendar
         )
         return LifeState(activeTasks: tasks, consecutiveHighLoadDays: streak)
@@ -42,7 +41,7 @@ public final class LifeEngine: @unchecked Sendable {
         weekEnding: Date = Date(),
         calendar: Calendar = .current
     ) -> WeeklyReviewSummary {
-        let state = lifeState(tasks: tasks, now: weekEnding, calendar: calendar)
+        let state = lifeState(tasks: tasks, weekEnding: weekEnding, calendar: calendar)
         let logs = cascadeLog.historyRecords()
         return WeeklyReviewAggregator.aggregate(
             logs: logs,

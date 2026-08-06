@@ -473,6 +473,7 @@ public struct LookAfterRootCanvas: View {
             )
         case .review:
             WeeklyReviewView(summary: weeklyReviewSummary)
+                .id(weeklyReviewRefreshKey)
         case .brain:
             BrainDashboardView(
                 brainVM: shell.brainVM,
@@ -504,10 +505,23 @@ public struct LookAfterRootCanvas: View {
         }
     }
 
+    /// Tasks for weekly metrics — persisted history when available, else in-memory scheduling context.
+    private var weeklyReviewTasks: [LifeTask] {
+        let persisted = shell.taskStore.allTasks
+        if !persisted.isEmpty { return persisted }
+        return shell.tasksVM.schedulingContext
+    }
+
+    /// Bumps when task or cascade data changes so the Review tab refreshes.
+    private var weeklyReviewRefreshKey: String {
+        let tasks = weeklyReviewTasks
+        let completed = tasks.filter { $0.status == .completed }.count
+        return "review-\(tasks.count)-\(completed)-\(LifeEngine.shared.behavioralVaultHistory.count)"
+    }
+
     /// Pull cascade history from BehavioralVault-adjacent `CascadeActionLog` via `LifeEngine`.
     private var weeklyReviewSummary: WeeklyReviewSummary {
-        let tasks = shell.taskStore.allTasks.isEmpty ? shell.tasksVM.tasks : shell.taskStore.allTasks
-        return LifeEngine.shared.weeklyReview(tasks: tasks)
+        LifeEngine.shared.weeklyReview(tasks: weeklyReviewTasks)
     }
 
     private func activeFlowSessionState() -> FlowSessionState? {
