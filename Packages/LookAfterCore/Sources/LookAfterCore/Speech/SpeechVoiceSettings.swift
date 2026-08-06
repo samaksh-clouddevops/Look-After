@@ -4,7 +4,7 @@ import Foundation
 public enum SpeechVoiceProvider: String, CaseIterable, Identifiable, Sendable {
     case appleEnhanced = "apple_enhanced"
     case appleStandard = "apple_standard"
-    /// Reserved for future cloud TTS (ElevenLabs / OpenAI / etc.).
+    /// OpenAI neural TTS (tts-1-hd) — requires a separate OpenAI API key.
     case cloud = "cloud"
 
     public var id: String { rawValue }
@@ -13,7 +13,7 @@ public enum SpeechVoiceProvider: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleEnhanced: return "Apple Enhanced"
         case .appleStandard: return "Apple Standard"
-        case .cloud: return "Cloud (coming soon)"
+        case .cloud: return "Cloud (OpenAI)"
         }
     }
 
@@ -21,7 +21,7 @@ public enum SpeechVoiceProvider: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleEnhanced: return "Best on-device neural voices when downloaded."
         case .appleStandard: return "System default English voice."
-        case .cloud: return "Higher-fidelity voices when a provider is configured."
+        case .cloud: return "Natural neural voice via OpenAI — requires an OpenAI API key."
         }
     }
 }
@@ -34,6 +34,20 @@ public enum SpeechVoiceSettings {
     public static let pitchKey = "lookafter.speech.pitch"
     public static let autoSpeakRepliesKey = "lookafter.speech.autoSpeakReplies"
     public static let spokenStyleKey = "lookafter.speech.spokenStyle"
+    public static let cloudAPIKeyKey = "lookafter.speech.cloudAPIKey"
+    public static let cloudVoiceKey = "lookafter.speech.cloudVoice"
+
+    /// OpenAI TTS voices — warm, conversational options first.
+    public static let cloudVoices: [(id: String, label: String)] = [
+        ("nova", "Nova (warm, conversational)"),
+        ("shimmer", "Shimmer (soft, friendly)"),
+        ("alloy", "Alloy (neutral, clear)"),
+        ("echo", "Echo (male, calm)"),
+        ("fable", "Fable (expressive)"),
+        ("onyx", "Onyx (deep, authoritative)"),
+    ]
+
+    public static let cloudAPIKeyEnvVar = "OPENAI_API_KEY"
 
     /// 0.0 … 1.0 relative to default AVSpeech rate band (mapped in synthesizer).
     public static var rate: Double {
@@ -71,6 +85,38 @@ public enum SpeechVoiceSettings {
         set { UserDefaults.standard.set(newValue, forKey: voiceIdentifierKey) }
     }
 
+    public static var cloudVoice: String {
+        get {
+            let stored = UserDefaults.standard.string(forKey: cloudVoiceKey)
+            if let stored, cloudVoices.contains(where: { $0.id == stored }) { return stored }
+            return "nova"
+        }
+        set { UserDefaults.standard.set(newValue, forKey: cloudVoiceKey) }
+    }
+
+    /// OpenAI API key for cloud TTS — UserDefaults override, then OPENAI_API_KEY env.
+    public static var cloudAPIKey: String? {
+        get {
+            if let stored = UserDefaults.standard.string(forKey: cloudAPIKeyKey),
+               !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return stored.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if let env = ProcessInfo.processInfo.environment[cloudAPIKeyEnvVar],
+               !env.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return env.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return nil
+        }
+        set {
+            let trimmed = newValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            UserDefaults.standard.set(trimmed, forKey: cloudAPIKeyKey)
+        }
+    }
+
+    public static var isCloudTTSAvailable: Bool {
+        provider == .cloud && cloudAPIKey != nil
+    }
+
     public static var autoSpeakReplies: Bool {
         get {
             let defaults = UserDefaults.standard
@@ -101,4 +147,19 @@ public enum SpeechVoiceSettings {
         - Sound calm, clear, and human — like a trusted chief of staff speaking in person.
         """
     }
+
+    /// Premium / enhanced voice identifiers to try before falling back to compact system voices.
+    public static let preferredVoiceIdentifiers: [String] = [
+        "com.apple.voice.premium.en-US.Zoe",
+        "com.apple.voice.premium.en-US.Samantha",
+        "com.apple.voice.premium.en-US.Ava",
+        "com.apple.voice.enhanced.en-US.Samantha",
+        "com.apple.voice.enhanced.en-US.Alex",
+        "com.apple.voice.premium.en-GB.Daniel",
+        "com.apple.voice.enhanced.en-GB.Daniel",
+        "com.apple.voice.premium.en-AU.Karen",
+        "com.apple.voice.enhanced.en-AU.Karen",
+        "com.apple.voice.premium.en-IE.Moira",
+        "com.apple.voice.enhanced.en-IE.Moira",
+    ]
 }

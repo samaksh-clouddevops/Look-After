@@ -40,7 +40,24 @@ public enum UserCalibrationStore {
               let entries = try? JSONDecoder().decode([UserCalibrationEntry].self, from: data) else {
             return []
         }
-        return entries.sorted { $0.createdAt > $1.createdAt }
+        let sorted = entries.sorted { $0.createdAt > $1.createdAt }
+        var didMigrate = false
+        let migrated = sorted.map { entry in
+            let cleaned = JournalCalibrationSanitizer.plainText(from: entry.summary)
+            guard cleaned != entry.summary else { return entry }
+            didMigrate = true
+            return UserCalibrationEntry(
+                id: entry.id,
+                createdAt: entry.createdAt,
+                source: entry.source,
+                summary: cleaned,
+                rawInput: entry.rawInput
+            )
+        }
+        if didMigrate {
+            save(migrated)
+        }
+        return migrated
     }
 
     @discardableResult
@@ -49,7 +66,7 @@ public enum UserCalibrationStore {
         source: CalibrationSource,
         rawInput: String? = nil
     ) -> UserCalibrationEntry {
-        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = JournalCalibrationSanitizer.plainText(from: summary)
         guard !trimmed.isEmpty else {
             return UserCalibrationEntry(source: source, summary: "")
         }

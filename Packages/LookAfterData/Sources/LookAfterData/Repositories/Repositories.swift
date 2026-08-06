@@ -16,14 +16,46 @@ public final class TaskRepository: ObservableObject {
     public static func invalidateLocalCache() {
         cachedAll = nil
     }
-    
+
+    /// True when the in-memory local task list has been populated (warm or empty write).
+    public static var hasWarmedLocalCache: Bool {
+        cachedAll != nil
+    }
+
     public init(firebase: FirebaseManager? = nil) {
         self.firebase = firebase ?? FirebaseManager.shared
     }
-    
+
+    /// Loads `tasks.json` off the main thread into `cachedAll`.
+    /// Call once before first `localSnapshot` / `localAllTasks` on a cold process.
+    /// Safe to call repeatedly — no-ops when already warm (unless `force` is true).
+    @discardableResult
+    public func warmLocalCache(force: Bool = false) async -> [LifeTask] {
+        if !force, let cached = Self.cachedAll {
+            return cached
+        }
+        let loaded = await local.loadAsync([LifeTask].self, filename: collection)
+        if force {
+            // Explicit reload from disk (tests / recovery). May race with concurrent saves.
+            Self.cachedAll = loaded
+            TaskPersistenceLog.localLoad(count: loaded.count, userId: "warm-cache-force")
+            return loaded
+        }
+        // Prefer a cache written by a concurrent mutator (create/save) during the await.
+        // Only adopt disk if cache is still cold — never clobber fresher in-memory writes.
+        if let cached = Self.cachedAll {
+            return cached
+        }
+        Self.cachedAll = loaded
+        TaskPersistenceLog.localLoad(count: loaded.count, userId: "warm-cache")
+        return loaded
+    }
+
     // MARK: - CRUD
-    
+
     /// Instant read from on-device cache — no network.
+    /// Prefers in-memory `cachedAll`. Cold path still uses barrier load as a safety net
+    /// for callers that have not awaited `warmLocalCache()` yet.
     public func localSnapshot(for userId: String) -> TaskListSnapshot {
         let tasks = tasksForUser(userId)
         TaskPersistenceLog.localLoad(count: tasks.count, userId: userId)
@@ -231,6 +263,54 @@ public final class TaskRepository: ObservableObject {
         let visible = tasks.filter { !deletedIDs.contains($0.id) }
         guard !userId.isEmpty else { return visible }
         return visible.filter { $0.userId.isEmpty || $0.userId == userId }
+    }
+
+    /// Drops terminal recurrence rows and duplicate same-day instances that bloat local storage.
+    @discardableResult
+    public func compactRecurrenceStorage(
+        for userId: String,
+        retentionDays: Int
+    ) -> Int {
+        let all = allLocalTasks()
+        let (pruned, removed) = TaskRecurrenceCompactor.compact(all, retentionDays: retentionDays)
+        guard removed > 0 else { return 0 }
+        persistAllLocally(pruned)
+        print("[Tasks] compacted \(removed) recurrence rows (\(all.count) → \(pruned.count))")
+        return removed
+    }
+
+    /// Background-safe compaction — loads/saves off the main actor's critical path.
+    @discardableResult
+    public func compactRecurrenceStorageAsync(
+        for userId: String,
+        retentionDays: Int
+    ) async -> Int {
+        let all: [LifeTask]
+        if let cached = Self.cachedAll {
+            all = cached
+        } else {
+            all = await local.loadAsync([LifeTask].self, filename: collection)
+            Self.cachedAll = all
+        }
+
+        let before = all.count
+        let (pruned, removed) = await Task.detached(priority: .utility) {
+            TaskRecurrenceCompactor.compact(all, retentionDays: retentionDays)
+        }.value
+        guard removed > 0 else { return 0 }
+        await local.saveAsync(pruned, filename: collection)
+        Self.cachedAll = pruned
+        print("[Tasks] compacted \(removed) recurrence rows (\(before) → \(pruned.count))")
+        return removed
+    }
+
+    /// Backward-compatible alias.
+    @discardableResult
+    public func pruneTerminalRecurrenceOccurrences(
+        for userId: String,
+        retentionDays: Int
+    ) -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
     }
 }
 

@@ -4,7 +4,7 @@ import LookAfterCore
 
 // MARK: - Protocol
 
-/// Abstraction over local Apple TTS and future cloud providers.
+/// Abstraction over local Apple TTS and cloud neural TTS.
 @MainActor
 protocol SpeechSynthesizing: AnyObject, ObservableObject {
     var isSpeaking: Bool { get }
@@ -12,24 +12,27 @@ protocol SpeechSynthesizing: AnyObject, ObservableObject {
     func stop()
 }
 
-// MARK: - Apple implementation
+// MARK: - Router implementation
 
-/// Executive-grade text-to-speech: preprocess → enhanced Apple voice → warm delivery.
+/// Executive speech — Apple on-device or OpenAI cloud neural voice.
 @MainActor
 final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthesizing {
     @Published private(set) var isSpeaking = false
-    /// Last voice identifier successfully used (for Settings diagnostics / preview).
     @Published private(set) var activeVoiceName: String = ""
 
-    private let synthesizer = AVSpeechSynthesizer()
+    private let appleSynthesizer = AVSpeechSynthesizer()
+    private let cloudPlayer = CloudSpeechPlayer()
+    private var cloudTask: Task<Void, Never>?
 
     override init() {
         super.init()
-        synthesizer.delegate = self
-        activeVoiceName = Self.resolveVoice()?.name ?? "System"
+        appleSynthesizer.delegate = self
+        cloudPlayer.onFinished = { [weak self] in
+            self?.isSpeaking = false
+        }
+        refreshActiveVoiceLabel()
     }
 
-    /// Preprocess markdown/lists/abbreviations, then speak with the preferred Apple voice.
     func speak(_ text: String) {
         let prepared = SpeechTextPreprocessor.prepareForSpeech(text)
         guard !prepared.isEmpty else {
@@ -39,10 +42,54 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
 
         stop()
 
+        if SpeechVoiceSettings.provider == .cloud, SpeechVoiceSettings.cloudAPIKey != nil {
+            speakCloud(prepared)
+            return
+        }
+
+        speakApple(prepared)
+    }
+
+    func stop() {
+        cloudTask?.cancel()
+        cloudTask = nil
+        cloudPlayer.stop()
+        if appleSynthesizer.isSpeaking || appleSynthesizer.isPaused {
+            appleSynthesizer.stopSpeaking(at: .immediate)
+        }
+        isSpeaking = false
+    }
+
+    func previewSample() {
+        speak("Here's how I sound. Calm, clear, and ready to help you plan the day.")
+    }
+
+    // MARK: - Cloud (OpenAI)
+
+    private func speakCloud(_ text: String) {
+        let voice = SpeechVoiceSettings.cloudVoice
+        activeVoiceName = SpeechVoiceSettings.cloudVoices.first(where: { $0.id == voice })?.label ?? voice
+        isSpeaking = true
+
+        cloudTask = Task {
+            do {
+                let mp3 = try await OpenAICloudTTSService.synthesizeMP3(text: text)
+                guard !Task.isCancelled else { return }
+                try cloudPlayer.play(data: mp3)
+            } catch {
+                guard !Task.isCancelled else { return }
+                print("[Speech] Cloud TTS failed: \(error.localizedDescription) — falling back to Apple")
+                speakApple(text)
+            }
+        }
+    }
+
+    // MARK: - Apple
+
+    private func speakApple(_ prepared: String) {
         #if os(iOS)
         do {
             let session = AVAudioSession.sharedInstance()
-            // Leave any mic `.record` session left by speech recognition.
             try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
@@ -52,11 +99,10 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         #endif
 
         let utterance = AVSpeechUtterance(string: prepared)
-        let voice = Self.resolveVoice()
+        let voice = Self.resolveAppleVoice()
         utterance.voice = voice
         activeVoiceName = voice?.name ?? "System"
 
-        // Map 0.35…0.65 preference into a calm AVSpeech band around default.
         let prefRate = Float(SpeechVoiceSettings.rate)
         let minRate = AVSpeechUtteranceMinimumSpeechRate
         let maxRate = AVSpeechUtteranceMaximumSpeechRate
@@ -69,60 +115,72 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         utterance.postUtteranceDelay = 0.08
 
         isSpeaking = true
-        synthesizer.speak(utterance)
+        appleSynthesizer.speak(utterance)
     }
 
-    func stop() {
-        if synthesizer.isSpeaking || synthesizer.isPaused {
-            synthesizer.stopSpeaking(at: .immediate)
+    private func refreshActiveVoiceLabel() {
+        if SpeechVoiceSettings.provider == .cloud, SpeechVoiceSettings.cloudAPIKey != nil {
+            let voice = SpeechVoiceSettings.cloudVoice
+            activeVoiceName = SpeechVoiceSettings.cloudVoices.first(where: { $0.id == voice })?.label ?? voice
+        } else {
+            activeVoiceName = Self.resolveAppleVoice()?.name ?? "System"
         }
-        isSpeaking = false
     }
 
-    /// Preview current settings with a short sample.
-    func previewSample() {
-        speak("Here's how I sound. Calm, clear, and ready to help you plan the day.")
-    }
-
-    // MARK: - Voice resolution
-
-    /// Prefer user choice → enhanced Siri/premium en voices → en-US quality → language default.
     static func resolveVoice() -> AVSpeechSynthesisVoice? {
+        resolveAppleVoice()
+    }
+
+    /// Prefer user choice → known premium/enhanced ids → best ranked voice → language default.
+    static func resolveAppleVoice() -> AVSpeechSynthesisVoice? {
         if let id = SpeechVoiceSettings.voiceIdentifier,
            let chosen = AVSpeechSynthesisVoice(identifier: id) {
             return chosen
         }
 
         let provider = SpeechVoiceSettings.provider
-        // Cloud is not wired yet — fall back to enhanced Apple.
         let preferEnhanced = provider == .appleEnhanced || provider == .cloud
 
-        let english = AVSpeechSynthesisVoice.speechVoices().filter {
-            $0.language.lowercased().hasPrefix("en")
-        }
-
         if preferEnhanced {
-            // Prefer higher quality / premium voices when installed.
+            for identifier in SpeechVoiceSettings.preferredVoiceIdentifiers {
+                if let voice = AVSpeechSynthesisVoice(identifier: identifier) {
+                    return voice
+                }
+            }
+
+            let english = AVSpeechSynthesisVoice.speechVoices().filter {
+                $0.language.lowercased().hasPrefix("en")
+            }
             let ranked = english.sorted { lhs, rhs in
                 voiceScore(lhs) > voiceScore(rhs)
             }
-            if let best = ranked.first, voiceScore(best) > 0 {
+            if let best = ranked.first, voiceScore(best) >= 25 {
                 return best
             }
         }
 
+        if provider == .appleStandard,
+           let english = AVSpeechSynthesisVoice.speechVoices().first(where: {
+               $0.language.lowercased().hasPrefix("en") && !isCompactVoice($0)
+           }) {
+            return english
+        }
+
         return AVSpeechSynthesisVoice(language: "en-US")
             ?? AVSpeechSynthesisVoice(language: Locale.current.identifier)
-            ?? english.first
     }
 
-    /// Higher = warmer / more natural executive voice.
+    private static func isCompactVoice(_ voice: AVSpeechSynthesisVoice) -> Bool {
+        let id = voice.identifier.lowercased()
+        let name = voice.name.lowercased()
+        return id.contains("compact") || name.contains("compact")
+    }
+
     private static func voiceScore(_ voice: AVSpeechSynthesisVoice) -> Int {
         var score = 0
         let id = voice.identifier.lowercased()
         let name = voice.name.lowercased()
 
-        // Quality API (iOS 16+)
         if #available(iOS 16.0, macOS 13.0, *) {
             switch voice.quality {
             case .enhanced: score += 40
@@ -133,7 +191,8 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
             if id.contains("enhanced") || id.contains("premium") { score += 40 }
         }
 
-        // Known natural Siri / neural-ish English voices.
+        if id.contains("compact") || name.contains("compact") { score -= 80 }
+
         let preferredTokens = [
             "samantha", "nora", "zoe", "ava", "allison", "susan", "karen",
             "daniel", "moira", "tessa", "siri", "nicky", "aaron"
@@ -145,14 +204,12 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         if voice.language.lowercased().hasPrefix("en-us") { score += 10 }
         else if voice.language.lowercased().hasPrefix("en") { score += 5 }
 
-        // Slight preference against novelty / novelty-character voices.
         if name.contains("whisper") || name.contains("bad news") || name.contains("organ") {
             score -= 50
         }
         return score
     }
 
-    /// Catalog of English voices for Settings pickers.
     static func availableEnglishVoices() -> [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices()
             .filter { $0.language.lowercased().hasPrefix("en") }
@@ -163,7 +220,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
     }
 }
 
-// MARK: - Delegate
+// MARK: - Apple delegate
 
 extension PlanningSpeechSynthesizer: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {

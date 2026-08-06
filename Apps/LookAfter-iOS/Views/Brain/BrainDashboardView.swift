@@ -236,19 +236,23 @@ struct BrainDashboardView: View {
         statusLine = "Thinking…"
 
         Task {
+            // Let the mic session fully release before playback TTS starts.
+            try? await Task.sleep(nanoseconds: 200_000_000)
+
             let response = await brain.chat(message: message)
             await MainActor.run {
-                let reply = response.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !reply.isEmpty else {
+                let rawReply = response.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !rawReply.isEmpty else {
                     orbState = .ready
                     statusLine = "I didn't catch that — try again."
                     return
                 }
-                responseSubtitle = reply
+                let reply = SpeechTextPreprocessor.prepareForSpeech(rawReply)
+                responseSubtitle = reply.isEmpty ? rawReply : reply
                 statusLine = nil
                 if SpeechVoiceSettings.autoSpeakReplies {
                     orbState = .speaking
-                    speechSynthesizer.speak(reply)
+                    speechSynthesizer.speak(reply.isEmpty ? rawReply : reply)
                     if !speechSynthesizer.isSpeaking {
                         orbState = .ready
                         statusLine = "Couldn't play voice reply."

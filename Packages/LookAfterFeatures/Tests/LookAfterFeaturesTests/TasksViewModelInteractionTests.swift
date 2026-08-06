@@ -200,6 +200,10 @@ final class InMemoryTaskStore: TaskStoring {
         self.calendar = calendar
     }
 
+    func warmLocalCache(for userId: String) async {
+        _ = userId
+    }
+
     func localSnapshot(for userId: String) -> TaskListSnapshot {
         TaskListSnapshot.make(from: tasks.filter { $0.userId == userId || userId.isEmpty })
     }
@@ -241,6 +245,20 @@ final class InMemoryTaskStore: TaskStoring {
 
     func delete(_ id: String) async throws {
         tasks.removeAll { $0.id == id }
+    }
+
+    func pruneTerminalRecurrenceOccurrences(for userId: String, retentionDays: Int) -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
+    }
+
+    func compactRecurrenceStorage(for userId: String, retentionDays: Int) -> Int {
+        _ = userId
+        _ = retentionDays
+        return 0
+    }
+
+    func compactRecurrenceStorageAsync(for userId: String, retentionDays: Int) async -> Int {
+        compactRecurrenceStorage(for: userId, retentionDays: retentionDays)
     }
 }
 

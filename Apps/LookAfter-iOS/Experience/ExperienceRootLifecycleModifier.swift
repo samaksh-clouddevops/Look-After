@@ -125,7 +125,7 @@ private struct ExperienceRootSyncModifier: ViewModifier {
                         userId: userId,
                         userName: UserLifeProfileStore.resolvedDisplayName(),
                         peakStartHour: UserLifeProfileStore.load().peakStartHour,
-                        capacityLLMPolicy: .llmIfDue
+                        capacityLLMPolicy: .deterministicOnly
                     )
                 }
             }
@@ -228,11 +228,18 @@ private struct ExperienceRootDataModifier: ViewModifier {
                 // Rebuild gaps before local snapshot refresh — optimistic completions live in memory first.
                 shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
                 if !userId.isEmpty {
-                    shell.tasksVM.refreshFromLocal(userId: userId)
+                    shell.tasksVM.syncFromTaskStore()
                     shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
+                    shell.briefingVM.refreshTaskProgress(
+                        tasksVM: shell.tasksVM,
+                        cognitiveSnapshot: shell.brainVM.cognitiveSnapshot,
+                        lifeTimelineEvents: shell.timelineService.snapshot.today
+                    )
+                    shell.syncBrainLiveProgress(userId: userId)
                 }
                 shell.refreshWidgetData()
                 shell.syncExecutionEnvironment()
+                shell.scheduleAppleCalendarSync()
             }
     }
 }

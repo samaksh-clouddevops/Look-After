@@ -18,6 +18,7 @@ public struct TimelineSnapshot: Sendable, Equatable {
 /// Optimistic timeline patch applied before the next full rebuild.
 public enum TimelinePatch: Sendable, Equatable {
     case completed(taskId: String)
+    case uncompleted(taskId: String)
     case rescheduled(taskId: String, to: Date)
 }
 
@@ -54,6 +55,13 @@ public enum TimelineRowProjector {
             updated[index].isPast = false
             updated[index].subtitle = "Done"
             updated[index].completedAt = Date()
+        case .uncompleted(let taskId):
+            guard let index = updated.firstIndex(where: { $0.taskId == taskId && $0.isCompleted }) else { return rows }
+            updated[index].isCompleted = false
+            updated[index].completedAt = nil
+            updated[index].subtitle = "Planned"
+            updated[index].isPast = false
+            updated[index].isNow = false
         case .rescheduled(let taskId, let newTime):
             guard let index = updated.firstIndex(where: { $0.taskId == taskId }) else { return rows }
             let formatter = DateFormatter()

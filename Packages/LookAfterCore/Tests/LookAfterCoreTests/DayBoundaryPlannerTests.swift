@@ -25,11 +25,13 @@ final class DayBoundaryPlannerTests: XCTestCase {
         XCTAssertEqual(event!.kind, .recovery)
     }
 
-    func testSleepTimelineEventHiddenInMorning() {
+    func testSleepTimelineEventVisibleInMorning() {
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: Date())
         let morning = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: day)!
         let event = DayBoundaryPlanner.sleepTimelineEvent(on: day, now: morning, calendar: calendar)
-        XCTAssertNil(event)
+        XCTAssertNotNil(event)
+        XCTAssertTrue(event!.title.contains("Sleep"))
+        XCTAssertTrue(event!.subtitle.contains("Tonight"))
     }
 }

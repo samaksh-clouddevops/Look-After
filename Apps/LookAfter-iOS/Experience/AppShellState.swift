@@ -29,6 +29,8 @@ final class AppShellState: ObservableObject {
 
     private var flowDirector: FlowDirector?
     private var flowDirectorUserName: String = ""
+    private let calendarSyncService = CalendarSyncService()
+    private var calendarSyncDebounceTask: Task<Void, Never>?
 
     init() {
         let glm = GLMService.shared
@@ -130,6 +132,34 @@ final class AppShellState: ObservableObject {
             if UITestLaunchConfiguration.shouldAutoStartFocusSession {
                 startFocusSessionForUITestIfNeeded(userId: userId)
             }
+
+            scheduleAppleCalendarSync()
+        }
+    }
+
+    /// Debounced mirror of today's scheduled tasks into Apple Calendar.
+    func scheduleAppleCalendarSync() {
+        guard CalendarSyncSettings.syncTasksToAppleCalendar else { return }
+        calendarSyncDebounceTask?.cancel()
+        calendarSyncDebounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled, let self else { return }
+            await self.syncTodayTasksToAppleCalendar()
+        }
+    }
+
+    func syncTodayTasksToAppleCalendar() async {
+        guard CalendarSyncSettings.syncTasksToAppleCalendar else { return }
+        let pool = tasksVM.tasks + tasksVM.completedToday
+        do {
+            let changed = try await calendarSyncService.syncScheduledTasks(pool, on: Date())
+            if !changed.isEmpty {
+                await tasksVM.applyCalendarEventIdentifiers(changed)
+            }
+        } catch CalendarSyncError.accessDenied {
+            // Stay silent when the user declines calendar access.
+        } catch {
+            print("[CalendarSync] \(error.localizedDescription)")
         }
     }
 
@@ -276,6 +306,14 @@ final class AppShellState: ObservableObject {
     private var contextLoopTask: Task<Void, Never>?
     /// Prevents overlapping context refreshes from the background loop.
     private var isContextRefreshInFlight = false
+    private struct PendingContextRefresh {
+        var userId: String
+        var userName: String
+        var peakStartHour: Int
+        var capacityLLMPolicy: ExecutiveCapacityLLMPolicy
+    }
+    private var pendingContextRefresh: PendingContextRefresh?
+    private var didForceInitialTaskSync = false
 
     /// Keeps brain/timeline fresh while the app is open. Capacity stays deterministic — no LLM polling.
     /// Performance: skips ticks while a refresh is already running or a focus session is active.
@@ -361,12 +399,38 @@ final class AppShellState: ObservableObject {
         capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
     ) async {
         guard !isPerformingFactoryReset else { return }
+        if isContextRefreshInFlight {
+            pendingContextRefresh = PendingContextRefresh(
+                userId: userId,
+                userName: userName,
+                peakStartHour: peakStartHour,
+                capacityLLMPolicy: capacityLLMPolicy
+            )
+            return
+        }
+        isContextRefreshInFlight = true
+        defer {
+            isContextRefreshInFlight = false
+            if let pending = pendingContextRefresh {
+                pendingContextRefresh = nil
+                Task { await self.refreshContext(
+                    userId: pending.userId,
+                    userName: pending.userName,
+                    peakStartHour: pending.peakStartHour,
+                    capacityLLMPolicy: pending.capacityLLMPolicy
+                ) }
+            }
+        }
+
         accountIdentity.refresh()
         let uid = resolvedUserId(userId)
         guard !uid.isEmpty else { return }
         let resolvedName = userName.isEmpty ? ProfileCoordinator.displayName : userName
         let peakHour = peakStartHour > 0 ? peakStartHour : ProfileCoordinator.peakStartHour
-        await tasksVM.syncRecurringSchedule(userId: uid)
+        await tasksVM.compactTaskStorageIfNeeded(userId: uid)
+        let forceTaskSync = !didForceInitialTaskSync
+        didForceInitialTaskSync = true
+        await tasksVM.syncRecurringSchedule(userId: uid, force: forceTaskSync)
         await healthStore.refresh(userId: uid)
         await orchestrateBrain(userId: uid)
         let shoppingCount = modulesVM.shoppingItems.filter { !$0.isPurchased }.count
@@ -483,6 +547,34 @@ final class AppShellState: ObservableObject {
             actualFocusMinutes: focusMins
         )
         await NotificationCoordinator.shared.refreshFromShell(self)
+    }
+
+    /// Keeps Executive Brain coach context in sync after task completions — without a full context refresh.
+    func syncBrainLiveProgress(userId: String) {
+        let completed = tasksVM.completedToday
+        let pending = tasksVM.tasks.filter { $0.status.isActive }
+        let focusMins = resolvedFocusMinutes(userId: userId, completed: completed)
+        brain.updateLiveProgress(
+            completedTasks: completed,
+            pendingTasks: pending,
+            focusMinutes: focusMins,
+            health: brainVM.healthSummary,
+            executiveCapacityLabel: contextOrchestrator.executiveCapacity.band.displayLabel,
+            actualFocusMinutes: focusMins
+        )
+    }
+
+    /// Rebuilds timeline snapshot from in-memory task state (no network / recurrence sync).
+    func rebuildTimelineFromTasks() {
+        timelineService.rebuild(
+            tasks: tasksVM.tasks,
+            completedToday: tasksVM.completedToday,
+            recurrenceTemplates: tasksVM.recurrenceTemplates,
+            bills: modulesVM.bills,
+            shoppingItems: modulesVM.shoppingItems,
+            contacts: modulesVM.contacts,
+            medications: MedicationStore.load()
+        )
     }
 
     private var healthKitEnabled: Bool {

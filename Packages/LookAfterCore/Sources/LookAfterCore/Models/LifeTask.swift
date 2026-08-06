@@ -196,6 +196,8 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     public var isRecurrenceTemplate: Bool?
     /// Structured meaning — computed once at create/edit; schedulers read this, not the title.
     public var semanticProfile: TaskSemanticProfile?
+    /// EventKit identifier for the Apple Calendar block mirroring this task.
+    public var calendarEventIdentifier: String?
     
     public init(
         id: String = UUID().uuidString,
@@ -233,7 +235,8 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         completedAt: Date? = nil,
         userId: String = "",
         isRecurrenceTemplate: Bool? = nil,
-        semanticProfile: TaskSemanticProfile? = nil
+        semanticProfile: TaskSemanticProfile? = nil,
+        calendarEventIdentifier: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -272,6 +275,7 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         self.userId = userId
         self.isRecurrenceTemplate = isRecurrenceTemplate
         self.semanticProfile = semanticProfile
+        self.calendarEventIdentifier = calendarEventIdentifier
     }
     
     // MARK: - Computed Properties
