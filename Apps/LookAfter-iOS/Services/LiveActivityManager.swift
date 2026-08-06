@@ -15,16 +15,27 @@ final class LiveActivityManager {
 
     /// Serializes start/update/end so async `Activity.end` cannot race a new `Activity.request`.
     private var focusOperationChain: Task<Void, Never>?
+    private var nowPinOperationChain: Task<Void, Never>?
     private var nowPinEndTask: Task<Void, Never>?
 
     private init() {}
 
     var isNowPinned: Bool {
-        nowPinActivity != nil
+        reattachNowPinIfNeeded()
+        return nowPinActivity != nil
     }
 
     var hasFocusActivity: Bool {
         focusActivity != nil
+    }
+
+    /// Reconnect to an existing system Live Activity after relaunch or if the local ref was lost.
+    func reattachNowPinIfNeeded() {
+        guard nowPinActivity == nil else { return }
+        nowPinActivity = Activity<NowPinActivityAttributes>.activities.first
+        if let nowPinActivity {
+            PinNowLogger.info("Reattached Now Pin activity id=\(nowPinActivity.id)")
+        }
     }
 
     // MARK: - Focus Session (manual ADHD / pomodoro)
@@ -40,7 +51,7 @@ final class LiveActivityManager {
         progressFraction: Double
     ) {
         isExecutionDriven = false
-        enqueueFocusOperation(deferStartup: true) { [weak self] in
+        enqueueFocusOperation(deferStartup: false) { [weak self] in
             guard let self else { return }
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
@@ -130,6 +141,7 @@ final class LiveActivityManager {
     /// Skipped while a manual ADHD focus session owns the slot.
     func applyExecutionBlock(_ snapshot: ExecutionBlockSnapshot, manualFocusActive: Bool) {
         guard !manualFocusActive else { return }
+        guard !WidgetSyncService.shared.isNowPinned, !isNowPinned else { return }
         guard !UITestLaunchConfiguration.shouldSkipLiveActivity else { return }
 
         guard snapshot.surfaceMode.projectsLiveActivity,
@@ -208,53 +220,45 @@ final class LiveActivityManager {
 
     // MARK: - Pinned Now
 
-    func startNowPin(from snapshot: WidgetSnapshot) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        guard let title = snapshot.topTaskTitle, !title.isEmpty else { return }
-
-        Task { @MainActor in
-            await endNowPinIfNeeded()
-
-            let attributes = NowPinActivityAttributes(pinnedAt: Date())
-            let state = NowPinActivityAttributes.ContentState(
-                topTaskTitle: title,
-                energyScore: snapshot.energyScore,
-                energyLevel: snapshot.energyLevel,
-                recommendation: snapshot.recommendation,
-                estimatedMinutes: snapshot.topTaskMinutes ?? 25
-            )
-
-            do {
-                nowPinActivity = try Activity.request(
-                    attributes: attributes,
-                    content: .init(state: state, staleDate: nil),
-                    pushType: nil
-                )
-            } catch {
-                print("Now pin Live Activity failed: \(error.localizedDescription)")
+    @discardableResult
+    func refreshNowPin(from snapshot: WidgetSnapshot) async -> PinNowResult {
+        await enqueueNowPinOperationReturning {
+            self.reattachNowPinIfNeeded()
+            if self.nowPinActivity != nil {
+                return await self.performUpdateNowPin(from: snapshot)
             }
+            return await self.performStartNowPin(from: snapshot)
         }
     }
 
-    func updateNowPin(from snapshot: WidgetSnapshot) {
-        guard let nowPinActivity else { return }
-        guard let title = snapshot.topTaskTitle, !title.isEmpty else { return }
+    @discardableResult
+    func startNowPin(from snapshot: WidgetSnapshot) async -> PinNowResult {
+        await enqueueNowPinOperationReturning {
+            await self.performStartNowPin(from: snapshot)
+        }
+    }
 
-        let state = NowPinActivityAttributes.ContentState(
-            topTaskTitle: title,
-            energyScore: snapshot.energyScore,
-            energyLevel: snapshot.energyLevel,
-            recommendation: snapshot.recommendation,
-            estimatedMinutes: snapshot.topTaskMinutes ?? 25
-        )
-        Task {
-            await nowPinActivity.update(.init(state: state, staleDate: nil))
+    @discardableResult
+    func updateNowPin(from snapshot: WidgetSnapshot) async -> PinNowResult {
+        await enqueueNowPinOperationReturning {
+            self.reattachNowPinIfNeeded()
+            if self.nowPinActivity != nil {
+                return await self.performUpdateNowPin(from: snapshot)
+            }
+            return await self.performStartNowPin(from: snapshot)
         }
     }
 
     func endNowPin() {
         Task { @MainActor in
-            await endNowPinIfNeeded()
+            await endNowPinAndWait()
+        }
+    }
+
+    func endNowPinAndWait() async {
+        await enqueueNowPinOperationReturning {
+            await self.endNowPinIfNeeded()
+            return PinNowResult.ok("Unpinned")
         }
     }
 
@@ -265,6 +269,100 @@ final class LiveActivityManager {
     }
 
     // MARK: - Private
+
+    @discardableResult
+    private func enqueueNowPinOperationReturning(
+        _ operation: @escaping @MainActor () async -> PinNowResult
+    ) async -> PinNowResult {
+        let previous = nowPinOperationChain
+        let task = Task { @MainActor () async -> PinNowResult in
+            if let previous { await previous.value }
+            return await operation()
+        }
+        nowPinOperationChain = Task { _ = await task.value }
+        return await task.value
+    }
+
+    @discardableResult
+    private func performStartNowPin(from snapshot: WidgetSnapshot) async -> PinNowResult {
+        guard !UITestLaunchConfiguration.shouldSkipLiveActivity else {
+            return PinNowResult.failed("Live Activities disabled in UI tests.")
+        }
+
+        let auth = ActivityAuthorizationInfo()
+        guard auth.areActivitiesEnabled else {
+            PinNowLogger.error("Live Activities disabled in Settings → \(UserFacingCopy.productName) → Live Activities")
+            return PinNowResult.failed(
+                "Live Activities are off. Enable them in Settings → \(UserFacingCopy.productName) → Live Activities."
+            )
+        }
+
+        guard let title = snapshot.resolvedTopTaskTitle else {
+            PinNowLogger.error("Missing top task title in widget snapshot")
+            return PinNowResult.failed("No next step to pin.")
+        }
+
+        await focusOperationChain?.value
+        await endFocusActivityIfNeeded()
+        await endNowPinIfNeeded()
+
+        let attributes = NowPinActivityAttributes(
+            pinnedAt: Date(),
+            categoryIcon: snapshot.pinCategoryIcon
+        )
+        let state = Self.nowPinContentState(from: snapshot, title: title)
+
+        PinNowLogger.info("Requesting Now Pin Live Activity for \"\(title)\"")
+
+        do {
+            nowPinActivity = try Activity.request(
+                attributes: attributes,
+                content: .init(state: state, staleDate: nil),
+                pushType: nil
+            )
+            PinNowLogger.info("Live Activity started id=\(nowPinActivity?.id ?? "nil")")
+            return PinNowResult.ok("Pinned \"\(title)\" to Lock Screen")
+        } catch {
+            nowPinActivity = nil
+            PinNowLogger.error("Activity.request failed: \(error.localizedDescription)")
+            return PinNowResult.failed("Could not pin: \(error.localizedDescription)")
+        }
+    }
+
+    @discardableResult
+    private func performUpdateNowPin(from snapshot: WidgetSnapshot) async -> PinNowResult {
+        reattachNowPinIfNeeded()
+        guard let nowPinActivity else {
+            return await performStartNowPin(from: snapshot)
+        }
+        guard let title = snapshot.resolvedTopTaskTitle else {
+            return PinNowResult.failed("No next step to update.")
+        }
+
+        let state = Self.nowPinContentState(from: snapshot, title: title)
+        await nowPinActivity.update(ActivityContent(state: state, staleDate: nil))
+        PinNowLogger.info("Updated Now Pin Live Activity for \"\(title)\"")
+        return PinNowResult.ok("Updated pinned task")
+    }
+
+    private static func nowPinContentState(from snapshot: WidgetSnapshot, title: String) -> NowPinActivityAttributes.ContentState {
+        let contextLine = snapshot.pinContextLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? snapshot.recommendation
+            : snapshot.pinContextLine
+        return NowPinActivityAttributes.ContentState(
+            topTaskTitle: title,
+            energyScore: snapshot.energyScore,
+            energyLevel: snapshot.energyLevel,
+            contextLine: contextLine,
+            estimatedMinutes: snapshot.topTaskMinutes ?? 25,
+            scheduleLabel: snapshot.pinScheduleLabel,
+            constraintLabel: snapshot.pinConstraintLabel,
+            nextUpSummary: snapshot.pinNextUpSummary,
+            progressFraction: snapshot.pinProgressFraction,
+            sectionLabel: snapshot.pinSectionLabel,
+            categoryIcon: snapshot.pinCategoryIcon
+        )
+    }
 
     private static func manualContentState(
         taskTitle: String,
@@ -321,6 +419,7 @@ final class LiveActivityManager {
             await endTask.value
             nowPinEndTask = nil
         }
+        reattachNowPinIfNeeded()
         guard let activity = nowPinActivity else { return }
         nowPinActivity = nil
         await activity.end(nil, dismissalPolicy: .immediate)

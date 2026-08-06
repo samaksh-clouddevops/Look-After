@@ -86,7 +86,13 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
     public let estimatedMinutes: Int?
     public let isCompleted: Bool
     public let isFixed: Bool
+    /// Semantic time lock from the source task when available.
+    public let timeConstraint: TimeConstraint?
     public let completedAt: Date?
+
+    public var resolvedTimeConstraint: TimeConstraint {
+        timeConstraint ?? (isFixed ? .anchored : .flexible)
+    }
 
     public init(
         id: String,
@@ -98,6 +104,7 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
         estimatedMinutes: Int? = nil,
         isCompleted: Bool = false,
         isFixed: Bool = false,
+        timeConstraint: TimeConstraint? = nil,
         completedAt: Date? = nil
     ) {
         self.id = id
@@ -109,6 +116,7 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
         self.estimatedMinutes = estimatedMinutes
         self.isCompleted = isCompleted
         self.isFixed = isFixed
+        self.timeConstraint = timeConstraint
         self.completedAt = completedAt
     }
 }
@@ -419,6 +427,7 @@ public enum LifeTimelinePresenter {
             estimatedMinutes: duration,
             isCompleted: forceCompleted || task.status == .completed,
             isFixed: task.isFixedTimeEvent,
+            timeConstraint: task.timeConstraintValue,
             completedAt: task.completedAt
         )
     }

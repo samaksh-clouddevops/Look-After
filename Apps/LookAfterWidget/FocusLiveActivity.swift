@@ -4,11 +4,12 @@ import SwiftUI
 import LookAfterCore
 
 private enum LiveActivityStyle {
-    static let accent = DesignSystem.accentPrimary
-    static let textPrimary = DesignSystem.textPrimary
-    static let textSecondary = DesignSystem.textSecondary
-    static let textMuted = DesignSystem.textMuted
-    static let background = DesignSystem.backgroundPrimary
+    // Fixed opaque colors — adaptive tokens can resolve to zero-size layers in ActivityKit snapshots.
+    static let accent = Color(hex: "5A9E3F")
+    static let textPrimary = Color(hex: "F4F4F4")
+    static let textSecondary = Color(hex: "B7BDC6")
+    static let textMuted = Color(hex: "8D939C")
+    static let background = Color(hex: "111315")
 
     static func accent(for mode: String, isOnBreak: Bool) -> Color {
         if isOnBreak { return textSecondary }
@@ -170,6 +171,7 @@ struct FocusLiveActivity: Widget {
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
         .activityBackgroundTint(LiveActivityStyle.background)
     }
 }
@@ -181,72 +183,199 @@ struct NowPinLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "sparkles")
-                        .foregroundColor(LiveActivityStyle.textMuted)
+                    Image(systemName: pinIcon(context))
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(LiveActivityStyle.accent)
+                        .frame(width: 24, height: 24)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("NOW")
-                            .font(.dsMetadata())
+                        Text(context.state.sectionLabel.uppercased())
+                            .font(.caption2.weight(.semibold))
                             .foregroundColor(LiveActivityStyle.textMuted)
-                        Text(context.state.topTaskTitle)
-                            .font(.dsCaption(weight: .semibold))
+                        Text(nowPinTitle(context))
+                            .font(.caption.weight(.semibold))
                             .lineLimit(1)
+                            .foregroundColor(LiveActivityStyle.textPrimary)
                     }
+                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text("\(context.state.energyScore)%")
-                        .font(.dsCaption(weight: .bold))
-                        .foregroundColor(LiveActivityStyle.accent)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(max(0, context.state.energyScore))%")
+                            .font(.caption.weight(.bold))
+                            .monospacedDigit()
+                            .foregroundColor(LiveActivityStyle.accent)
+                        Text(energyLabel(context))
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(LiveActivityStyle.textMuted)
+                    }
+                    .frame(minWidth: 28, minHeight: 28)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if context.state.progressFraction > 0 {
+                            ProgressView(value: context.state.progressFraction)
+                                .tint(LiveActivityStyle.accent)
+                        }
+                        Text(nowPinBottomLine(context))
+                            .font(.caption2)
+                            .lineLimit(2)
+                            .foregroundColor(LiveActivityStyle.textSecondary)
+                            .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
+                    }
                 }
             } compactLeading: {
-                Image(systemName: "sparkles")
-                    .foregroundColor(LiveActivityStyle.textMuted)
-            } compactTrailing: {
-                Text("\(context.state.energyScore)%")
-                    .font(.dsMetadata(weight: .bold))
+                Image(systemName: pinIcon(context))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(LiveActivityStyle.accent)
+                    .frame(width: 18, height: 18)
+            } compactTrailing: {
+                Text("\(max(0, context.state.energyScore))%")
+                    .font(.caption2.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundColor(LiveActivityStyle.accent)
+                    .frame(minWidth: 24, minHeight: 16)
             } minimal: {
-                Image(systemName: "sparkles")
-                    .foregroundColor(LiveActivityStyle.textMuted)
+                Image(systemName: pinIcon(context))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(LiveActivityStyle.accent)
+                    .frame(width: 16, height: 16)
             }
         }
     }
 
+    private func pinIcon(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String {
+        let stateIcon = context.state.categoryIcon.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !stateIcon.isEmpty { return stateIcon }
+        let icon = context.attributes.categoryIcon.trimmingCharacters(in: .whitespacesAndNewlines)
+        return icon.isEmpty ? "sparkles" : icon
+    }
+
+    private func nowPinTitle(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String {
+        let title = context.state.topTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "Next step" : title
+    }
+
+    private func nowPinContextLine(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String {
+        let sanitized = UserFacingCopy.sanitize(context.state.contextLine)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitized
+    }
+
+    private func nowPinBottomLine(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String {
+        let schedule = context.state.scheduleLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let contextLine = nowPinContextLine(context)
+        if !schedule.isEmpty, !contextLine.isEmpty {
+            return "\(schedule) · \(contextLine)"
+        }
+        if !schedule.isEmpty { return schedule }
+        if !contextLine.isEmpty { return contextLine }
+        let minutes = max(1, context.state.estimatedMinutes)
+        return "~\(minutes) min • \(energyLabel(context)) energy"
+    }
+
     @ViewBuilder
     private func nowLockScreen(context: ActivityViewContext<NowPinActivityAttributes>) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("NOW", systemImage: "sparkles")
-                    .font(.dsMetadata(weight: .bold))
-                    .foregroundColor(LiveActivityStyle.textSecondary)
-                Spacer()
-                Text("\(context.state.energyScore)% • \(context.state.energyLevel)")
-                    .font(.dsMetadata(weight: .semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 6) {
+                Image(systemName: pinIcon(context))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(LiveActivityStyle.accent)
+                    .frame(width: 16, height: 16)
+
+                Text(context.state.sectionLabel)
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(LiveActivityStyle.accent)
+                    .lineLimit(1)
+                    .frame(minHeight: 14)
+
+                if !context.state.constraintLabel.isEmpty {
+                    Text(context.state.constraintLabel)
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(LiveActivityStyle.textMuted.opacity(0.2))
+                        .clipShape(Capsule())
+                        .foregroundColor(LiveActivityStyle.textSecondary)
+                }
+
+                Text("\(max(0, context.state.energyScore))%")
+                    .font(.caption2.weight(.bold))
+                    .monospacedDigit()
                     .foregroundColor(LiveActivityStyle.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .frame(minHeight: 14)
             }
 
-            Text(context.state.topTaskTitle)
-                .font(.dsTitle())
+            Text(nowPinTitle(context))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(LiveActivityStyle.textPrimary)
                 .lineLimit(2)
+                .minimumScaleFactor(0.9)
+                .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
 
-            Text(UserFacingCopy.sanitize(context.state.recommendation))
-                .font(.dsBody())
-                .foregroundColor(LiveActivityStyle.textSecondary)
-                .lineLimit(2)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(context.state.scheduleLabel.isEmpty ? pinDurationLabel(context) : context.state.scheduleLabel)
+                    .font(.caption)
+                    .foregroundColor(LiveActivityStyle.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minHeight: 14)
 
-            HStack {
-                Label("~\(context.state.estimatedMinutes) min", systemImage: "clock")
-                Spacer()
-                Text("Pinned to Lock Screen")
-                    .font(.dsMetadata())
-                    .foregroundColor(LiveActivityStyle.textMuted)
+                if !context.state.scheduleLabel.isEmpty {
+                    Text(pinDurationLabel(context))
+                        .font(.caption.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundColor(LiveActivityStyle.accent)
+                        .lineLimit(1)
+                        .frame(minHeight: 14)
+                }
             }
-            .font(.dsMetadata())
-            .foregroundColor(LiveActivityStyle.textSecondary)
+
+            if context.state.progressFraction > 0 {
+                ProgressView(value: context.state.progressFraction)
+                    .tint(LiveActivityStyle.accent)
+                    .frame(height: 4)
+            }
+
+            if let footer = pinFooterLine(context) {
+                Text(footer)
+                    .font(.caption2)
+                    .foregroundColor(LiveActivityStyle.textMuted)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
         .activityBackgroundTint(LiveActivityStyle.background)
+    }
+
+    private func pinFooterLine(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String? {
+        let nextUp = context.state.nextUpSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !nextUp.isEmpty { return nextUp }
+
+        let contextLine = nowPinContextLine(context)
+        if contextLine.isEmpty { return nil }
+        if contextLine == "Ready when you are." { return nil }
+        if contextLine == "Fixed window — stay in this block." { return nil }
+        return contextLine
+    }
+
+    private func pinDurationLabel(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String {
+        let minutes = max(1, context.state.estimatedMinutes)
+        let formatted = PinNowSnapshotBuilder.compactDuration(minutes: minutes)
+        if context.state.constraintLabel == "Anchored" {
+            return "\(formatted) left"
+        }
+        return "~\(formatted)"
+    }
+
+    private func energyLabel(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String {
+        let level = context.state.energyLevel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return level.isEmpty ? "Energy" : level
     }
 }

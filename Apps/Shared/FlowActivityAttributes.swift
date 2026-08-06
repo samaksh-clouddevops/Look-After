@@ -69,9 +69,47 @@ struct NowPinActivityAttributes: ActivityAttributes {
         var topTaskTitle: String
         var energyScore: Int
         var energyLevel: String
-        var recommendation: String
+        var contextLine: String
         var estimatedMinutes: Int
+        var scheduleLabel: String
+        var constraintLabel: String
+        var nextUpSummary: String
+        var progressFraction: Double
+        var sectionLabel: String
+        var categoryIcon: String
+
+        init(
+            topTaskTitle: String,
+            energyScore: Int,
+            energyLevel: String,
+            contextLine: String,
+            estimatedMinutes: Int,
+            scheduleLabel: String = "",
+            constraintLabel: String = "Flexible",
+            nextUpSummary: String = "",
+            progressFraction: Double = 0,
+            sectionLabel: String = "NOW",
+            categoryIcon: String = "sparkles"
+        ) {
+            self.topTaskTitle = topTaskTitle
+            self.energyScore = energyScore
+            self.energyLevel = energyLevel
+            self.contextLine = contextLine
+            self.estimatedMinutes = estimatedMinutes
+            self.scheduleLabel = scheduleLabel
+            self.constraintLabel = constraintLabel
+            self.nextUpSummary = nextUpSummary
+            self.progressFraction = min(1, max(0, progressFraction))
+            self.sectionLabel = sectionLabel
+            self.categoryIcon = categoryIcon
+        }
     }
 
     var pinnedAt: Date
+    var categoryIcon: String
+
+    init(pinnedAt: Date, categoryIcon: String = "sparkles") {
+        self.pinnedAt = pinnedAt
+        self.categoryIcon = categoryIcon
+    }
 }

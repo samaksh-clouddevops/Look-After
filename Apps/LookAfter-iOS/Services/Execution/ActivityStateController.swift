@@ -22,7 +22,7 @@ final class ActivityStateController {
     /// - Parameter manualFocusActive: When true, ADHD pomodoro owns the slot.
     /// - Parameter force: When true, bypass throttling (e.g. app entering background).
     func apply(snapshot: ExecutionBlockSnapshot, manualFocusActive: Bool, force: Bool = false) {
-        if manualFocusActive {
+        if manualFocusActive || WidgetSyncService.shared.isNowPinned || LiveActivityManager.shared.isNowPinned {
             lastProjectedKey = nil
             lastProgressBucket = -1
             return

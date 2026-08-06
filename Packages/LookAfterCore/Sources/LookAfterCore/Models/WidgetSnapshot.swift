@@ -29,6 +29,15 @@ public struct WidgetSnapshot: Codable, Sendable {
     public var hrvMs: Int?
     public var tasks: [WidgetTaskItem]
     public var updatedAt: Date
+
+    // Pin Live Activity — execution-aligned display fields.
+    public var pinContextLine: String
+    public var pinScheduleLabel: String
+    public var pinConstraintLabel: String
+    public var pinCategoryIcon: String
+    public var pinNextUpSummary: String
+    public var pinProgressFraction: Double
+    public var pinSectionLabel: String
     
     public init(
         topTaskTitle: String? = nil,
@@ -42,7 +51,14 @@ public struct WidgetSnapshot: Codable, Sendable {
         stepCount: Int? = nil,
         hrvMs: Int? = nil,
         tasks: [WidgetTaskItem] = [],
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        pinContextLine: String = "",
+        pinScheduleLabel: String = "",
+        pinConstraintLabel: String = "Flexible",
+        pinCategoryIcon: String = "sparkles",
+        pinNextUpSummary: String = "",
+        pinProgressFraction: Double = 0,
+        pinSectionLabel: String = "NOW"
     ) {
         self.topTaskTitle = topTaskTitle
         self.topTaskMinutes = topTaskMinutes
@@ -56,9 +72,26 @@ public struct WidgetSnapshot: Codable, Sendable {
         self.hrvMs = hrvMs
         self.tasks = tasks
         self.updatedAt = updatedAt
+        self.pinContextLine = pinContextLine
+        self.pinScheduleLabel = pinScheduleLabel
+        self.pinConstraintLabel = pinConstraintLabel
+        self.pinCategoryIcon = pinCategoryIcon
+        self.pinNextUpSummary = pinNextUpSummary
+        self.pinProgressFraction = min(1, max(0, pinProgressFraction))
+        self.pinSectionLabel = pinSectionLabel
     }
     
     public static let empty = WidgetSnapshot()
+}
+
+public extension WidgetSnapshot {
+    /// Title to show on pinned Live Activity — falls back to first widget task row.
+    var resolvedTopTaskTitle: String? {
+        let trimmed = topTaskTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { return trimmed }
+        let fallback = tasks.first?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return fallback.isEmpty ? nil : fallback
+    }
 }
 
 public enum WidgetAppGroup {

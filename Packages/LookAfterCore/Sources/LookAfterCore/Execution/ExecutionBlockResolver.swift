@@ -45,11 +45,55 @@ public enum ExecutionBlockResolver {
         }
         .sorted { $0.interval.start < $1.interval.start }
 
-        if let active = candidates.first(where: { $0.interval.start <= now && now < $0.interval.end }) {
+        if let active = bestActiveCandidate(from: candidates, now: now) {
             return snapshot(for: active, candidates: candidates, now: now, calendar: calendar)
         }
 
         return fluidGapSnapshot(candidates: candidates, now: now, calendar: calendar)
+    }
+
+    /// When multiple tasks overlap `now`, prefer anchored deep-work over life commitments.
+    public static func bestActiveCandidate(from candidates: [Candidate], now: Date) -> Candidate? {
+        candidates
+            .filter { $0.interval.start <= now && now < $0.interval.end }
+            .max(by: { candidatePriority($0) < candidatePriority($1) })
+    }
+
+    public static func candidatePriority(_ candidate: Candidate) -> Int {
+        var score = 0
+        let task = candidate.task
+        switch task.timeConstraintValue {
+        case .anchored: score += 10_000
+        case .flexible: score += 5_000
+        case .fluid: score += 1_000
+        }
+        switch FocusTaskCategory.resolve(for: task) {
+        case .deepWork: score += 2_000
+        case .creative: score += 1_500
+        case .admin, .health: score += 500
+        case .recovery, .social, .fluidGap: score += 100
+        }
+        if task.isLifeCommitmentTask { score -= 3_000 }
+        score += min(999, Int(candidate.interval.end.timeIntervalSince(candidate.interval.start) / 60))
+        return score
+    }
+
+    /// Legacy single-match path — kept for tests.
+    static func firstActiveCandidate(from candidates: [Candidate], now: Date) -> Candidate? {
+        candidates.first(where: { $0.interval.start <= now && now < $0.interval.end })
+    }
+
+    /// Whether `task` is scheduled in an active window at `now`.
+    public static func isInActiveWindow(
+        _ task: LifeTask,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        let day = calendar.startOfDay(for: now)
+        guard let interval = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) else {
+            return false
+        }
+        return interval.start <= now && now < interval.end
     }
 
     /// Whether the snapshot should own Focus Filter + Live Activity projection.

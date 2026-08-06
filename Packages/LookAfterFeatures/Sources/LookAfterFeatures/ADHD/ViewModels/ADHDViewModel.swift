@@ -150,6 +150,7 @@ public final class ADHDViewModel: ObservableObject {
             currentSessionNumber = 1
             // UI flag last so observers see a complete initial state in one publish cycle.
             isFocusSessionActive = true
+            onFocusSessionDidStart?()
         }
 
         Task { @MainActor in
@@ -290,6 +291,9 @@ public final class ADHDViewModel: ObservableObject {
         startFocusTimer()
     }
     
+    /// Optional hook fired synchronously when a focus session begins (Live Activity, execution layer).
+    public var onFocusSessionDidStart: (() -> Void)?
+
     /// Optional hook for Flow Director re-orchestration after a focus session ends.
     public var onFocusSessionEnded: ((Int, LifeTask?) -> Void)?
 

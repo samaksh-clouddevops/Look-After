@@ -20,6 +20,7 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
     private var manualFocusActive = false
     private var tickTask: Task<Void, Never>?
     private var lastResolutionIdentity: String?
+    private var lastPinProgressBucket: Int = -1
 
     /// Seconds between re-evaluations when a block is active.
     private let activeTickInterval: TimeInterval = 30
@@ -79,6 +80,9 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
         resolveAndProject(now: now, forceLiveActivity: true)
     }
 
+    /// Called when the pinned NOW Live Activity should reflect the latest schedule.
+    var onPinRefreshNeeded: (() -> Void)?
+
     // MARK: - Resolve
 
     private func resolveAndProject(now: Date, forceLiveActivity: Bool = false) {
@@ -88,6 +92,9 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
         let identity = "\(snapshot.id)|\(snapshot.surfaceMode.rawValue)|\(snapshot.taskID ?? "")"
         let identityChanged = identity != lastResolutionIdentity
         lastResolutionIdentity = identity
+        let progressBucket = Int((snapshot.progressFraction * 100).rounded(.down))
+        let progressChanged = progressBucket != lastPinProgressBucket
+        lastPinProgressBucket = progressBucket
 
         ActivityStateController.shared.apply(
             snapshot: snapshot,
@@ -99,6 +106,11 @@ final class ExecutionEnvironmentCoordinator: ObservableObject {
             Task {
                 await ExecutionFocusCoordinator.shared.apply(snapshot: snapshot)
             }
+        }
+
+        if WidgetSyncService.shared.isNowPinned,
+           identityChanged || progressChanged || forceLiveActivity {
+            onPinRefreshNeeded?()
         }
     }
 

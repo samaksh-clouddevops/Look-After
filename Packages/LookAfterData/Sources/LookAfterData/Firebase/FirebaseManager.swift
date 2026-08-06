@@ -31,9 +31,13 @@ public final class FirebaseManager: ObservableObject {
     
     private var authListener: AuthStateDidChangeListenerHandle?
     
-    public static let shared = FirebaseManager()
+    public static let shared: FirebaseManager = {
+        LookAfterFirebaseConfiguration.configureIfNeeded()
+        return FirebaseManager()
+    }()
     
     private init() {
+        LookAfterFirebaseConfiguration.configureIfNeeded()
         let savedUid = UserDefaults.standard.string(forKey: "saved_user_uid")
         let savedEmail = UserDefaults.standard.string(forKey: "userEmail")
         if let uid = savedUid, !uid.isEmpty {
@@ -72,7 +76,11 @@ public final class FirebaseManager: ObservableObject {
 
     /// Stable account id for local storage — prefers Firebase Auth UID.
     public var resolvedUserId: String {
-        if let uid = Auth.auth().currentUser?.uid, !uid.isEmpty { return uid }
+        if FirebaseApp.app() != nil,
+           let uid = Auth.auth().currentUser?.uid,
+           !uid.isEmpty {
+            return uid
+        }
         if let uid = currentUserId, !uid.isEmpty { return uid }
         return UserDefaults.standard.string(forKey: "saved_user_uid") ?? ""
     }

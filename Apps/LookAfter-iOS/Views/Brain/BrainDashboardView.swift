@@ -71,6 +71,13 @@ struct BrainDashboardView: View {
                 orbState = .ready
             }
         }
+        .onChange(of: orbState) { _, state in
+            if state == .thinking {
+                VoiceSessionKeepAlive.begin("brain-voice-thinking")
+            } else {
+                VoiceSessionKeepAlive.end("brain-voice-thinking")
+            }
+        }
         .onChange(of: brain.isThinking) { _, thinking in
             if thinking {
                 orbState = .thinking

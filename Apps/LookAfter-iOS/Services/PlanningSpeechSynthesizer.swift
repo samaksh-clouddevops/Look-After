@@ -29,6 +29,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         appleSynthesizer.delegate = self
         cloudPlayer.onFinished = { [weak self] in
             self?.isSpeaking = false
+            VoiceSessionKeepAlive.end("speech-synthesis")
         }
         refreshActiveVoiceLabel()
     }
@@ -41,6 +42,8 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         }
 
         stop()
+
+        VoiceSessionKeepAlive.begin("speech-synthesis")
 
         if SpeechVoiceSettings.provider == .cloud, SpeechVoiceSettings.cloudAPIKey != nil {
             speakCloud(prepared)
@@ -58,6 +61,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
             appleSynthesizer.stopSpeaking(at: .immediate)
         }
         isSpeaking = false
+        VoiceSessionKeepAlive.end("speech-synthesis")
     }
 
     func previewSample() {
@@ -94,6 +98,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             isSpeaking = false
+            VoiceSessionKeepAlive.end("speech-synthesis")
             return
         }
         #endif
@@ -226,12 +231,14 @@ extension PlanningSpeechSynthesizer: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
             isSpeaking = false
+            VoiceSessionKeepAlive.end("speech-synthesis")
         }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in
             isSpeaking = false
+            VoiceSessionKeepAlive.end("speech-synthesis")
         }
     }
 }
