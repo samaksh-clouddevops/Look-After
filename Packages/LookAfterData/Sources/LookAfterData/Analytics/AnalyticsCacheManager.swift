@@ -89,6 +89,11 @@ public final class AnalyticsCacheManager: @unchecked Sendable {
         lock.lock()
         memoryBundles.removeValue(forKey: userId)
         lock.unlock()
+    }
+
+    /// Removes cached analytics from memory and disk for a user.
+    public func purge(userId: String) {
+        invalidate(userId: userId)
         local.deleteFile(named: analyticsFilename(for: userId))
     }
 

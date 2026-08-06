@@ -3,11 +3,30 @@ import Foundation
 /// Deterministic semantic understanding — no LLM. Safety baseline and offline fallback.
 public enum TaskSemanticProfileBuilder {
 
+    /// Deterministic semantics for known routines — ignores stale LLM profiles on daily anchors.
+    public static func classificationProfile(for task: LifeTask) -> TaskSemanticProfile {
+        let deterministic = build(from: task)
+        if task.tags.contains("daily-routine") || isAnchoredRoutine(deterministic) {
+            return deterministic
+        }
+        return task.semanticProfile ?? deterministic
+    }
+
+    private static func isAnchoredRoutine(_ profile: TaskSemanticProfile) -> Bool {
+        profile.semanticType == .selfCare || profile.subtype == "meal"
+    }
+
     public static func build(from task: LifeTask) -> TaskSemanticProfile {
         let corpus = normalizedCorpus(for: task)
 
         if let medication = medicationProfile(task: task, corpus: corpus) {
             return medication
+        }
+        if let selfCare = selfCareProfile(task: task, corpus: corpus) {
+            return selfCare
+        }
+        if let meal = mealRoutineProfile(task: task, corpus: corpus) {
+            return meal
         }
         if let deepWork = deepWorkProfile(task: task, corpus: corpus) {
             return deepWork
@@ -59,6 +78,70 @@ public enum TaskSemanticProfileBuilder {
     }
 
     // MARK: - Profiles
+
+    private static func selfCareProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+        let terms = ["brush", "teeth", "floss", "shower", "skincare", "hygiene", "wash face"]
+        guard terms.contains(where: { corpus.contains($0) }) else { return nil }
+
+        let isEvening = corpus.contains("evening") || corpus.contains("night")
+        let preferred: [TimeWindowPreference] = isEvening ? [.evening, .night] : [.morning]
+        let forbidden: [TimeWindowPreference] = isEvening ? [.morning, .midday] : [.night]
+
+        return TaskSemanticProfile(
+            semanticType: .selfCare,
+            subtype: task.title,
+            schedulingConstraints: [.sameTimeDaily],
+            requiredConditions: ["Daily hygiene anchor"],
+            preferredTimeWindows: preferred,
+            forbiddenTimeWindows: forbidden,
+            estimatedDuration: max(task.estimatedMinutes, 5),
+            flexibility: .low,
+            splittable: false,
+            interruptionTolerance: 0.2,
+            energyRequirement: .minimal,
+            cognitiveRequirement: .minimal,
+            recurringRules: task.recurrenceRule == .none ? nil : task.recurrenceRule.rawValue,
+            consequenceOfDelay: .moderate,
+            confidence: 0.9,
+            source: .deterministic
+        )
+    }
+
+    private static func mealRoutineProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+        let mealTerms = ["breakfast", "lunch", "dinner", "supper", "snack", "brunch", "coffee"]
+        guard mealTerms.contains(where: { corpus.contains($0) }) else { return nil }
+        guard task.tags.contains("daily-routine") || task.recurrenceRule != .none else { return nil }
+
+        let preferred: [TimeWindowPreference]
+        if corpus.contains("breakfast") || corpus.contains("coffee") || corpus.contains("brunch") {
+            preferred = [.morning]
+        } else if corpus.contains("lunch") {
+            preferred = [.midday]
+        } else if corpus.contains("snack") {
+            preferred = [.afternoon]
+        } else {
+            preferred = [.evening]
+        }
+
+        return TaskSemanticProfile(
+            semanticType: .errand,
+            subtype: "meal",
+            schedulingConstraints: [.sameTimeDaily],
+            requiredConditions: ["Daily meal anchor"],
+            preferredTimeWindows: preferred,
+            forbiddenTimeWindows: [.night],
+            estimatedDuration: max(task.estimatedMinutes, 10),
+            flexibility: .low,
+            splittable: false,
+            interruptionTolerance: 0.25,
+            energyRequirement: .minimal,
+            cognitiveRequirement: .minimal,
+            recurringRules: task.recurrenceRule.rawValue,
+            consequenceOfDelay: .low,
+            confidence: 0.88,
+            source: .deterministic
+        )
+    }
 
     private static func medicationProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
         let medicationTerms = [

@@ -1,6 +1,7 @@
 import Foundation
 import LookAfterCore
 import LookAfterData
+import LookAfterAI
 import ExecutiveBrain
 
 /// Builds Daily Briefing presentation state from brain, task, and health data.
@@ -54,6 +55,13 @@ public final class DailyBriefingViewModel: ObservableObject {
     @Published public private(set) var dayBriefing: MorningDayBriefing?
     @Published public private(set) var dayHeroSummaryLines: [String] = []
     @Published public private(set) var isLoadingDayHeroSummary = false
+    /// Chief-of-Staff narrative (max 4 sentences) + deterministic chips.
+    @Published public private(set) var chiefNarrative: String = ""
+    @Published public private(set) var chiefNarrativeSource: String = "deterministic"
+    @Published public private(set) var chiefFromCache: Bool = false
+    @Published public private(set) var snapshotChips: [BriefingSnapshotChip] = []
+    @Published public private(set) var briefingPayload: BriefingPayload?
+    @Published public private(set) var isLoadingChiefNarrative = false
     @Published public private(set) var lifeGaps: [LifeGap] = []
     @Published public private(set) var cycleData = BriefingCycleData.disabled
     @Published public private(set) var moduleInsights: [BriefingModuleInsight] = []
@@ -86,17 +94,25 @@ public final class DailyBriefingViewModel: ObservableObject {
     }
 
     public var visibleCards: [BriefingCardKind] {
-        var ordered = cardOrder.filter { !hiddenCards.contains($0) }
+        var ordered = cardOrder.filter { !hiddenCards.contains($0) || pinnedCards.contains($0) }
 
         // Replace legacy metric trio with unified snapshot when snapshot is enabled.
         if !hiddenCards.contains(.healthSnapshot) {
-            ordered.removeAll { BriefingCardKind.legacyMetricCards.contains($0) }
+            ordered.removeAll { BriefingCardKind.legacyMetricCards.contains($0) && !pinnedCards.contains($0) }
             if !ordered.contains(.healthSnapshot) {
                 if let greetingIndex = ordered.firstIndex(of: .greeting) {
                     ordered.insert(.healthSnapshot, at: greetingIndex + 1)
                 } else {
                     ordered.insert(.healthSnapshot, at: 0)
                 }
+            }
+        }
+
+        for kind in pinnedCards where !ordered.contains(kind) {
+            if let greetingIndex = ordered.firstIndex(of: .greeting) {
+                ordered.insert(kind, at: greetingIndex)
+            } else {
+                ordered.insert(kind, at: 0)
             }
         }
 
@@ -126,7 +142,16 @@ public final class DailyBriefingViewModel: ObservableObject {
         flowSurface: FlowSurface? = nil,
         heroBriefing: HeroBriefing? = nil
     ) {
-        buildGreeting(userName: userName, flowSurface: flowSurface, heroBriefing: heroBriefing)
+        greeting = BriefingProjector.projectGreeting(
+            userName: userName,
+            flowSurface: flowSurface,
+            heroBriefing: heroBriefing
+        )
+    }
+
+    public func applyProjectedSurface(_ surface: UnifiedBriefingSurface) {
+        greeting = surface.greeting
+        executiveHero = surface.executiveHero
     }
 
     public func refresh(
@@ -145,12 +170,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             brainSummary: brainVM.healthSummary,
             userId: userId
         )
-        if brainVM.healthSummary == nil, let resolvedHealth {
-            brainVM.healthSummary = resolvedHealth
-        }
 
-        buildGreeting(userName: userName, flowSurface: brainVM.flowSurface, heroBriefing: heroBriefing)
-        buildExecutiveHero(heroBriefing: heroBriefing, brainDecision: brainDecision, brainVM: brainVM, tasksVM: tasksVM)
         buildDailySummary(snapshot: brainVM.cognitiveSnapshot, flowSurface: brainVM.flowSurface)
         buildSleep(health: resolvedHealth, snapshot: brainVM.cognitiveSnapshot, available: healthKitAvailable)
         buildEnergy(snapshot: brainVM.cognitiveSnapshot, flowSurface: brainVM.flowSurface)
@@ -160,7 +180,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             healthKitAvailable: healthKitAvailable,
             healthSummary: resolvedHealth
         )
-        buildMission(tasksVM: tasksVM)
+        buildMission(tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
         buildCalendar(flowSurface: brainVM.flowSurface)
         buildHealth(health: resolvedHealth, available: healthKitAvailable)
         buildAIRecommendation(brainVM: brainVM)
@@ -176,18 +196,25 @@ public final class DailyBriefingViewModel: ObservableObject {
             tomorrowLifeTimelineEvents: tomorrowLifeTimelineEvents,
             tasksVM: tasksVM
         )
-        buildLifeGaps(tasksVM: tasksVM)
-        buildCycleData(healthSummary: resolvedHealth)
         refreshHabitCompletions()
+        buildLifeGaps(tasksVM: tasksVM, userId: userId)
+        buildCycleData(healthSummary: resolvedHealth)
         await buildDayHeroSummary(userName: userName, tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
+        await buildChiefOfStaffNarrative(userName: userName, tasksVM: tasksVM)
         await buildModuleInsights(userName: userName)
         await loadWeeklyTrends(userId: userId, tasksVM: tasksVM)
     }
 
-    /// Prefers brain cache, then loads directly from local storage (handles userId mismatches).
+    /// Prefers brain cache, then health store, then repository fallback.
     private func resolveHealthSummary(brainSummary: HealthSummary?, userId: String) async -> HealthSummary? {
         if let brainSummary, healthHasVisibleMetrics(brainSummary) {
             return brainSummary
+        }
+        if let storeSummary = HealthStore.shared.latest, healthHasVisibleMetrics(storeSummary) {
+            return storeSummary
+        }
+        if let refreshed = await HealthStore.shared.refresh(userId: userId), healthHasVisibleMetrics(refreshed) {
+            return refreshed
         }
         let canonicalId = FirebaseManager.shared.resolvedUserId
         let candidates = [canonicalId, userId].filter { !$0.isEmpty }
@@ -200,15 +227,14 @@ public final class DailyBriefingViewModel: ObservableObject {
         return try? await healthRepo.getLatest(for: "")
     }
 
-    public func toggleHabit(_ habit: BriefingHabit) {
+    public func toggleHabit(_ habit: BriefingHabit, tasksVM: TasksViewModel? = nil, userId: String = "") {
         let today = Self.todayKey
-        if habitCompletionDates[habit.id] == today {
-            habitCompletionDates.removeValue(forKey: habit.id)
-        } else {
-            habitCompletionDates[habit.id] = today
-        }
-        persistHabitCompletions()
+        _ = HabitCompletionStore.toggle(habitId: habit.id, todayKey: today)
+        habitCompletionDates = HabitCompletionStore.latestCompletionDates()
         refreshHabitCompletions()
+        if let tasksVM {
+            refreshLifeGaps(tasksVM: tasksVM, userId: userId.isEmpty ? FirebaseManager.shared.resolvedUserId : userId)
+        }
         NotificationCenter.default.post(
             name: .analyticsDataDidChange,
             object: nil,
@@ -230,6 +256,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             pinnedCards.remove(kind)
         } else {
             pinnedCards.insert(kind)
+            hiddenCards.remove(kind)
         }
         persistPreferences()
     }
@@ -643,37 +670,57 @@ public final class DailyBriefingViewModel: ObservableObject {
         postWakeState = postWake
 
         dayBriefing = MorningDayBriefingBuilder.build(
-            postWake: postWake,
-            healthSummary: healthSummary,
-            sleep: sleep,
-            executiveCapacity: executiveCapacity,
-            lifeSnapshot: lifeSnapshot,
-            lifeTimelineEvents: lifeTimelineEvents,
-            tomorrowTimelineEvents: tomorrowLifeTimelineEvents,
-            tasks: tasksVM.tasks,
-            completedToday: tasksVM.completedToday,
-            calendarData: calendar,
-            focusWindowLabel: healthSnapshot.focusWindow
+            .init(
+                postWake: postWake,
+                healthSummary: healthSummary,
+                sleep: sleep,
+                executiveCapacity: executiveCapacity,
+                lifeSnapshot: lifeSnapshot,
+                lifeTimelineEvents: lifeTimelineEvents,
+                tomorrowTimelineEvents: tomorrowLifeTimelineEvents,
+                tasks: tasksVM.tasks,
+                completedToday: tasksVM.completedToday,
+                calendarData: calendar,
+                focusWindowLabel: healthSnapshot.focusWindow
+            )
         )
     }
 
-    private func buildMission(tasksVM: TasksViewModel) {
-        let allTasks = tasksVM.tasks + tasksVM.completedToday + tasksVM.recurrenceTemplates
+    private func buildMission(tasksVM: TasksViewModel, lifeTimelineEvents: [LifeTimelineEvent] = []) {
+        let allTasks = tasksVM.schedulingContext
         let now = Date()
         let calendar = Calendar.current
 
-        let scheduledCompleted = LifeTimelinePresenter.completedTasksScheduledForToday(
-            from: tasksVM.completedToday,
-            allTasks: allTasks,
-            now: now,
-            calendar: calendar
-        )
-        let scheduledActive = LifeTimelinePresenter.tasksScheduledForToday(
-            from: tasksVM.tasks.filter { $0.status.isActive },
-            allTasks: allTasks,
-            now: now,
-            calendar: calendar
-        )
+        let scheduledCompleted: [LifeTask]
+        let scheduledActive: [LifeTask]
+
+        if !lifeTimelineEvents.isEmpty {
+            let completedIds = Set(
+                lifeTimelineEvents
+                    .filter { $0.isCompleted && $0.id.hasPrefix("task-") }
+                    .compactMap { String($0.id.dropFirst(5)) }
+            )
+            let activeIds = Set(
+                lifeTimelineEvents
+                    .filter { !$0.isCompleted && $0.id.hasPrefix("task-") }
+                    .compactMap { String($0.id.dropFirst(5)) }
+            )
+            scheduledCompleted = tasksVM.completedToday.filter { completedIds.contains($0.id) }
+            scheduledActive = tasksVM.tasks.filter { activeIds.contains($0.id) }
+        } else {
+            scheduledCompleted = LifeTimelinePresenter.completedTasksScheduledForToday(
+                from: tasksVM.completedToday,
+                allTasks: allTasks,
+                now: now,
+                calendar: calendar
+            )
+            scheduledActive = LifeTimelinePresenter.tasksScheduledForToday(
+                from: tasksVM.tasks.filter { $0.status.isActive },
+                allTasks: allTasks,
+                now: now,
+                calendar: calendar
+            )
+        }
 
         let completedIds = Set(scheduledCompleted.map(\.id))
         let pending = scheduledActive.filter { !completedIds.contains($0.id) }
@@ -1020,17 +1067,15 @@ public final class DailyBriefingViewModel: ObservableObject {
     }
 
     private func loadHabitState() {
-        if let data = UserDefaults.standard.data(forKey: StorageKey.habitCompletions),
-           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
-            habitCompletionDates = decoded
-        }
+        habitCompletionDates = HabitCompletionStore.latestCompletionDates()
         refreshHabitCompletions()
     }
 
     private func persistHabitCompletions() {
-        if let data = try? JSONEncoder().encode(habitCompletionDates) {
-            UserDefaults.standard.set(data, forKey: StorageKey.habitCompletions)
+        let history = habitCompletionDates.reduce(into: [String: [String]]()) { partial, entry in
+            partial[entry.key] = [entry.value]
         }
+        HabitCompletionStore.save(history)
     }
 
     private func refreshHabitCompletions() {
@@ -1042,15 +1087,40 @@ public final class DailyBriefingViewModel: ObservableObject {
         }
     }
 
-    private func buildLifeGaps(tasksVM: TasksViewModel) {
+    /// Recomputes life-gap cards from the latest task state — call after task completion.
+    public func refreshLifeGaps(tasksVM: TasksViewModel, userId: String) {
+        refreshHabitCompletions()
+        buildLifeGaps(tasksVM: tasksVM, userId: userId)
+    }
+
+    private func buildLifeGaps(tasksVM: TasksViewModel, userId: String) {
         guard let model = LifeModelStore.load(), model.hasContent else {
             lifeGaps = []
             return
         }
+
+        let canonicalId = FirebaseManager.shared.resolvedUserId
+        var candidateIds = Set<String>()
+        if !canonicalId.isEmpty { candidateIds.insert(canonicalId) }
+        if !userId.isEmpty { candidateIds.insert(userId) }
+        candidateIds.insert("")
+
+        var tasksByID: [String: LifeTask] = [:]
+        for candidate in candidateIds {
+            for task in tasksVM.localAllTasks(userId: candidate) {
+                tasksByID[task.id] = task
+            }
+        }
+        // In-memory lists win — they carry optimistic completions before disk/cache catches up.
+        for task in tasksVM.tasks + tasksVM.recurrenceTemplates + tasksVM.completedToday {
+            tasksByID[task.id] = task
+        }
+
+        let habitsToday = Set(habits.filter(\.isCompletedToday).map(\.id))
         lifeGaps = LifeGapDetector.detect(
             model: model,
-            completedTasks: tasksVM.completedToday,
-            activeTasks: tasksVM.tasks
+            allTasks: Array(tasksByID.values),
+            habitsCompletedToday: habitsToday
         )
     }
 
@@ -1076,6 +1146,91 @@ public final class DailyBriefingViewModel: ObservableObject {
             lifeTimelineEvents: lifeTimelineEvents
         )
         dayHeroSummaryLines = await BriefingDayHeroSummaryGenerator.generate(input)
+    }
+
+    /// Payload-to-Prompt Chief of Staff narrative — cached, sanitized, non-blocking.
+    private func buildChiefOfStaffNarrative(userName: String, tasksVM: TasksViewModel) async {
+        isLoadingChiefNarrative = true
+        defer { isLoadingChiefNarrative = false }
+
+        let parked = ParkedTaskQueueStore.shared
+        _ = parked.applyFluidDecay()
+        let recovery = ParkedTaskRecoveryService.shared
+        let decayedCount = parked.snapshot().decayedEntries.count
+
+        // Macro cascade actions only (CascadeDistiller → overnight log).
+        let distilledActions = CascadeActionLog.shared.systemActions()
+        let distilledMutations = CascadeDistiller.mutationFacts(from: distilledActions)
+
+        let payload = BriefingPayloadCompiler.compile(
+            .init(
+                energy: energy.energyLevel,
+                energyPercent: energy.currentEnergyPercent,
+                sleepHours: sleep.totalHours,
+                capacityBandLabel: executiveCapacity.band.displayLabel,
+                tasks: tasksVM.tasks + tasksVM.completedToday,
+                cascadeDecisions: [],
+                parkedRecoverableCount: parked.candidatesForReintegration(limit: 50).count,
+                somedayDecayCount: decayedCount,
+                telemetryLearnings: recovery.briefingNotes().map { BriefingPIISanitizer.scrub($0) },
+                nextEventTitle: calendar.nextEventTitle,
+                minutesUntilNextEvent: calendar.minutesUntilStart,
+                resurrectedTaskIDs: recovery.resurrectedIDs()
+            )
+        )
+        // Prefer distilled mutation facts when overnight cascade ran.
+        var payloadWithMutations = payload
+        if !distilledMutations.isEmpty {
+            payloadWithMutations.mutations = distilledMutations
+            // Tallies from distilled codes when statuses not yet on tasks.
+            payloadWithMutations.supersededTaskCount = max(
+                payload.supersededTaskCount,
+                distilledMutations.filter { $0.code == "superseded" }.count
+            )
+            payloadWithMutations.expiredTaskCount = max(
+                payload.expiredTaskCount,
+                distilledMutations.filter { $0.code == "expired" }.count
+            )
+            let recovery = payload.hasRecoveryBlockToday
+                || distilledActions.contains { $0.lowercased().contains("sabotage") }
+            payloadWithMutations.hasRecoveryBlockToday = recovery
+            payloadWithMutations.structureFingerprint = BriefingPayload.fingerprint(for: payloadWithMutations)
+        }
+        let finalPayload = distilledMutations.isEmpty ? payload : payloadWithMutations
+        briefingPayload = finalPayload
+        snapshotChips = finalPayload.snapshotChips()
+
+        // Instant fallback while AI may be in-flight (never looks broken).
+        if chiefNarrative.isEmpty {
+            chiefNarrative = finalPayload.deterministicNarrative(userName: userName)
+            chiefNarrativeSource = "deterministic"
+        }
+
+        let hasKey = !GLMService.shared.keyManagerAccess.allRecords().filter(\.isEnabled).isEmpty
+            || GLMService.shared.keyManagerAccess.resolveAPIKey() != nil
+
+        // AIRouter: distilled systemActions → immutable system prompt (no raw cascade spam).
+        let routerPayload = BriefingRouterPayload(from: finalPayload)
+        let compiled = BriefingPromptGenerator.compile(routerPayload)
+
+        let result = await ChiefOfStaffBriefingSynthesizer.synthesize(
+            payload: finalPayload,
+            userName: userName,
+            forceRefresh: false,
+            glmComplete: hasKey
+                ? { _, _ in
+                    try await GLMService.shared.complete(
+                        prompt: compiled.user,
+                        systemPrompt: compiled.system,
+                        tier: .economy
+                    )
+                }
+                : nil
+        )
+        chiefNarrative = result.narrative
+        chiefNarrativeSource = result.source
+        chiefFromCache = result.fromCache
+        snapshotChips = result.chips
     }
 
     private func buildModuleInsights(userName: String) async {

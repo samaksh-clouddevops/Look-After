@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 import LookAfterCore
 
 /// View model for the Executive Planning Conversation on Today.
@@ -30,9 +31,23 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     private let replanEngine = DayReplanEngine()
     private let applier = PlanMutationApplier()
     private var medications: [Medication] = []
+    private weak var timelineService: TimelineService?
+    private var cancellables = Set<AnyCancellable>()
 
     public init(engine: LLMPlanningEngine = LLMPlanningEngine()) {
         self.engine = engine
+    }
+
+    /// Subscribes timeline row state to the shared timeline service.
+    public func bind(timelineService: TimelineService) {
+        self.timelineService = timelineService
+        cancellables.removeAll()
+        timelineService.$todayRows
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$timelineRows)
+        timelineService.$tomorrowRows
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$tomorrowTimelineRows)
     }
 
     /// Wipes planning conversation and timeline UI state.
@@ -58,25 +73,28 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     }
 
     public func bootstrapTimeline(from events: [LifeTimelineEvent], now: Date = Date()) {
-        guard timelineRows.isEmpty else { return }
-        timelineRows = Self.rows(from: events, now: now)
+        guard timelineService == nil else { return }
+        timelineRows = TimelineRowProjector.rows(from: events, now: now)
     }
 
     public func refreshTimeline(from events: [LifeTimelineEvent], now: Date = Date()) {
+        guard timelineService == nil else { return }
         recentDeltas = []
-        let built = Self.rows(from: events, now: now)
+        let built = TimelineRowProjector.rows(from: events, now: now)
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
             timelineRows = built
         }
     }
 
     public func bootstrapTomorrowTimeline(from events: [LifeTimelineEvent]) {
+        guard timelineService == nil else { return }
         guard tomorrowTimelineRows.isEmpty else { return }
-        tomorrowTimelineRows = Self.previewRows(from: events)
+        tomorrowTimelineRows = TimelineRowProjector.previewRows(from: events)
     }
 
     public func refreshTomorrowTimeline(from events: [LifeTimelineEvent]) {
-        let built = Self.previewRows(from: events)
+        guard timelineService == nil else { return }
+        let built = TimelineRowProjector.previewRows(from: events)
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
             tomorrowTimelineRows = built
         }
@@ -84,6 +102,10 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
     /// Instant timeline feedback when the user completes a task from the live timeline.
     public func markTimelineTaskCompleted(taskId: String) {
+        if let timelineService {
+            timelineService.applyPatch(.completed(taskId: taskId))
+            return
+        }
         guard let index = timelineRows.firstIndex(where: { $0.taskId == taskId && !$0.isCompleted }) else { return }
         withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
             timelineRows[index].isCompleted = true
@@ -96,6 +118,10 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
     /// Instant timeline feedback when a task is rescheduled from the live timeline.
     public func markTimelineTaskRescheduled(taskId: String, to newTime: Date) {
+        if let timelineService {
+            timelineService.applyPatch(.rescheduled(taskId: taskId, to: newTime))
+            return
+        }
         guard let index = timelineRows.firstIndex(where: { $0.taskId == taskId }) else { return }
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
@@ -166,6 +192,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             if suggestion.deferToTomorrow {
                 task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
                 task.scheduledTime = nil
+                task.scheduledEndTime = nil
             } else if let hour = suggestion.startHour, let minute = suggestion.startMinute,
                       let time = PlanningSchedulePolicy.validatedSchedule(
                         hour: hour,
@@ -174,6 +201,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                       ) {
                 task.scheduledDate = calendar.startOfDay(for: Date())
                 task.scheduledTime = time
+                let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+                task.scheduledEndTime = time.addingTimeInterval(TimeInterval(duration * 60))
             }
             tasksVM.updateTask(task)
         }
@@ -457,7 +486,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         multiDayDraft = nil
         multiDayPlanning = nil
 
-        let todaySlice = draft.slices.sorted { $0.dayIndex < $1.dayIndex }.first
+        let todaySlice = draft.slices.min { $0.dayIndex < $1.dayIndex }
         let reply = "Done — \(draft.title) is spread across \(draft.dayCount) days. Today: \(todaySlice?.title ?? draft.title)."
         turns.append(PlanningConversationTurn(role: .assistant, text: appendApplyNotices(to: reply, applyResult: applyResult)))
         if inputMode == .voice {
@@ -471,12 +500,17 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     }
 
     /// Active multi-day goal banner data for Today view.
-    public var activeMultiDayBanner: (title: String, dayIndex: Int, dayCount: Int, sliceTitle: String)? {
+    public var activeMultiDayBanner: MultiDayBannerData? {
         guard let draft = multiDayDraft ?? multiDaySession?.draft else { return nil }
         let sorted = draft.slices.sorted { $0.dayIndex < $1.dayIndex }
         let todaySlice = sorted.first { $0.dayIndex == 0 } ?? sorted.first
         guard let slice = todaySlice else { return nil }
-        return (draft.title, slice.dayIndex + 1, draft.dayCount, slice.title)
+        return MultiDayBannerData(
+            title: draft.title,
+            dayIndex: slice.dayIndex + 1,
+            dayCount: draft.dayCount,
+            sliceTitle: slice.title
+        )
     }
 
     public func setInputMode(_ mode: PlanningInputMode) {
@@ -518,102 +552,6 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         return merged.sorted { $0.sortDate < $1.sortDate }
     }
 
-    private static func rows(from events: [LifeTimelineEvent], now: Date) -> [ExecutivePlanningTimelineRow] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-
-        let sorted = events.sorted { $0.date < $1.date }
-        let currentIndex = currentEventIndex(in: sorted, now: now)
-
-        return sorted.enumerated().map { index, event in
-            row(from: event, index: index, currentIndex: currentIndex, now: now, formatter: formatter, isPreview: false)
-        }
-    }
-
-    /// Tomorrow preview — everything is upcoming; no "now" or "past" markers.
-    static func previewRows(from events: [LifeTimelineEvent]) -> [ExecutivePlanningTimelineRow] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let sorted = events.sorted { $0.date < $1.date }
-        return sorted.enumerated().map { index, event in
-            row(from: event, index: index, currentIndex: nil, now: Date(), formatter: formatter, isPreview: true)
-        }
-    }
-
-    private static func row(
-        from event: LifeTimelineEvent,
-        index: Int,
-        currentIndex: Int?,
-        now: Date,
-        formatter: DateFormatter,
-        isPreview: Bool
-    ) -> ExecutivePlanningTimelineRow {
-        let end = eventEndDate(event)
-        let endLabel = formatter.string(from: end)
-        let rangeLabel = ScheduleTimeFormatting.rangeLabel(from: event.date, to: end)
-        let isPast = !isPreview && !event.isCompleted && end < now
-        let isCompleted = event.isCompleted
-        let isNow = !isPreview && !isCompleted && !isPast && currentIndex == index
-
-        return ExecutivePlanningTimelineRow(
-            id: event.id,
-            sortDate: event.date,
-            timeLabel: formatter.string(from: event.date),
-            endTimeLabel: endLabel,
-            scheduleRangeLabel: rangeLabel,
-            title: event.title,
-            subtitle: previewSubtitle(for: event, isPast: isPast, isCompleted: isCompleted, isPreview: isPreview),
-            detailLines: event.detailLines,
-            kind: event.kind,
-            isNow: isNow,
-            isCompleted: isCompleted,
-            isPast: isPast,
-            taskId: Self.taskId(from: event.id),
-            estimatedMinutes: event.estimatedMinutes,
-            completedAt: event.completedAt,
-            isFixedEvent: event.isFixed
-        )
-    }
-
-    private static func previewSubtitle(
-        for event: LifeTimelineEvent,
-        isPast: Bool,
-        isCompleted: Bool,
-        isPreview: Bool
-    ) -> String {
-        if isPreview {
-            if event.isFixed { return "Fixed commitment" }
-            return event.subtitle.isEmpty ? "Planned" : event.subtitle
-        }
-        return subtitle(for: event, isPast: isPast, isCompleted: isCompleted)
-    }
-
-    private static func subtitle(for event: LifeTimelineEvent, isPast: Bool, isCompleted: Bool) -> String {
-        if isCompleted { return "Done" }
-        if isPast { return "Window passed" }
-        return event.subtitle
-    }
-
-    private static func taskId(from eventId: String) -> String? {
-        guard eventId.hasPrefix("task-") else { return nil }
-        let id = String(eventId.dropFirst(5))
-        return id.isEmpty ? nil : id
-    }
-
-    /// Event in progress, or the next upcoming one — drives the glowing timeline dot.
-    private static func currentEventIndex(in events: [LifeTimelineEvent], now: Date) -> Int? {
-        for (index, event) in events.enumerated() {
-            guard !event.isCompleted else { continue }
-            let end = eventEndDate(event)
-            if event.date <= now, now <= end { return index }
-        }
-        return events.firstIndex { !$0.isCompleted && $0.date > now }
-    }
-
-    private static func eventEndDate(_ event: LifeTimelineEvent) -> Date {
-        event.resolvedEndDate()
-    }
-
     /// Parses "h:mm a" labels from planner deltas into today's timeline order.
     private static func sortDate(from timeLabel: String, reference: Date) -> Date {
         let formatter = DateFormatter()
@@ -644,8 +582,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
         let nextMeeting = timelineItems
             .filter { $0.kind == .meeting && $0.date > Date() }
-            .sorted { $0.date < $1.date }
-            .first
+            .min { $0.date < $1.date }
 
         let meetingMinutes: Int?
         if let nextMeeting {

@@ -88,16 +88,13 @@ struct AppFeatureTourOverlay: View {
     ) -> some View {
         cardContent
             .frame(width: layoutWidth, alignment: .topLeading)
-            .background(
-                GeometryReader { cardGeo in
-                    Color.clear.preference(
-                        key: TourCardSizeKey.self,
-                        value: cardGeo.size
-                    )
-                }
-            )
-            .onPreferenceChange(TourCardSizeKey.self) { size in
-                applyMeasuredCardSize(size, geo: geo)
+            .background {
+                Color.clear
+                    .onGeometryChange(for: CGSize.self) { proxy in
+                        proxy.size
+                    } action: { size in
+                        applyMeasuredCardSize(size, geo: geo)
+                    }
             }
             .overlay {
                 if let proposal, proposal.arrowEdge != .none, let localHighlight {
@@ -331,14 +328,6 @@ struct AppFeatureTourOverlay: View {
 }
 
 // MARK: - Supporting views
-
-private struct TourCardSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        let next = nextValue()
-        if next.width > 1, next.height > 1 { value = next }
-    }
-}
 
 private struct TourArrowView: View {
     let edge: TourArrowEdge

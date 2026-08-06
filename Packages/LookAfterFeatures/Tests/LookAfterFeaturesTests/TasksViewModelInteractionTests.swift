@@ -204,6 +204,10 @@ final class InMemoryTaskStore: TaskStoring {
         TaskListSnapshot.make(from: tasks.filter { $0.userId == userId || userId.isEmpty })
     }
 
+    func localAllTasks(for userId: String) -> [LifeTask] {
+        tasks.filter { $0.userId == userId || userId.isEmpty }
+    }
+
     func getTaskLists(for userId: String) async throws -> TaskListSnapshot {
         localSnapshot(for: userId)
     }
@@ -213,7 +217,7 @@ final class InMemoryTaskStore: TaskStoring {
     }
 
     func getActive(for userId: String) async throws -> [LifeTask] {
-        try await getAll(for: userId).filter { $0.status.isActive && $0.isRecurrenceTemplate != true }
+        try await getTaskLists(for: userId).active
     }
 
     func getCompletedToday(for userId: String) async throws -> [LifeTask] {

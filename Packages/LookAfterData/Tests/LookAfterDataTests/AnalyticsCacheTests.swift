@@ -84,7 +84,7 @@ final class AnalyticsCacheTests: XCTestCase {
         let userId = "incremental-\(UUID().uuidString)"
         let service = BackgroundAnalyticsService(
             engine: PersonalAnalyticsEngine(fetchBehaviorEvents: { [] }),
-            taskRepo: TaskRepository(),
+            taskStore: TaskStore(taskRepo: TaskRepository()),
             healthRepo: HealthSummaryRepository(),
             fetchBehaviorEvents: { [] }
         )

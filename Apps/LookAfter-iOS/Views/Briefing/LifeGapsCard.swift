@@ -16,7 +16,7 @@ struct LifeGapsCard: View {
                     Text("Easy to overlook")
                         .textStyleSectionLabel()
 
-                    Text("These haven't made it onto your calendar lately.")
+                    Text("These haven't been logged lately.")
                         .textStyleCaption()
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)

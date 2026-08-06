@@ -30,7 +30,6 @@ final class LifeProfileNameExtractorTests: XCTestCase {
     }
 
     func testResolvedDisplayNamePrefersSettingsOverride() {
-        UserDefaults.standard.set("Manual Name", forKey: "userName")
         defer { UserDefaults.standard.removeObject(forKey: "userName") }
 
         var profile = UserLifeProfile()
@@ -38,6 +37,8 @@ final class LifeProfileNameExtractorTests: XCTestCase {
         profile.preferredName = "Alex"
         UserLifeProfileStore.save(profile)
 
+        // Settings override is written after profile sync (user edit in Settings).
+        UserDefaults.standard.set("Manual Name", forKey: "userName")
         XCTAssertEqual(UserLifeProfileStore.resolvedDisplayName(), "Manual Name")
     }
 

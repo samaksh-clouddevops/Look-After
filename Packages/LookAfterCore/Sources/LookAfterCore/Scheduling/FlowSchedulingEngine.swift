@@ -84,5 +84,4 @@ public struct FlowSchedulingEngine: FlowSchedulingEngineProtocol {
             actionType: state.actionType
         )
     }
-
 }

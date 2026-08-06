@@ -47,7 +47,7 @@ struct APIKeysSettingsView: View {
                     }
                 }
 
-                Section {
+                Section(content: {
                     if viewModel.keys.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("No API keys yet")
@@ -70,25 +70,25 @@ struct APIKeysSettingsView: View {
                         Label("Add Key", systemImage: "plus.circle.fill")
                     }
                     .listRowBackground(Color.white.opacity(0.05))
-                } header: {
+                }, header: {
                     Text("API Keys")
-                } footer: {
+                }, footer: {
                     Text("\(UserFacingCopy.productName) uses GLM 5.2 (z.ai), not Gemini. Old Gemini keys were migrated here but will not work — delete them and add a GLM key.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
                 if !viewModel.keys.isEmpty {
-                    Section {
+                    Section(content: {
                         Button("Remove All Keys", role: .destructive) {
                             viewModel.clearAllKeys()
                         }
                         .listRowBackground(Color.white.opacity(0.05))
-                    } footer: {
+                    }, footer: {
                         Text("Clears Keychain secrets and legacy Gemini storage. Use this before adding your z.ai GLM key.")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
-                    }
+                    })
                 }
             }
             .scrollContentBackground(.hidden)
@@ -323,20 +323,20 @@ private struct APIKeyEditorSheet: View {
     var body: some View {
         NavigationStack {
             PremiumForm {
-                Section {
+                Section(content: {
                     TextField("Label (e.g. Personal, Backup)", text: $name)
                     SecureField("GLM API key", text: $secret)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
-                } footer: {
+                }, footer: {
                     if case .edit = mode {
                         Text("Leave the key field blank to keep the existing secret.")
                     } else {
                         Text("Get a key at z.ai")
                     }
-                }
+                })
             }
             .navigationTitle(mode.title)
             #if os(iOS)

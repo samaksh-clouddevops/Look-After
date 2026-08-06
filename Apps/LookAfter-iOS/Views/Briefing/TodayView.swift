@@ -45,6 +45,7 @@ struct TodayView: View {
     @State private var selectedMetricKind: TodayMetricKind?
     @State private var selectedCalendarDate = Calendar.current.startOfDay(for: Date())
     @State private var expandedPriorityId: String?
+    @State private var timelineBlockScrollDisabled = false
 
     var body: some View {
         timelineSection
@@ -126,11 +127,15 @@ struct TodayView: View {
     }
 
     private var lifeTimelineSignature: String {
-        "\(lifeTimelineEvents.count)|\(lifeTimelineEvents.first?.id ?? "")|\(lifeTimelineEvents.last?.id ?? "")"
+        lifeTimelineEvents
+            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))|\($0.isCompleted)|\($0.subtitle)" }
+            .joined(separator: ";")
     }
 
     private var tomorrowLifeTimelineSignature: String {
-        "\(tomorrowLifeTimelineEvents.count)|\(tomorrowLifeTimelineEvents.first?.id ?? "")|\(tomorrowLifeTimelineEvents.last?.id ?? "")"
+        tomorrowLifeTimelineEvents
+            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))|\($0.isCompleted)|\($0.subtitle)" }
+            .joined(separator: ";")
     }
 
     private var timelineSection: some View {
@@ -198,6 +203,8 @@ struct TodayView: View {
                 .safeAreaPadding(.top, DesignSystem.spacingSM)
                 .padding(.bottom, scrollBottomInset)
             }
+            .scrollDisabled(timelineBlockScrollDisabled)
+            .onPreferenceChange(TimelineBlockScrollDisabledKey.self) { timelineBlockScrollDisabled = $0 }
             .refreshable {
                 await onRefresh()
             }
@@ -756,9 +763,9 @@ private struct TodayWhyAffordance: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Button {
+            Button(action: {
                 withAnimation(.easeInOut(duration: 0.22)) { isExpanded.toggle() }
-            } label: {
+            }, label: {
                 HStack(spacing: DesignSystem.spacingSM) {
                     Image(systemName: "questionmark.circle")
                         .font(.system(size: 14, weight: .medium))
@@ -769,7 +776,7 @@ private struct TodayWhyAffordance: View {
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(DesignSystem.textMuted)
-            }
+            })
             .buttonStyle(.plain)
 
             if isExpanded, let disclosure = content.disclosure {

@@ -18,7 +18,7 @@ struct ExperienceRootView: View {
         ZStack {
             PremiumBackground()
 
-            LookAfterMasterCanvas()
+            LookAfterRootCanvas()
                 .environmentObject(featureTour)
                 .transition(.opacity)
         }

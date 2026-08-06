@@ -21,7 +21,7 @@ struct OnboardingView: View {
     @State private var workEndTime = Self.defaultWorkEnd
     @State private var focusPreference: FocusTimePreference = .notSure
     @State private var targetSleepHours: Double = 8.0
-    @State private var adhdFocusChallenge = "Task initiation"
+    @State private var adhdFocusChallenge = ADHDFocusChallenge.defaultValue.rawValue
     @State private var userKeyGoals = ""
     @State private var enableHealth = true
     @State private var trackCycle = false
@@ -38,14 +38,7 @@ struct OnboardingView: View {
 
     private var aiAvailable: Bool { GLMService.shared.hasConfiguredAPIKey }
 
-    private let adhdChallenges = [
-        "Task initiation",
-        "Time blindness",
-        "Hyperfocus",
-        "Overwhelm",
-        "Working memory",
-        "Emotional regulation"
-    ]
+    private let adhdChallenges = ADHDFocusChallenge.allCases
 
     var body: some View {
         ZStack {
@@ -166,8 +159,8 @@ struct OnboardingView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(DesignSystem.textSecondary)
                 Picker("Focus challenge", selection: $adhdFocusChallenge) {
-                    ForEach(adhdChallenges, id: \.self) { challenge in
-                        Text(challenge).tag(challenge)
+                    ForEach(adhdChallenges) { challenge in
+                        Text(challenge.label).tag(challenge.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
@@ -194,12 +187,12 @@ struct OnboardingView: View {
 
             VStack(spacing: 10) {
                 ForEach(UserGender.allCases) { gender in
-                    Button {
+                    Button(action: {
                         selectedGender = gender
                         if gender != .female {
                             trackCycle = false
                         }
-                    } label: {
+                    }, label: {
                         HStack {
                             Text(gender.label)
                                 .font(.system(size: 15, weight: .medium))
@@ -217,7 +210,7 @@ struct OnboardingView: View {
                                       ? DesignSystem.accentPrimary.opacity(0.15)
                                       : DesignSystem.backgroundElevated)
                         )
-                    }
+                    })
                     .buttonStyle(.plain)
                 }
             }
@@ -321,9 +314,9 @@ struct OnboardingView: View {
 
             if enableHealth {
                 if healthSync.isAvailable {
-                    Button {
+                    Button(action: {
                         beginHealthConnect()
-                    } label: {
+                    }, label: {
                         HStack {
                             Image(systemName: "heart.text.square.fill")
                             Text(healthConnectButtonTitle)
@@ -331,7 +324,7 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
-                    }
+                    })
                     .buttonStyle(.plain)
 
                     if healthSync.syncPhase == .complete {
@@ -402,13 +395,13 @@ struct OnboardingView: View {
 
                 FlowLayout(spacing: 8) {
                     ForEach(CycleSymptomCatalog.common, id: \.self) { symptom in
-                        Button {
+                        Button(action: {
                             if selectedCycleSymptoms.contains(symptom) {
                                 selectedCycleSymptoms.remove(symptom)
                             } else {
                                 selectedCycleSymptoms.insert(symptom)
                             }
-                        } label: {
+                        }, label: {
                             Text(symptom)
                                 .font(.system(size: 12))
                                 .padding(.horizontal, 10)
@@ -416,7 +409,7 @@ struct OnboardingView: View {
                                 .background(
                                     Capsule().fill(selectedCycleSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.backgroundElevated)
                                 )
-                        }
+                        })
                         .buttonStyle(.plain)
                     }
                 }
@@ -598,7 +591,7 @@ struct OnboardingView: View {
             userName = UserLifeProfileStore.load().preferredName
         }
         targetSleepHours = UserDefaults.standard.object(forKey: "targetSleepHours") as? Double ?? 8.0
-        adhdFocusChallenge = UserDefaults.standard.string(forKey: "adhdFocusChallenge") ?? adhdFocusChallenge
+        adhdFocusChallenge = ADHDFocusChallenge.load().rawValue
         userKeyGoals = UserDefaults.standard.string(forKey: "userKeyGoals") ?? ""
         enableHealth = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
 
@@ -634,7 +627,7 @@ struct OnboardingView: View {
     private func persistName() {
         let trimmed = userName.trimmingCharacters(in: .whitespacesAndNewlines)
         UserDefaults.standard.set(trimmed, forKey: "userName")
-        UserDefaults.standard.set(adhdFocusChallenge, forKey: "adhdFocusChallenge")
+        ADHDFocusChallenge.resolve(adhdFocusChallenge).persist()
         UserDefaults.standard.set(userKeyGoals.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "userKeyGoals")
     }
 

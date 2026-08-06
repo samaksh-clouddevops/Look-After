@@ -73,6 +73,7 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
             BackgroundAnalyticsScheduler.shared.handleAppBackground(userId: userId)
             PostWakeSessionStore.recordBackground()
             BackgroundNotificationRefreshTask.scheduleNextRefresh()
+            BehavioralTelemetryBackgroundTask.scheduleNext()
             shell.persistResume(
                 userId: userId,
                 screen: "briefing",
@@ -212,9 +213,14 @@ private struct ExperienceRootDataModifier: ViewModifier {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .taskListDidChange)) { _ in
-                let userId = firebase.currentUserId ?? ""
-                guard !userId.isEmpty, !shell.isPerformingFactoryReset else { return }
-                shell.tasksVM.refreshFromLocal(userId: userId)
+                guard !shell.isPerformingFactoryReset else { return }
+                let userId = firebase.resolvedUserId
+                // Rebuild gaps before local snapshot refresh — optimistic completions live in memory first.
+                shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
+                if !userId.isEmpty {
+                    shell.tasksVM.refreshFromLocal(userId: userId)
+                    shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
+                }
                 shell.refreshWidgetData()
             }
     }

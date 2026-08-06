@@ -68,6 +68,92 @@ public struct TaskScheduleInterval: Sendable, Equatable {
     ) -> Date? {
         window(for: task, on: day, calendar: calendar)?.end
     }
+
+    /// Resolves when a task starts on a timeline day — combines date + time-of-day when both exist.
+    public static func resolvedStart(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        if let window = window(for: task, on: day, calendar: calendar) {
+            return window.start
+        }
+
+        if let scheduledDate = task.scheduledDate,
+           calendar.isDate(scheduledDate, inSameDayAs: day),
+           task.scheduledTime == nil {
+            return calendar.startOfDay(for: scheduledDate)
+        }
+
+        if let startTime = task.scheduledTime,
+           let combined = calendar.combine(date: day, timeFrom: startTime) {
+            if let scheduledDate = task.scheduledDate {
+                guard calendar.isDate(scheduledDate, inSameDayAs: day) else { return nil }
+            }
+            return combined
+        }
+
+        return nil
+    }
+
+    /// Resolves when a task's window ends on a timeline day.
+    public static func resolvedEnd(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        if let window = window(for: task, on: day, calendar: calendar) {
+            return window.end
+        }
+
+        if let scheduledDate = task.scheduledDate,
+           calendar.isDate(scheduledDate, inSameDayAs: day),
+           task.scheduledTime == nil {
+            return DayBoundaryPlanner.actionableDayEnd(on: day, calendar: calendar)
+        }
+
+        if let start = resolvedStart(for: task, on: day, calendar: calendar) {
+            let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+            return start.addingTimeInterval(TimeInterval(duration * 60))
+        }
+
+        return nil
+    }
+
+    /// Whether the task has a calendar day but no explicit time-of-day.
+    public static func isDateOnlySchedule(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard let scheduledDate = task.scheduledDate,
+              calendar.isDate(scheduledDate, inSameDayAs: day) else { return false }
+        return task.scheduledTime == nil
+    }
+
+    /// Midnight time-of-day usually means the user picked a day, not a clock time.
+    public static func isMidnightTimeOfDay(_ time: Date?, calendar: Calendar = .current) -> Bool {
+        guard let time else { return true }
+        return calendar.component(.hour, from: time) == 0
+            && calendar.component(.minute, from: time) == 0
+    }
+
+    /// Date-only or midnight-on-day tasks that should show as "Flexible today" on the timeline.
+    public static func isFlexibleDaySchedule(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        if isDateOnlySchedule(for: task, on: day, calendar: calendar) {
+            return true
+        }
+        guard let scheduledDate = task.scheduledDate,
+              calendar.isDate(scheduledDate, inSameDayAs: day),
+              isMidnightTimeOfDay(task.scheduledTime, calendar: calendar) else {
+            return false
+        }
+        return task.schedulingMode != .fixedTime
+    }
 }
 
 /// Formats schedule times for timeline display.
@@ -92,11 +178,18 @@ public enum ScheduleTimeFormatting {
 public extension LifeTimelineEvent {
     /// Resolves the end of this event's scheduled window.
     func resolvedEndDate(calendar: Calendar = .current) -> Date {
+        if isFlexibleToday {
+            return DayBoundaryPlanner.actionableDayEnd(on: date, calendar: calendar)
+        }
         if let parsed = ScheduleTimeFormatting.parseRangeEnd(from: subtitle, on: date, calendar: calendar) {
             return parsed
         }
         let minutes = estimatedMinutes ?? 30
         return date.addingTimeInterval(TimeInterval(minutes * 60))
+    }
+
+    public var isFlexibleToday: Bool {
+        subtitle == "Flexible today" || subtitle.hasSuffix(" · Flexible today")
     }
 
     /// Display range label preferring subtitle when it already contains a time range.

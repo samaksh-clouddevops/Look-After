@@ -102,8 +102,7 @@ public final class ExecutiveCapacityEngine {
 
         if let sleepMin = input.healthSummary?.totalSleepMinutes {
             let hours = sleepMin / 60.0
-            if hours >= 7.5 { score += 0.06 }
-            else if hours < 6 { score -= 0.1 }
+            if hours >= 7.5 { score += 0.06 } else if hours < 6 { score -= 0.1 }
         }
 
         if let hrv = input.healthSummary?.hrvAverage, hrv < 35 {
@@ -112,9 +111,7 @@ public final class ExecutiveCapacityEngine {
 
         let cal = snapshot?.calendarAvailability
         if let until = cal?.minutesUntilNextEvent {
-            if until >= 120 { score += 0.06 }
-            else if until <= 25 { score -= 0.14 }
-            else if until <= 60 { score -= 0.06 }
+            if until >= 120 { score += 0.06 } else if until <= 25 { score -= 0.14 } else if until <= 60 { score -= 0.06 }
         } else if cal?.hasOpenFlowWindow == true {
             score += 0.05
         }
@@ -159,8 +156,7 @@ public final class ExecutiveCapacityEngine {
             candidates.append((10, "Sleep was short — go easier on deep work."))
         case .unknown:
             if let hours = input.healthSummary?.totalSleepMinutes.map({ $0 / 60.0 }) {
-                if hours >= 7 { candidates.append((8, "You slept well.")) }
-                else if hours < 6 { candidates.append((9, "Short sleep is limiting focus.")) }
+                if hours >= 7 { candidates.append((8, "You slept well.")) } else if hours < 6 { candidates.append((9, "Short sleep is limiting focus.")) }
             }
         }
 

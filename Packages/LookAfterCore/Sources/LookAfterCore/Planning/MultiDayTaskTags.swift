@@ -17,3 +17,18 @@ public enum MultiDayTaskTags {
         isRoot(task) || isSlice(task)
     }
 }
+
+/// Banner presentation for an active multi-day goal.
+public struct MultiDayBannerData: Sendable, Equatable {
+    public var title: String
+    public var dayIndex: Int
+    public var dayCount: Int
+    public var sliceTitle: String
+
+    public init(title: String, dayIndex: Int, dayCount: Int, sliceTitle: String) {
+        self.title = title
+        self.dayIndex = dayIndex
+        self.dayCount = dayCount
+        self.sliceTitle = sliceTitle
+    }
+}

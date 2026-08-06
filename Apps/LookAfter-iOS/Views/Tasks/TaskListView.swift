@@ -70,26 +70,26 @@ struct TaskListView: View {
                     }
                     .minTouchTarget()
 
-                    Menu {
-                        Button {
+                    Menu(content: {
+                        Button(action: {
                             Task { await proposeReplan() }
-                        } label: {
+                        }, label: {
                             Label("Adjust schedule", systemImage: "sparkles")
-                        }
+                        })
                         .disabled(plannerVM.isScheduling)
                         .accessibilityLabel("Adjust schedule")
 
-                        Button {
+                        Button(action: {
                             Task { await proposeTomorrowPlan() }
-                        } label: {
+                        }, label: {
                             Label("Plan Tomorrow", systemImage: "sunrise")
-                        }
+                        })
                         .disabled(plannerVM.isScheduling)
-                    } label: {
+                    }, label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 22))
                             .foregroundColor(DesignSystem.textSecondary)
-                    }
+                    })
                     .minTouchTarget()
                     .accessibilityLabel("Task actions")
                 }
@@ -247,12 +247,12 @@ struct TaskListView: View {
                     .foregroundColor(DesignSystem.textMuted)
             }
             Spacer()
-            Button {
+            Button(action: {
                 Task { await proposeTomorrowPlan() }
-            } label: {
+            }, label: {
                 Label("Plan", systemImage: "sparkles")
                     .font(.system(size: 13, weight: .semibold, design: .default))
-            }
+            })
             .buttonStyle(.borderedProminent)
             .disabled(plannerVM.isScheduling)
         }
@@ -604,13 +604,13 @@ struct WeekdaySelectionView: View {
             HStack(spacing: 8) {
                 ForEach(WeekdaySelection.allSymbols, id: \.weekday) { entry in
                     let isSelected = selectedWeekdays.contains(entry.weekday)
-                    Button {
+                    Button(action: {
                         if isSelected {
                             selectedWeekdays.remove(entry.weekday)
                         } else {
                             selectedWeekdays.insert(entry.weekday)
                         }
-                    } label: {
+                    }, label: {
                         Text(String(entry.label.prefix(1)))
                             .font(.system(size: 13, weight: .bold, design: .default))
                             .frame(width: 34, height: 34)
@@ -618,7 +618,7 @@ struct WeekdaySelectionView: View {
                                 Circle().fill(isSelected ? DesignSystem.accentPrimary.opacity(0.35) : Color.white.opacity(0.08))
                             )
                             .foregroundColor(isSelected ? DesignSystem.textPrimary : DesignSystem.textMuted)
-                    }
+                    })
                     .buttonStyle(.plain)
                 }
             }

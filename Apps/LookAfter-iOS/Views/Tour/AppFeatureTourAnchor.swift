@@ -6,36 +6,42 @@ struct AppFeatureTourAnchorPayload: Equatable {
     var cornerRadius: CGFloat
 }
 
-struct AppFeatureTourFramePreferenceKey: PreferenceKey {
-    static var defaultValue: [AppFeatureTourAnchorID: AppFeatureTourAnchorPayload] = [:]
-
-    static func reduce(
-        value: inout [AppFeatureTourAnchorID: AppFeatureTourAnchorPayload],
-        nextValue: () -> [AppFeatureTourAnchorID: AppFeatureTourAnchorPayload]
-    ) {
-        value.merge(nextValue(), uniquingKeysWith: { $1 })
-    }
-}
-
 extension View {
     /// Registers this view as a guided-tour target. Frames are reported in global coordinates.
     func featureTourAnchor(_ id: AppFeatureTourAnchorID, cornerRadius: CGFloat = 16) -> some View {
-        background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: AppFeatureTourFramePreferenceKey.self,
-                    value: [
-                        id: AppFeatureTourAnchorPayload(
-                            frame: geo.frame(in: .global),
-                            cornerRadius: cornerRadius
-                        )
-                    ]
-                )
-            }
-        )
+        background {
+            FeatureTourAnchorFrameReader(id: id, cornerRadius: cornerRadius)
+        }
         .anchorPreference(key: TourScrollAnchorPreferenceKey.self, value: .bounds) { anchor in
             [id.rawValue: anchor]
         }
+    }
+}
+
+/// Reports anchor geometry directly to the tour coordinator — avoids preference churn per frame.
+private struct FeatureTourAnchorFrameReader: View {
+    @EnvironmentObject private var tour: AppFeatureTourCoordinator
+
+    let id: AppFeatureTourAnchorID
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        Color.clear
+            .onGeometryChange(for: AppFeatureTourAnchorPayload.self) { proxy in
+                AppFeatureTourAnchorPayload(
+                    frame: proxy.frame(in: .global),
+                    cornerRadius: cornerRadius
+                )
+            } action: { newPayload in
+                guard newPayload.frame.width > 0, newPayload.frame.height > 0 else {
+                    tour.clearAnchor(id)
+                    return
+                }
+                tour.reportAnchor(id: id, payload: newPayload)
+            }
+            .onDisappear {
+                tour.clearAnchor(id)
+            }
     }
 }
 

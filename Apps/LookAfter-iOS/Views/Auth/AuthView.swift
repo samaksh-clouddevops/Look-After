@@ -22,7 +22,7 @@ public struct AuthView: View {
     @State private var authSuccess: Bool = false
     @State private var welcomeName: String = ""
     
-    public var onGuestContinue: (() -> Void)? = nil
+    public var onGuestContinue: (() -> Void)?
     
     public init(onGuestContinue: (() -> Void)? = nil) {
         self.onGuestContinue = onGuestContinue
@@ -251,24 +251,24 @@ public struct AuthView: View {
         .scrollDismissesKeyboard(.interactively)
         .animation(.easeInOut(duration: 0.3), value: isLoading)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: authSuccess)
-        .alert("Sign In with Google", isPresented: $showGooglePrompt) {
+        .alert("Sign In with Google", isPresented: $showGooglePrompt, actions: {
             TextField("Google Email (e.g. name@gmail.com)", text: $ssoEmailInput)
             Button("Sign In") {
                 performSSOSignIn(provider: "Google")
             }
             Button("Cancel", role: .cancel) {}
-        } message: {
+        }, message: {
             Text("Enter your Google account email to sign in and sync your \(UserFacingCopy.productName) profile.")
-        }
-        .alert("Sign In with Apple", isPresented: $showApplePrompt) {
+        })
+        .alert("Sign In with Apple", isPresented: $showApplePrompt, actions: {
             TextField("Apple ID Email (e.g. name@icloud.com)", text: $ssoEmailInput)
             Button("Sign In") {
                 performSSOSignIn(provider: "Apple")
             }
             Button("Cancel", role: .cancel) {}
-        } message: {
+        }, message: {
             Text("Enter your Apple ID email to sign in and sync your \(UserFacingCopy.productName) profile.")
-        }
+        })
         .interactiveDismissDisabled(isLoading)
         .accessibilityIdentifier("screen-auth")
     }

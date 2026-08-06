@@ -5,9 +5,12 @@ public enum TaskListSorter {
 
     /// Today view: overdue → priority → scheduled time → created.
     /// Fixed-time events stay ordered by their scheduled start time.
-    public static func sortForToday(_ tasks: [LifeTask], calendar: Calendar = .current) -> [LifeTask] {
-        tasks.sorted { lhs, rhs in
-            compareForToday(lhs, rhs, calendar: calendar)
+    public static func sortForToday(_ tasks: [LifeTask], calendar: Calendar = .current, now: Date = Date()) -> [LifeTask] {
+        // Cache "today" once — `LifeTask.isOverdue` otherwise rebuilds Calendar.startOfDay
+        // on every comparison (O(n log n) times).
+        let todayStart = calendar.startOfDay(for: now)
+        return tasks.sorted { lhs, rhs in
+            compareForToday(lhs, rhs, calendar: calendar, todayStart: todayStart, now: now)
         }
     }
 
@@ -23,13 +26,21 @@ public enum TaskListSorter {
         }
     }
 
-    private static func compareForToday(_ lhs: LifeTask, _ rhs: LifeTask, calendar: Calendar) -> Bool {
+    private static func compareForToday(
+        _ lhs: LifeTask,
+        _ rhs: LifeTask,
+        calendar: Calendar,
+        todayStart: Date,
+        now: Date
+    ) -> Bool {
         if lhs.isFixedTimeEvent && rhs.isFixedTimeEvent {
             return (lhs.scheduledTime ?? .distantFuture) < (rhs.scheduledTime ?? .distantFuture)
         }
 
-        if lhs.isOverdue != rhs.isOverdue {
-            return lhs.isOverdue && !rhs.isOverdue
+        let lhsOverdue = isOverdue(lhs, calendar: calendar, todayStart: todayStart, now: now)
+        let rhsOverdue = isOverdue(rhs, calendar: calendar, todayStart: todayStart, now: now)
+        if lhsOverdue != rhsOverdue {
+            return lhsOverdue && !rhsOverdue
         }
 
         if lhs.isFixedTimeEvent != rhs.isFixedTimeEvent {
@@ -49,6 +60,20 @@ public enum TaskListSorter {
         }
 
         return lhs.createdAt < rhs.createdAt
+    }
+
+    private static func isOverdue(
+        _ task: LifeTask,
+        calendar: Calendar,
+        todayStart: Date,
+        now: Date
+    ) -> Bool {
+        guard task.status.isActive else { return false }
+        if let deadline = task.deadline, deadline < now { return true }
+        if let scheduledDate = task.scheduledDate {
+            return calendar.startOfDay(for: scheduledDate) < todayStart
+        }
+        return false
     }
 
     private static func flexibleSortAnchor(_ task: LifeTask) -> Date {

@@ -51,7 +51,7 @@ enum UITestLaunchConfiguration {
         }
         if ProcessInfo.processInfo.arguments.contains("-SimulateNotificationDenied") {
             var prefs = NotificationPreferencesStore.load()
-            prefs.masterEnabled = true
+            prefs.globallyEnabled = true
             NotificationPreferencesStore.save(prefs)
         }
         if let category = argumentValue(prefix: "-UIPreferredContentSizeCategory") {

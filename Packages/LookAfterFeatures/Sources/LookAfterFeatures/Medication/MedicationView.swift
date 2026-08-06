@@ -143,12 +143,12 @@ public struct MedicationView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         viewModel.deleteMedication(med)
                                         HapticManager.notification(.warning)
-                                    } label: {
+                                    }, label: {
                                         Label("Delete", systemImage: "trash")
-                                    }
+                                    })
                                 }
                                 .onTapGesture {
                                     editingMedication = med
@@ -172,14 +172,14 @@ public struct MedicationView: View {
     @ViewBuilder
     private func medicationRow(_ med: Medication) -> some View {
         HStack(spacing: 16) {
-            Button {
+            Button(action: {
                 viewModel.toggleMedication(med)
                 HapticManager.impact(.light)
-            } label: {
+            }, label: {
                 Image(systemName: med.isTaken ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 24))
                     .foregroundColor(med.isTaken ? DesignSystem.success : DesignSystem.textMuted)
-            }
+            })
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(med.name)

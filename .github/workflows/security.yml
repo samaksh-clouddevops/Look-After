@@ -1,0 +1,115 @@
+# SAST, secret scan, dependency review, SBOM
+name: Security
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master, release/*]
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  pull-requests: read
+
+jobs:
+  secret-scan:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # optional for orgs
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: true
+        continue-on-error: true
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript # repo may only get JS lockfile analysis; Swift limited on ubuntu
+          queries: security-extended
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+        continue-on-error: true
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+        continue-on-error: true
+
+  sbom:
+    name: SBOM (Syft)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: true
+          upload-artifact-retention: 30
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-spdx
+          path: sbom.spdx.json
+          retention-days: 30
+
+  package-audit:
+    name: Swift PM resolve audit
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve packages
+        run: |
+          set -euo pipefail
+          for pkg in Packages/*/Package.swift Tools/*/Package.swift; do
+            dir=$(dirname "$pkg")
+            echo "::group::resolve $dir"
+            swift package --package-path "$dir" resolve || true
+            echo "::endgroup::"
+          done
+      - name: Check for pinned-only issues
+        run: |
+          # Flag packages without Package.resolved committed (advisory)
+          missing=0
+          for dir in Packages/* Tools/*; do
+            [ -f "$dir/Package.swift" ] || continue
+            if [ ! -f "$dir/Package.resolved" ]; then
+              echo "::warning::$dir has no Package.resolved â€” reproducible builds risk"
+              missing=$((missing+1))
+            fi
+          done
+          echo "Packages missing resolved file: $missing"

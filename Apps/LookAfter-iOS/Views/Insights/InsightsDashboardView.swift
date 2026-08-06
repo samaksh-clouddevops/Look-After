@@ -64,11 +64,11 @@ public struct InsightsDashboardView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
+                    Button(action: {
                         Task { await viewModel.invalidateCache() }
-                    } label: {
+                    }, label: {
                         Image(systemName: "arrow.clockwise")
-                    }
+                    })
                     .accessibilityLabel("Refresh insights")
                 }
             }
@@ -124,9 +124,9 @@ public struct InsightsDashboardView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(InsightsTimeframe.allCases) { timeframe in
-                        Button {
+                        Button(action: {
                             viewModel.selectedTimeframe = timeframe
-                        } label: {
+                        }, label: {
                             Text(timeframe.rawValue)
                                 .font(.system(size: 12, weight: .semibold, design: .default))
                                 .padding(.horizontal, 12)
@@ -143,7 +143,7 @@ public struct InsightsDashboardView: View {
                                         ? DesignSystem.textPrimary
                                         : DesignSystem.textMuted
                                 )
-                        }
+                        })
                         .buttonStyle(.plain)
                     }
                 }

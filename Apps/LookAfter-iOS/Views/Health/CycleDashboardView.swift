@@ -189,13 +189,13 @@ struct CycleDashboardView: View {
     }
 
     private var quickLogButton: some View {
-        Button {
+        Button(action: {
             showQuickLog = true
-        } label: {
+        }, label: {
             Label("Log how you feel", systemImage: "plus.circle.fill")
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-        }
+        })
         .buttonStyle(.borderedProminent)
     }
 

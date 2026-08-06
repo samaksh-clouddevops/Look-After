@@ -70,26 +70,26 @@ struct DailyPlanView: View {
             .navigationTitle("Today’s Plan")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { isShowingAddTask = true } label: {
+                    Button(action: { isShowingAddTask = true }, label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
                             .foregroundColor(DesignSystem.textMuted)
-                    }
+                    })
                     .accessibilityLabel("Add a task for today")
                 }
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Menu {
-                        Button {
+                    Menu(content: {
+                        Button(action: {
                             Task { await proposeReplan() }
-                        } label: {
+                        }, label: {
                             Label("Adjust schedule", systemImage: "sparkles")
-                        }
+                        })
                         .disabled(viewModel.isScheduling)
                         .accessibilityLabel("Adjust schedule")
-                    } label: {
+                    }, label: {
                         Image(systemName: "ellipsis.circle")
                             .foregroundColor(DesignSystem.textSecondary)
-                    }
+                    })
                     .accessibilityLabel("Day planning actions")
                 }
             }
@@ -144,9 +144,9 @@ struct DailyPlanView: View {
                 .foregroundColor(DesignSystem.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button {
+            Button(action: {
                 Task { await proposeReplan() }
-            } label: {
+            }, label: {
                 HStack {
                     if viewModel.isScheduling { ProgressView().tint(.white) }
                     Image(systemName: "sparkles")
@@ -159,7 +159,7 @@ struct DailyPlanView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 15)
                 .background(Capsule().fill(DesignSystem.accentGradient))
-            }
+            })
             .disabled(viewModel.isScheduling || viewModel.todayTasks.isEmpty)
         }
         .elevatedSurface(padding: 20, cornerRadius: 24)
@@ -371,21 +371,21 @@ private struct VisualFocusTimer: View {
                 .foregroundColor(.white.opacity(0.76))
 
             HStack(spacing: 12) {
-                Button { isRunning.toggle() } label: {
+                Button(action: { isRunning.toggle() }, label: {
                     Label(isRunning ? "Pause" : "Resume", systemImage: isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: 16, weight: .bold, design: .default))
                         .foregroundColor(DesignSystem.backgroundPrimary)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
                         .background(Capsule().fill(.white))
-                }
-                Button { dismiss() } label: {
+                })
+                Button(action: { dismiss() }, label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 46, height: 46)
                         .background(Circle().stroke(Color.white.opacity(0.45), lineWidth: 1))
-                }
+                })
                 .accessibilityLabel("Close timer")
             }
 

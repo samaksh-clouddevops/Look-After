@@ -167,7 +167,7 @@ public struct CachedAIContextSummary: Codable, Sendable, Equatable {
             lines.append("Note: offline cached snapshot — treat as approximate")
         }
         guard !lines.isEmpty else { return "" }
-        return "BEHAVIORAL ANALYTICS:\n" + lines.map { "- \($0)" }.joined(separator: "\n")
+        return "CACHED ANALYTICS SUMMARY:\n" + lines.map { "- \($0)" }.joined(separator: "\n")
     }
 }
 

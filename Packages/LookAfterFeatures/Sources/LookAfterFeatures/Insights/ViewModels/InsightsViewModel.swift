@@ -28,11 +28,11 @@ public final class InsightsViewModel: ObservableObject {
 
     public init(
         analyticsEngine: PersonalAnalyticsEngine? = nil,
-        analyticsService: BackgroundAnalyticsService? = nil,
+        analyticsService: BackgroundAnalyticsService? = BackgroundAnalyticsService.shared,
         userId: String = ""
     ) {
         self.userId = userId
-        self.analyticsService = analyticsService ?? BackgroundAnalyticsService.shared
+        self.analyticsService = analyticsService
         if let analyticsEngine {
             self.analyticsEngine = analyticsEngine
         } else {

@@ -54,11 +54,12 @@ public enum TaskRecurrenceEngine {
     ) -> [LifeTask] {
         let day = calendar.startOfDay(for: date)
         let templates = allTasks.filter(isRecurrenceTemplate)
+        let index = OccurrenceDayIndex.build(from: allTasks, calendar: calendar)
         var results: [LifeTask] = []
 
         for template in templates {
             guard template.recurrenceOccurs(on: day, calendar: calendar) else { continue }
-            guard !hasOccurrence(for: template, on: day, in: allTasks, calendar: calendar) else { continue }
+            guard !hasStoredOccurrence(for: template, on: day, index: index, calendar: calendar) else { continue }
 
             results.append(makeOccurrence(from: template, template: template, scheduledDate: day, calendar: calendar))
         }
@@ -66,16 +67,102 @@ public enum TaskRecurrenceEngine {
         return results
     }
 
+    /// In-memory occurrences for timeline display when no live row exists yet.
+    public static func timelineProjections(
+        for allTasks: [LifeTask],
+        on date: Date,
+        calendar: Calendar = .current
+    ) -> [LifeTask] {
+        let day = calendar.startOfDay(for: date)
+        let templates = allTasks.filter(isRecurrenceTemplate)
+        let index = OccurrenceDayIndex.build(from: allTasks, calendar: calendar)
+        var results: [LifeTask] = []
+
+        for template in templates {
+            guard template.recurrenceOccurs(on: day, calendar: calendar) else { continue }
+            guard !hasActionableOccurrence(for: template, on: day, index: index, calendar: calendar) else { continue }
+            guard !template.isLifeCommitmentTask else { continue }
+            results.append(makeOccurrence(from: template, template: template, scheduledDate: day, calendar: calendar))
+        }
+
+        return results
+    }
+
+    /// Any stored row for template+day — prevents duplicate DB materialization.
+    public static func hasStoredOccurrence(
+        for template: LifeTask,
+        on date: Date,
+        in allTasks: [LifeTask],
+        calendar: Calendar = .current
+    ) -> Bool {
+        let index = OccurrenceDayIndex.build(from: allTasks, calendar: calendar)
+        return hasStoredOccurrence(for: template, on: date, index: index, calendar: calendar)
+    }
+
+    /// Active or completed row for template+day — drives timeline and task lists.
+    public static func hasActionableOccurrence(
+        for template: LifeTask,
+        on date: Date,
+        in allTasks: [LifeTask],
+        calendar: Calendar = .current
+    ) -> Bool {
+        let index = OccurrenceDayIndex.build(from: allTasks, calendar: calendar)
+        return hasActionableOccurrence(for: template, on: date, index: index, calendar: calendar)
+    }
+
+    /// Backward-compatible alias — stored rows block sync duplication.
     public static func hasOccurrence(
         for template: LifeTask,
         on date: Date,
         in allTasks: [LifeTask],
         calendar: Calendar = .current
     ) -> Bool {
-        allTasks.contains { task in
-            guard task.templateTaskId == template.id else { return false }
-            guard let scheduledDate = task.scheduledDate else { return false }
-            return calendar.isDate(scheduledDate, inSameDayAs: date)
+        hasStoredOccurrence(for: template, on: date, in: allTasks, calendar: calendar)
+    }
+
+    private static func hasStoredOccurrence(
+        for template: LifeTask,
+        on date: Date,
+        index: OccurrenceDayIndex,
+        calendar: Calendar
+    ) -> Bool {
+        !index.tasks(for: template.id, on: date, calendar: calendar).isEmpty
+    }
+
+    private static func hasActionableOccurrence(
+        for template: LifeTask,
+        on date: Date,
+        index: OccurrenceDayIndex,
+        calendar: Calendar
+    ) -> Bool {
+        index.tasks(for: template.id, on: date, calendar: calendar).contains {
+            $0.status.isActive || $0.status == .completed
+        }
+    }
+
+    /// Fast lookup of occurrence rows by template id + scheduled day.
+    private struct OccurrenceDayIndex {
+        let byTemplateDay: [String: [LifeTask]]
+
+        static func build(from allTasks: [LifeTask], calendar: Calendar) -> OccurrenceDayIndex {
+            var map: [String: [LifeTask]] = [:]
+            for task in allTasks {
+                guard !isRecurrenceTemplate(task) else { continue }
+                guard task.parentTaskId != nil else { continue }
+                guard let scheduledDate = task.scheduledDate else { continue }
+                let key = Self.key(templateId: task.templateTaskId, day: calendar.startOfDay(for: scheduledDate))
+                map[key, default: []].append(task)
+            }
+            return OccurrenceDayIndex(byTemplateDay: map)
+        }
+
+        static func key(templateId: String, day: Date) -> String {
+            "\(templateId)|\(Int(day.timeIntervalSince1970))"
+        }
+
+        func tasks(for templateId: String, on date: Date, calendar: Calendar) -> [LifeTask] {
+            let day = calendar.startOfDay(for: date)
+            return byTemplateDay[Self.key(templateId: templateId, day: day)] ?? []
         }
     }
 
@@ -88,12 +175,20 @@ public enum TaskRecurrenceEngine {
     ) -> Bool {
         if isRecurrenceTemplate(task) { return false }
 
+        if duplicateSeriesTemplate(for: task, in: allTasks) != nil {
+            return false
+        }
+
         if let parentId = task.parentTaskId,
            !allTasks.contains(where: { $0.id == parentId }) {
             return false
         }
 
-        if let seriesTemplate = duplicateSeriesTemplate(for: task, in: allTasks) {
+        // Same-title template fallback is for *legacy* duplicates only.
+        // If this row already carries an explicit recurrence rule/weekdays that
+        // differ from the template, prefer the occurrence (user override).
+        if let seriesTemplate = duplicateSeriesTemplate(for: task, in: allTasks),
+           !hasExplicitRecurrenceOverride(task, relativeTo: seriesTemplate) {
             return matchesRecurrenceSchedule(
                 using: seriesTemplate,
                 for: task,
@@ -145,6 +240,23 @@ public enum TaskRecurrenceEngine {
             guard candidate.id != task.id else { return false }
             return candidate.title.caseInsensitiveCompare(task.title) == .orderedSame
         }
+    }
+
+    /// True when the occurrence intentionally diverges from the template schedule.
+    private static func hasExplicitRecurrenceOverride(_ task: LifeTask, relativeTo template: LifeTask) -> Bool {
+        if task.recurrenceRule != .none, task.recurrenceRule != template.recurrenceRule {
+            return true
+        }
+        let taskDays = Set(task.recurrenceWeekdays ?? [])
+        let templateDays = Set(template.recurrenceWeekdays ?? [])
+        if !taskDays.isEmpty, taskDays != templateDays {
+            return true
+        }
+        if let taskInterval = task.recurrenceInterval,
+           taskInterval != template.recurrenceIntervalValue {
+            return true
+        }
+        return false
     }
 
     /// First day the recurrence series may start generating instances.
@@ -295,7 +407,7 @@ public enum TaskRecurrenceEngine {
         calendar: Calendar = .current
     ) -> LifeTask {
         let day = calendar.startOfDay(for: scheduledDate)
-        return LifeTask(
+        let occurrence = LifeTask(
             title: template.title,
             description: template.description,
             lifeArea: template.lifeArea,
@@ -318,6 +430,7 @@ public enum TaskRecurrenceEngine {
             userId: source.userId,
             semanticProfile: template.semanticProfile
         )
+        return TaskEphemeralityDefaults.applyTemplatePolicy(occurrence, from: template)
     }
 
     public static func makeNextOccurrence(

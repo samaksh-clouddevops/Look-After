@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import LookAfterCore
 import LookAfterAI
 import LookAfterData
@@ -8,7 +9,7 @@ import LookAfterHealth
 struct SettingsView: View {
     @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
-    
+
     @AppStorage("enableHealth") private var enableHealth: Bool = true
     @State private var lifeProfile = UserLifeProfileStore.load()
     @State private var lifeProfileMarkdown: String = ""
@@ -20,7 +21,7 @@ struct SettingsView: View {
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("userEmail") private var userEmail: String = ""
-    @AppStorage("adhdFocusChallenge") private var adhdFocusChallenge: String = "Task Initiation"
+    @AppStorage(ADHDFocusChallenge.storageKey) private var adhdFocusChallengeRaw = ADHDFocusChallenge.taskInitiation.rawValue
     @AppStorage("aiCoachTone") private var aiCoachTone: String = "Encouraging & Gentle"
     @AppStorage("userKeyGoals") private var userKeyGoals: String = ""
     @AppStorage("appCurrencySymbol") private var appCurrencySymbol: String = "₹"
@@ -28,6 +29,13 @@ struct SettingsView: View {
     @AppStorage("pinNowToLockScreen") private var pinNowToLockScreen = false
     @AppStorage(FlowDirectorFeature.userDefaultsKey) private var enableFlowDirector = false
     @AppStorage(AppAppearanceMode.storageKey) private var appearanceRaw = AppAppearanceMode.system.rawValue
+    @AppStorage(SpeechVoiceSettings.providerKey) private var speechProviderRaw = SpeechVoiceProvider.appleEnhanced.rawValue
+    @AppStorage(SpeechVoiceSettings.voiceIdentifierKey) private var speechVoiceIdentifier = ""
+    @AppStorage(SpeechVoiceSettings.rateKey) private var speechRate = 0.48
+    @AppStorage(SpeechVoiceSettings.pitchKey) private var speechPitch = 1.0
+    @AppStorage(SpeechVoiceSettings.autoSpeakRepliesKey) private var autoSpeakReplies = true
+    @AppStorage(SpeechVoiceSettings.spokenStyleKey) private var preferSpokenStyle = true
+    @StateObject private var speechPreview = PlanningSpeechSynthesizer()
     @StateObject private var notificationPermission = NotificationPermissionService.shared
     @State private var notificationPreferences = NotificationPreferencesStore.load()
 
@@ -61,12 +69,7 @@ struct SettingsView: View {
     @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
     @State private var aiUsageSummary = GLMUsageSummary()
     
-    private let focusChallenges = [
-        "Task Initiation",
-        "Time Blindness",
-        "Task Paralysis / Overwhelm",
-        "Hyperfocus Context Switching"
-    ]
+    private let focusChallenges = ADHDFocusChallenge.allCases
     
     private let coachTones = [
         "Encouraging & Gentle",
@@ -78,7 +81,7 @@ struct SettingsView: View {
     var body: some View {
         PremiumForm {
                 // Account & Cloud Sync
-                Section {
+                Section(content: {
                     HStack {
                         Image(systemName: "person.circle.fill")
                             .font(.system(size: 48))
@@ -112,15 +115,15 @@ struct SettingsView: View {
                         Label("Sign Out", systemImage: "arrow.right.square")
                     }
                     .listRowBackground(DesignSystem.backgroundSecondary)
-                } header: {
+                }, header: {
                     Text("Account & Cloud Sync")
-                } footer: {
+                }, footer: {
                     Text("Leave blank to use the name from your Life Profile (e.g. \"I'm Alex…\").")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
-                Section {
+                Section(content: {
                     Toggle(isOn: useSystemAppearance) {
                         Label("Match iPhone appearance", systemImage: "iphone")
                     }
@@ -134,21 +137,21 @@ struct SettingsView: View {
                         .accessibilityIdentifier("settings-dark-mode-toggle")
                         .listRowBackground(DesignSystem.backgroundSecondary)
                     }
-                } header: {
+                }, header: {
                     Text("Display")
-                } footer: {
+                }, footer: {
                     Text(appearance.usesSystemSetting
                          ? "Look After follows your iPhone light or dark setting."
                          : "Dark Mode is controlled inside the app. Turn off “Match iPhone appearance” to change it here.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
-                Section {
+                Section(content: {
                     Toggle(isOn: Binding(
-                        get: { notificationPreferences.masterEnabled },
+                        get: { notificationPreferences.globallyEnabled },
                         set: { enabled in
-                            notificationPreferences.masterEnabled = enabled
+                            notificationPreferences.globallyEnabled = enabled
                             NotificationPreferencesStore.save(notificationPreferences)
                             if enabled {
                                 Task { _ = await notificationPermission.requestAuthorization() }
@@ -161,7 +164,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings-notifications-master-toggle")
                     .listRowBackground(DesignSystem.backgroundSecondary)
 
-                    if notificationPreferences.masterEnabled {
+                    if notificationPreferences.globallyEnabled {
                         ForEach(NotificationKind.allCases.filter(\.countsTowardDailyCap)) { kind in
                             Toggle(isOn: Binding(
                                 get: { notificationPreferences.isEnabled(kind) },
@@ -192,39 +195,39 @@ struct SettingsView: View {
                     }
 
                     if notificationPermission.isDenied {
-                        Button {
+                        Button(action: {
                             notificationPermission.openSystemSettings()
-                        } label: {
+                        }, label: {
                             Label("Open iOS Settings", systemImage: "gear")
-                        }
+                        })
                         .accessibilityIdentifier("settings-notifications-open-system-settings")
                         .listRowBackground(DesignSystem.backgroundSecondary)
                     }
-                } header: {
+                }, header: {
                     Text("Notifications")
-                } footer: {
+                }, footer: {
                     Text(notificationPermission.isDenied
                          ? "Notifications are off in iOS Settings. Look After works fully without them — you won't get proactive reminders."
                          : "Up to 2 calm proactive reminders per day. Focus break alerts only fire during an active focus session.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
-                Section {
+                Section(content: {
                     Button(action: startAppTour) {
                         Label("Start tour", systemImage: "map")
                     }
                     .accessibilityIdentifier("settings-start-tour")
                     .listRowBackground(DesignSystem.backgroundSecondary)
-                } header: {
+                }, header: {
                     Text("Help")
-                } footer: {
+                }, footer: {
                     Text("Walk through Briefing, Today, Capture, Brain, and profile — useful if you started before the tour existed or want a refresher.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
-                Section {
+                Section(content: {
                     Picker("Gender", selection: Binding(
                         get: { lifeProfile.gender ?? .preferNotToSay },
                         set: { newGender in
@@ -241,19 +244,19 @@ struct SettingsView: View {
                         }
                     }
                     .listRowBackground(DesignSystem.backgroundSecondary)
-                } header: {
+                }, header: {
                     Text("Profile")
-                } footer: {
+                }, footer: {
                     Text("Cycle tracking is available when you identify as female.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
                 // AI Executive Profile & Personalization
-                Section {
-                    Picker("Primary Focus Challenge", selection: $adhdFocusChallenge) {
-                        ForEach(focusChallenges, id: \.self) { challenge in
-                            Text(challenge).tag(challenge)
+                Section(content: {
+                    Picker("Primary Focus Challenge", selection: $adhdFocusChallengeRaw) {
+                        ForEach(focusChallenges) { challenge in
+                            Text(challenge.label).tag(challenge.rawValue)
                         }
                     }
                     
@@ -272,14 +275,80 @@ struct SettingsView: View {
                             .font(.system(size: 14, design: .default))
                             .foregroundColor(DesignSystem.textSecondary)
                     }
-                } header: {
+                }, header: {
                     Text("Personal Profile")
-                } footer: {
+                }, footer: {
                     Text("This profile helps daily planning, task micro-steps, and chat adapt to your unique brain.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
-                
+                })
+
+                // Voice & Speech
+                Section(content: {
+                    Picker("Voice engine", selection: $speechProviderRaw) {
+                        ForEach(SpeechVoiceProvider.allCases.filter { $0 != .cloud }) { provider in
+                            Text(provider.title).tag(provider.rawValue)
+                        }
+                        Text(SpeechVoiceProvider.cloud.title)
+                            .tag(SpeechVoiceProvider.cloud.rawValue)
+                    }
+
+                    Picker("Voice", selection: $speechVoiceIdentifier) {
+                        Text("Automatic (best available)").tag("")
+                        ForEach(PlanningSpeechSynthesizer.availableEnglishVoices(), id: \.identifier) { voice in
+                            Text(voicePickerLabel(voice)).tag(voice.identifier)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Speaking rate")
+                            Spacer()
+                            Text(speechRateLabel)
+                                .foregroundColor(DesignSystem.textSecondary)
+                                .font(.system(size: 13))
+                        }
+                        Slider(value: $speechRate, in: 0.35...0.65, step: 0.01)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Pitch")
+                            Spacer()
+                            Text(String(format: "%.2f", speechPitch))
+                                .foregroundColor(DesignSystem.textSecondary)
+                                .font(.system(size: 13))
+                        }
+                        Slider(value: $speechPitch, in: 0.75...1.25, step: 0.01)
+                    }
+
+                    Toggle("Auto-speak AI replies", isOn: $autoSpeakReplies)
+                    Toggle("Write replies for speech", isOn: $preferSpokenStyle)
+
+                    Button {
+                        HapticManager.impact(.light)
+                        speechPreview.previewSample()
+                    } label: {
+                        Label(
+                            speechPreview.isSpeaking ? "Speaking…" : "Preview voice",
+                            systemImage: speechPreview.isSpeaking ? "speaker.wave.2.fill" : "play.circle.fill"
+                        )
+                    }
+                    .disabled(speechPreview.isSpeaking)
+
+                    if !speechPreview.activeVoiceName.isEmpty {
+                        Text("Active: \(speechPreview.activeVoiceName)")
+                            .font(.system(size: 12))
+                            .foregroundColor(DesignSystem.textMuted)
+                    }
+                }, header: {
+                    Text("Voice & Speech")
+                }, footer: {
+                    Text("Enhanced Apple voices sound more natural when downloaded in Settings → Accessibility → Spoken Content → Voices. Cloud voices are reserved for a future provider.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.textMuted)
+                })
+
                 // AI Configuration
                 Section {
                     HStack {
@@ -312,31 +381,31 @@ struct SettingsView: View {
                         .listRowBackground(DesignSystem.backgroundSecondary)
                     }
 
-                    NavigationLink {
+                    NavigationLink(destination: {
                         GLMUsageSettingsView()
-                    } label: {
+                    }, label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Label("AI Usage", systemImage: "chart.bar.doc.horizontal")
                             Text(aiUsagePreviewText)
                                 .font(.system(size: 12))
                                 .foregroundColor(DesignSystem.textSecondary)
                         }
-                    }
+                    })
                     .listRowBackground(DesignSystem.backgroundSecondary)
                     .accessibilityIdentifier("settings-ai-usage")
 
-                    NavigationLink {
+                    NavigationLink(destination: {
                         GLMConfigurationSettingsView()
-                    } label: {
+                    }, label: {
                         Label("GLM Configuration", systemImage: "cpu")
-                    }
+                    })
                     .listRowBackground(DesignSystem.backgroundSecondary)
 
-                    NavigationLink {
+                    NavigationLink(destination: {
                         APIKeysSettingsView()
-                    } label: {
+                    }, label: {
                         Label("Manage API Keys", systemImage: "key.fill")
-                    }
+                    })
                     .listRowBackground(DesignSystem.backgroundSecondary)
 
                     Text("Add a GLM API key in API Keys to enable AI features, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
@@ -352,7 +421,7 @@ struct SettingsView: View {
                 }
                 
                 // Preferences & Currency
-                Section {
+                Section(content: {
                     Picker("Default Currency", selection: $appCurrencySymbol) {
                         Text("INR (₹)").tag("₹")
                         Text("USD ($)").tag("$")
@@ -367,12 +436,12 @@ struct SettingsView: View {
                         Text("45 minutes").tag(45)
                         Text("60 minutes").tag(60)
                     }
-                } header: {
+                }, header: {
                     Text("Preferences")
-                }
+                })
                 
                 // Features
-                Section {
+                Section(content: {
                     Toggle(isOn: $enableHealth) {
                         Label("Health Tracking", systemImage: "heart.fill")
                     }
@@ -391,18 +460,18 @@ struct SettingsView: View {
                         Label("Suggested next steps", systemImage: "point.3.connected.trianglepath.dotted")
                     }
                     .tint(DesignSystem.accentPrimary)
-                } header: {
+                }, header: {
                     Text("Features")
-                } footer: {
+                }, footer: {
                     if enableFlowDirector {
                         Text("Picks your next task from calendar, energy, and deadlines — without generic category labels.")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
                     }
-                }
+                })
                 
                 if enableHealth {
-                    Section {
+                    Section(content: {
                         HStack {
                             Image(systemName: "applewatch.watchface")
                                 .font(.system(size: 28))
@@ -458,17 +527,17 @@ struct SettingsView: View {
                         }
                         .disabled(healthSync.isSyncing)
                         .listRowBackground(DesignSystem.backgroundSecondary)
-                    } header: {
+                    }, header: {
                         Text("Health Data Sync")
-                    } footer: {
+                    }, footer: {
                         Text("\(UserFacingCopy.productName) reads from the iPhone Health app, which includes metrics recorded by your Apple Watch.")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
-                    }
+                    })
                 }
 
                 if lifeProfile.gender == .female {
-                Section {
+                Section(content: {
                     Toggle(isOn: Binding(
                         get: { cyclePreferences.isEnabled },
                         set: { enabled in
@@ -481,11 +550,11 @@ struct SettingsView: View {
                     .tint(DesignSystem.accentPrimary)
 
                     if cyclePreferences.isEnabled {
-                        NavigationLink {
+                        NavigationLink(destination: {
                             CycleDashboardView()
-                        } label: {
+                        }, label: {
                             Label("Cycle dashboard", systemImage: "calendar.circle")
-                        }
+                        })
                         .listRowBackground(DesignSystem.backgroundSecondary)
 
                         Stepper("Cycle length: \(cyclePreferences.averageCycleLengthDays) days", value: Binding(
@@ -515,16 +584,16 @@ struct SettingsView: View {
                         ), displayedComponents: .date)
                         .listRowBackground(DesignSystem.backgroundSecondary)
                     }
-                } header: {
+                }, header: {
                     Text("Cycle tracking")
-                } footer: {
+                }, footer: {
                     Text("Optional. Includes menstrual data from Apple Health when enabled. \(UserFacingCopy.medicalDisclaimer)")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
                 }
                 
-                Section {
+                Section(content: {
                     Toggle(isOn: $pinNowToLockScreen) {
                         Label("Pin Next Step to Lock Screen", systemImage: "pin.fill")
                     }
@@ -546,30 +615,30 @@ struct SettingsView: View {
                         }
                     }
                     .listRowBackground(DesignSystem.backgroundSecondary)
-                } header: {
+                }, header: {
                     Text("Widgets & Lock Screen")
-                } footer: {
+                }, footer: {
                     Text("The timer pins to your Lock Screen and Dynamic Island. Pin Next Step keeps your top task visible even when the app is closed.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
                 
                 // Life Profile (compiled life model)
-                Section {
+                Section(content: {
                     LifeProfileImportView(markdown: $lifeProfileMarkdown)
 
                     workTimeRow(title: "Work starts", hour: $lifeProfile.workStartHour, minute: $lifeProfile.workStartMinute)
                     workTimeRow(title: "Work ends", hour: $lifeProfile.workEndHour, minute: $lifeProfile.workEndMinute)
-                } header: {
+                }, header: {
                     Text("Brain context")
-                } footer: {
+                }, footer: {
                     Text("Import your full life profile. The brain compiles identity, time blocks, and commitments — fixed blocks appear on Timeline automatically.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
                 // Energy Profile
-                Section {
+                Section(content: {
                     Picker("Best focus time", selection: $lifeProfile.focusTimePreference) {
                         ForEach(FocusTimePreference.allCases) { pref in
                             Text(pref.label).tag(pref)
@@ -585,12 +654,12 @@ struct SettingsView: View {
                     
                     Slider(value: $targetSleepHours, in: 5...10, step: 0.5)
                         .tint(DesignSystem.accentPrimary)
-                } header: {
+                }, header: {
                     Text("Energy Profile")
-                }
+                })
 
                 // About
-                Section {
+                Section(content: {
                     HStack {
                         Text("Version")
                         Spacer()
@@ -604,9 +673,9 @@ struct SettingsView: View {
                         Text("GLM 5.2")
                             .foregroundColor(DesignSystem.textMuted)
                     }
-                } header: {
+                }, header: {
                     Text("About \(UserFacingCopy.productName)")
-                }
+                })
             }
             .scrollContentBackground(.hidden)
             .navigationTitle("Settings")
@@ -623,6 +692,7 @@ struct SettingsView: View {
                 if userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     userName = UserLifeProfileStore.resolvedDisplayName()
                 }
+                adhdFocusChallengeRaw = ADHDFocusChallenge.normalizeStorage().rawValue
                 Task { await notificationPermission.refreshStatus() }
             }
             .onChange(of: structuredProfileSections.personality) { _, _ in syncStructuredProfileToStore() }
@@ -651,6 +721,24 @@ struct SettingsView: View {
             return "No AI usage logged today"
         }
         return "Today: \(GLMUsageSummary.formatTokenCount(aiUsageSummary.dailyTotalTokens)) tokens · \(String(format: "$%.4f", aiUsageSummary.dailyTotalUSD))"
+    }
+
+    private var speechRateLabel: String {
+        if speechRate < 0.42 { return "Slower" }
+        if speechRate > 0.55 { return "Faster" }
+        return "Natural"
+    }
+
+    private func voicePickerLabel(_ voice: AVSpeechSynthesisVoice) -> String {
+        var quality = ""
+        if #available(iOS 16.0, *) {
+            switch voice.quality {
+            case .premium: quality = " · Premium"
+            case .enhanced: quality = " · Enhanced"
+            default: break
+            }
+        }
+        return "\(voice.name) (\(voice.language))\(quality)"
     }
 
     private func refreshAIUsageSummary() {

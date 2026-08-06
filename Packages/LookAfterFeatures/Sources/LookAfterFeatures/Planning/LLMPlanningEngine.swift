@@ -77,6 +77,7 @@ public final class LLMPlanningEngine {
         Return ONLY valid JSON — no markdown fences, no prose outside JSON.
         The app executes your mutations automatically (creates tasks, updates timeline, shopping, medications).
         The "reply" field is the ONLY text the user sees — write warm plain English, never JSON or code.
+        \(SpeechVoiceSettings.preferSpokenStyle ? "\n        \(SpeechVoiceSettings.spokenDeliveryInstruction)\n        Apply SPOKEN DELIVERY rules to the \"reply\" field only." : "")
         """
     }
 
@@ -104,6 +105,7 @@ public final class LLMPlanningEngine {
         \(PlanningPromptContextBuilder.temporalBlock(now: now, profile: profile))
         \(PlanningPromptContextBuilder.schedulingRulesBlock())
         \(PlanningPromptContextBuilder.dailyRoutineBlock())
+        \(PlanningPromptContextBuilder.sleepBoundaryBlock(now: now, profile: profile))
         \(PlanningPromptContextBuilder.duplicateReuseRulesBlock())
 
         PRE-ANALYSIS (deterministic — follow this):
@@ -330,11 +332,9 @@ public final class LLMPlanningEngine {
             "i'm going to ", "im going to ", "i plan to ", "please ",
         ]
         var lowered = text.lowercased()
-        for prefix in stripPrefixes {
-            if lowered.hasPrefix(prefix) {
-                text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                lowered = text.lowercased()
-            }
+        for prefix in stripPrefixes where lowered.hasPrefix(prefix) {
+            text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            lowered = text.lowercased()
         }
 
         var parts = [text]

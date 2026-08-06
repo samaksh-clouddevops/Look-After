@@ -8,11 +8,11 @@ struct FlowWidgetProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (FlowWidgetEntry) -> Void) {
-        completion(FlowWidgetEntry(date: Date(), snapshot: WidgetDataStore.load()))
+        completion(FlowWidgetEntry(date: Date(), snapshot: AppGroupWidgetStore.load()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FlowWidgetEntry>) -> Void) {
-        let snapshot = WidgetDataStore.load()
+        let snapshot = AppGroupWidgetStore.load()
         let entry = FlowWidgetEntry(date: Date(), snapshot: snapshot)
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
         completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
@@ -40,23 +40,6 @@ struct FlowWidgetProvider: TimelineProvider {
 struct FlowWidgetEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot
-}
-
-enum WidgetDataStore {
-    private static var defaults: UserDefaults? {
-        UserDefaults(suiteName: WidgetAppGroup.identifier)
-    }
-
-    static func load() -> WidgetSnapshot {
-        guard
-            let defaults,
-            let data = defaults.data(forKey: WidgetAppGroup.snapshotKey),
-            let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
-        else {
-            return .empty
-        }
-        return snapshot
-    }
 }
 
 private enum WidgetStyle {

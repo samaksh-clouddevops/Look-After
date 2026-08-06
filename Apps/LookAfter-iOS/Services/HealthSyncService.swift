@@ -1,6 +1,7 @@
 import Foundation
 import LookAfterCore
 import LookAfterData
+import LookAfterFeatures
 import LookAfterHealth
 
 /// Overall sync outcome shown in Settings and progress UI.
@@ -419,6 +420,7 @@ final class HealthSyncService: ObservableObject {
                     try await self.healthRepo.save(summaryToSave)
                 }
             }
+            HealthStore.shared.applySaved(summaryToSave)
             
             lastSyncDate = Date()
             UserDefaults.standard.set(lastSyncDate, forKey: "healthLastSyncDate")
@@ -726,7 +728,7 @@ final class HealthSyncService: ObservableObject {
             icon: "bed.double.fill",
             hasData: (fetched.totalSleepMinutes ?? 0) > 0,
             value: fetched.totalSleepMinutes.map { String(format: "%.1fh imported", $0 / 60) },
-            emptyIssue: "No sleep found in the last 36 hours.",
+            emptyIssue: "No sleep found for last night in Apple Health.",
             emptyFix: "Wear your Apple Watch overnight, or turn on Sleep in Health → Sharing → Apps → \(UserFacingCopy.productName)."
         ))
 
@@ -737,7 +739,7 @@ final class HealthSyncService: ObservableObject {
             hasData: (fetched.stepCount ?? 0) > 0,
             value: fetched.stepCount.map { "\($0) steps imported" },
             emptyIssue: "No steps recorded today in Apple Health.",
-            emptyFix: "Walk with your iPhone or Apple Watch, or enable Steps for \(UserFacingCopy.productName) in the Health app."
+            emptyFix: "Walk with your iPhone or Apple Watch, or open Health → Sharing → Apps → \(UserFacingCopy.productName) and enable Steps and Activity."
         ))
 
         checks.append(verificationCheckForFetchStep(

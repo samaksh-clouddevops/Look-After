@@ -10,6 +10,10 @@ import LookAfterHealth
 final class AppShellState: ObservableObject {
     let brain: ExecutiveBrain
     let brainVM: BrainViewModel
+    let taskStore: TaskStore
+    let timelineService: TimelineService
+    let healthStore: HealthStore
+    let accountIdentity: AccountIdentity
     let tasksVM: TasksViewModel
     let modulesVM: LifeModulesViewModel
     let adhdVM: ADHDViewModel
@@ -29,9 +33,17 @@ final class AppShellState: ObservableObject {
     init() {
         let glm = GLMService.shared
         let executiveBrain = ExecutiveBrain(glmService: glm)
+        let taskStore = TaskStore.shared
+        let timelineService = TimelineService.shared
+        let healthStore = HealthStore.shared
+        let accountIdentity = AccountIdentity.shared
+        self.taskStore = taskStore
+        self.timelineService = timelineService
+        self.healthStore = healthStore
+        self.accountIdentity = accountIdentity
         brain = executiveBrain
-        brainVM = BrainViewModel(brain: executiveBrain)
-        tasksVM = TasksViewModel(decomposer: TaskDecomposer(glmService: glm))
+        brainVM = BrainViewModel(brain: executiveBrain, taskStore: taskStore, healthStore: healthStore)
+        tasksVM = TasksViewModel(taskStore: taskStore, decomposer: TaskDecomposer(glmService: glm))
         modulesVM = LifeModulesViewModel()
         adhdVM = ADHDViewModel()
         briefingVM = DailyBriefingViewModel()
@@ -102,7 +114,7 @@ final class AppShellState: ObservableObject {
                 executiveCapacityLabel: contextOrchestrator.executiveCapacity.band.displayLabel,
                 actualFocusMinutes: focusMins
             )
-            WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM)
+            WidgetSyncService.shared.sync(brainVM: brainVM, taskStore: taskStore, healthStore: healthStore)
 
             await seedUITestFocusTaskIfNeeded(userId: userId)
 
@@ -257,8 +269,7 @@ final class AppShellState: ObservableObject {
     }
 
     private func resolvedUserId(_ userId: String) -> String {
-        if !userId.isEmpty { return userId }
-        return FirebaseManager.shared.resolvedUserId
+        accountIdentity.resolved(userId)
     }
 
     private var contextLoopTask: Task<Void, Never>?
@@ -293,7 +304,11 @@ final class AppShellState: ObservableObject {
     }
 
     func refreshWidgetData() {
-        WidgetSyncService.shared.sync(brainVM: brainVM, tasksVM: tasksVM)
+        WidgetSyncService.shared.sync(
+            brainVM: brainVM,
+            taskStore: taskStore,
+            healthStore: healthStore
+        )
     }
 
     func orchestrateBrain(userId: String) async {
@@ -318,15 +333,18 @@ final class AppShellState: ObservableObject {
         capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly
     ) async {
         guard !isPerformingFactoryReset else { return }
+        accountIdentity.refresh()
         let uid = resolvedUserId(userId)
         guard !uid.isEmpty else { return }
-        let resolvedName = userName.isEmpty ? UserLifeProfileStore.resolvedDisplayName() : userName
+        let resolvedName = userName.isEmpty ? ProfileCoordinator.displayName : userName
+        let peakHour = peakStartHour > 0 ? peakStartHour : ProfileCoordinator.peakStartHour
         await tasksVM.syncRecurringSchedule(userId: uid)
+        await healthStore.refresh(userId: uid)
         await orchestrateBrain(userId: uid)
         let shoppingCount = modulesVM.shoppingItems.filter { !$0.isPurchased }.count
         let bills = modulesVM.bills.filter { !$0.isPaid }
         let medications = MedicationStore.load()
-        let lifeEvents = ExecutiveTimelineBuilder.buildLifeEvents(
+        timelineService.rebuild(
             tasks: tasksVM.tasks,
             completedToday: tasksVM.completedToday,
             recurrenceTemplates: tasksVM.recurrenceTemplates,
@@ -335,46 +353,58 @@ final class AppShellState: ObservableObject {
             contacts: modulesVM.contacts,
             medications: medications
         )
-        let tomorrowEvents = ExecutiveTimelineBuilder.buildTomorrowLifeEvents(
-            tasks: tasksVM.tasks,
-            recurrenceTemplates: tasksVM.recurrenceTemplates,
-            bills: modulesVM.bills,
-            shoppingItems: modulesVM.shoppingItems,
-            contacts: modulesVM.contacts
-        )
+        let lifeEvents = timelineService.snapshot.today
+        let tomorrowEvents = timelineService.snapshot.tomorrow
         let timeline = lifeEvents
         let isWeekend = Calendar.current.isDateInWeekend(Date())
         await contextOrchestrator.refresh(
-            userId: uid,
-            userName: resolvedName,
-            cognitiveSnapshot: brainVM.cognitiveSnapshot,
-            healthSummary: brainVM.healthSummary,
-            flowSurface: brainVM.flowSurface,
-            activeFlowSession: activeFlowSessionState(),
-            heroTask: brainVM.flowSurface?.heroTask
-                ?? brainVM.topTasks.first
-                ?? tasksVM.tasks.first(where: { $0.status.isActive }),
-            topTasks: {
-                let brainTasks = brainVM.topTasks.filter(\.status.isActive)
-                if !brainTasks.isEmpty { return brainTasks }
-                return Array(tasksVM.tasks.filter(\.status.isActive).prefix(8))
-            }(),
-            unpurchasedShoppingCount: shoppingCount,
-            upcomingBills: bills,
-            lifeTimelineEvents: lifeEvents,
-            tomorrowLifeTimelineEvents: tomorrowEvents,
-            isWeekend: isWeekend,
-            peakStartHour: peakStartHour,
-            allTasks: tasksVM.tasks,
-            completedTaskIDs: Set(tasksVM.completedToday.map(\.id)),
-            flowConfidenceScore: brainVM.flowSurface?.confidence,
-            capacityLLMPolicy: capacityLLMPolicy
+            .init(
+                userId: uid,
+                userName: resolvedName,
+                cognitiveSnapshot: brainVM.cognitiveSnapshot,
+                healthSummary: brainVM.healthSummary,
+                flowSurface: brainVM.flowSurface,
+                activeFlowSession: activeFlowSessionState(),
+                heroTask: brainVM.flowSurface?.heroTask
+                    ?? brainVM.topTasks.first
+                    ?? tasksVM.tasks.first(where: { $0.status.isActive }),
+                topTasks: {
+                    let brainTasks = brainVM.topTasks.filter(\.status.isActive)
+                    if !brainTasks.isEmpty { return brainTasks }
+                    return Array(tasksVM.tasks.filter(\.status.isActive).prefix(8))
+                }(),
+                unpurchasedShoppingCount: shoppingCount,
+                upcomingBills: bills,
+                lifeTimelineEvents: lifeEvents,
+                tomorrowLifeTimelineEvents: tomorrowEvents,
+                isWeekend: isWeekend,
+                peakStartHour: peakHour,
+                allTasks: tasksVM.tasks,
+                completedTaskIDs: Set(tasksVM.completedToday.map(\.id)),
+                flowConfidenceScore: brainVM.flowSurface?.confidence,
+                capacityLLMPolicy: capacityLLMPolicy
+            )
         )
-        briefingVM.updateGreeting(
-            userName: resolvedName,
-            flowSurface: brainVM.flowSurface,
-            heroBriefing: contextOrchestrator.briefing?.hero
+        let projected = BriefingProjector.project(
+            BriefingProjectorInput(
+                userName: resolvedName,
+                heroBriefing: contextOrchestrator.briefing?.hero,
+                brainDecision: contextOrchestrator.brainState?.decision,
+                flowSurface: brainVM.flowSurface,
+                recommendation: brainVM.recommendation,
+                topTasks: brainVM.topTasks,
+                resumeSnapshot: contextOrchestrator.resumeSnapshot,
+                executiveCapacity: contextOrchestrator.executiveCapacity,
+                lifeSnapshot: contextOrchestrator.snapshot,
+                cognitiveSnapshot: brainVM.cognitiveSnapshot,
+                healthSummary: brainVM.healthSummary,
+                activeTasks: tasksVM.tasks.filter(\.status.isActive),
+                upcomingBills: bills,
+                medications: medications,
+                timelineItems: timeline
+            )
         )
+        briefingVM.applyProjectedSurface(projected)
         briefingVM.updateExecutiveCapacity(contextOrchestrator.executiveCapacity)
         await briefingVM.refresh(
             brainVM: brainVM,
@@ -385,22 +415,32 @@ final class AppShellState: ObservableObject {
             heroBriefing: contextOrchestrator.briefing?.hero,
             brainDecision: contextOrchestrator.brainState?.decision,
             lifeSnapshot: contextOrchestrator.snapshot,
-            lifeTimelineEvents: contextOrchestrator.lifeTimelineEvents,
-            tomorrowLifeTimelineEvents: contextOrchestrator.tomorrowLifeTimelineEvents
+            lifeTimelineEvents: timelineService.snapshot.today,
+            tomorrowLifeTimelineEvents: timelineService.snapshot.tomorrow
         )
-        briefingVM.updateExecutiveCapacity(contextOrchestrator.executiveCapacity)
         refreshWidgetData()
 
-        brainVM.syncFromOrchestrator(
-            heroBriefing: contextOrchestrator.briefing?.hero,
-            resumeSnapshot: contextOrchestrator.resumeSnapshot,
-            executiveCapacity: contextOrchestrator.executiveCapacity,
-            lifeSnapshot: contextOrchestrator.snapshot,
-            activeTasks: tasksVM.tasks.filter(\.status.isActive),
-            upcomingBills: bills,
-            medications: medications,
-            timelineItems: timeline,
-            readinessLabel: briefingVM.healthSnapshot.readinessLabel
+        brainVM.applyPresentation(
+            BriefingProjector.project(
+                BriefingProjectorInput(
+                    userName: resolvedName,
+                    heroBriefing: contextOrchestrator.briefing?.hero,
+                    brainDecision: contextOrchestrator.brainState?.decision,
+                    flowSurface: brainVM.flowSurface,
+                    recommendation: brainVM.recommendation,
+                    topTasks: brainVM.topTasks,
+                    resumeSnapshot: contextOrchestrator.resumeSnapshot,
+                    executiveCapacity: contextOrchestrator.executiveCapacity,
+                    lifeSnapshot: contextOrchestrator.snapshot,
+                    cognitiveSnapshot: brainVM.cognitiveSnapshot,
+                    healthSummary: brainVM.healthSummary,
+                    activeTasks: tasksVM.tasks.filter(\.status.isActive),
+                    upcomingBills: bills,
+                    medications: medications,
+                    timelineItems: timeline,
+                    readinessLabel: briefingVM.healthSnapshot.readinessLabel
+                )
+            ).brainPresentation
         )
 
         let completed = tasksVM.completedToday

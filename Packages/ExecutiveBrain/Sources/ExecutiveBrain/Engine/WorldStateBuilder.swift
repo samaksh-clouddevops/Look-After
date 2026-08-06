@@ -41,6 +41,12 @@ public struct WorldStateBuilder: Sendable {
                 && !$0.isCompleted
         }.count
 
+        let loadStreak = HighLoadDayEvaluator.consecutiveHighLoadDays(
+            tasks: input.tasks,
+            now: input.now,
+            calendar: calendar
+        )
+
         return WorldState(
             generatedAt: input.now,
             currentEnergy: snapshot.currentEnergy,
@@ -52,6 +58,7 @@ public struct WorldStateBuilder: Sendable {
             minutesUntilNextEvent: snapshot.calendarAvailability.minutesUntilNextEvent,
             nextEventTitle: snapshot.calendarAvailability.nextEventTitle,
             isMeetingHeavyDay: meetingCount >= 3,
+            consecutiveHighLoadDays: loadStreak,
             currentMission: snapshot.currentMission,
             topTasks: Array(input.tasks.filter { $0.status.isActive }.prefix(8)),
             upcomingDeadlines: deadlines,

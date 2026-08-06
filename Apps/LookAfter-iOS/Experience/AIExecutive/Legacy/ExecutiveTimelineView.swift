@@ -46,17 +46,17 @@ struct ExecutiveTimelineView: View {
                 } else {
                     List {
                         ForEach(groupedByDay, id: \.title) { section in
-                            Section {
+                            Section(content: {
                                 ForEach(section.items) { item in
                                     timelineRow(item)
                                         .listRowBackground(Color.clear)
                                         .listRowSeparator(.hidden)
                                 }
-                            } header: {
+                            }, header: {
                                 Text(section.title)
                                     .font(.dsCaption(weight: .bold))
                                     .foregroundColor(DesignSystem.textMuted)
-                            }
+                            })
                         }
                     }
                     .listStyle(.plain)

@@ -39,14 +39,14 @@ enum BackgroundNotificationRefreshTask {
     @MainActor
     private static func performDeterministicRefresh() async {
         guard NotificationPermissionService.shared.isAuthorized else { return }
-        guard NotificationPreferencesStore.load().masterEnabled else { return }
+        guard NotificationPreferencesStore.load().globallyEnabled else { return }
 
         let now = Date()
         let calendarProvider = EventKitCalendarEnvironmentSignalProvider()
         let calendarSignals = await calendarProvider.currentSignals(at: now)
         let medications = MedicationStore.load()
         let userId = FirebaseManager.shared.resolvedUserId
-        let snapshot = TaskRepository().localSnapshot(for: userId)
+        let snapshot = TaskStore.shared.localSnapshot(for: userId)
         let tasks = snapshot.active
 
         let postWake = PostWakeDetector.evaluate(

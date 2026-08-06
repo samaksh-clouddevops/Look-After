@@ -37,8 +37,7 @@ final class WeatherDisplayService: NSObject, ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        guard CLLocationManager.locationServicesEnabled() else { return }
-
+        // Use authorizationStatus only — locationServicesEnabled() blocks the main thread.
         let status = locationManager.authorizationStatus
         if status == .notDetermined {
             locationManager.requestWhenInUseAuthorization()

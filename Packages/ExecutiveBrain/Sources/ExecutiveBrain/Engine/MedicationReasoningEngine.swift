@@ -111,8 +111,8 @@ public enum MedicationReasoningEngine: Sendable {
     /// Rejects unsafe copy that invents medical advice or wrong timing.
     public static func isSafeRecommendation(_ text: String, status: MedicationWorldStatus) -> Bool {
         let lower = text.lowercased()
-        for phrase in prohibitedPhrases {
-            if lower.contains(phrase) { return false }
+        for phrase in prohibitedPhrases where lower.contains(phrase) {
+            return false
         }
 
         switch status {

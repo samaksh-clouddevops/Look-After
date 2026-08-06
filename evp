@@ -5,13 +5,35 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 EVP_PKG="Tools/ExecutiveValidationPlatform"
-BUILD_DIR="$EVP_PKG/.build/debug"
+DEBUG_BIN="$EVP_PKG/.build/debug/evp"
+RELEASE_BIN="$EVP_PKG/.build/release/evp"
+
+# Prefer an existing binary. CI builds release once; avoid rebuilding on every ./evp call.
+resolve_binary() {
+  if [[ -n "${EVP_BIN:-}" && -x "$EVP_BIN" ]]; then
+    echo "$EVP_BIN"
+    return
+  fi
+  if [[ -x "$RELEASE_BIN" ]]; then
+    echo "$RELEASE_BIN"
+    return
+  fi
+  if [[ -x "$DEBUG_BIN" ]]; then
+    echo "$DEBUG_BIN"
+    return
+  fi
+  return 1
+}
 
 build_if_needed() {
-  if [[ ! -x "$BUILD_DIR/evp" ]] || [[ "$EVP_PKG" -nt "$BUILD_DIR/evp" ]]; then
-    swift build --package-path "$EVP_PKG" -c debug
+  if resolve_binary >/dev/null 2>&1; then
+    return
   fi
+  # Default local config
+  local config="${EVP_BUILD_CONFIG:-debug}"
+  swift build --package-path "$EVP_PKG" -c "$config"
 }
 
 build_if_needed
-exec "$BUILD_DIR/evp" "$@"
+BIN="$(resolve_binary)"
+exec "$BIN" "$@"

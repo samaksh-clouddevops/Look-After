@@ -56,25 +56,25 @@ public struct TaskCardStackView: View {
                         
                         focusCard(for: currentTask)
                             .overlay(alignment: .topTrailing) {
-                                Menu {
+                                Menu(content: {
                                     Button(action: { editingTask = currentTask }) {
                                         Label("Edit", systemImage: "pencil")
                                     }
                                     Button(action: { tasksVM.duplicateTask(currentTask) }) {
                                         Label("Duplicate", systemImage: "plus.square.on.square")
                                     }
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         deleteTask(currentTask)
-                                    } label: {
+                                    }, label: {
                                         Label("Delete", systemImage: "trash")
-                                    }
-                                } label: {
+                                    })
+                                }, label: {
                                     Image(systemName: "ellipsis.circle")
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundColor(DesignSystem.textMuted)
                                         .minTouchTarget(36)
                                         .padding(DesignSystem.spacingSM)
-                                }
+                                })
                             }
                             .offset(x: offset.width, y: offset.height)
                             .rotationEffect(.degrees(Double(offset.width / 15)))

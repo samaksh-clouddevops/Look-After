@@ -1,0 +1,39 @@
+# Look After — CI-friendly baseline. Tighten gradually.
+excluded:
+  - .build
+  - DerivedData
+  - Pods
+  - .git
+  - Tools/**/.build
+  - Packages/**/.build
+  - "**/*.generated.swift"
+  - Apps/LookAfter-iOS/Generated
+
+included:
+  - Apps
+  - Packages
+  - Tools/ExecutiveValidationPlatform/Sources
+
+disabled_rules:
+  - trailing_whitespace
+  - todo
+  - line_length
+  - type_body_length
+  - file_length
+  - function_body_length
+  - function_parameter_count
+  - cyclomatic_complexity
+  - identifier_name
+  - large_tuple
+  - nesting
+  - type_name
+
+opt_in_rules:
+  - empty_count
+
+empty_count: warning
+force_cast: warning
+force_try: warning
+force_unwrapping: warning
+
+reporter: "github-actions-logging"

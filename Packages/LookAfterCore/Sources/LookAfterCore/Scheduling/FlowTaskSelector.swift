@@ -27,13 +27,12 @@ public enum FlowTaskSelector {
     ) -> LifeTask? {
         context.heroEligibleTasks()
             .filter { effectiveMinutes(for: $0) <= maxMinutes }
-            .sorted { lhs, rhs in
+            .min { lhs, rhs in
                 let l = effectiveMinutes(for: lhs)
                 let r = effectiveMinutes(for: rhs)
                 if l != r { return l < r }
                 return lhs.title < rhs.title
             }
-            .first
     }
 
     /// Highest-priority task that exceeds the current energy budget.
@@ -41,8 +40,7 @@ public enum FlowTaskSelector {
         let energy = EnergyLevel.from(score: context.energyScore)
         return context.heroEligibleTasks()
             .filter { !$0.isSuitableForEnergy(energy) }
-            .sorted { $0.priority.rawValue > $1.priority.rawValue }
-            .first
+            .min { $0.priority.rawValue > $1.priority.rawValue }
     }
 
     private static func score(task: LifeTask, energy: EnergyLevel, context: FlowSchedulingContext) -> Int {

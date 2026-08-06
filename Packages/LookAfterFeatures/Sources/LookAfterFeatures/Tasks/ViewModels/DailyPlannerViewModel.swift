@@ -15,7 +15,7 @@ public final class DailyPlannerViewModel: ObservableObject {
     @Published public var error: String?
     @Published public var rescheduleProposal: DayRescheduleProposal?
 
-    private let taskRepository: TaskRepository
+    private let taskStore: TaskStore
     private let glm: GLMService
     private let calendar: Calendar
     private let calendarSyncService: CalendarSyncService
@@ -23,12 +23,12 @@ public final class DailyPlannerViewModel: ObservableObject {
     private var planningDay: Date = Calendar.current.startOfDay(for: Date())
 
     public init(
-        taskRepository: TaskRepository? = nil,
+        taskStore: TaskStore = .shared,
         glmService: GLMService = .shared,
         calendar: Calendar = .current,
         calendarSyncService: CalendarSyncService = CalendarSyncService()
     ) {
-        self.taskRepository = taskRepository ?? TaskRepository()
+        self.taskStore = taskStore
         self.glm = glmService
         self.calendar = calendar
         self.calendarSyncService = calendarSyncService
@@ -51,9 +51,9 @@ public final class DailyPlannerViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let allTasks = try await taskRepository.getAll(for: userId)
+            let allTasks = try await taskStore.getAll(for: userId)
             try await createDueRecurringOccurrences(from: allTasks, userId: userId, on: day)
-            let refreshed = try await taskRepository.getAll(for: userId)
+            let refreshed = try await taskStore.getAll(for: userId)
             todayTasks = refreshed
                 .filter {
                     guard $0.status.isActive else { return false }
@@ -126,7 +126,7 @@ public final class DailyPlannerViewModel: ObservableObject {
                     scheduledDate: today,
                     userId: userId
                 )
-                try await taskRepository.create(task)
+                try await taskStore.create(task)
                 todayTasks.append(task)
             } else {
                 let template = LifeTask(
@@ -147,8 +147,8 @@ public final class DailyPlannerViewModel: ObservableObject {
                 )
                 var mutableOccurrence = occurrence
                 mutableOccurrence.userId = userId
-                try await taskRepository.create(template)
-                try await taskRepository.create(mutableOccurrence)
+                try await taskStore.create(template)
+                try await taskStore.create(mutableOccurrence)
                 todayTasks.append(mutableOccurrence)
             }
 
@@ -210,7 +210,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         todayTasks.removeAll { $0.id == task.id }
 
         do {
-            try await taskRepository.update(completedTask)
+            try await taskStore.update(completedTask)
             NotificationCenter.default.post(name: .taskListDidChange, object: nil)
         } catch {
             todayTasks.append(task)
@@ -222,16 +222,16 @@ public final class DailyPlannerViewModel: ObservableObject {
     private func createDueRecurringOccurrences(from allTasks: [LifeTask], userId: String, on day: Date) async throws {
         for task in allTasks where TaskRecurrenceEngine.needsLegacyNormalization(task) {
             let (template, occurrence) = TaskRecurrenceEngine.normalizeLegacyRecurringTask(task)
-            try await taskRepository.create(template)
-            try await taskRepository.update(occurrence)
+            try await taskStore.create(template)
+            try await taskStore.update(occurrence)
         }
 
-        let refreshed = try await taskRepository.getAll(for: userId)
+        let refreshed = try await taskStore.getAll(for: userId)
         let missing = TaskRecurrenceEngine.missingOccurrences(for: refreshed, on: day, calendar: calendar)
             .filter { !$0.isLifeCommitmentTask }
         for var occurrence in missing {
             occurrence.userId = userId
-            try await taskRepository.create(occurrence)
+            try await taskStore.create(occurrence)
         }
     }
 
@@ -249,6 +249,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         \(PlanningPromptContextBuilder.temporalBlock(now: Date(), profile: profile, planningDay: planningDay))
         \(PlanningPromptContextBuilder.schedulingRulesBlock(planningDay: planningDay))
         \(PlanningPromptContextBuilder.dailyRoutineBlock())
+        \(PlanningPromptContextBuilder.sleepBoundaryBlock(now: Date(), profile: profile))
         \(PlanningPromptContextBuilder.combinedLifeContextBlock(profile: profile))
         \(supplemental.isEmpty ? "" : "\(supplemental)\n")
         \(analyticsBlock)
@@ -441,7 +442,7 @@ public final class DailyPlannerViewModel: ObservableObject {
                   let combined = combineTime(from: change.proposedTime, on: planningDay) else { continue }
             task.scheduledDate = calendar.startOfDay(for: planningDay)
             task.scheduledTime = combined
-            try await taskRepository.update(task)
+            try await taskStore.update(task)
             scheduled.append(task)
         }
 

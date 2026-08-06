@@ -31,6 +31,18 @@ struct ReschedulePreviewSheet: View {
                         ForEach(proposal.changes) { change in
                             changeRow(change)
                         }
+
+                        Button {
+                            Task { await plannerVM.regenerateRescheduleProposal(userId: userId) }
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Regenerate")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(plannerVM.isScheduling)
                     }
                     .padding(DesignSystem.spacingLG)
                 }
@@ -55,21 +67,6 @@ struct ReschedulePreviewSheet: View {
                     }
                     .disabled(plannerVM.isScheduling)
                 }
-                #if os(iOS)
-                ToolbarItem(placement: .bottomBar) {
-                    Button("Regenerate") {
-                        Task { await plannerVM.regenerateRescheduleProposal(userId: userId) }
-                    }
-                    .disabled(plannerVM.isScheduling)
-                }
-                #else
-                ToolbarItem(placement: .automatic) {
-                    Button("Regenerate") {
-                        Task { await plannerVM.regenerateRescheduleProposal(userId: userId) }
-                    }
-                    .disabled(plannerVM.isScheduling)
-                }
-                #endif
             }
         }
         .accessibilityIdentifier("screen-reschedule-preview")

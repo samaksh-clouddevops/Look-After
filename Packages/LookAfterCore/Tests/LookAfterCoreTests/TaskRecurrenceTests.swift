@@ -76,6 +76,40 @@ final class TaskRecurrenceTests: XCTestCase {
         XCTAssertTrue(missing.isEmpty)
     }
 
+    func testMissingOccurrencesSkipsWhenSupersededRowExists() {
+        let template = LifeTask(
+            title: "Brush teeth — morning",
+            scheduledTime: makeDate(year: 2026, month: 1, day: 1, hour: 7, minute: 30),
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let today = makeDate(year: 2026, month: 8, day: 6)
+        var superseded = TaskRecurrenceEngine.makeOccurrence(from: template, template: template, scheduledDate: today, calendar: calendar)
+        superseded.status = .superseded
+
+        let missing = TaskRecurrenceEngine.missingOccurrences(for: [template, superseded], on: today, calendar: calendar)
+        XCTAssertTrue(missing.isEmpty)
+    }
+
+    func testTimelineProjectionsAfterSupersededOccurrence() {
+        let template = LifeTask(
+            title: "Brush teeth — morning",
+            scheduledTime: makeDate(year: 2026, month: 1, day: 1, hour: 7, minute: 30),
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let today = makeDate(year: 2026, month: 8, day: 6)
+        var superseded = TaskRecurrenceEngine.makeOccurrence(from: template, template: template, scheduledDate: today, calendar: calendar)
+        superseded.status = .superseded
+
+        let projected = TaskRecurrenceEngine.timelineProjections(for: [template, superseded], on: today, calendar: calendar)
+        XCTAssertEqual(projected.count, 1)
+        XCTAssertEqual(projected.first?.title, template.title)
+        XCTAssertEqual(projected.first?.parentTaskId, template.id)
+    }
+
     func testRecurrenceEngineCreatesNextOccurrenceAfterCompletion() {
         var template = LifeTask(
             title: "Take Thyroid Medication",
@@ -244,9 +278,11 @@ final class TaskRecurrenceTests: XCTestCase {
 
     func testOccurrenceRecurrenceOverridesTemplateForScheduleCheck() {
         let sunday = makeDate(year: 2026, month: 8, day: 2)
+        // Anchor must precede the dates under test — default createdAt is wall-clock.
         let template = LifeTask(
             title: "Gym",
             recurrence: .daily,
+            createdAt: makeDate(year: 2026, month: 7, day: 1),
             userId: "user-1",
             isRecurrenceTemplate: true
         )
@@ -257,11 +293,12 @@ final class TaskRecurrenceTests: XCTestCase {
             calendar: calendar
         )
         occurrence.recurrence = .custom
-        occurrence.recurrenceWeekdays = [2, 3, 4, 5, 6, 7]
+        occurrence.recurrenceWeekdays = [2, 3, 4, 5, 6, 7] // Mon–Sat
         let allTasks = [template, occurrence]
 
         XCTAssertFalse(
-            TaskRecurrenceEngine.matchesRecurrenceSchedule(occurrence, on: sunday, in: allTasks, calendar: calendar)
+            TaskRecurrenceEngine.matchesRecurrenceSchedule(occurrence, on: sunday, in: allTasks, calendar: calendar),
+            "Sunday must not match Mon–Sat override"
         )
         XCTAssertTrue(
             TaskRecurrenceEngine.matchesRecurrenceSchedule(
@@ -269,7 +306,8 @@ final class TaskRecurrenceTests: XCTestCase {
                 on: makeDate(year: 2026, month: 8, day: 3),
                 in: allTasks,
                 calendar: calendar
-            )
+            ),
+            "Monday must match Mon–Sat override"
         )
     }
 

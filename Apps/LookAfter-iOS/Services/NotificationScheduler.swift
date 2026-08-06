@@ -9,7 +9,7 @@ actor NotificationScheduler {
     private let center = UNUserNotificationCenter.current()
 
     func apply(selected: [NotificationCandidate], preferences: NotificationPreferences) async {
-        guard preferences.masterEnabled else {
+        guard preferences.globallyEnabled else {
             await cancelAllManaged()
             return
         }

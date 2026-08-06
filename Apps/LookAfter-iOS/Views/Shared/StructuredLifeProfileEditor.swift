@@ -83,9 +83,9 @@ struct StructuredLifeProfileEditor: View {
 
     @ViewBuilder
     private func organizeButton(title: String, action: @escaping () async -> Void) -> some View {
-        Button {
+        Button(action: {
             Task { await action() }
-        } label: {
+        }, label: {
             HStack {
                 if isOrganizing {
                     ProgressView().tint(DesignSystem.textPrimary)
@@ -95,7 +95,7 @@ struct StructuredLifeProfileEditor: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
-        }
+        })
         .buttonStyle(.plain)
         .disabled(isOrganizing || !sections.hasContent)
     }
@@ -133,21 +133,12 @@ enum KeyboardDismiss {
 }
 
 extension View {
-    /// Adds a toolbar button above the keyboard to dismiss it.
+    /// Adds a Done/Send bar above the keyboard without UIKit toolbar nesting (avoids UIHostingController faults).
     func keyboardDismissToolbar(
         label: String = "Done",
         onDone: (() -> Void)? = nil
     ) -> some View {
-        toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button(label) {
-                    onDone?()
-                    KeyboardDismiss.dismiss()
-                }
-                .fontWeight(.semibold)
-            }
-        }
+        modifier(KeyboardDismissToolbarModifier(label: label, onDone: onDone))
     }
 
     /// Dismisses the keyboard when tapping outside focused fields.
@@ -157,3 +148,55 @@ extension View {
         }
     }
 }
+
+#if canImport(UIKit)
+private struct KeyboardDismissToolbarModifier: ViewModifier {
+    let label: String
+    let onDone: (() -> Void)?
+
+    @State private var keyboardHeight: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottom) {
+                if keyboardHeight > 0 {
+                    HStack {
+                        Spacer()
+                        Button(label) {
+                            onDone?()
+                            KeyboardDismiss.dismiss()
+                        }
+                        .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.bar)
+                    .padding(.bottom, keyboardHeight)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                keyboardHeight = frame.height
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                keyboardHeight = max(0, frame.height)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardHeight = 0
+            }
+    }
+}
+#else
+private struct KeyboardDismissToolbarModifier: ViewModifier {
+    let label: String
+    let onDone: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        content
+    }
+}
+#endif

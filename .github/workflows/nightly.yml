@@ -1,0 +1,145 @@
+# Heavy validation — visual, perf, a11y, replay, counterfactual, readiness
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC daily
+  workflow_dispatch:
+  push:
+    branches: [release/*]
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: write
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  SIM_DESTINATION_NAME: iPhone 16
+
+jobs:
+  nightly-matrix:
+    name: EVP full matrix
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ios
+      - uses: ./.github/actions/build-evp
+
+      - name: Build for testing
+        run: |
+          set -euo pipefail
+          UDID=$(xcodebuild -scheme LookAfter-iOS -showdestinations 2>/dev/null \
+            | grep 'platform:iOS Simulator' | grep 'iPhone' | head -1 \
+            | sed -n 's/.*id:\([^,]*\),.*/\1/p' || true)
+          if [ -n "${UDID:-}" ]; then
+            xcodebuild -scheme LookAfter-iOS \
+              -destination "platform=iOS Simulator,id=$UDID" \
+              -derivedDataPath DerivedData \
+              -enableCodeCoverage YES \
+              build-for-testing
+          else
+            xcodebuild -scheme LookAfter-iOS \
+              -destination 'generic/platform=iOS Simulator' \
+              -derivedDataPath DerivedData \
+              build-for-testing
+          fi
+
+      - name: Unit + static (tier 2)
+        run: ./evp run --tier 2 --skip-ui
+
+      - name: Decision regression (blocking)
+        run: ./evp decisions
+
+      - name: Flow automation
+        run: ./evp flows
+
+      - name: Visual regression
+        run: ./evp visual
+
+      - name: Performance benchmarks
+        run: ./evp perf
+
+      - name: Accessibility audit
+        run: ./evp a11y
+
+      - name: Reality replay
+        run: ./evp replay --fixture REPLAY-001
+
+      - name: Counterfactual
+        run: ./evp counterfactual CF-001
+
+      - name: Production readiness
+        run: ./evp readiness
+
+      - name: Cost / time budget gate
+        if: always()
+        run: |
+          set -euo pipefail
+          # Fail if EVP cost history reports a regression over threshold (when file present).
+          python3 - <<'PY'
+          import json, os, sys
+          path = "Documentation/qa/.engine/cost-history.json"
+          if not os.path.isfile(path):
+              print("No cost-history.json — skip budget gate")
+              sys.exit(0)
+          try:
+              data = json.load(open(path))
+          except Exception as e:
+              print("Unreadable cost history:", e)
+              sys.exit(0)
+          # Flexible schema: list of runs with duration_ms or totalSeconds
+          runs = data if isinstance(data, list) else data.get("runs") or data.get("history") or []
+          if len(runs) < 2:
+              print("Not enough history for budget comparison")
+              sys.exit(0)
+          def dur(r):
+              return float(r.get("duration_ms") or r.get("totalSeconds", 0)*1000 or r.get("ms") or 0)
+          prev, cur = dur(runs[-2]), dur(runs[-1])
+          if prev <= 0:
+              sys.exit(0)
+          ratio = cur / prev
+          print(f"Budget: prev={prev:.0f}ms cur={cur:.0f}ms ratio={ratio:.2f}")
+          # Fail if >2x slower than previous night (catastrophic regression only)
+          if ratio > 2.0 and cur > 60_000:
+              print("::error::Nightly cost/time budget exceeded (>2x)")
+              sys.exit(1)
+          PY
+
+      - name: Upload nightly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-evp-${{ github.run_id }}
+          retention-days: 30
+          path: |
+            Documentation/qa/.engine/**
+            DerivedData/Logs/Test/**
+
+      - name: Publish JUnit
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Nightly EVP Results
+          path: Documentation/qa/.engine/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: GitHub Step Summary
+        if: always()
+        run: |
+          if [ -f Documentation/qa/.engine/github-summary.md ]; then
+            cat Documentation/qa/.engine/github-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: nightly
+          fail_ci_if_error: false

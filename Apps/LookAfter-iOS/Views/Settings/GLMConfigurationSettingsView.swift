@@ -11,7 +11,7 @@ struct GLMConfigurationSettingsView: View {
             PremiumBackground()
 
             List {
-                Section {
+                Section(content: {
                     TextField("Base URL", text: $viewModel.baseURL)
                         .font(.system(size: 13, design: .monospaced))
                         #if os(iOS)
@@ -64,20 +64,20 @@ struct GLMConfigurationSettingsView: View {
                     Toggle("Streaming", isOn: $viewModel.streamingEnabled)
                         .onChange(of: viewModel.streamingEnabled) { _, _ in viewModel.save() }
                         .listRowBackground(Color.white.opacity(0.05))
-                } header: {
+                }, header: {
                     Text("Model tiers")
-                } footer: {
+                }, footer: {
                     Text("Premium: coach and day planning. Standard: scheduling and inbox. Economy: task analysis and auto-fill. Failed economy/standard calls automatically retry on stronger tiers.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
-                }
+                })
 
-                Section {
-                    NavigationLink {
+                Section(content: {
+                    NavigationLink(destination: {
                         GLMUsageSettingsView()
-                    } label: {
+                    }, label: {
                         Label("Usage & Cost", systemImage: "chart.bar.doc.horizontal")
-                    }
+                    })
                     .listRowBackground(Color.white.opacity(0.05))
 
                     Button("Reset to defaults") {
@@ -85,9 +85,9 @@ struct GLMConfigurationSettingsView: View {
                     }
                     .foregroundColor(DesignSystem.warning)
                     .listRowBackground(Color.white.opacity(0.05))
-                } header: {
+                }, header: {
                     Text("Developer")
-                }
+                })
             }
             .scrollContentBackground(.hidden)
         }
@@ -150,7 +150,7 @@ struct GLMUsageSettingsView: View {
             PremiumBackground()
 
             List {
-                Section {
+                Section(content: {
                     tokenStatRow(
                         title: "Today",
                         tokens: summary.dailyTotalTokens,
@@ -165,11 +165,11 @@ struct GLMUsageSettingsView: View {
                     )
                     statRow("Today", value: "\(summary.dailyRequestCount) requests", detail: String(format: "$%.4f", summary.dailyTotalUSD))
                     statRow("This month", value: "\(summary.monthlyRequestCount) requests", detail: String(format: "$%.4f", summary.monthlyTotalUSD))
-                } header: {
+                }, header: {
                     Text("Usage")
-                }
+                })
 
-                Section {
+                Section(content: {
                     if summary.recentRecords.isEmpty {
                         Text("No GLM requests logged yet.")
                             .foregroundColor(DesignSystem.textMuted)
@@ -200,9 +200,9 @@ struct GLMUsageSettingsView: View {
                         refresh()
                     }
                     .listRowBackground(Color.white.opacity(0.05))
-                } header: {
+                }, header: {
                     Text("Recent Requests")
-                }
+                })
             }
             .scrollContentBackground(.hidden)
         }

@@ -14,23 +14,28 @@ public struct BuildValidator: Sendable {
 
     public func run(repoRoot: String = EVPPaths.repoRoot) async throws -> [TestResult] {
         var results: [TestResult] = []
+        let logsDir = EVPPaths.engineArtifact("logs")
+        try? FileManager.default.createDirectory(atPath: logsDir, withIntermediateDirectories: true)
+
         for pkg in packages {
             let start = Date()
             let pkgPath = (repoRoot as NSString).appendingPathComponent("Packages/\(pkg)")
-            let (status, evidence) = await runSwiftTest(at: pkgPath)
+            let logPath = (logsDir as NSString).appendingPathComponent("swift-test-\(pkg).log")
+            let (status, evidence) = await runSwiftTest(at: pkgPath, logPath: logPath)
             results.append(TestResult(
                 requirementId: "BUILD-\(pkg)",
                 sourceDocument: "Documentation/qa/11-regression-suite.md",
                 validationLayer: .functional,
                 status: status,
                 durationMs: Int(Date().timeIntervalSince(start) * 1000),
-                evidence: evidence
+                evidence: evidence,
+                message: status == .pass ? nil : "swift test failed for \(pkg) — see \(logPath)"
             ))
         }
         return results
     }
 
-    private func runSwiftTest(at path: String) async -> (TestStatus, [String]) {
+    private func runSwiftTest(at path: String, logPath: String) async -> (TestStatus, [String]) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["swift", "test", "--package-path", path]
@@ -45,13 +50,16 @@ public struct BuildValidator: Sendable {
             process.waitUntilExit()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(data: data, encoding: .utf8) ?? ""
-            let lines = output.split(separator: "\n").suffix(5).map(String.init)
+            try? output.write(toFile: logPath, atomically: true, encoding: .utf8)
+            let lines = output.split(separator: "\n").suffix(20).map(String.init)
             if process.terminationStatus == 0 {
-                return (.pass, lines)
+                return (.pass, lines + ["log: \(logPath)"])
             }
-            return (.fail, lines + ["exit: \(process.terminationStatus)"])
+            return (.fail, lines + ["exit: \(process.terminationStatus)", "log: \(logPath)"])
         } catch {
-            return (.error, [error.localizedDescription])
+            let message = error.localizedDescription
+            try? message.write(toFile: logPath, atomically: true, encoding: .utf8)
+            return (.error, [message, "log: \(logPath)"])
         }
     }
 }

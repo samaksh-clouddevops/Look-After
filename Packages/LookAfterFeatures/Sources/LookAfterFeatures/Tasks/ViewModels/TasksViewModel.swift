@@ -26,6 +26,7 @@ public final class TasksViewModel: ObservableObject {
     @Published public private(set) var undoToastMessage = ""
     
     private let taskRepo: TaskStoring
+    private let taskStore: TaskStore?
     private let decomposer: TaskDecomposer
     private let autoFiller: TaskAutoFiller
     private let taskImporter: TaskImporter
@@ -36,16 +37,26 @@ public final class TasksViewModel: ObservableObject {
     
     /// Active, completed-today, and recurrence templates for schedule validation.
     public var schedulingContext: [LifeTask] {
-        tasks + completedToday + recurrenceTemplates
+        taskStore?.snapshot.schedulingContext ?? (tasks + completedToday + recurrenceTemplates)
     }
 
     /// Active task occurrences — excludes recurrence templates.
     public var activeTasks: [LifeTask] {
         tasks.filter { $0.status.isActive && !$0.isRecurrenceTemplateTask }
     }
+
+    /// Full on-device task history for analytics and gap detection.
+    public func localAllTasks(userId: String) -> [LifeTask] {
+        taskRepo.localAllTasks(for: userId)
+    }
     
-    public init(taskRepo: TaskRepository? = nil, decomposer: TaskDecomposer, autoFiller: TaskAutoFiller? = nil) {
-        self.taskRepo = taskRepo ?? TaskRepository()
+    public init(
+        taskStore: TaskStore = .shared,
+        decomposer: TaskDecomposer,
+        autoFiller: TaskAutoFiller? = nil
+    ) {
+        self.taskStore = taskStore
+        self.taskRepo = taskStore
         self.decomposer = decomposer
         self.autoFiller = autoFiller ?? TaskAutoFiller()
         self.taskImporter = TaskImporter()
@@ -53,6 +64,7 @@ public final class TasksViewModel: ObservableObject {
     }
 
     init(taskRepo: TaskStoring, decomposer: TaskDecomposer, autoFiller: TaskAutoFiller, taskImporter: TaskImporter, semanticAnalyzer: TaskSemanticAnalyzer? = nil) {
+        self.taskStore = taskRepo as? TaskStore
         self.taskRepo = taskRepo
         self.decomposer = decomposer
         self.autoFiller = autoFiller
@@ -90,7 +102,17 @@ public final class TasksViewModel: ObservableObject {
 
     /// Reload from on-device cache only — fast path after local mutations.
     public func refreshFromLocal(userId: String) {
-        applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "local-refresh")
+        if let taskStore {
+            taskStore.refreshLocal(userId: userId)
+            applySnapshot(taskStore.snapshot, logSource: "local-refresh")
+        } else {
+            applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "local-refresh")
+        }
+    }
+
+    private func notifyTaskListDidChange() {
+        guard taskStore == nil else { return }
+        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
     }
 
     private func applySnapshot(_ snapshot: TaskListSnapshot, logSource: String) {
@@ -138,23 +160,38 @@ public final class TasksViewModel: ObservableObject {
 
         all = try await taskRepo.getAll(for: userId)
         let invalidIDs = TaskRecurrenceEngine.invalidScheduledTaskIDs(in: all)
-        for id in invalidIDs {
-            try await taskRepo.delete(id)
-            print("[Tasks] removed invalid scheduled task id=\(id.prefix(8))")
-        }
+        try await supersedeInvalidScheduledTasks(invalidIDs, in: all)
         if !invalidIDs.isEmpty {
             all = all.filter { !invalidIDs.contains($0.id) }
         }
 
+        for task in all where TaskRecurrenceEngine.isRecurrenceTemplate(task) {
+            guard task.semanticProfile == nil
+                || task.expirationPolicy == nil
+                || task.collisionStrategy == nil
+                || task.temporalBoundingBox == nil else { continue }
+            try await taskRepo.update(TaskEphemeralityDefaults.enrich(task))
+        }
+        all = try await taskRepo.getAll(for: userId)
+
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)
+        let materializeDays = [today] + (tomorrow.map { [$0] } ?? [])
+        try await reactivateSupersededOccurrences(userId: userId, days: materializeDays, in: all)
+        all = try await taskRepo.getAll(for: userId)
+
         let missing = TaskRecurrenceEngine.missingOccurrences(for: all, on: Date())
+            .filter { !$0.isLifeCommitmentTask }
         for var occurrence in missing {
             occurrence.userId = userId
             try await taskRepo.create(occurrence)
             print("[Tasks] scheduler created occurrence template=\(occurrence.parentTaskId?.prefix(8) ?? "?")")
         }
 
-        if let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date())) {
+        if let tomorrow {
+            all = try await taskRepo.getAll(for: userId)
             let tomorrowMissing = TaskRecurrenceEngine.missingOccurrences(for: all, on: tomorrow)
+                .filter { !$0.isLifeCommitmentTask }
             for var occurrence in tomorrowMissing {
                 occurrence.userId = userId
                 try await taskRepo.create(occurrence)
@@ -165,9 +202,64 @@ public final class TasksViewModel: ObservableObject {
         // Re-run after materialization in case stale rows were merged back in.
         all = try await taskRepo.getAll(for: userId)
         let remainingInvalid = TaskRecurrenceEngine.invalidScheduledTaskIDs(in: all)
-        for id in remainingInvalid {
-            try await taskRepo.delete(id)
-            print("[Tasks] removed lingering invalid task id=\(id.prefix(8))")
+        try await supersedeInvalidScheduledTasks(remainingInvalid, in: all)
+
+        all = try await taskRepo.getAll(for: userId)
+        let staleDuplicates = TaskScheduleQuery.supersededDuplicateIDs(in: all)
+        try await supersedeInvalidScheduledTasks(staleDuplicates, in: all)
+
+        if let model = LifeModelStore.load(), model.hasContent {
+            await dedupeLifeCommitmentTasks(userId: userId, model: model)
+        }
+    }
+
+    /// Reuse midnight-superseded rows instead of creating duplicate occurrences every refresh.
+    private func reactivateSupersededOccurrences(
+        userId: String,
+        days: [Date],
+        in allTasks: [LifeTask]
+    ) async throws {
+        let calendar = Calendar.current
+        let templates = allTasks.filter(TaskRecurrenceEngine.isRecurrenceTemplate)
+        guard !templates.isEmpty else { return }
+
+        for day in days {
+            let dayStart = calendar.startOfDay(for: day)
+            for template in templates {
+                guard template.recurrenceOccurs(on: dayStart, calendar: calendar) else { continue }
+                guard !TaskRecurrenceEngine.hasActionableOccurrence(
+                    for: template,
+                    on: dayStart,
+                    in: allTasks,
+                    calendar: calendar
+                ) else { continue }
+
+                guard var stale = allTasks.first(where: { task in
+                    task.parentTaskId == template.id
+                        && task.status == .superseded
+                        && task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
+                }) else { continue }
+
+                stale.status = .pending
+                stale.updatedAt = Date()
+                try await taskRepo.update(stale)
+                print("[Tasks] reactivated superseded occurrence id=\(stale.id.prefix(8)) template=\(template.id.prefix(8))")
+            }
+        }
+    }
+
+    /// Marks invalid recurrence rows as superseded instead of deleting user data.
+    private func supersedeInvalidScheduledTasks(_ ids: [String], in allTasks: [LifeTask]) async throws {
+        for id in ids {
+            guard var task = allTasks.first(where: { $0.id == id }) else { continue }
+            guard task.status.isActive else { continue }
+            if task.isLifeCommitmentTask { continue }
+            task.status = .superseded
+            task.updatedAt = Date()
+            try await taskRepo.update(task)
+            tasks.removeAll { $0.id == id }
+            completedToday.removeAll { $0.id == id }
+            print("[Tasks] superseded invalid scheduled task id=\(id.prefix(8))")
         }
     }
     
@@ -199,7 +291,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "onboarding-seed")
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
     }
 
     public func hasOnboardingTaggedTasks(userId: String) -> Bool {
@@ -232,11 +324,11 @@ public final class TasksViewModel: ObservableObject {
         tasks.removeAll { junkIDs.contains($0.id) }
         completedToday.removeAll { junkIDs.contains($0.id) }
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "onboarding-cleanup")
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
     }
 
     private func persistRecurringTask(_ task: LifeTask, decompose: Bool) async {
-        var template = task
+        var template = TaskEphemeralityDefaults.enrich(task)
         template.isRecurrenceTemplate = true
         template.scheduledDate = nil
         template.status = .pending
@@ -311,7 +403,7 @@ public final class TasksViewModel: ObservableObject {
         if let project = plan.project {
             persistCreativeProject(project)
         }
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
     }
 
     /// Banner data for an active multi-day goal on a given day.
@@ -319,7 +411,7 @@ public final class TasksViewModel: ObservableObject {
         from tasks: [LifeTask],
         on date: Date = Date(),
         calendar: Calendar = .current
-    ) -> (title: String, dayIndex: Int, dayCount: Int, sliceTitle: String)? {
+    ) -> MultiDayBannerData? {
         let dayStart = calendar.startOfDay(for: date)
         let roots = tasks.filter { MultiDayTaskTags.isRoot($0) && $0.status.isActive }
         for root in roots {
@@ -335,7 +427,12 @@ public final class TasksViewModel: ObservableObject {
                 return calendar.isDate(scheduled, inSameDayAs: dayStart)
             }) {
                 let index = slices.firstIndex(where: { $0.id == todaySlice.id }) ?? 0
-                return (root.title, index + 1, max(dayCount, slices.count), todaySlice.title)
+                return MultiDayBannerData(
+                    title: root.title,
+                    dayIndex: index + 1,
+                    dayCount: max(dayCount, slices.count),
+                    sliceTitle: todaySlice.title
+                )
             }
         }
         return nil
@@ -391,7 +488,7 @@ public final class TasksViewModel: ObservableObject {
         task.semanticProfile = await resolveSemanticProfile(for: task)
         try await taskRepo.create(task)
         tasks.insert(task, at: 0)
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
     }
 
     /// Update an existing task — instant UI, background persistence.
@@ -455,6 +552,8 @@ public final class TasksViewModel: ObservableObject {
         var updated = task
         updated.scheduledDate = calendar.startOfDay(for: now)
         updated.scheduledTime = slot
+        let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        updated.scheduledEndTime = slot.addingTimeInterval(TimeInterval(duration * 60))
         updated.updatedAt = Date()
 
         do {
@@ -462,7 +561,7 @@ public final class TasksViewModel: ObservableObject {
             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[index] = updated
             }
-            NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+            notifyTaskListDidChange()
             return slot
         } catch {
             self.error = error.localizedDescription
@@ -490,9 +589,6 @@ public final class TasksViewModel: ObservableObject {
                 template.recurrenceInterval = task.recurrenceInterval
                 template.recurrenceWeekdays = task.recurrenceWeekdays
             }
-            template.schedulingMode = task.schedulingMode
-            template.scheduledTime = task.scheduledTime
-            template.scheduledEndTime = task.scheduledEndTime
             template.estimatedMinutes = task.estimatedMinutes
             template.updatedAt = Date()
             try await taskRepo.update(template)
@@ -513,9 +609,7 @@ public final class TasksViewModel: ObservableObject {
 
             let all = try await taskRepo.getAll(for: task.userId)
             let invalidIDs = TaskRecurrenceEngine.invalidScheduledTaskIDs(in: all)
-            for id in invalidIDs {
-                try await taskRepo.delete(id)
-            }
+            try await supersedeInvalidScheduledTasks(invalidIDs, in: all)
             return
         }
 
@@ -713,7 +807,7 @@ public final class TasksViewModel: ObservableObject {
             )
             presentUndo(undo)
             NotificationCenter.default.post(name: .analyticsDataDidChange, object: nil, userInfo: ["reason": AnalyticsDataChangeReason.taskCompleted.rawValue])
-            NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+            notifyTaskListDidChange()
             return undo
         } catch {
             completedToday.removeAll { $0.id == task.id }
@@ -791,6 +885,11 @@ public final class TasksViewModel: ObservableObject {
         let wasInActive = activeIndex != nil
         let wasInCompleted = completedIndex != nil
 
+        // Capture schedule geometry before removal (auction needs the freed gap).
+        let freedGap = Self.freedGap(from: task)
+        let wasRecovery = task.tags.contains("recovery-block") || task.tags.contains("brain-locked")
+        let wasAnchored = task.timeConstraintValue == .anchored || task.isFixedTimeEvent
+
         tasks.removeAll { idsToDelete.contains($0.id) }
         completedToday.removeAll { idsToDelete.contains($0.id) }
         recurrenceTemplates.removeAll { idsToDelete.contains($0.id) }
@@ -801,6 +900,23 @@ public final class TasksViewModel: ObservableObject {
             } catch {
                 self.error = error.localizedDescription
             }
+        }
+
+        // Sabotage override learning + cool-down when user breaks a recovery lock.
+        if wasRecovery {
+            ParkedTaskRecoveryService.shared.handleRecoveryBlockOverride(task: task)
+        } else if wasAnchored, let gap = freedGap, gap.minutes >= 45 {
+            // Product trigger: freed anchored time → auction / possible sabotage.
+            let streak = HighLoadDayEvaluator.consecutiveHighLoadDays(tasks: tasks + completedToday)
+            _ = ParkedTaskRecoveryService.shared.auction(
+                gapMinutes: gap.minutes,
+                energy: .moderate,
+                consecutiveHighLoadDays: streak,
+                gapStart: gap.start,
+                day: gap.day,
+                userId: task.userId,
+                tasksVM: self
+            )
         }
 
         let undo = TaskUndoAction(
@@ -814,8 +930,22 @@ public final class TasksViewModel: ObservableObject {
             )
         )
         presentUndo(undo)
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
         return undo
+    }
+
+    /// Geometry of a deleted block for gap auction.
+    private static func freedGap(from task: LifeTask) -> (start: Date, day: Date, minutes: Int)? {
+        guard let start = task.scheduledTime else { return nil }
+        let cal = Calendar.current
+        let day = task.scheduledDate.map { cal.startOfDay(for: $0) } ?? cal.startOfDay(for: start)
+        let minutes: Int
+        if let end = task.scheduledEndTime {
+            minutes = max(TaskDurationPolicy.minimumMinutes, Int(end.timeIntervalSince(start) / 60.0))
+        } else {
+            minutes = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        }
+        return (start, day, minutes)
     }
 
     /// Deletes recurring occurrences together with their template so sync cannot recreate them.
@@ -877,7 +1007,7 @@ public final class TasksViewModel: ObservableObject {
 
         if !assembly.tasksToCreate.isEmpty {
             applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "life-commitments")
-            NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+            notifyTaskListDidChange()
         }
 
         await reconcileTodaySchedule(userId: userId, model: model, date: date, calendar: calendar)
@@ -891,6 +1021,9 @@ public final class TasksViewModel: ObservableObject {
         calendar: Calendar = .current
     ) async {
         guard !userId.isEmpty else { return }
+
+        // Day-boundary Reaper: expire/skip/supersede yesterday before today's cascade.
+        await sweepPreviousDayIfNeeded(userId: userId, now: date, calendar: calendar)
 
         let day = calendar.startOfDay(for: date)
         let activePool = tasks.filter { task in
@@ -913,6 +1046,9 @@ public final class TasksViewModel: ObservableObject {
             if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
                 tasks[index] = updated
             }
+            if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
+                completedToday[index] = updated
+            }
             do {
                 try await taskRepo.update(updated)
             } catch {
@@ -920,8 +1056,54 @@ public final class TasksViewModel: ObservableObject {
             }
         }
 
-        applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "schedule-reconcile")
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
+    }
+
+    /// Run once per calendar day: reaper on yesterday's incomplete tasks.
+    private func sweepPreviousDayIfNeeded(
+        userId: String,
+        now: Date,
+        calendar: Calendar
+    ) async {
+        let key = "lookafter.lastReaperSweep.\(userId)"
+        let todayKey = TelemetryLogRotation.dayKey(for: now, calendar: calendar)
+        if UserDefaults.standard.string(forKey: key) == todayKey { return }
+
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) else {
+            return
+        }
+        let pool = tasks + completedToday
+        let result = DayScheduleReconciler.sweepDayBoundary(
+            tasks: pool,
+            from: yesterday,
+            to: now,
+            now: now,
+            calendar: calendar,
+            parkedQueue: ParkedTaskQueueStore.shared
+        )
+        for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
+            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
+                if updated.status.isActive {
+                    tasks[index] = updated
+                } else {
+                    tasks.remove(at: index)
+                }
+            }
+            if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
+                if updated.status == .completed {
+                    completedToday[index] = updated
+                } else {
+                    completedToday.remove(at: index)
+                }
+            }
+            do {
+                try await taskRepo.update(updated)
+            } catch {
+                self.error = error.localizedDescription
+                return
+            }
+        }
+        UserDefaults.standard.set(todayKey, forKey: key)
     }
 
     /// Removes duplicate creative commitment tasks and recurring templates that spawn multiple music tasks per day.
@@ -970,7 +1152,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         for (_, group) in grouped where group.count > 1 {
-            let keeper = group.sorted { lhs, rhs in
+            let keeper = group.min { lhs, rhs in
                 if MultiDayTaskTags.isSlice(lhs) != MultiDayTaskTags.isSlice(rhs) {
                     return MultiDayTaskTags.isSlice(lhs) && !MultiDayTaskTags.isSlice(rhs)
                 }
@@ -980,7 +1162,7 @@ public final class TasksViewModel: ObservableObject {
                 if lhs.isFixedTimeEvent != rhs.isFixedTimeEvent { return lhs.isFixedTimeEvent && !rhs.isFixedTimeEvent }
                 if lhs.priority != rhs.priority { return lhs.priority > rhs.priority }
                 return lhs.createdAt < rhs.createdAt
-            }.first
+            }
             for task in group where task.id != keeper?.id {
                 idsToDelete.insert(task.id)
             }
@@ -1004,7 +1186,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "life-commitment-dedupe")
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
         await fixLifeCommitmentFixedTimes(userId: userId, in: all.filter { !idsToDelete.contains($0.id) })
         await reconcileTodaySchedule(userId: userId, model: model, calendar: calendar)
     }
@@ -1124,7 +1306,7 @@ public final class TasksViewModel: ObservableObject {
             }
             try? await taskRepo.create(task)
         }
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        notifyTaskListDidChange()
     }
     
     public func clearPendingUndo() {

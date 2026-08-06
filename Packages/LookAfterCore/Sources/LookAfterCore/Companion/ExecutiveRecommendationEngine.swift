@@ -188,8 +188,7 @@ public enum ExecutiveRecommendationEngine {
         }
         return scored
             .filter { $0.1 > -400 }
-            .sorted { $0.1 > $1.1 }
-            .first?.0
+            .min(by: { $0.1 > $1.1 })?.0
     }
 
     // MARK: - Medication

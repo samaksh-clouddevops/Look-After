@@ -138,12 +138,12 @@ public struct LearningKnowledgeView: View {
                                 .cornerRadius(16)
                                 .padding(.horizontal)
                                 .contextMenu {
-                                    Button(role: .destructive) {
+                                    Button(role: .destructive, action: {
                                         HapticManager.notification(.warning)
                                         viewModel.deleteNote(node)
-                                    } label: {
+                                    }, label: {
                                         Label("Remove", systemImage: "trash")
-                                    }
+                                    })
                                 }
                             }
                         }

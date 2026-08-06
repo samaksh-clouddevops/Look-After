@@ -207,7 +207,7 @@ public struct EVPOrchestrator: Sendable {
                     requirementId: "RTM-INDEX",
                     sourceDocument: "Documentation/qa/README.md",
                     validationLayer: .staticValidation,
-                    status: index.requirements.count > 0 ? .pass : .fail,
+                    status: index.requirements.isEmpty ? .fail : .pass,
                     evidence: ["requirementsIndexed: \(index.requirements.count)"]
                 )]
             )
@@ -285,7 +285,7 @@ public struct EVPOrchestrator: Sendable {
 
         case "compare-versions":
             let parts = options.requirementId?.split(separator: " ").map(String.init) ?? ["v1.0.0", "v1.1.0"]
-            let v1 = parts.count > 0 ? parts[0] : "v1.0.0"
+            let v1 = parts.isEmpty ? "v1.0.0" : parts[0]
             let v2 = parts.count > 1 ? parts[1] : "v1.1.0"
             let decisionResults = try DecisionRegressionRunner().run()
             let replayResults = try await RealityReplayRunner().run(options: EVPRunOptions(fixture: "REPLAY-001"))

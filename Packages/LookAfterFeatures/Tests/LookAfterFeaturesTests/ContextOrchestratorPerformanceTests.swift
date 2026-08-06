@@ -22,6 +22,7 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
 
         let start = CFAbsoluteTimeGetCurrent()
         await orchestrator.refresh(
+            .init(
             userId: "perf-user",
             userName: "Perf",
             cognitiveSnapshot: cognitive,
@@ -40,6 +41,8 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
             completedTaskIDs: [],
             flowConfidenceScore: 0.7,
             capacityLLMPolicy: .deterministicOnly
+        
+            )
         )
         let elapsedMs = (CFAbsoluteTimeGetCurrent() - start) * 1000
         let score = PerformanceBudgets.score(
@@ -67,6 +70,7 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
 
         // Warm-up
         await orchestrator.refresh(
+            .init(
             userId: "perf-user",
             userName: "Perf",
             cognitiveSnapshot: CognitiveSnapshot(energyScore: 0.5, availableMinutes: 60),
@@ -78,10 +82,13 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
             unpurchasedShoppingCount: 0,
             allTasks: tasks,
             capacityLLMPolicy: .deterministicOnly
+        
+            )
         )
 
         let start = CFAbsoluteTimeGetCurrent()
         await orchestrator.refresh(
+            .init(
             userId: "perf-user",
             userName: "Perf",
             cognitiveSnapshot: CognitiveSnapshot(energyScore: 0.55, availableMinutes: 55),
@@ -93,6 +100,8 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
             unpurchasedShoppingCount: 0,
             allTasks: tasks,
             capacityLLMPolicy: .deterministicOnly
+        
+            )
         )
         let elapsedMs = (CFAbsoluteTimeGetCurrent() - start) * 1000
         let score = PerformanceBudgets.score(
@@ -117,6 +126,7 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
         let task = LifeTask(title: "Hero", status: .pending, estimatedMinutes: 25, userId: "u")
 
         await orchestrator.refresh(
+            .init(
             userId: "u",
             userName: "User",
             cognitiveSnapshot: CognitiveSnapshot(energyScore: 0.7, availableMinutes: 40),
@@ -129,6 +139,8 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
             lifeTimelineEvents: makeTimeline(from: [task]),
             allTasks: [task],
             capacityLLMPolicy: .deterministicOnly
+        
+            )
         )
 
         // Batch update contract: if brainState is set, briefing/snapshot should be set in same pass.

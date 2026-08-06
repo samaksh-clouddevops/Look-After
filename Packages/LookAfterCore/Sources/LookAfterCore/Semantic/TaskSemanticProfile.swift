@@ -161,7 +161,7 @@ public struct TaskSchedulabilityResult: Sendable, Equatable {
 public extension LifeTask {
     /// Profile from storage, or a deterministic fallback for legacy tasks.
     var resolvedSemanticProfile: TaskSemanticProfile {
-        semanticProfile ?? TaskSemanticProfileBuilder.build(from: self)
+        TaskSemanticProfileBuilder.classificationProfile(for: self)
     }
 
     var needsSemanticAnalysis: Bool {

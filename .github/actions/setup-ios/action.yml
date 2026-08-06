@@ -1,0 +1,80 @@
+﻿name: Setup iOS CI
+description: Xcode select, SPM cache, XcodeGen, Firebase stub, project generate, simulator destination
+
+inputs:
+  xcode-version:
+    description: Optional Xcode_VERSION.app suffix
+    required: false
+    default: ""
+  install-xcodegen:
+    required: false
+    default: "true"
+  generate-project:
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Select Xcode
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -n "${{ inputs.xcode-version }}" ]; then
+          sudo xcode-select -s "/Applications/Xcode_${{ inputs.xcode-version }}.app" \
+            || sudo xcode-select -s /Applications/Xcode.app
+        else
+          sudo xcode-select -s /Applications/Xcode.app
+        fi
+        xcodebuild -version
+        swift --version
+
+    - name: Cache SPM and DerivedData
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Caches/org.swift.swiftpm
+          ~/Library/Developer/Xcode/DerivedData
+          .build
+        key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved', '**/Package.swift', 'project.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-spm-
+
+    - name: Install XcodeGen
+      if: inputs.install-xcodegen == 'true'
+      shell: bash
+      run: |
+        if ! command -v xcodegen >/dev/null 2>&1; then
+          brew install xcodegen
+        fi
+        xcodegen --version
+
+    - name: Prepare Firebase config for CI
+      shell: bash
+      run: |
+        if [ -f Config/GoogleService-Info.plist.example ]; then
+          cp Config/GoogleService-Info.plist.example Config/GoogleService-Info.plist
+        fi
+
+    - name: Generate Xcode project
+      if: inputs.generate-project == 'true'
+      shell: bash
+      run: xcodegen generate
+
+    - name: Resolve simulator destination
+      shell: bash
+      run: |
+        set -euo pipefail
+        DEST_NAME="${SIM_DESTINATION_NAME:-iPhone 16}"
+        UDID=$(xcrun simctl list devices available 2>/dev/null | sed -n "s/.*${DEST_NAME} (\([A-F0-9-]*\)).*/\1/p" | head -1 || true)
+        if [ -z "${UDID}" ]; then
+          UDID=$(xcrun simctl list devices available 2>/dev/null | sed -n 's/.*iPhone[^(]*(\([A-F0-9-]*\)).*/\1/p' | head -1 || true)
+        fi
+        if [ -n "${UDID}" ]; then
+          DEST="platform=iOS Simulator,id=${UDID}"
+          echo "Resolved simulator ${DEST_NAME}: ${UDID}"
+        else
+          DEST="generic/platform=iOS Simulator"
+          echo "Using generic iOS Simulator destination"
+        fi
+        echo "DESTINATION=${DEST}" >> "${GITHUB_ENV}"

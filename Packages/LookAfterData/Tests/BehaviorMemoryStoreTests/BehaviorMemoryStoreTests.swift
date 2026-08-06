@@ -152,7 +152,7 @@ final class BehaviorMemoryStoreTests: XCTestCase {
 
     func testCorruptedStorageRecovery() async throws {
         let corruptURL = tempDirectory.appendingPathComponent(FileBehaviorMemoryPersistenceBackend.defaultFileName)
-        try "{ not valid json".data(using: .utf8)!.write(to: corruptURL)
+        try Data("{ not valid json".utf8).write(to: corruptURL)
 
         let store = await makeStore()
         let report = await store.loadReport

@@ -61,14 +61,14 @@ struct ExecutiveProfileView: View {
                 .accessibilityIdentifier("you-appearance-toggle")
                 .accessibilityLabel(isEffectivelyDark ? "Switch to light mode" : "Switch to dark mode")
 
-                Button {
+                Button(action: {
                     showSettings = true
-                } label: {
+                }, label: {
                     Image(systemName: "gearshape")
                         .font(.dsIcon())
                         .foregroundColor(DesignSystem.textSecondary)
                         .frame(width: 44, height: 44)
-                }
+                })
                 .accessibilityLabel("Settings")
             }
             .padding(.trailing, DesignSystem.screenHorizontal - 8)
@@ -95,19 +95,19 @@ struct ExecutiveProfileView: View {
                 .environmentObject(shell)
         }
         #endif
-        .alert("Factory Reset \(UserFacingCopy.productName)?", isPresented: $showResetAlert) {
+        .alert("Factory Reset \(UserFacingCopy.productName)?", isPresented: $showResetAlert, actions: {
             Button("Erase Everything", role: .destructive) {
                 Task { await performFactoryReset() }
             }
             Button("Cancel", role: .cancel) {}
-        } message: {
+        }, message: {
             Text("Deletes all tasks, timeline, AI memory, health cache, learned behavior, and modules on this device and in the cloud. Your account and API keys are preserved. This cannot be undone.")
-        }
-        .alert("Factory reset complete", isPresented: $resetComplete) {
+        })
+        .alert("Factory reset complete", isPresented: $resetComplete, actions: {
             Button("OK", role: .cancel) {}
-        } message: {
+        }, message: {
             Text("\(UserFacingCopy.productName) is starting fresh. Health and calendar will re-import automatically.")
-        }
+        })
         .accessibilityIdentifier("screen-you")
     }
 
@@ -154,12 +154,12 @@ struct ExecutiveProfileView: View {
                 LAProgressBar(label: "Focus", progress: focusProgress)
                 LAProgressBar(label: "Wellbeing", progress: wellbeingProgress)
 
-                Button {
+                Button(action: {
                     showInsights = true
-                } label: {
+                }, label: {
                     Text("See all insights →")
                         .textStyleCaption(color: DesignSystem.focus)
-                }
+                })
                 .buttonStyle(.plain)
             }
         }
@@ -199,23 +199,23 @@ struct ExecutiveProfileView: View {
             Text("Life areas")
                 .textStyleSectionLabel()
 
-            Button { showInbox = true } label: {
+            Button(action: { showInbox = true }, label: {
                 DestinationTile(
                     title: "Inbox",
                     subtitle: "Review captured thoughts",
                     badge: shell.inboxVM.unprocessedCount > 0 ? "\(shell.inboxVM.unprocessedCount) to review" : nil
                 )
-            }
+            })
             .buttonStyle(PremiumPressStyle())
             .accessibilityIdentifier("you-inbox-tile")
 
-            Button { showModules = true } label: {
+            Button(action: { showModules = true }, label: {
                 DestinationTile(
                     title: "Modules",
                     subtitle: "Finance, relationships, journal, and more",
                     badge: nil
                 )
-            }
+            })
             .buttonStyle(PremiumPressStyle())
             .accessibilityIdentifier("nav-open-modules")
         }
@@ -348,15 +348,15 @@ struct ExecutiveProfileView: View {
     }
 
     private var developerResetSection: some View {
-        Section {
+        Section(content: {
             VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
                 Text("Erases all app data and behaves like a fresh install. Preserves your account and API keys only.")
                     .textStyleCaption(color: DesignSystem.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Button(role: .destructive) {
+                Button(role: .destructive, action: {
                     showResetAlert = true
-                } label: {
+                }, label: {
                     HStack {
                         Label("Factory Reset", systemImage: "arrow.counterclockwise.circle.fill")
                         Spacer()
@@ -365,14 +365,14 @@ struct ExecutiveProfileView: View {
                                 .scaleEffect(0.85)
                         }
                     }
-                }
+                })
                 .disabled(isResetting)
             }
             .padding(.vertical, 4)
             .listRowBackground(DesignSystem.backgroundSecondary)
-        } header: {
+        }, header: {
             Text("Developer")
-        }
+        })
     }
 
     private var isEffectivelyDark: Bool {
@@ -403,29 +403,29 @@ struct ExecutiveProfileView: View {
 
     #if DEBUG
     private var debugSection: some View {
-        Section {
-            Button {
+        Section(content: {
+            Button(action: {
                 showBrainInspector = true
-            } label: {
+            }, label: {
                 Label("Brain Inspector", systemImage: "ladybug.fill")
-            }
+            })
             .listRowBackground(DesignSystem.backgroundSecondary)
-        } header: {
+        }, header: {
             Text("Debug Tools")
-        } footer: {
+        }, footer: {
             Text("Inspect Life State, intent, simulations, cost, and decision history.")
-        }
+        })
     }
     #endif
 
     private var integrationsSection: some View {
         Section("Integrations") {
-            NavigationLink {
+            NavigationLink(destination: {
                 SettingsView()
                     .environmentObject(shell)
-            } label: {
+            }, label: {
                 Label("Settings & API Keys", systemImage: "gearshape.fill")
-            }
+            })
             .accessibilityIdentifier("nav-open-settings")
             .listRowBackground(DesignSystem.backgroundSecondary)
         }

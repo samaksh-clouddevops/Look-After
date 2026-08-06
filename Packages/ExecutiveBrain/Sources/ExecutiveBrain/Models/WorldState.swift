@@ -18,6 +18,8 @@ public struct WorldState: Codable, Sendable, Equatable {
     public var minutesUntilNextEvent: Int?
     public var nextEventTitle: String?
     public var isMeetingHeavyDay: Bool
+    /// Rolling high-load streak (yesterday backward) for Sabotage Auction.
+    public var consecutiveHighLoadDays: Int
 
     // Mission & work
     public var currentMission: LifeTask?
@@ -46,6 +48,7 @@ public struct WorldState: Codable, Sendable, Equatable {
         minutesUntilNextEvent: Int? = nil,
         nextEventTitle: String? = nil,
         isMeetingHeavyDay: Bool = false,
+        consecutiveHighLoadDays: Int = 0,
         currentMission: LifeTask? = nil,
         topTasks: [LifeTask] = [],
         upcomingDeadlines: [TaskDeadlineRef] = [],
@@ -67,6 +70,7 @@ public struct WorldState: Codable, Sendable, Equatable {
         self.minutesUntilNextEvent = minutesUntilNextEvent
         self.nextEventTitle = nextEventTitle
         self.isMeetingHeavyDay = isMeetingHeavyDay
+        self.consecutiveHighLoadDays = consecutiveHighLoadDays
         self.currentMission = currentMission
         self.topTasks = topTasks
         self.upcomingDeadlines = upcomingDeadlines

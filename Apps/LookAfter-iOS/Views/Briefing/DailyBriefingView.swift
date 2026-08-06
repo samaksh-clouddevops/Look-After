@@ -126,11 +126,14 @@ struct DailyBriefingView: View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
             VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
                 headerBar
+                // Time greeting only — Chief narrative is the body (no chat/mic here).
                 BriefingGreetingHeader(greeting: briefingVM.greeting)
             }
 
+            // Hero — bullet summary lines (body size), same as main.
             LAExecutiveBriefingCard(
                 summaryLines: briefingVM.dayHeroSummaryLines,
+                buttonTitle: "Continue to today",
                 isLoading: briefingVM.isLoadingDayHeroSummary,
                 onContinue: onContinue
             )
@@ -194,7 +197,7 @@ struct DailyBriefingView: View {
     }
 
     private var glanceEvents: [GlanceEvent] {
-        shell.contextOrchestrator.lifeTimelineEvents
+        shell.timelineService.snapshot.today
             .filter(\.isImportantCommitment)
             .sorted { $0.date < $1.date }
             .prefix(3)
@@ -370,7 +373,7 @@ struct DailyBriefingView: View {
             }
             if isVisible(.habits) {
                 BriefingHabitsCard(habits: briefingVM.habits, compact: true) { habit in
-                    briefingVM.toggleHabit(habit)
+                    briefingVM.toggleHabit(habit, tasksVM: tasksVM, userId: userId)
                 }
             }
             if isVisible(.weeklyTrends) {
@@ -519,26 +522,13 @@ struct DailyBriefingView: View {
         if enableHealth, !resolvedId.isEmpty {
             await healthSync.ensureSynced(userId: resolvedId)
         }
-        let peakStart = UserDefaults.standard.integer(forKey: "peakStartHour")
+        let peakStart = UserLifeProfileStore.load().peakStartHour
         let resolvedName = UserLifeProfileStore.resolvedDisplayName()
         await shell.refreshContext(
             userId: resolvedId,
             userName: resolvedName,
             peakStartHour: peakStart > 0 ? peakStart : 9
         )
-        await briefingVM.refresh(
-            brainVM: brainVM,
-            tasksVM: tasksVM,
-            userId: resolvedId,
-            userName: resolvedName,
-            healthKitAvailable: enableHealth && HealthManager().isAvailable,
-            heroBriefing: shell.contextOrchestrator.briefing?.hero,
-            brainDecision: shell.contextOrchestrator.brainState?.decision,
-            lifeSnapshot: shell.contextOrchestrator.snapshot,
-            lifeTimelineEvents: shell.contextOrchestrator.lifeTimelineEvents,
-            tomorrowLifeTimelineEvents: shell.contextOrchestrator.tomorrowLifeTimelineEvents
-        )
-        briefingVM.updateExecutiveCapacity(shell.contextOrchestrator.executiveCapacity)
     }
 }
 

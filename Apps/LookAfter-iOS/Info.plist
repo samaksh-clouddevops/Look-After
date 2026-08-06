@@ -1,45 +1,46 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Look After reads your calendar to find free blocks and meeting-aware scheduling windows.</string>
-	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>Look After needs access to your calendar to add scheduled tasks and sync events.</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Look After reads sleep, heart rate, HRV, steps, and workout data from Apple Health (including Apple Watch) to estimate your energy levels and personalize task recommendations.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Look After uses the microphone for voice capture and speech-to-text transcription.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Look After transcribes your spoken thoughts into tasks, journal entries, and notes.</string>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
-	<key>UILaunchScreen</key>
-	<dict/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>processing</string>
-	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.samaksh.flowos.app.notification-refresh</string>
-	</array>
+<key>CFBundleDevelopmentRegion</key>
+<string>$(DEVELOPMENT_LANGUAGE)</string>
+<key>CFBundleExecutable</key>
+<string>$(EXECUTABLE_NAME)</string>
+<key>CFBundleIdentifier</key>
+<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+<key>CFBundleInfoDictionaryVersion</key>
+<string>6.0</string>
+<key>CFBundleName</key>
+<string>$(PRODUCT_NAME)</string>
+<key>CFBundlePackageType</key>
+<string>APPL</string>
+<key>CFBundleShortVersionString</key>
+<string>1.0</string>
+<key>CFBundleVersion</key>
+<string>1</string>
+<key>NSCalendarsFullAccessUsageDescription</key>
+<string>Look After reads your calendar to find free blocks and meeting-aware scheduling windows.</string>
+<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+<string>Look After needs access to your calendar to add scheduled tasks and sync events.</string>
+<key>NSHealthShareUsageDescription</key>
+<string>Look After reads sleep, heart rate, HRV, steps, and workout data from Apple Health (including Apple Watch) to estimate your energy levels and personalize task recommendations.</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>Look After uses the microphone for voice capture and speech-to-text transcription.</string>
+<key>NSSpeechRecognitionUsageDescription</key>
+<string>Look After transcribes your spoken thoughts into tasks, journal entries, and notes.</string>
+<key>NSSupportsLiveActivities</key>
+<true/>
+<key>UILaunchScreen</key>
+<dict/>
+<key>UIBackgroundModes</key>
+<array>
+<string>fetch</string>
+<string>processing</string>
+</array>
+<key>BGTaskSchedulerPermittedIdentifiers</key>
+<array>
+<string>com.samaksh.flowos.app.notification-refresh</string>
+<string>com.samaksh.flowos.app.behavioral-telemetry</string>
+</array>
 </dict>
 </plist>

@@ -7,7 +7,7 @@ import LookAfterData
 struct MacSettingsView: View {
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
-    @AppStorage("adhdFocusChallenge") private var adhdFocusChallenge: String = "Task Initiation"
+    @AppStorage(ADHDFocusChallenge.storageKey) private var adhdFocusChallengeRaw = ADHDFocusChallenge.taskInitiation.rawValue
     @AppStorage("aiCoachTone") private var aiCoachTone: String = "Encouraging & Gentle"
     @AppStorage("userKeyGoals") private var userKeyGoals: String = ""
     @AppStorage("appCurrencySymbol") private var appCurrencySymbol: String = "₹"
@@ -16,12 +16,7 @@ struct MacSettingsView: View {
     @State private var lifeProfile = UserLifeProfileStore.load()
     @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
 
-    private let focusChallenges = [
-        "Task Initiation",
-        "Time Blindness",
-        "Task Paralysis / Overwhelm",
-        "Hyperfocus Context Switching"
-    ]
+    private let focusChallenges = ADHDFocusChallenge.allCases
 
     private let coachTones = [
         "Encouraging & Gentle",
@@ -35,7 +30,7 @@ struct MacSettingsView: View {
             PremiumBackground()
 
             PremiumForm {
-                Section {
+                Section(content: {
                     HStack {
                         Image(systemName: "person.circle.fill")
                             .font(.system(size: 48))
@@ -69,14 +64,14 @@ struct MacSettingsView: View {
                         Label("Sign Out", systemImage: "arrow.right.square")
                     }
                     .listRowBackground(Color.white.opacity(0.05))
-                } header: {
+                }, header: {
                     Text("Account")
-                }
+                })
 
-                Section {
-                    Picker("Primary Focus Challenge", selection: $adhdFocusChallenge) {
-                        ForEach(focusChallenges, id: \.self) { challenge in
-                            Text(challenge).tag(challenge)
+                Section(content: {
+                    Picker("Primary Focus Challenge", selection: $adhdFocusChallengeRaw) {
+                        ForEach(focusChallenges) { challenge in
+                            Text(challenge.label).tag(challenge.rawValue)
                         }
                     }
 
@@ -88,11 +83,11 @@ struct MacSettingsView: View {
 
                     TextField("Current goals & focus areas", text: $userKeyGoals, axis: .vertical)
                         .lineLimit(2...4)
-                } header: {
+                }, header: {
                     Text("Personal Profile")
-                }
+                })
 
-                Section {
+                Section(content: {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("AI Engine")
@@ -123,24 +118,24 @@ struct MacSettingsView: View {
                         .listRowBackground(Color.white.opacity(0.05))
                     }
 
-                    NavigationLink {
+                    NavigationLink(destination: {
                         GLMConfigurationSettingsView()
-                    } label: {
+                    }, label: {
                         Label("GLM Configuration", systemImage: "cpu")
-                    }
+                    })
                     .listRowBackground(Color.white.opacity(0.05))
 
-                    NavigationLink {
+                    NavigationLink(destination: {
                         APIKeysSettingsView()
-                    } label: {
+                    }, label: {
                         Label("Manage API Keys", systemImage: "key.fill")
-                    }
+                    })
                     .listRowBackground(Color.white.opacity(0.05))
-                } header: {
+                }, header: {
                     Text("AI Engine")
-                }
+                })
 
-                Section {
+                Section(content: {
                     Picker("Default Currency", selection: $appCurrencySymbol) {
                         Text("INR (₹)").tag("₹")
                         Text("USD ($)").tag("$")
@@ -162,11 +157,11 @@ struct MacSettingsView: View {
                         in: 4...12,
                         step: 0.5
                     )
-                } header: {
+                }, header: {
                     Text("Preferences")
-                }
+                })
 
-                Section {
+                Section(content: {
                     Picker("Gender", selection: Binding(
                         get: { lifeProfile.gender ?? .preferNotToSay },
                         set: { newGender in
@@ -179,9 +174,9 @@ struct MacSettingsView: View {
                         }
                     }
                     .listRowBackground(Color.white.opacity(0.05))
-                } header: {
+                }, header: {
                     Text("Profile")
-                }
+                })
             }
         }
         .navigationTitle("Settings")

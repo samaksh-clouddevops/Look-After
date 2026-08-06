@@ -8,7 +8,11 @@ public enum TaskStatus: String, Codable, CaseIterable, Sendable {
     case completed = "Completed"
     case skipped = "Skipped"
     case deferred = "Deferred"
-    
+    /// Ephemeral window missed — not a failure, a contextual kill.
+    case expired = "Expired"
+    /// Semantic collision dropped this instance (duplicate already on the day).
+    case superseded = "Superseded"
+
     public var icon: String {
         switch self {
         case .pending: return "circle"
@@ -17,9 +21,11 @@ public enum TaskStatus: String, Codable, CaseIterable, Sendable {
         case .completed: return "checkmark.circle.fill"
         case .skipped: return "arrow.right.circle"
         case .deferred: return "clock.arrow.circlepath"
+        case .expired: return "xmark.circle"
+        case .superseded: return "arrow.triangle.merge"
         }
     }
-    
+
     public var isActive: Bool {
         self == .pending || self == .inProgress || self == .paused
     }
@@ -149,6 +155,9 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     public var status: TaskStatus
     public var steps: [TaskStep]
     public var estimatedMinutes: Int
+    /// Floor for cascade compress — below this the block is useless (therapy, deep work).
+    /// Optional for backward-compatible decode; resolved via `minimumViableDurationValue`.
+    public var minimumViableDuration: Int?
     public var actualMinutes: Int?
     public var requiredEnergy: EnergyLevel
     public var deadline: Date?
@@ -168,6 +177,15 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     public var recurrenceWeekdays: [Int]?
     /// Whether the scheduler may move this task.
     public var schedulingMode: TaskSchedulingMode?
+    /// Semantic time lock for timeline physics (anchored / flexible / fluid).
+    /// Optional for backward-compatible decode of older task payloads.
+    public var timeConstraint: TimeConstraint?
+    /// When incomplete instances die (meals / meds / infinite work).
+    public var expirationPolicy: TaskExpirationPolicy?
+    /// Same-day start fence (e.g. lunch 11–15).
+    public var temporalBoundingBox: TemporalBoundingBox?
+    /// Rollover vs duplicate-on-destination-day policy.
+    public var collisionStrategy: SemanticCollisionStrategy?
     /// Fixed end time-of-day for fixed-time events.
     public var scheduledEndTime: Date?
     public var createdAt: Date
@@ -189,6 +207,7 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         status: TaskStatus = .pending,
         steps: [TaskStep] = [],
         estimatedMinutes: Int = 30,
+        minimumViableDuration: Int? = nil,
         actualMinutes: Int? = nil,
         requiredEnergy: EnergyLevel = .moderate,
         deadline: Date? = nil,
@@ -204,6 +223,10 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         recurrenceInterval: Int? = nil,
         recurrenceWeekdays: [Int]? = nil,
         schedulingMode: TaskSchedulingMode? = nil,
+        timeConstraint: TimeConstraint? = nil,
+        expirationPolicy: TaskExpirationPolicy? = nil,
+        temporalBoundingBox: TemporalBoundingBox? = nil,
+        collisionStrategy: SemanticCollisionStrategy? = nil,
         scheduledEndTime: Date? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
@@ -221,6 +244,7 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         self.status = status
         self.steps = steps
         self.estimatedMinutes = estimatedMinutes
+        self.minimumViableDuration = minimumViableDuration
         self.actualMinutes = actualMinutes
         self.requiredEnergy = requiredEnergy
         self.deadline = deadline
@@ -236,6 +260,11 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         self.recurrenceInterval = recurrenceInterval
         self.recurrenceWeekdays = recurrenceWeekdays
         self.schedulingMode = schedulingMode
+        // Prefer explicit constraint; otherwise derive from scheduling mode.
+        self.timeConstraint = timeConstraint ?? TimeConstraint.from(schedulingMode: schedulingMode)
+        self.expirationPolicy = expirationPolicy
+        self.temporalBoundingBox = temporalBoundingBox
+        self.collisionStrategy = collisionStrategy
         self.scheduledEndTime = scheduledEndTime
         self.createdAt = createdAt
         self.updatedAt = updatedAt

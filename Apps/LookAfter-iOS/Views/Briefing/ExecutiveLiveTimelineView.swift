@@ -35,6 +35,14 @@ private struct TimelineDotCenterKey: PreferenceKey {
     }
 }
 
+/// Bubbles LifeBlock vertical-drag state so parent ScrollViews can call `.scrollDisabled`.
+struct TimelineBlockScrollDisabledKey: PreferenceKey {
+    static var defaultValue: Bool = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 // MARK: - Live timeline
 
 /// Continuous vertical progress timeline — Fitness / Linear style, not a card list.
@@ -48,7 +56,7 @@ struct ExecutiveLiveTimelineView: View {
     var showPlanButton: Bool = false
     var isPlanning: Bool = false
     var onViewAll: () -> Void
-    var onPlan: (() -> Void)? = nil
+    var onPlan: (() -> Void)?
     var onCompleteTask: ((String) -> Void)?
     var onStartTask: ((String) -> Void)?
     var onEditTask: ((String) -> Void)?
@@ -59,6 +67,8 @@ struct ExecutiveLiveTimelineView: View {
     @State private var completingTaskIds: Set<String> = []
     @State private var reschedulingTaskIds: Set<String> = []
     @State private var expandedRowId: String?
+    @StateObject private var constraintVM = TimelineConstraintViewModel()
+    @State private var blockScrollDisabled = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
@@ -83,6 +93,20 @@ struct ExecutiveLiveTimelineView: View {
             }
         }
         .accessibilityIdentifier("screen-live-timeline")
+        .onAppear { seedConstraintState() }
+        .onChange(of: rows.map(\.id)) { _, _ in seedConstraintState() }
+    }
+
+    private func seedConstraintState() {
+        // Shadow rows into VM so swipe mutations have a constraint source even before tasks load.
+        for row in rows {
+            guard let taskID = row.taskId else { continue }
+            if constraintVM.constraintsByTaskID[taskID] == nil {
+                var stub = LifeTask(id: taskID, title: row.title, userId: "")
+                stub.applyTimeConstraint(row.timeConstraint)
+                constraintVM.upsert(task: stub)
+            }
+        }
     }
 
     // MARK: - Header
@@ -168,58 +192,98 @@ struct ExecutiveLiveTimelineView: View {
             .frame(width: ExecutiveTimelineVisuals.gutterWidth)
 
             VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
-                EventTimelineCard(
-                    row: row,
-                    phase: phase,
-                    isCompleting: isCompleting,
-                    isRescheduling: isRescheduling,
-                    isActionsExpanded: expandedRowId == row.id,
-                    showsTaskActions: row.taskId != nil && !row.isCompleted,
-                    onToggleActions: {
-                        withAnimation(.easeInOut(duration: 0.22)) {
-                            expandedRowId = expandedRowId == row.id ? nil : row.id
-                        }
-                    },
-                    onStart: row.taskId.flatMap { taskId in
-                        guard let onStartTask else { return nil }
-                        return {
-                            expandedRowId = nil
-                            onStartTask(taskId)
-                        }
-                    },
-                    onEdit: row.taskId.flatMap { taskId in
-                        guard let onEditTask else { return nil }
-                        return {
-                            expandedRowId = nil
-                            onEditTask(taskId)
-                        }
-                    },
-                    onDoubleTapComplete: row.taskId.flatMap { taskId in
-                        guard !row.isCompleted else { return nil }
-                        return {
-                            completingTaskIds.insert(taskId)
-                            onCompleteTask?(taskId)
-                            Task {
-                                try? await Task.sleep(nanoseconds: 600_000_000)
-                                completingTaskIds.remove(taskId)
+                interactiveBlock(for: row) {
+                    EventTimelineCard(
+                        row: row,
+                        phase: phase,
+                        isCompleting: isCompleting,
+                        isRescheduling: isRescheduling,
+                        isActionsExpanded: expandedRowId == row.id,
+                        showsTaskActions: row.taskId != nil && !row.isCompleted,
+                        onToggleActions: {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                expandedRowId = expandedRowId == row.id ? nil : row.id
                             }
-                        }
-                    },
-                    onReschedule: row.canReschedule ? row.taskId.flatMap { taskId in
-                        guard let onRescheduleTask else { return nil }
-                        return {
-                            reschedulingTaskIds.insert(taskId)
-                            onRescheduleTask(taskId)
-                            Task {
-                                try? await Task.sleep(nanoseconds: 800_000_000)
-                                reschedulingTaskIds.remove(taskId)
+                        },
+                        onStart: row.taskId.flatMap { taskId in
+                            guard let onStartTask else { return nil }
+                            return {
+                                expandedRowId = nil
+                                onStartTask(taskId)
                             }
-                        }
-                    } : nil
-                )
+                        },
+                        onEdit: row.taskId.flatMap { taskId in
+                            guard let onEditTask else { return nil }
+                            return {
+                                expandedRowId = nil
+                                onEditTask(taskId)
+                            }
+                        },
+                        onDoubleTapComplete: row.taskId.flatMap { taskId in
+                            guard !row.isCompleted else { return nil }
+                            return {
+                                completingTaskIds.insert(taskId)
+                                onCompleteTask?(taskId)
+                                Task {
+                                    try? await Task.sleep(nanoseconds: 600_000_000)
+                                    completingTaskIds.remove(taskId)
+                                }
+                            }
+                        },
+                        onReschedule: row.canReschedule ? row.taskId.flatMap { taskId in
+                            guard let onRescheduleTask else { return nil }
+                            return {
+                                reschedulingTaskIds.insert(taskId)
+                                onRescheduleTask(taskId)
+                                Task {
+                                    try? await Task.sleep(nanoseconds: 800_000_000)
+                                    reschedulingTaskIds.remove(taskId)
+                                }
+                            }
+                        } : nil
+                    )
+                }
             }
             .padding(.bottom, isLast ? 0 : ExecutiveTimelineVisuals.rowSpacing)
         }
+    }
+
+    @ViewBuilder
+    private func interactiveBlock<Content: View>(
+        for row: ExecutivePlanningTimelineRow,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if let taskID = row.taskId, !row.isCompleted, !isPreview {
+            let resolved = constraintVM.constraintsByTaskID[taskID] ?? row.timeConstraint
+            LifeBlockView(
+                taskID: taskID,
+                constraint: resolved,
+                isEnabled: true,
+                viewModel: constraintVM,
+                scrollDisabled: $blockScrollDisabled
+            ) {
+                content()
+            }
+            .preference(key: TimelineBlockScrollDisabledKey.self, value: blockScrollDisabled)
+            .overlay(alignment: .trailing) {
+                constraintBadge(resolved)
+                    .padding(.trailing, DesignSystem.spacingSM)
+                    .padding(.top, DesignSystem.spacingSM)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+        } else {
+            content()
+        }
+    }
+
+    private func constraintBadge(_ constraint: TimeConstraint) -> some View {
+        Text(constraint.displayName)
+            .font(.dsCaption(weight: .semibold))
+            .foregroundColor(DesignSystem.textMuted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(DesignSystem.backgroundElevated.opacity(0.9)))
+            .accessibilityHidden(true)
     }
 
     private func dotPhase(for row: ExecutivePlanningTimelineRow, uiPhase: TimelineEventPhase) -> TimelineEventPhase {
@@ -375,6 +439,12 @@ private struct EventTimelineCard: View {
     var onDoubleTapComplete: (() -> Void)?
     var onReschedule: (() -> Void)?
 
+    /// Auction-filled casualty — brief sparkle ("I found this time for you").
+    private var isResurrectedSparkle: Bool {
+        guard let id = row.taskId else { return false }
+        return ResurrectedTaskRegistry.shared.isResurrected(id)
+    }
+
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
@@ -521,6 +591,14 @@ private struct EventTimelineCard: View {
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
                 .stroke(isActionsExpanded ? DesignSystem.accentPrimary.opacity(0.35) : borderColor, lineWidth: phase == .current || isActionsExpanded ? 1 : 0.5)
         )
+        .overlay {
+            if isResurrectedSparkle {
+                ResurrectedSparkleOverlay()
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
+                    .allowsHitTesting(false)
+                    .accessibilityLabel("Resurrected into free time")
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous))
         .opacity(row.isCompleted ? 0.72 : ((isCompleting || isRescheduling) ? 0.55 : 1))
         .scaleEffect((isCompleting || isRescheduling) ? 0.98 : 1)
@@ -640,3 +718,99 @@ private struct EventTimelineCard: View {
         }
     }
 }
+
+/// Soft shimmer for auction-resurrected blocks — temporary "I found this time" cue.
+private struct ResurrectedSparkleOverlay: View {
+    @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+            .stroke(
+                DesignSystem.accentPrimary.opacity(pulse ? 0.55 : 0.2),
+                lineWidth: 1.5
+            )
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                    .fill(DesignSystem.accentPrimary.opacity(pulse ? 0.08 : 0.03))
+            )
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(DesignSystem.accentPrimary.opacity(0.85))
+                    .padding(8)
+            }
+            .onAppear {
+                guard !reduceMotion else {
+                    pulse = true
+                    return
+                }
+                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            }
+    }
+}
+
+#if DEBUG
+/// One block of each time constraint for rapid visual QA.
+enum TimelineConstraintPreviewProvider {
+    static var rows: [ExecutivePlanningTimelineRow] {
+        let now = Date()
+        return [
+            ExecutivePlanningTimelineRow(
+                id: "preview-anchored",
+                sortDate: now,
+                timeLabel: "9:00 AM",
+                endTimeLabel: "9:30 AM",
+                title: "Team standup",
+                subtitle: "Anchored meeting",
+                kind: .meeting,
+                isNow: true,
+                taskId: "task-anchored",
+                estimatedMinutes: 30,
+                isFixedEvent: true,
+                timeConstraint: .anchored
+            ),
+            ExecutivePlanningTimelineRow(
+                id: "preview-flexible",
+                sortDate: now.addingTimeInterval(3600),
+                timeLabel: "10:00 AM",
+                endTimeLabel: "11:30 AM",
+                title: "Deep work block",
+                subtitle: "Flexible preferred slot",
+                kind: .work,
+                taskId: "task-flexible",
+                estimatedMinutes: 90,
+                timeConstraint: .flexible
+            ),
+            ExecutivePlanningTimelineRow(
+                id: "preview-fluid",
+                sortDate: now.addingTimeInterval(7200),
+                timeLabel: "Afternoon",
+                endTimeLabel: "",
+                title: "Pick up groceries",
+                subtitle: "Fluid soft intent",
+                kind: .shopping,
+                taskId: "task-fluid",
+                estimatedMinutes: 40,
+                timeConstraint: .fluid
+            ),
+        ]
+    }
+}
+
+#Preview("Constraint physics") {
+    ScrollView {
+        ExecutiveLiveTimelineView(
+            rows: TimelineConstraintPreviewProvider.rows,
+            thinkingStep: nil,
+            isProcessing: false,
+            title: "Constraint demo",
+            onViewAll: {}
+        )
+        .padding()
+    }
+    .background(DesignSystem.backgroundPrimary)
+}
+#endif

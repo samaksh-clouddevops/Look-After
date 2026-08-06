@@ -49,9 +49,9 @@ struct TodayCompactMetricsStrip: View {
     }
 
     private func metricCapsule(_ metric: TodayExecutiveMetric) -> some View {
-        Button {
+        Button(action: {
             onMetricTap(metric.kind)
-        } label: {
+        }, label: {
             HStack(spacing: 5) {
                 Image(systemName: metric.icon)
                     .font(.system(size: 11, weight: .medium))
@@ -75,7 +75,7 @@ struct TodayCompactMetricsStrip: View {
                             )
                     )
             )
-        }
+        })
         .buttonStyle(.plain)
     }
 
