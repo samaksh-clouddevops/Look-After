@@ -16,14 +16,46 @@ public final class TaskRepository: ObservableObject {
     public static func invalidateLocalCache() {
         cachedAll = nil
     }
-    
+
+    /// True when the in-memory local task list has been populated (warm or empty write).
+    public static var hasWarmedLocalCache: Bool {
+        cachedAll != nil
+    }
+
     public init(firebase: FirebaseManager? = nil) {
         self.firebase = firebase ?? FirebaseManager.shared
     }
-    
+
+    /// Loads `tasks.json` off the main thread into `cachedAll`.
+    /// Call once before first `localSnapshot` / `localAllTasks` on a cold process.
+    /// Safe to call repeatedly — no-ops when already warm (unless `force` is true).
+    @discardableResult
+    public func warmLocalCache(force: Bool = false) async -> [LifeTask] {
+        if !force, let cached = Self.cachedAll {
+            return cached
+        }
+        let loaded = await local.loadAsync([LifeTask].self, filename: collection)
+        if force {
+            // Explicit reload from disk (tests / recovery). May race with concurrent saves.
+            Self.cachedAll = loaded
+            TaskPersistenceLog.localLoad(count: loaded.count, userId: "warm-cache-force")
+            return loaded
+        }
+        // Prefer a cache written by a concurrent mutator (create/save) during the await.
+        // Only adopt disk if cache is still cold — never clobber fresher in-memory writes.
+        if let cached = Self.cachedAll {
+            return cached
+        }
+        Self.cachedAll = loaded
+        TaskPersistenceLog.localLoad(count: loaded.count, userId: "warm-cache")
+        return loaded
+    }
+
     // MARK: - CRUD
-    
+
     /// Instant read from on-device cache — no network.
+    /// Prefers in-memory `cachedAll`. Cold path still uses barrier load as a safety net
+    /// for callers that have not awaited `warmLocalCache()` yet.
     public func localSnapshot(for userId: String) -> TaskListSnapshot {
         let tasks = tasksForUser(userId)
         TaskPersistenceLog.localLoad(count: tasks.count, userId: userId)

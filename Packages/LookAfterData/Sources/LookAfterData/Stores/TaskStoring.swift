@@ -4,6 +4,8 @@ import LookAfterCore
 /// Persistence contract for task lists — implemented by `TaskRepository` and `TaskStore`.
 @MainActor
 public protocol TaskStoring {
+    /// Off-main disk hydrate of the local task list. Call before first snapshot on cold launch.
+    func warmLocalCache(for userId: String) async
     func localSnapshot(for userId: String) -> TaskListSnapshot
     func localAllTasks(for userId: String) -> [LifeTask]
     func getTaskLists(for userId: String) async throws -> TaskListSnapshot
@@ -15,4 +17,9 @@ public protocol TaskStoring {
     func delete(_ id: String) async throws
 }
 
-extension TaskRepository: TaskStoring {}
+extension TaskRepository: TaskStoring {
+    public func warmLocalCache(for userId: String) async {
+        _ = userId
+        _ = await warmLocalCache(force: false)
+    }
+}

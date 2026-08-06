@@ -200,6 +200,10 @@ final class InMemoryTaskStore: TaskStoring {
         self.calendar = calendar
     }
 
+    func warmLocalCache(for userId: String) async {
+        _ = userId
+    }
+
     func localSnapshot(for userId: String) -> TaskListSnapshot {
         TaskListSnapshot.make(from: tasks.filter { $0.userId == userId || userId.isEmpty })
     }

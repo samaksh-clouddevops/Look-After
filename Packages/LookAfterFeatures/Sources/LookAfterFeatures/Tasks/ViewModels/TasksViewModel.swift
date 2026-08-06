@@ -72,10 +72,14 @@ public final class TasksViewModel: ObservableObject {
         self.semanticAnalyzer = semanticAnalyzer ?? TaskSemanticAnalyzer()
     }
     
-    /// Load tasks — hydrates from local cache instantly, then syncs with remote.
+    /// Load tasks — warms on-device cache off-main, paints local snapshot, then syncs remote.
     public func loadTasks(userId: String) async {
         let generation = loadGeneration + 1
         loadGeneration = generation
+
+        // Cold launch: decode tasks.json on the I/O queue before first snapshot read.
+        await taskRepo.warmLocalCache(for: userId)
+        guard generation == loadGeneration else { return }
 
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "launch-cache")
 

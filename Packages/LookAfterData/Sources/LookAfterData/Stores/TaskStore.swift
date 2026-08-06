@@ -18,6 +18,18 @@ public final class TaskStore: ObservableObject, TaskStoring {
 
     // MARK: - Snapshot refresh
 
+    /// Off-main disk hydrate into TaskRepository cache, then publish local snapshot.
+    /// Prefer this over bare `refreshLocal` on cold launch.
+    public func warmLocalCache(for userId: String) async {
+        await warmLocalCache(userId: userId, force: false)
+    }
+
+    public func warmLocalCache(userId: String, force: Bool = false) async {
+        _ = await taskRepo.warmLocalCache(force: force)
+        guard !userId.isEmpty else { return }
+        refreshLocal(userId: userId)
+    }
+
     public func refreshLocal(userId: String) {
         guard !userId.isEmpty else { return }
         lastUserId = userId
@@ -30,6 +42,7 @@ public final class TaskStore: ObservableObject, TaskStoring {
     public func loadRemote(userId: String) async throws -> TaskListSnapshot {
         guard !userId.isEmpty else { return snapshot }
         lastUserId = userId
+        await taskRepo.warmLocalCache()
         _ = try await taskRepo.getTaskLists(for: userId)
         refreshLocal(userId: userId)
         return snapshot
