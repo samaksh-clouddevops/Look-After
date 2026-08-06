@@ -314,7 +314,16 @@ public enum ConflictResolutionCascade {
                 continue
             }
 
-            // Stage 4: park + recovery queue (infinite tasks only).
+            // Stage 4: park + recovery queue (fluid / flexible only).
+            // Anchored blocks keep their clock — overlap is shown, not stripped to "Flexible today".
+            if task.timeConstraintValue == .anchored {
+                blocked.append(interval)
+                blocked.sort { $0.start < $1.start }
+                decisions.append(.init(taskID: task.id, action: .keep, reason: "anchored_overlap_preserved"))
+                byID[task.id] = task
+                continue
+            }
+
             task.scheduledTime = nil
             task.scheduledEndTime = nil
             task.applyTimeConstraint(.fluid)
@@ -362,8 +371,7 @@ public enum ConflictResolutionCascade {
     public static func canMove(_ task: LifeTask) -> Bool {
         switch task.timeConstraintValue {
         case .anchored:
-            // Anchored life commitments never move; legacy fixed non-commitments may.
-            return !task.isLifeCommitmentTask
+            return false
         case .flexible, .fluid:
             return true
         }

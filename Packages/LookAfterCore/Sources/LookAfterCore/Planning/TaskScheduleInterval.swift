@@ -144,6 +144,7 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         on day: Date,
         calendar: Calendar = .current
     ) -> Bool {
+        guard task.timeConstraintValue != .anchored else { return false }
         if isDateOnlySchedule(for: task, on: day, calendar: calendar) {
             return true
         }
@@ -152,7 +153,7 @@ public struct TaskScheduleInterval: Sendable, Equatable {
               isMidnightTimeOfDay(task.scheduledTime, calendar: calendar) else {
             return false
         }
-        return task.schedulingMode != .fixedTime
+        return task.timeConstraintValue != .anchored
     }
 }
 

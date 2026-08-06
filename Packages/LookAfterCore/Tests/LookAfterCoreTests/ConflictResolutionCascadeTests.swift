@@ -106,7 +106,7 @@ final class ConflictResolutionCascadeTests: XCTestCase {
     func testParkedQueueEnqueuesOnPark() {
         let park = ParkedTaskQueueStore.inMemory()
         let a = task(id: "a", title: "A", hour: 10, minutes: 60, constraint: .anchored, priority: .critical)
-        var b = task(id: "b", title: "B", hour: 10, minutes: 60, constraint: .anchored, priority: .low)
+        var b = task(id: "b", title: "B", hour: 10, minutes: 60, constraint: .flexible, priority: .low)
         b.tags = [LifeModel.commitmentTaskTag]
         let result = ConflictResolutionCascade.resolve(
             tasks: [a, b], on: day, calendar: calendar, parkedQueue: park
@@ -116,6 +116,45 @@ final class ConflictResolutionCascadeTests: XCTestCase {
             XCTAssertEqual(park.candidatesForReintegration().count, 1)
         }
         XCTAssertTrue(result.unresolvedTaskIDs.isEmpty)
+    }
+
+    func testOverlappingAnchoredTasksPreserveClockTimes() {
+        let park = ParkedTaskQueueStore.inMemory()
+        let first = task(id: "t1", title: "Task 1", hour: 10, minutes: 120, constraint: .anchored, priority: .high)
+        let second = task(id: "t2", title: "Task 2", hour: 11, minutes: 60, constraint: .anchored, priority: .medium)
+        let third = task(id: "t3", title: "Task 3", hour: 13, minutes: 60, constraint: .anchored, priority: .medium)
+
+        let result = ConflictResolutionCascade.resolve(
+            tasks: [first, second, third],
+            on: day,
+            calendar: calendar,
+            parkedQueue: park
+        )
+
+        let byID = Dictionary(uniqueKeysWithValues: result.tasks.map { ($0.id, $0) })
+        XCTAssertNotNil(byID["t2"]?.scheduledTime)
+        XCTAssertEqual(byID["t2"]?.timeConstraintValue, .anchored)
+        XCTAssertFalse(result.parkedTaskIDs.contains("t2"))
+        XCTAssertEqual(decision(result, "t2"), .keep)
+        XCTAssertEqual(park.snapshot().entries.count, 0)
+    }
+
+    func testSequentialAnchoredTasksUnchangedAfterReconcile() {
+        let first = task(id: "t1", title: "Task 1", hour: 10, minutes: 45, constraint: .anchored)
+        let second = task(id: "t2", title: "Task 2", hour: 11, minutes: 45, constraint: .anchored)
+        let third = task(id: "t3", title: "Task 3", hour: 13, minutes: 45, constraint: .anchored)
+
+        let result = DayScheduleReconciler.reconcile(
+            tasks: [first, second, third],
+            on: day,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(result.changedTaskIDs.isEmpty)
+        let byID = Dictionary(uniqueKeysWithValues: result.tasks.map { ($0.id, $0) })
+        XCTAssertEqual(byID["t1"]?.scheduledTime, first.scheduledTime)
+        XCTAssertEqual(byID["t2"]?.scheduledTime, second.scheduledTime)
+        XCTAssertEqual(byID["t3"]?.scheduledTime, third.scheduledTime)
     }
 
     func testFluidDecayAfter14Days() {

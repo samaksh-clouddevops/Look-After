@@ -344,6 +344,58 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertEqual(taskEvents.last?.title, "Flexible task")
     }
 
+    func testThreeAnchoredTasksStayInChronologicalOrderWithTimes() {
+        let now = makeDate(year: 2026, month: 8, day: 6, hour: 9, minute: 30)
+        let day = calendar.startOfDay(for: now)
+
+        let task1 = LifeTask(
+            id: "t1",
+            title: "Task 1",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 10, minute: 0),
+            timeConstraint: .anchored,
+            scheduledEndTime: makeDate(year: 2026, month: 8, day: 6, hour: 10, minute: 45),
+            userId: "user-1"
+        )
+        let task2 = LifeTask(
+            id: "t2",
+            title: "Task 2",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 11, minute: 0),
+            timeConstraint: .anchored,
+            scheduledEndTime: makeDate(year: 2026, month: 8, day: 6, hour: 11, minute: 45),
+            userId: "user-1"
+        )
+        let task3 = LifeTask(
+            id: "t3",
+            title: "Task 3",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 13, minute: 0),
+            timeConstraint: .anchored,
+            scheduledEndTime: makeDate(year: 2026, month: 8, day: 6, hour: 13, minute: 45),
+            userId: "user-1"
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [task1, task2, task3],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let taskEvents = events.filter { $0.id.hasPrefix("task-") }
+        XCTAssertEqual(taskEvents.map(\.title), ["Task 1", "Task 2", "Task 3"])
+        XCTAssertFalse(taskEvents.contains(where: \.isFlexibleToday))
+        XCTAssertEqual(calendar.component(.hour, from: taskEvents[1].date), 11)
+        XCTAssertTrue(taskEvents[1].subtitle.contains("11:00"))
+    }
+
     func testDuplicateRoutineOccurrenceDedupedOnTimeline() {
         let now = makeDate(year: 2026, month: 8, day: 5, hour: 20, minute: 45)
         let day = calendar.startOfDay(for: now)

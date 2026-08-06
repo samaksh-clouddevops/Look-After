@@ -27,6 +27,8 @@ struct SettingsView: View {
     @AppStorage("appCurrencySymbol") private var appCurrencySymbol: String = "₹"
     @AppStorage("focusDurationMinutes") private var focusDurationMinutes: Int = 25
     @AppStorage("pinNowToLockScreen") private var pinNowToLockScreen = false
+    @State private var pinNowStatusMessage: String?
+    @State private var isPinningNow = false
     @AppStorage(FlowDirectorFeature.userDefaultsKey) private var enableFlowDirector = false
     @AppStorage(AppAppearanceMode.storageKey) private var appearanceRaw = AppAppearanceMode.system.rawValue
     @AppStorage(SpeechVoiceSettings.providerKey) private var speechProviderRaw = SpeechVoiceProvider.appleEnhanced.rawValue
@@ -629,8 +631,33 @@ struct SettingsView: View {
                         Label("Pin Next Step to Lock Screen", systemImage: "pin.fill")
                     }
                     .tint(DesignSystem.accentPrimary)
+                    .disabled(isPinningNow)
                     .onChange(of: pinNowToLockScreen) { _, pinned in
-                        WidgetSyncService.shared.setNowPinned(pinned)
+                        Task {
+                            isPinningNow = true
+                            defer { isPinningNow = false }
+                            let result = await WidgetSyncService.shared.setNowPinned(pinned, shell: shell)
+                            pinNowStatusMessage = result.message
+                            if pinned, !result.success {
+                                pinNowToLockScreen = false
+                            }
+                        }
+                    }
+
+                    if isPinningNow {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Starting Live Activity…")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textMuted)
+                        }
+                    } else if let pinNowStatusMessage {
+                        Text(pinNowStatusMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(pinNowStatusMessage.contains("Could not") || pinNowStatusMessage.contains("No next")
+                                ? Color.orange
+                                : DesignSystem.textMuted)
                     }
                     
                     HStack(alignment: .top, spacing: 12) {
