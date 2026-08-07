@@ -1,0 +1,4 @@
+# Prevent EOL conversion on Gradle wrapper scripts
+android/gradlew -text
+android/gradlew.bat -text
+android/gradle/wrapper/gradle-wrapper.jar binary
