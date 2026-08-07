@@ -39,6 +39,17 @@ sealed interface LookAfterIntent {
     ) : LookAfterIntent
 
     /**
+     * Commit what-if tasks from [com.lookafter.core.simulation.SimulationEngine]
+     * into the live universe and re-run cascade for [day].
+     */
+    data class CommitHypotheticalTasks(
+        val tasks: List<LifeTask>,
+        val day: LocalDate? = null,
+        val now: Instant = Instant.now(),
+        val zone: ZoneId = ZoneId.of("UTC"),
+    ) : LookAfterIntent
+
+    /**
      * Midnight / day-boundary Reaper sweep.
      * Rolls [previousDay] incompletes against [nextDay] actives via
      * [com.lookafter.core.planning.DayScheduleReconciler.sweepDayBoundary].

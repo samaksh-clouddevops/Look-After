@@ -83,6 +83,7 @@ class LifeEngine(
         is LookAfterIntent.MoveToSomeday -> reduceMoveToSomeday(current, intent.id)
         is LookAfterIntent.UnparkTask -> reduceUnparkTask(current, intent.id)
         is LookAfterIntent.CompleteTask -> reduceCompleteTask(current, intent.id, intent.completedAt)
+        is LookAfterIntent.CommitHypotheticalTasks -> reduceCommitHypothetical(current, intent)
         is LookAfterIntent.TriggerMidnightSweep -> reduceMidnightSweep(current, intent)
         is LookAfterIntent.RunCascadeReconciliation -> reduceCascade(current, intent)
         is LookAfterIntent.ReplaceState -> intent.state
@@ -199,6 +200,33 @@ class LifeEngine(
                 )
             else -> current
         }
+    }
+
+    /**
+     * Inject what-if tasks into the live active pool and re-run the cascade.
+     * SimulationEngine is dry-run only — this is the real commit path.
+     */
+    private fun reduceCommitHypothetical(
+        current: LifeState,
+        intent: LookAfterIntent.CommitHypotheticalTasks,
+    ): LifeState {
+        if (intent.tasks.isEmpty()) return current
+        var next = current
+        for (task in intent.tasks) {
+            next = reduceAddTask(next, task)
+        }
+        val day = intent.day
+            ?: intent.tasks.firstNotNullOfOrNull { it.scheduledDate }
+            ?: next.currentDay
+            ?: return next
+        return reduceCascade(
+            next,
+            LookAfterIntent.RunCascadeReconciliation(
+                day = day,
+                now = intent.now,
+                zone = intent.zone,
+            ),
+        )
     }
 
     private fun reduceMidnightSweep(
