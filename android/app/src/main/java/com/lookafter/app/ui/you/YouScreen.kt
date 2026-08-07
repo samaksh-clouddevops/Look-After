@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -26,6 +27,7 @@ import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LifeState
+import kotlin.math.roundToInt
 
 /** Profile / settings hub — iOS "You" tab parity. */
 @Composable
@@ -33,6 +35,7 @@ fun YouScreen(
     state: LifeState,
     onOpenReview: () -> Unit,
     onOpenSimulation: () -> Unit,
+    onOpenMedication: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -65,6 +68,20 @@ fun YouScreen(
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
             }
+        }
+        item {
+            val medCount = state.medications.size
+            val adh = (state.medicationAdherenceRate * 100).roundToInt()
+            YouRow(
+                icon = Icons.Outlined.Medication,
+                title = "Medication",
+                subtitle = if (medCount == 0) {
+                    "Track meds and supplements"
+                } else {
+                    "$medCount configured · $adh% today"
+                },
+                onClick = onOpenMedication,
+            )
         }
         item {
             YouRow(

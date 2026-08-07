@@ -2,6 +2,7 @@ package com.lookafter.core.engine
 
 import com.lookafter.core.models.CascadeActionLog
 import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.Medication
 import com.lookafter.core.models.Priority
 import com.lookafter.core.models.TaskStatus
 import com.lookafter.core.serialization.LocalDateSerializer
@@ -12,7 +13,7 @@ import kotlinx.serialization.Serializable
  * Immutable single source of truth for the Look After operational universe.
  *
  * Pure data — no IO, no Android. Engines reduce intents into a new [LifeState]
- * via [copy]; never mutate in place.
+ * via [copy]; never mutate in place. Mirrors iOS `LifeState`.
  */
 @Serializable
 data class LifeState(
@@ -24,11 +25,27 @@ data class LifeState(
     /** Calendar day the engine last treated as "today" (for midnight sweeps). */
     @Serializable(with = LocalDateSerializer::class)
     val currentDay: LocalDate? = null,
+    /** Medication inventory / daily schedule owned by the UDF pipeline. */
+    val medications: List<Medication> = emptyList(),
+    /** Start-of-day when medication `isTaken` flags were last cleared. */
+    @Serializable(with = LocalDateSerializer::class)
+    val medicationsLastResetDay: LocalDate? = null,
 ) {
     fun taskById(id: String): LifeTask? =
         activeTasks.firstOrNull { it.id == id }
             ?: parkedQueue.firstOrNull { it.id == id }
             ?: somedayVault.firstOrNull { it.id == id }
+
+    fun medicationById(id: String): Medication? =
+        medications.firstOrNull { it.id == id }
+
+    /** Today's adherence rate across configured medications (0…1). */
+    val medicationAdherenceRate: Double
+        get() {
+            if (medications.isEmpty()) return 0.0
+            val taken = medications.count { it.isTaken }
+            return taken.toDouble() / medications.size.toDouble()
+        }
 
     fun withActiveTasks(tasks: List<LifeTask>): LifeState = copy(activeTasks = tasks)
 

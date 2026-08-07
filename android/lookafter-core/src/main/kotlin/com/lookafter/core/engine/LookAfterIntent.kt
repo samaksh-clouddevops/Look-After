@@ -1,6 +1,7 @@
 package com.lookafter.core.engine
 
 import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.Medication
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -77,4 +78,25 @@ sealed interface LookAfterIntent {
 
     /** Update the consecutive high-load day counter. */
     data class SetHighLoadStreak(val days: Int) : LookAfterIntent
+
+    // -- Medication domain (mirrors iOS LookAfterIntent) ---------------------
+
+    data class AddMedication(val medication: Medication) : LookAfterIntent
+
+    data class UpdateMedication(val medication: Medication) : LookAfterIntent
+
+    data class DeleteMedication(val id: String) : LookAfterIntent
+
+    /** Mark a dose taken (or untaken when [taken] is false). */
+    data class TakeMedication(
+        val id: String,
+        val takenAt: Instant = Instant.now(),
+        val taken: Boolean = true,
+    ) : LookAfterIntent
+
+    /** Clear daily `isTaken` flags when the calendar day advances. */
+    data class ResetMedicationsForNewDay(val day: LocalDate) : LookAfterIntent
+
+    /** Bulk replace inventory (migration / planning applier). */
+    data class ReplaceMedications(val medications: List<Medication>) : LookAfterIntent
 }

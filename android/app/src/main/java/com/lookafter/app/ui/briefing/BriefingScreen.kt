@@ -23,7 +23,9 @@ import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
+import com.lookafter.core.brain.HeroTaskRanker
 import com.lookafter.core.engine.LifeState
+import com.lookafter.core.health.HealthSummary
 import com.lookafter.core.models.TaskStatus
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -32,10 +34,12 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun BriefingScreen(
     state: LifeState,
+    health: HealthSummary = HealthSummary.EMPTY,
     modifier: Modifier = Modifier,
 ) {
     val active = state.activeTasks.count { it.status.isActive }
     val done = state.activeTasks.count { it.status == TaskStatus.COMPLETED }
+    val hero = HeroTaskRanker.select(state)
     val day = state.currentDay ?: LocalDate.now()
     val dayLabel = day.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
 
@@ -56,20 +60,52 @@ fun BriefingScreen(
         item {
             ElevatedSurfaceCard {
                 Text(
-                    text = if (active == 0) {
-                        "Your board is clear. Protect the quiet."
-                    } else {
-                        "You have $active open · $done done today."
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = "Next up",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LookAfterColors.AccentPrimary,
                 )
                 Text(
-                    text = "Start with the next intentional block on Today.",
+                    text = hero.task?.title
+                        ?: if (active == 0) {
+                            "Your board is clear. Protect the quiet."
+                        } else {
+                            "You have $active open · $done done today."
+                        },
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                )
+                Text(
+                    text = hero.reason,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
                 )
+            }
+        }
+        if (health.readinessScore != null || health.totalSleepMinutes != null) {
+            item {
+                ElevatedSurfaceCard {
+                    Text(
+                        text = "Readiness",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.Health,
+                    )
+                    Text(
+                        text = health.readinessLabel,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                    )
+                    val sleep = health.sleepHours
+                    if (sleep != null) {
+                        Text(
+                            text = "Sleep ${"%.1f".format(sleep)}h",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                        )
+                    }
+                }
             }
         }
         item {

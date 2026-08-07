@@ -2,6 +2,7 @@ package com.lookafter.core.serialization
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -36,6 +37,18 @@ object LocalDateSerializer : KSerializer<LocalDate> {
     override fun deserialize(decoder: Decoder): LocalDate = LocalDate.parse(decoder.decodeString())
 }
 
+/** ISO local time serializer (HH:mm[:ss]). */
+object LocalTimeSerializer : KSerializer<LocalTime> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("java.time.LocalTime", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: LocalTime) {
+        encoder.encodeString(value.toString())
+    }
+
+    override fun deserialize(decoder: Decoder): LocalTime = LocalTime.parse(decoder.decodeString())
+}
+
 /**
  * Shared JSON codec for LifeState snapshots.
  * Tolerant of unknown keys so schema can grow without wiping user data.
@@ -44,6 +57,7 @@ object LookAfterJson {
     val module: SerializersModule = SerializersModule {
         contextual(InstantSerializer)
         contextual(LocalDateSerializer)
+        contextual(LocalTimeSerializer)
     }
 
     val codec: Json = Json {

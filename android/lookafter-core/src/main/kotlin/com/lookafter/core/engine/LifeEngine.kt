@@ -6,11 +6,13 @@ import com.lookafter.core.models.ConflictCascadeAction
 import com.lookafter.core.models.ConflictCascadeDecision
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.Medication
 import com.lookafter.core.models.Priority
 import com.lookafter.core.models.TaskStatus
 import com.lookafter.core.planning.ConflictResolutionCascade
 import com.lookafter.core.planning.DayScheduleReconciler
 import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,6 +100,15 @@ class LifeEngine(
         is LookAfterIntent.ReplaceState -> intent.state
         is LookAfterIntent.SetHighLoadStreak ->
             current.copy(consecutiveHighLoadDays = intent.days.coerceAtLeast(0))
+        is LookAfterIntent.AddMedication -> reduceAddMedication(current, intent.medication)
+        is LookAfterIntent.UpdateMedication -> reduceUpdateMedication(current, intent.medication)
+        is LookAfterIntent.DeleteMedication -> reduceDeleteMedication(current, intent.id)
+        is LookAfterIntent.TakeMedication ->
+            reduceTakeMedication(current, intent.id, intent.takenAt, intent.taken)
+        is LookAfterIntent.ResetMedicationsForNewDay ->
+            reduceResetMedications(current, intent.day)
+        is LookAfterIntent.ReplaceMedications ->
+            current.copy(medications = intent.medications)
     }
 
     // -------------------------------------------------------------------------
@@ -274,12 +285,14 @@ class LifeEngine(
 
         val logs = result.decisions.map { it.toActionLog(intent.now) }
 
-        return current.copy(
+        val afterTasks = current.copy(
             activeTasks = stillActive,
             parkedQueue = mergedParked + promotedParked,
             actionLogs = current.actionLogs + logs,
             currentDay = intent.nextDay,
         )
+        // Daily medication taken-flags roll with the calendar day boundary (iOS parity).
+        return reduceResetMedications(afterTasks, intent.nextDay)
     }
 
     private fun reduceCascade(
@@ -312,6 +325,54 @@ class LifeEngine(
             parkedQueue = current.parkedQueue + newlyParked,
             actionLogs = current.actionLogs + logs,
             currentDay = intent.day,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // Medication reducers
+    // -------------------------------------------------------------------------
+
+    private fun reduceAddMedication(current: LifeState, medication: Medication): LifeState {
+        val without = current.medications.filterNot { it.id == medication.id }
+        return current.copy(medications = without + medication)
+    }
+
+    private fun reduceUpdateMedication(current: LifeState, medication: Medication): LifeState {
+        val idx = current.medications.indexOfFirst { it.id == medication.id }
+        return if (idx < 0) {
+            reduceAddMedication(current, medication)
+        } else {
+            val next = current.medications.toMutableList()
+            next[idx] = medication
+            current.copy(medications = next)
+        }
+    }
+
+    private fun reduceDeleteMedication(current: LifeState, id: String): LifeState =
+        current.copy(medications = current.medications.filterNot { it.id == id })
+
+    private fun reduceTakeMedication(
+        current: LifeState,
+        id: String,
+        takenAt: Instant,
+        taken: Boolean,
+    ): LifeState {
+        val idx = current.medications.indexOfFirst { it.id == id }
+        if (idx < 0) return current
+        val next = current.medications.toMutableList()
+        next[idx] = if (taken) next[idx].markTaken(takenAt) else next[idx].markUntaken()
+        return current.copy(medications = next)
+    }
+
+    private fun reduceResetMedications(current: LifeState, day: LocalDate): LifeState {
+        if (current.medicationsLastResetDay == day) return current
+        if (current.medications.isEmpty()) {
+            return current.copy(medicationsLastResetDay = day)
+        }
+        val cleared = current.medications.map { it.copy(isTaken = false) }
+        return current.copy(
+            medications = cleared,
+            medicationsLastResetDay = day,
         )
     }
 

@@ -13,6 +13,7 @@ import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
+import com.lookafter.core.brain.HeroTaskRanker
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.TaskStatus
@@ -23,10 +24,8 @@ fun BrainScreen(
     state: LifeState,
     modifier: Modifier = Modifier,
 ) {
-    val hero = state.activeTasks
-        .filter { it.status.isActive }
-        .sortedBy { it.scheduledStart }
-        .firstOrNull()
+    val selection = HeroTaskRanker.select(state)
+    val hero = selection.task
     val parked = state.parkedQueue.size
     val anchored = state.activeTasks.count {
         it.status.isActive && it.constraintType == ConstraintType.ANCHORED
@@ -59,12 +58,18 @@ fun BrainScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
+                Text(
+                    text = selection.reason,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                )
                 if (hero != null) {
                     Text(
                         text = "${hero.durationMinutes} min · ${hero.constraintType.name.lowercase()}",
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                     )
                 }
             }

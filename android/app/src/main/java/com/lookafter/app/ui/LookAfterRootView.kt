@@ -14,13 +14,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookafter.app.LookAfterViewModel
 import com.lookafter.app.ui.brain.BrainScreen
 import com.lookafter.app.ui.briefing.BriefingScreen
+import com.lookafter.app.ui.capture.CaptureSheet
 import com.lookafter.app.ui.components.LookAfterBottomNav
+import com.lookafter.app.ui.medication.MedicationScreen
 import com.lookafter.app.ui.navigation.AppDestination
 import com.lookafter.app.ui.review.WeeklyReviewScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
 import com.lookafter.app.ui.timeline.TodayTimelineScreen
 import com.lookafter.app.ui.you.YouScreen
-import com.lookafter.core.engine.LookAfterIntent
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.TaskExpirationPolicy
@@ -29,7 +30,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 
-/** App root — iOS shell parity: Briefing | Today | Capture | Brain | You */
+/** App root - iOS shell parity: Briefing | Today | Capture | Brain | You */
 @Composable
 fun LookAfterRootView(
     viewModel: LookAfterViewModel,
@@ -42,6 +43,8 @@ fun LookAfterRootView(
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
     var simulationOpen by remember { mutableStateOf(false) }
     var reviewOpen by remember { mutableStateOf(false) }
+    var medicationOpen by remember { mutableStateOf(false) }
+    var captureOpen by remember { mutableStateOf(false) }
     var hypotheticals by remember { mutableStateOf<List<LifeTask>>(emptyList()) }
 
     if (simulationOpen && hypotheticals.isNotEmpty()) {
@@ -66,34 +69,41 @@ fun LookAfterRootView(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
             LookAfterBottomNav(
-                current = if (reviewOpen) AppDestination.YOU else current,
+                current = when {
+                    reviewOpen || medicationOpen -> AppDestination.YOU
+                    else -> current
+                },
                 onSelect = { dest ->
                     reviewOpen = false
+                    medicationOpen = false
                     destination = dest.name
                 },
                 onCapture = {
-                    viewModel.dispatch(
-                        LookAfterIntent.AddTask(
-                            LifeTask(
-                                id = "cap-" + UUID.randomUUID(),
-                                title = "Captured thought",
-                                durationMinutes = 15,
-                                constraintType = ConstraintType.FLUID,
-                                status = TaskStatus.PENDING,
-                                expirationPolicy = TaskExpirationPolicy.EndOfDay,
-                                scheduledDate = state.currentDay ?: LocalDate.now(),
-                                tags = listOf("capture"),
-                            ),
-                        ),
-                    )
-                    destination = AppDestination.TODAY.name
-                    reviewOpen = false
+                    captureOpen = true
                 },
             )
         },
     ) { padding ->
+        if (captureOpen) {
+            CaptureSheet(
+                currentDay = state.currentDay,
+                onIntent = { intent ->
+                    viewModel.dispatch(intent)
+                    destination = AppDestination.TODAY.name
+                    reviewOpen = false
+                    medicationOpen = false
+                },
+                onDismiss = { captureOpen = false },
+            )
+        }
         val contentModifier = Modifier.padding(padding).fillMaxSize()
         when {
+            medicationOpen -> MedicationScreen(
+                state = state,
+                onIntent = viewModel::dispatch,
+                onBack = { medicationOpen = false },
+                modifier = contentModifier,
+            )
             reviewOpen -> WeeklyReviewScreen(state = state, modifier = contentModifier)
             current == AppDestination.BRIEFING -> BriefingScreen(state = state, modifier = contentModifier)
             current == AppDestination.TODAY -> TodayTimelineScreen(
@@ -106,10 +116,18 @@ fun LookAfterRootView(
             current == AppDestination.BRAIN -> BrainScreen(state = state, modifier = contentModifier)
             current == AppDestination.YOU -> YouScreen(
                 state = state,
-                onOpenReview = { reviewOpen = true },
+                onOpenReview = {
+                    medicationOpen = false
+                    reviewOpen = true
+                },
                 onOpenSimulation = {
+                    medicationOpen = false
                     hypotheticals = listOf(dummyHypotheticalMeeting(state.currentDay))
                     simulationOpen = true
+                },
+                onOpenMedication = {
+                    reviewOpen = false
+                    medicationOpen = true
                 },
                 modifier = contentModifier,
             )
