@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
+import com.lookafter.app.widget.TodayWidgetUpdater
 import com.lookafter.core.adhd.FocusSessionEngine
 import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
@@ -33,6 +34,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -120,6 +123,15 @@ class LookAfterViewModel(
                 )
                 notifier.scheduleAll(plans)
             }
+        }
+        // Keep home-screen Glance widget in sync with hero / open count.
+        viewModelScope.launch {
+            brainTick
+                .map { it.decision.heroTitle to it.world.openTaskCount }
+                .distinctUntilChanged()
+                .collect {
+                    TodayWidgetUpdater.requestUpdate(getApplication())
+                }
         }
     }
 
