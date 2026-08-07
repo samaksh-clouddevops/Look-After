@@ -7,15 +7,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookafter.app.ui.LookAfterRootView
+import com.lookafter.app.ui.theme.LookAfterTheme
 
 /**
- * Compose entry point. Hosts [LookAfterViewModel] and the Phase-3/4 proof UI.
+ * Compose entry point. Hosts [LookAfterViewModel] inside [LookAfterTheme]
+ * and the Phase-5 Today timeline surface.
  */
 class MainActivity : ComponentActivity() {
 
@@ -25,8 +28,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme {
-                Surface {
+            LookAfterTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
                     val app = application as LookAfterApplication
                     val hydrationComplete by app.hydrationComplete.collectAsStateWithLifecycle()
                     val restoredFromDisk by app.restoredFromDisk.collectAsStateWithLifecycle()

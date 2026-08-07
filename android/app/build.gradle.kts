@@ -66,6 +66,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
 
     // Persistence (DataStore + kotlinx.serialization JSON snapshots)
     implementation("androidx.datastore:datastore:1.1.1")

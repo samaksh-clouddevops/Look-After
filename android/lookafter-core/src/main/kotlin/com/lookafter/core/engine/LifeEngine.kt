@@ -82,6 +82,7 @@ class LifeEngine(
         is LookAfterIntent.ParkTask -> reduceParkTask(current, intent.id, intent.reason)
         is LookAfterIntent.MoveToSomeday -> reduceMoveToSomeday(current, intent.id)
         is LookAfterIntent.UnparkTask -> reduceUnparkTask(current, intent.id)
+        is LookAfterIntent.CompleteTask -> reduceCompleteTask(current, intent.id, intent.completedAt)
         is LookAfterIntent.TriggerMidnightSweep -> reduceMidnightSweep(current, intent)
         is LookAfterIntent.RunCascadeReconciliation -> reduceCascade(current, intent)
         is LookAfterIntent.ReplaceState -> intent.state
@@ -156,6 +157,48 @@ class LifeEngine(
             parkedQueue = current.parkedQueue.filterNot { it.id == id },
             activeTasks = current.activeTasks + active,
         )
+    }
+
+    private fun reduceCompleteTask(
+        current: LifeState,
+        id: String,
+        completedAt: Instant,
+    ): LifeState {
+        val task = current.taskById(id) ?: return current
+        if (task.status == TaskStatus.COMPLETED) return current
+        val completed = task.copy(
+            status = TaskStatus.COMPLETED,
+            completedAt = completedAt,
+            updatedAt = completedAt,
+        )
+        val log = CascadeActionLog(
+            taskId = id,
+            action = CascadeActionKind.FOCUS_COMPLETED,
+            reason = "user_complete",
+            focusMinutes = task.durationMinutes.coerceAtLeast(0),
+            recordedAt = completedAt,
+        )
+        fun List<LifeTask>.replaceOrKeep(): List<LifeTask> =
+            map { if (it.id == id) completed else it }
+
+        return when {
+            current.activeTasks.any { it.id == id } ->
+                current.copy(
+                    activeTasks = current.activeTasks.replaceOrKeep(),
+                    actionLogs = current.actionLogs + log,
+                )
+            current.parkedQueue.any { it.id == id } ->
+                current.copy(
+                    parkedQueue = current.parkedQueue.replaceOrKeep(),
+                    actionLogs = current.actionLogs + log,
+                )
+            current.somedayVault.any { it.id == id } ->
+                current.copy(
+                    somedayVault = current.somedayVault.replaceOrKeep(),
+                    actionLogs = current.actionLogs + log,
+                )
+            else -> current
+        }
     }
 
     private fun reduceMidnightSweep(

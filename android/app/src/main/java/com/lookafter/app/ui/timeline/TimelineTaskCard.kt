@@ -1,0 +1,149 @@
+package com.lookafter.app.ui.timeline
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.lookafter.app.ui.theme.LookAfterColors
+import com.lookafter.core.engine.LookAfterIntent
+import com.lookafter.core.models.ConstraintType
+import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.TaskStatus
+
+/**
+ * Timeline row for a single [LifeTask].
+ *
+ * Left: constraint badge · Center: title + duration · Right: complete control.
+ */
+@Composable
+fun TimelineTaskCard(
+    task: LifeTask,
+    onIntent: (LookAfterIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val completed = task.status == TaskStatus.COMPLETED
+    val expired = task.status == TaskStatus.EXPIRED || task.status == TaskStatus.SUPERSEDED
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(if (expired) 0.55f else 1f),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ConstraintBadge(constraintType = task.constraintType)
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textDecoration = if (completed) TextDecoration.LineThrough else null,
+                )
+                Text(
+                    text = metaLine(task),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            CompletionButton(
+                completed = completed,
+                enabled = !completed && !expired,
+                onClick = { onIntent(LookAfterIntent.CompleteTask(task.id)) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConstraintBadge(constraintType: ConstraintType) {
+    val (label, tint) = when (constraintType) {
+        ConstraintType.ANCHORED -> "A" to LookAfterColors.Anchored
+        ConstraintType.FLEXIBLE -> "F" to LookAfterColors.Flexible
+        ConstraintType.FLUID -> "·" to LookAfterColors.Fluid
+    }
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(tint.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleLarge,
+            color = tint,
+        )
+    }
+}
+
+@Composable
+private fun CompletionButton(
+    completed: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, enabled = enabled) {
+        Icon(
+            imageVector = if (completed) {
+                Icons.Filled.CheckCircle
+            } else {
+                Icons.Outlined.RadioButtonUnchecked
+            },
+            contentDescription = if (completed) "Completed" else "Mark complete",
+            tint = if (completed) LookAfterColors.Completed else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp),
+        )
+    }
+}
+
+private fun metaLine(task: LifeTask): String {
+    val parts = mutableListOf("${task.durationMinutes} min")
+    parts += when (task.constraintType) {
+        ConstraintType.ANCHORED -> "Anchored"
+        ConstraintType.FLEXIBLE -> "Flexible"
+        ConstraintType.FLUID -> "Fluid"
+    }
+    if (task.status != TaskStatus.PENDING && task.status != TaskStatus.IN_PROGRESS) {
+        parts += task.status.name.lowercase().replaceFirstChar { it.titlecase() }
+    }
+    return parts.joinToString(" · ")
+}

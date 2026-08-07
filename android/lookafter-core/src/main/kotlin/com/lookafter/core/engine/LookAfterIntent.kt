@@ -32,6 +32,12 @@ sealed interface LookAfterIntent {
     /** Resurrect a parked task back into the active pool. */
     data class UnparkTask(val id: String) : LookAfterIntent
 
+    /** Mark a task completed (timeline completion control). */
+    data class CompleteTask(
+        val id: String,
+        val completedAt: Instant = Instant.now(),
+    ) : LookAfterIntent
+
     /**
      * Midnight / day-boundary Reaper sweep.
      * Rolls [previousDay] incompletes against [nextDay] actives via

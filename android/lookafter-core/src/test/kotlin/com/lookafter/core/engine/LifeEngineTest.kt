@@ -117,4 +117,19 @@ class LifeEngineTest {
         assertTrue(shifted.scheduledStart!! >= day.atTime(10, 35).toInstant(zone))
         assertTrue(engine.state.value.actionLogs.any { it.action == CascadeActionKind.SHIFTED_LATER })
     }
+
+    @Test
+    fun `CompleteTask marks task completed and logs focus`() = runTest {
+        val task = LifeTask(id = "c1", title = "Ship UI", durationMinutes = 45)
+        val engine = LifeEngine(LifeState(activeTasks = listOf(task)))
+        engine.process(LookAfterIntent.CompleteTask(id = "c1", completedAt = now))
+        val done = engine.state.value.activeTasks.single()
+        assertEquals(TaskStatus.COMPLETED, done.status)
+        assertEquals(now, done.completedAt)
+        assertTrue(
+            engine.state.value.actionLogs.any {
+                it.action == CascadeActionKind.FOCUS_COMPLETED && it.focusMinutes == 45
+            },
+        )
+    }
 }
