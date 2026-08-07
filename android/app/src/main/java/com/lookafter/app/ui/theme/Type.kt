@@ -7,19 +7,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Golden-ratio type scale ported from iOS DesignSystem.
+ * Type scale aligned with iOS DesignSystem (SF-style hierarchy).
  *
- * displayLarge  27sp Bold     — section headers ("Today's Execution")
- * titleLarge    17sp SemiBold — task titles / sub-headers
- * bodyLarge     15sp Regular  — body
- * labelMedium   13sp Medium   — captions / meta
+ * displayLarge  28sp Bold     — screen titles ("Medication & Supplements")
+ * headlineMedium 22sp Bold    — section / chapter titles
+ * titleLarge    17sp SemiBold — card titles / task rows
+ * bodyLarge     15sp Medium   — body / secondary lines
+ * labelMedium   13sp Medium   — captions / meta / tab labels
  */
 val LookAfterTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
-        fontSize = 27.sp,
+        fontSize = 28.sp,
         lineHeight = 34.sp,
+        letterSpacing = (-0.3).sp,
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
         letterSpacing = (-0.2).sp,
     ),
     titleLarge = TextStyle(
@@ -29,12 +37,24 @@ val LookAfterTypography = Typography(
         lineHeight = 22.sp,
         letterSpacing = (-0.1).sp,
     ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 15.sp,
+        lineHeight = 20.sp,
+    ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Medium,
         fontSize = 15.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
     ),
     labelMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
@@ -42,19 +62,6 @@ val LookAfterTypography = Typography(
         fontSize = 13.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.1.sp,
-    ),
-    // Material slots we still fill so components don't fall back oddly.
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp,
-        lineHeight = 20.sp,
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
     ),
     labelSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,

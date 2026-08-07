@@ -12,41 +12,51 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val LightColorScheme = lightColorScheme(
-    primary = LookAfterColors.Accent,
-    onPrimary = LookAfterColors.LightSurface,
+    primary = LookAfterColors.AccentPrimary,
+    onPrimary = LookAfterColors.AccentOnPrimary,
     primaryContainer = LookAfterColors.AccentSoft,
-    onPrimaryContainer = LookAfterColors.Accent,
-    secondary = LookAfterColors.Flexible,
-    onSecondary = LookAfterColors.LightSurface,
+    onPrimaryContainer = LookAfterColors.AccentPressed,
+    secondary = LookAfterColors.Focus,
+    onSecondary = LookAfterColors.LightTextPrimary,
+    tertiary = LookAfterColors.Health,
+    onTertiary = LookAfterColors.LightTextPrimary,
     background = LookAfterColors.LightBackground,
-    onBackground = LookAfterColors.LightOnBackground,
+    onBackground = LookAfterColors.LightTextPrimary,
     surface = LookAfterColors.LightSurface,
-    onSurface = LookAfterColors.LightOnSurface,
-    surfaceVariant = LookAfterColors.LightSurfaceSecondary,
-    onSurfaceVariant = LookAfterColors.LightMuted,
-    outline = LookAfterColors.LightOutline,
+    onSurface = LookAfterColors.LightTextPrimary,
+    surfaceVariant = LookAfterColors.LightSurfaceElevated,
+    onSurfaceVariant = LookAfterColors.LightTextSecondary,
+    outline = LookAfterColors.LightBorder,
+    outlineVariant = LookAfterColors.LightDivider,
+    error = LookAfterColors.Error,
+    onError = LookAfterColors.AccentOnPrimary,
 )
 
 private val DarkColorScheme = darkColorScheme(
     primary = LookAfterColors.AccentOnDark,
     onPrimary = LookAfterColors.DarkBackground,
-    primaryContainer = LookAfterColors.DarkSurfaceSecondary,
+    primaryContainer = LookAfterColors.DarkSurfaceElevated,
     onPrimaryContainer = LookAfterColors.AccentOnDark,
-    secondary = LookAfterColors.Flexible,
-    onSecondary = LookAfterColors.DarkOnSurface,
+    secondary = LookAfterColors.Focus,
+    onSecondary = LookAfterColors.DarkTextPrimary,
+    tertiary = LookAfterColors.Health,
+    onTertiary = LookAfterColors.DarkTextPrimary,
     background = LookAfterColors.DarkBackground,
-    onBackground = LookAfterColors.DarkOnBackground,
+    onBackground = LookAfterColors.DarkTextPrimary,
     surface = LookAfterColors.DarkSurface,
-    onSurface = LookAfterColors.DarkOnSurface,
-    surfaceVariant = LookAfterColors.DarkSurfaceSecondary,
-    onSurfaceVariant = LookAfterColors.DarkMuted,
-    outline = LookAfterColors.DarkOutline,
+    onSurface = LookAfterColors.DarkTextPrimary,
+    surfaceVariant = LookAfterColors.DarkSurfaceElevated,
+    onSurfaceVariant = LookAfterColors.DarkTextSecondary,
+    outline = LookAfterColors.DarkBorder,
+    outlineVariant = LookAfterColors.DarkDivider,
+    error = LookAfterColors.Error,
+    onError = LookAfterColors.DarkTextPrimary,
 )
 
 @Composable
 fun LookAfterTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    /** Dynamic color is intentionally off — brand indigo is part of the identity. */
+    /** Dynamic Material You off — brand green is part of the identity (matches iOS). */
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {

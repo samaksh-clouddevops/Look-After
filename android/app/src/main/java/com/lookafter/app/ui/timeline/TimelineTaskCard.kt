@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lookafter.app.ui.theme.LookAfterColors
+import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LookAfterIntent
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
@@ -50,18 +51,21 @@ fun TimelineTaskCard(
         modifier = modifier
             .fillMaxWidth()
             .alpha(if (expired) 0.55f else 1f),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(LookAfterDimens.radiusMD),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(
+                    horizontal = LookAfterDimens.cardPadding,
+                    vertical = LookAfterDimens.spacingSM,
+                ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
         ) {
             ConstraintBadge(constraintType = task.constraintType)
 

@@ -31,10 +31,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.lookafter.app.execution.SystemFocusController
+import com.lookafter.app.ui.components.SectionHeader
+import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.engine.LookAfterIntent
 import com.lookafter.core.models.TaskStatus
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
  * Primary Today surface — Golden Ratio header + timeline of active tasks.
@@ -70,27 +73,18 @@ fun TodayTimelineScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(
+            horizontal = LookAfterDimens.screenHorizontal,
+            vertical = LookAfterDimens.spacingLG,
+        ),
+        verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
     ) {
         item(key = "header") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = "Today's Execution",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = subtitle(state, restoredFromDisk, hydrationComplete),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            SectionHeader(
+                title = "Today",
+                subtitle = subtitle(state, restoredFromDisk, hydrationComplete),
+                modifier = Modifier.padding(bottom = LookAfterDimens.spacingXS),
+            )
         }
 
         if (!policyGranted) {
@@ -195,7 +189,8 @@ private fun subtitle(
     restoredFromDisk: Boolean,
     hydrationComplete: Boolean,
 ): String {
-    val day = state.currentDay?.toString() ?: LocalDate.now().toString()
+    val day = (state.currentDay ?: LocalDate.now())
+        .format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
     val pending = state.activeTasks.count { it.status.isActive }
     val persistence = when {
         !hydrationComplete -> "loading…"
