@@ -37,9 +37,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      - name: Unit tests (lookafter-core)
+      - name: Unit tests (lookafter-core + app)
         working-directory: android
-        run: ./gradlew :lookafter-core:test --stacktrace
+        run: ./gradlew :lookafter-core:test :app:testDebugUnitTest --stacktrace
 
       - name: Build debug APK
         working-directory: android

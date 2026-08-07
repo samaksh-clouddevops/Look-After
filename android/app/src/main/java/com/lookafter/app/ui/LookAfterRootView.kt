@@ -16,6 +16,7 @@ import com.lookafter.app.ui.brain.BrainScreen
 import com.lookafter.app.ui.briefing.BriefingScreen
 import com.lookafter.app.ui.capture.CaptureSheet
 import com.lookafter.app.ui.components.LookAfterBottomNav
+import com.lookafter.app.ui.health.HealthScreen
 import com.lookafter.app.ui.medication.MedicationScreen
 import com.lookafter.app.ui.navigation.AppDestination
 import com.lookafter.app.ui.review.WeeklyReviewScreen
@@ -39,11 +40,14 @@ fun LookAfterRootView(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val health by viewModel.health.collectAsStateWithLifecycle()
+    val healthGranted by viewModel.healthPermissionGranted.collectAsStateWithLifecycle()
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
     var simulationOpen by remember { mutableStateOf(false) }
     var reviewOpen by remember { mutableStateOf(false) }
     var medicationOpen by remember { mutableStateOf(false) }
+    var healthOpen by remember { mutableStateOf(false) }
     var captureOpen by remember { mutableStateOf(false) }
     var hypotheticals by remember { mutableStateOf<List<LifeTask>>(emptyList()) }
 
@@ -70,12 +74,13 @@ fun LookAfterRootView(
         bottomBar = {
             LookAfterBottomNav(
                 current = when {
-                    reviewOpen || medicationOpen -> AppDestination.YOU
+                    reviewOpen || medicationOpen || healthOpen -> AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
                     reviewOpen = false
                     medicationOpen = false
+                    healthOpen = false
                     destination = dest.name
                 },
                 onCapture = {
@@ -92,6 +97,7 @@ fun LookAfterRootView(
                     destination = AppDestination.TODAY.name
                     reviewOpen = false
                     medicationOpen = false
+                    healthOpen = false
                 },
                 onDismiss = { captureOpen = false },
             )
@@ -104,8 +110,20 @@ fun LookAfterRootView(
                 onBack = { medicationOpen = false },
                 modifier = contentModifier,
             )
+            healthOpen -> HealthScreen(
+                summary = health,
+                permissionGranted = healthGranted,
+                onPermissionChange = viewModel::setHealthPermission,
+                onRefresh = viewModel::refreshHealth,
+                onBack = { healthOpen = false },
+                modifier = contentModifier,
+            )
             reviewOpen -> WeeklyReviewScreen(state = state, modifier = contentModifier)
-            current == AppDestination.BRIEFING -> BriefingScreen(state = state, modifier = contentModifier)
+            current == AppDestination.BRIEFING -> BriefingScreen(
+                state = state,
+                health = health,
+                modifier = contentModifier,
+            )
             current == AppDestination.TODAY -> TodayTimelineScreen(
                 state = state,
                 onIntent = viewModel::dispatch,
@@ -116,18 +134,27 @@ fun LookAfterRootView(
             current == AppDestination.BRAIN -> BrainScreen(state = state, modifier = contentModifier)
             current == AppDestination.YOU -> YouScreen(
                 state = state,
+                health = health,
                 onOpenReview = {
                     medicationOpen = false
+                    healthOpen = false
                     reviewOpen = true
                 },
                 onOpenSimulation = {
                     medicationOpen = false
+                    healthOpen = false
                     hypotheticals = listOf(dummyHypotheticalMeeting(state.currentDay))
                     simulationOpen = true
                 },
                 onOpenMedication = {
                     reviewOpen = false
+                    healthOpen = false
                     medicationOpen = true
+                },
+                onOpenHealth = {
+                    reviewOpen = false
+                    medicationOpen = false
+                    healthOpen = true
                 },
                 modifier = contentModifier,
             )

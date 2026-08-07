@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.Science
@@ -27,15 +28,18 @@ import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LifeState
+import com.lookafter.core.health.HealthSummary
 import kotlin.math.roundToInt
 
 /** Profile / settings hub — iOS "You" tab parity. */
 @Composable
 fun YouScreen(
     state: LifeState,
+    health: HealthSummary = HealthSummary.EMPTY,
     onOpenReview: () -> Unit,
     onOpenSimulation: () -> Unit,
     onOpenMedication: () -> Unit,
+    onOpenHealth: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -81,6 +85,18 @@ fun YouScreen(
                     "$medCount configured · $adh% today"
                 },
                 onClick = onOpenMedication,
+            )
+        }
+        item {
+            YouRow(
+                icon = Icons.Outlined.FavoriteBorder,
+                title = "Health",
+                subtitle = if (health.readinessScore == null) {
+                    "Connect readiness signals"
+                } else {
+                    "Readiness ${health.readinessLabel}"
+                },
+                onClick = onOpenHealth,
             )
         }
         item {
