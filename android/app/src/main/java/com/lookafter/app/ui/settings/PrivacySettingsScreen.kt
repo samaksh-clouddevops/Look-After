@@ -35,6 +35,8 @@ fun PrivacySettingsScreen(
     llmConfigured: Boolean,
     firebaseAvailable: Boolean,
     onExport: () -> Unit,
+    onExportToFolder: () -> Unit = onExport,
+    onImport: () -> Unit = {},
     onFactoryReset: () -> Unit,
     onSignInEmail: (email: String, password: String) -> Unit,
     onOpenPrivacyPolicy: () -> Unit,
@@ -45,6 +47,7 @@ fun PrivacySettingsScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmReset by remember { mutableStateOf(false) }
+    var confirmImport by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -69,7 +72,7 @@ fun PrivacySettingsScreen(
             ElevatedSurfaceCard {
                 Text("Backup", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.AccentPrimary)
                 Text(
-                    "Export LifeState JSON to share or archive. Import is available via shared backup files.",
+                    "Export LifeState JSON via share sheet or save to a folder. Import replaces this device's board.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
@@ -81,6 +84,42 @@ fun PrivacySettingsScreen(
                         .padding(top = LookAfterDimens.spacingSM),
                     colors = ButtonDefaults.buttonColors(containerColor = LookAfterColors.AccentPrimary),
                 ) { Text("Export & share") }
+                TextButton(
+                    onClick = onExportToFolder,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Save to Files…") }
+                if (!confirmImport) {
+                    TextButton(
+                        onClick = { confirmImport = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Import backup…") }
+                } else {
+                    Text(
+                        "Import will replace tasks, meds, and queues on this device.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = LookAfterColors.Warning,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = LookAfterDimens.spacingSM),
+                        horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
+                    ) {
+                        TextButton(
+                            onClick = { confirmImport = false },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Cancel") }
+                        Button(
+                            onClick = {
+                                confirmImport = false
+                                onImport()
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = LookAfterColors.AccentPrimary),
+                        ) { Text("Choose file") }
+                    }
+                }
             }
         }
         item {

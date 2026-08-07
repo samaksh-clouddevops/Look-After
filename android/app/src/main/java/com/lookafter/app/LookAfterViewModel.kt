@@ -432,19 +432,63 @@ class LookAfterViewModel(
         _lastSyncMessage.value = "Export failed"
     }.getOrNull()
 
+    fun exportSuggestedFileName(): String {
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+            .format(java.util.Date())
+        return "lookafter-life-$stamp.json"
+    }
+
+    fun exportToUri(uri: android.net.Uri) {
+        viewModelScope.launch {
+            com.lookafter.app.data.DataExportImport.writeUri(
+                getApplication(),
+                uri,
+                engine.currentState,
+            ).onSuccess {
+                _lastSyncMessage.value = "Saved backup to Files"
+                CrashReporting.log("export uri ok")
+            }.onFailure {
+                CrashReporting.recordNonFatal(it, "export uri")
+                _lastSyncMessage.value = "Save failed: ${it.message}"
+            }
+        }
+    }
+
     fun importLifeStateJson(json: String) {
         viewModelScope.launch {
             com.lookafter.app.data.DataExportImport.parseImport(json)
-                .onSuccess { state ->
-                    engine.process(LookAfterIntent.ReplaceState(state))
-                    _lastSyncMessage.value = "Imported backup"
-                    TodayWidgetUpdater.requestUpdate(getApplication())
+                .onSuccess { imported ->
+                    applyImportedState(imported)
                 }
                 .onFailure {
                     CrashReporting.recordNonFatal(it, "import")
                     _lastSyncMessage.value = "Import failed: ${it.message}"
                 }
         }
+    }
+
+    fun importFromUri(uri: android.net.Uri) {
+        viewModelScope.launch {
+            com.lookafter.app.data.DataExportImport.importUri(getApplication(), uri)
+                .onSuccess { imported ->
+                    applyImportedState(imported)
+                }
+                .onFailure {
+                    CrashReporting.recordNonFatal(it, "import uri")
+                    _lastSyncMessage.value = "Import failed: ${it.message}"
+                }
+        }
+    }
+
+    private suspend fun applyImportedState(imported: com.lookafter.core.engine.LifeState) {
+        engine.process(LookAfterIntent.ReplaceState(imported))
+        val summary = com.lookafter.app.data.DataExportImport.prettySummary(imported)
+            .lines()
+            .joinToString(" · ") { it.trim() }
+            .take(120)
+        _lastSyncMessage.value = "Imported backup · $summary"
+        CrashReporting.log("import ok")
+        TodayWidgetUpdater.requestUpdate(getApplication())
     }
 
     fun startFocusForHero(emergency: Boolean = false) {

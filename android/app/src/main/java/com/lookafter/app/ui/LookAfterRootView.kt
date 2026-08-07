@@ -2,6 +2,8 @@ package com.lookafter.app.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -16,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookafter.app.LookAfterViewModel
+import com.lookafter.app.data.DataExportImport
 import com.lookafter.app.ui.adhd.FocusSessionOverlay
 import com.lookafter.app.ui.brain.BrainScreen
 import com.lookafter.app.ui.briefing.BriefingScreen
@@ -67,6 +70,18 @@ fun LookAfterRootView(
     val cameraBodyDouble by viewModel.cameraBodyDoubleEnabled.collectAsStateWithLifecycle()
     val syncMessage by viewModel.lastSyncMessage.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        // Temporary read grant is enough; persistable is best-effort only.
+        if (uri != null) viewModel.importFromUri(uri)
+    }
+    val exportToFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(DataExportImport.MIME_JSON),
+    ) { uri: Uri? ->
+        if (uri != null) viewModel.exportToUri(uri)
+    }
 
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
@@ -226,6 +241,18 @@ fun LookAfterRootView(
                         viewModel.exportShareIntent()?.let { intent ->
                             context.startActivity(Intent.createChooser(intent, "Export Look After"))
                         }
+                    },
+                    onExportToFolder = {
+                        exportToFolderLauncher.launch(viewModel.exportSuggestedFileName())
+                    },
+                    onImport = {
+                        importBackupLauncher.launch(
+                            arrayOf(
+                                DataExportImport.MIME_JSON,
+                                "application/*",
+                                "text/*",
+                            ),
+                        )
                     },
                     onFactoryReset = {
                         viewModel.factoryReset()
