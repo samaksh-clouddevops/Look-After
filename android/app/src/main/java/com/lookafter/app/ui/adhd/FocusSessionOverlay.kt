@@ -21,16 +21,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
+import com.lookafter.core.adhd.BodyDoublingPrompts
 import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
 import com.lookafter.core.adhd.FocusSessionState
 import java.time.Instant
 import kotlinx.coroutines.delay
 
-/** Full-screen ADHD focus lock — iOS body-doubling / timer overlay parity. */
+/** Full-screen ADHD focus lock - body-doubling prompts + timer (iOS parity). */
 @Composable
 fun FocusSessionOverlay(
     session: FocusSessionState,
@@ -38,23 +41,38 @@ fun FocusSessionOverlay(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var remaining by remember(session) { mutableLongStateOf(session.remainingSeconds()) }
-    LaunchedEffect(session.phase, session.startedAt) {
+    var remaining by remember(session.phase, session.startedAt, session.accumulatedActiveSeconds) {
+        mutableLongStateOf(session.remainingSeconds())
+    }
+    var elapsed by remember(session.phase, session.startedAt, session.accumulatedActiveSeconds) {
+        mutableLongStateOf(session.elapsedActiveSeconds())
+    }
+
+    LaunchedEffect(session.phase, session.startedAt, session.emergencyMode) {
         while (session.phase == FocusSessionPhase.RUNNING) {
             val now = Instant.now()
             remaining = session.remainingSeconds(now)
+            elapsed = session.elapsedActiveSeconds(now)
             onIntent(FocusSessionIntent.Tick(now))
             if (remaining <= 0) break
             delay(1000)
         }
         remaining = session.remainingSeconds()
+        elapsed = session.elapsedActiveSeconds()
     }
+
     val mins = remaining / 60
     val secs = remaining % 60
+    val accent = if (session.emergencyMode) LookAfterColors.Warning else LookAfterColors.AccentPrimary
+    val doubleLine = BodyDoublingPrompts.lineFor(elapsed, session.emergencyMode)
+    val emergency = session.emergencyMode
+    val onBg = if (emergency) LookAfterColors.DarkTextPrimary else MaterialTheme.colorScheme.onBackground
+    val muted = if (emergency) LookAfterColors.DarkTextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (emergency) LookAfterColors.DarkBackground else MaterialTheme.colorScheme.background)
             .padding(LookAfterDimens.screenHorizontal)
             .padding(vertical = LookAfterDimens.spacingXL),
         verticalArrangement = Arrangement.SpaceBetween,
@@ -62,33 +80,43 @@ fun FocusSessionOverlay(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                if (session.emergencyMode) "Emergency focus" else "Focus",
+                text = if (emergency) "Emergency focus" else "Focus",
                 style = MaterialTheme.typography.labelMedium,
-                color = LookAfterColors.AccentPrimary,
+                color = accent,
             )
             Text(
-                session.taskTitle.ifBlank { "Deep work" },
+                text = session.taskTitle.ifBlank { "Deep work" },
                 style = MaterialTheme.typography.headlineMedium,
+                color = onBg,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = LookAfterDimens.spacingSM),
             )
             Text(
-                "%d:%02d".format(mins, secs),
+                text = "%d:%02d".format(mins, secs),
                 style = MaterialTheme.typography.displayLarge,
+                color = onBg,
                 modifier = Modifier.padding(top = LookAfterDimens.spacingLG),
             )
             LinearProgressIndicator(
                 progress = { session.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = LookAfterDimens.spacingMD),
-                color = LookAfterColors.AccentPrimary,
+                modifier = Modifier.fillMaxWidth().padding(top = LookAfterDimens.spacingMD),
+                color = accent,
             )
             Text(
-                session.phase.name.lowercase(),
+                text = session.phase.name.lowercase(),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = muted,
                 modifier = Modifier.padding(top = 8.dp),
             )
+            ElevatedSurfaceCard(modifier = Modifier.padding(top = LookAfterDimens.spacingLG)) {
+                Text("Body double", style = MaterialTheme.typography.labelMedium, color = accent)
+                Text(
+                    text = doubleLine,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                )
+            }
         }
         Column(verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM)) {
             Row(
@@ -100,18 +128,14 @@ fun FocusSessionOverlay(
                         Button(
                             onClick = { onIntent(FocusSessionIntent.Pause()) },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = LookAfterColors.AccentPrimary,
-                            ),
+                            colors = ButtonDefaults.buttonColors(containerColor = accent),
                         ) { Text("Pause") }
                     }
                     FocusSessionPhase.PAUSED -> {
                         Button(
                             onClick = { onIntent(FocusSessionIntent.Resume()) },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = LookAfterColors.AccentPrimary,
-                            ),
+                            colors = ButtonDefaults.buttonColors(containerColor = accent),
                         ) { Text("Resume") }
                     }
                     else -> Unit

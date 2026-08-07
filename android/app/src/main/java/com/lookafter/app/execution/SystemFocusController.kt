@@ -61,18 +61,35 @@ class SystemFocusController(
 
     /** Force restore to ALL (e.g. service teardown). */
     fun releaseFocus() {
-        if (!isPolicyAccessGranted) return
+        setFilter(NotificationManager.INTERRUPTION_FILTER_ALL, reason = "release")
+    }
+
+    /**
+     * ADHD / timer session DND.
+     * - Normal focus → PRIORITY (calls/alarms)
+     * - Emergency → ALARMS only (harder gate)
+     */
+    fun applySessionFocus(emergency: Boolean) {
+        val target = if (emergency) {
+            NotificationManager.INTERRUPTION_FILTER_ALARMS
+        } else {
+            NotificationManager.INTERRUPTION_FILTER_PRIORITY
+        }
+        setFilter(target, reason = if (emergency) "emergency-session" else "focus-session")
+    }
+
+    private fun setFilter(target: Int, reason: String) {
+        if (!isPolicyAccessGranted) {
+            Log.d(TAG, "DND policy access not granted — skip ($reason)")
+            return
+        }
+        val current = notificationManager.currentInterruptionFilter
+        if (current == target) return
         try {
-            if (notificationManager.currentInterruptionFilter !=
-                NotificationManager.INTERRUPTION_FILTER_ALL
-            ) {
-                notificationManager.setInterruptionFilter(
-                    NotificationManager.INTERRUPTION_FILTER_ALL,
-                )
-                Log.i(TAG, "Interruption filter restored to ALL")
-            }
+            notificationManager.setInterruptionFilter(target)
+            Log.i(TAG, "Interruption filter → ${filterName(target)} ($reason)")
         } catch (t: SecurityException) {
-            Log.w(TAG, "Failed to release interruption filter", t)
+            Log.w(TAG, "Failed to set interruption filter ($reason)", t)
         }
     }
 

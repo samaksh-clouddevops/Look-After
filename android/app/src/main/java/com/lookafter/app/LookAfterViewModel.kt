@@ -3,6 +3,7 @@ package com.lookafter.app
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.core.adhd.FocusSessionEngine
@@ -46,6 +47,7 @@ class LookAfterViewModel(
     private val calendar: CalendarEventsProvider = app.calendarProvider
     private val notifier: LookAfterNotifier = app.notifier
     private val coach: CoachService = app.coachService
+    private val systemFocus = SystemFocusController(application)
 
     /** Deep-link destination requested by widget / notifications (e.g. "today", "brain", "focus"). */
     private val _pendingDeepLink = MutableStateFlow<String?>(null)
@@ -169,17 +171,38 @@ class LookAfterViewModel(
     }
 
     fun dispatchFocus(intent: FocusSessionIntent) {
-        _focus.value = FocusSessionEngine.reduce(_focus.value, intent)
-        if (_focus.value.phase == FocusSessionPhase.COMPLETED) {
+        val previous = _focus.value.phase
+        val next = FocusSessionEngine.reduce(_focus.value, intent)
+        _focus.value = next
+        syncSystemFocus(previousPhase = previous, session = next)
+        if (next.phase == FocusSessionPhase.COMPLETED) {
             notifier.postNow(
                 com.lookafter.core.notifications.PlannedNotification(
                     id = "focus-complete",
                     kind = com.lookafter.core.notifications.NotificationKind.FOCUS_COMPLETE,
-                    title = "Focus complete",
-                    body = _focus.value.taskTitle.ifBlank { "Session finished" },
+                    title = if (next.emergencyMode) "Emergency block complete" else "Focus complete",
+                    body = next.taskTitle.ifBlank { "Session finished" },
                     fireAt = java.time.Instant.now(),
                 ),
             )
+        }
+    }
+
+    private fun syncSystemFocus(previousPhase: FocusSessionPhase, session: FocusSessionState) {
+        when (session.phase) {
+            FocusSessionPhase.RUNNING -> systemFocus.applySessionFocus(emergency = session.emergencyMode)
+            FocusSessionPhase.PAUSED,
+            FocusSessionPhase.COMPLETED,
+            FocusSessionPhase.ABORTED,
+            FocusSessionPhase.IDLE,
+            -> {
+                // Release only when leaving an active/paused session.
+                if (previousPhase == FocusSessionPhase.RUNNING ||
+                    previousPhase == FocusSessionPhase.PAUSED
+                ) {
+                    systemFocus.releaseFocus()
+                }
+            }
         }
     }
 
