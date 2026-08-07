@@ -73,7 +73,8 @@ object FocusSessionEngine {
                 phase = FocusSessionPhase.RUNNING,
                 taskId = intent.taskId,
                 taskTitle = intent.taskTitle,
-                plannedMinutes = intent.plannedMinutes.coerceIn(5, 180),
+                // Allow short blocks (tests / emergency) down to 1 minute.
+                plannedMinutes = intent.plannedMinutes.coerceIn(1, 180),
                 startedAt = intent.now,
                 emergencyMode = intent.emergencyMode,
             )

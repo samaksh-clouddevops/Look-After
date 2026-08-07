@@ -51,7 +51,8 @@ object HeroTaskRanker {
             Priority.LOW -> s += 5.0
             Priority.SOMEDAY -> s -= 20.0
         }
-        if (task.status == TaskStatus.IN_PROGRESS) s += 50.0
+        // Continuity: finish what's already live before reopening the board.
+        if (task.status == TaskStatus.IN_PROGRESS) s += 200.0
         val start = task.scheduledStart
         if (start != null) {
             val minutes = java.time.Duration.between(now, start).toMinutes()

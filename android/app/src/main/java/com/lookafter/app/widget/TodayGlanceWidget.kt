@@ -47,21 +47,32 @@ private fun WidgetContent(hero: String, reason: String, open: Int) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(LookAfterColors.LightSurface)
+            .background(
+                ColorProvider(
+                    day = LookAfterColors.LightSurface,
+                    night = LookAfterColors.DarkSurface,
+                ),
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Text(
             text = "Today",
             style = TextStyle(
-                color = ColorProvider(LookAfterColors.AccentPrimary),
+                color = ColorProvider(
+                    day = LookAfterColors.AccentPrimary,
+                    night = LookAfterColors.AccentOnDark,
+                ),
                 fontSize = 12.sp,
             ),
         )
         Text(
             text = hero,
             style = TextStyle(
-                color = ColorProvider(LookAfterColors.LightTextPrimary),
+                color = ColorProvider(
+                    day = LookAfterColors.LightTextPrimary,
+                    night = LookAfterColors.DarkTextPrimary,
+                ),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
             ),
@@ -69,14 +80,20 @@ private fun WidgetContent(hero: String, reason: String, open: Int) {
         Text(
             text = reason,
             style = TextStyle(
-                color = ColorProvider(LookAfterColors.LightTextSecondary),
+                color = ColorProvider(
+                    day = LookAfterColors.LightTextSecondary,
+                    night = LookAfterColors.DarkTextSecondary,
+                ),
                 fontSize = 12.sp,
             ),
         )
         Text(
             text = "$open open",
             style = TextStyle(
-                color = ColorProvider(LookAfterColors.LightTextMuted),
+                color = ColorProvider(
+                    day = LookAfterColors.LightTextMuted,
+                    night = LookAfterColors.DarkTextMuted,
+                ),
                 fontSize = 11.sp,
             ),
         )
