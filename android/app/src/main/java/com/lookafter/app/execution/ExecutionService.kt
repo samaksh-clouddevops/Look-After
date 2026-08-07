@@ -33,6 +33,7 @@ class ExecutionService : LifecycleService() {
 
     private lateinit var engine: LifeEngine
     private lateinit var notifications: ExecutionNotificationHelper
+    private lateinit var systemFocus: SystemFocusController
     private var observeJob: Job? = null
     private var isForeground: Boolean = false
     private var lastTaskId: String? = null
@@ -43,6 +44,7 @@ class ExecutionService : LifecycleService() {
         engine = app.lifeEngine
         notifications = ExecutionNotificationHelper(this)
         notifications.ensureChannel()
+        systemFocus = SystemFocusController(this)
         Log.i(TAG, "ExecutionService created")
     }
 
@@ -86,11 +88,18 @@ class ExecutionService : LifecycleService() {
     override fun onDestroy() {
         observeJob?.cancel()
         observeJob = null
+        // Never leave the device stuck in DND after service teardown.
+        if (::systemFocus.isInitialized) {
+            systemFocus.releaseFocus()
+        }
         super.onDestroy()
         Log.i(TAG, "ExecutionService destroyed")
     }
 
     private fun publish(snapshot: ExecutionBlockSnapshot) {
+        // Drive DND on every resolve — Anchored engages, all else restores.
+        systemFocus.applyFocusState(snapshot)
+
         if (!snapshot.isFocusEligible) {
             if (isForeground) {
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)

@@ -1,21 +1,36 @@
 package com.lookafter.app.ui.timeline
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DoNotDisturbOn
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.engine.LookAfterIntent
 import com.lookafter.core.models.TaskStatus
@@ -32,6 +47,16 @@ fun TodayTimelineScreen(
     restoredFromDisk: Boolean = false,
     hydrationComplete: Boolean = true,
 ) {
+    val context = LocalContext.current
+    val policyGrantedState = remember {
+        mutableStateOf(SystemFocusController.isPolicyAccessGranted(context))
+    }
+    // Re-check when returning from system settings.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        policyGrantedState.value = SystemFocusController.isPolicyAccessGranted(context)
+    }
+    val policyGranted by policyGrantedState
+
     // Prefer still-actionable work; completed stay visible for the session.
     val tasks = state.activeTasks
         .sortedWith(
@@ -68,6 +93,18 @@ fun TodayTimelineScreen(
             }
         }
 
+        if (!policyGranted) {
+            item(key = "strict-focus-banner") {
+                StrictFocusPermissionBanner(
+                    onEnableClick = {
+                        context.startActivity(
+                            SystemFocusController.notificationPolicySettingsIntent(),
+                        )
+                    },
+                )
+            }
+        }
+
         if (tasks.isEmpty()) {
             item(key = "empty") {
                 EquilibriumEmptyState(
@@ -79,6 +116,49 @@ fun TodayTimelineScreen(
         } else {
             items(tasks, key = { it.id }) { task ->
                 TimelineTaskCard(task = task, onIntent = onIntent)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StrictFocusPermissionBanner(
+    onEnableClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onEnableClick),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.DoNotDisturbOn,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enable Strict Focus",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    text = "Allow Look After to silence interruptions during Anchored blocks.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                )
             }
         }
     }
