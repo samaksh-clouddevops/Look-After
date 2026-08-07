@@ -17,8 +17,10 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,12 +31,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.lookafter.app.auth.AuthSessionState
 import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.health.HealthSummary
+import com.lookafter.core.insights.InsightsSnapshot
 import kotlin.math.roundToInt
 
 /** Profile / settings hub — iOS "You" tab parity. */
@@ -42,6 +46,8 @@ import kotlin.math.roundToInt
 fun YouScreen(
     state: LifeState,
     health: HealthSummary = HealthSummary.EMPTY,
+    insights: InsightsSnapshot = InsightsSnapshot.EMPTY,
+    auth: AuthSessionState = AuthSessionState(),
     ambientEnabled: Boolean = true,
     onAmbientChange: (Boolean) -> Unit = {},
     onOpenReview: () -> Unit,
@@ -49,10 +55,14 @@ fun YouScreen(
     onOpenMedication: () -> Unit,
     onOpenHealth: () -> Unit = {},
     onOpenInbox: () -> Unit = {},
+    onOpenInsights: () -> Unit = {},
     onConnectCalendar: () -> Unit = {},
     calendarEventCount: Int = 0,
     canScheduleExactAlarms: Boolean = true,
     onRequestExactAlarms: () -> Unit = {},
+    onSignInLocal: (String) -> Unit = {},
+    onSignOut: () -> Unit = {},
+    onSyncChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -84,7 +94,64 @@ fun YouScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
+                if (insights.headline.isNotBlank() && insights.asOf.year > 1970) {
+                    Text(
+                        insights.headline,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                    )
+                }
             }
+        }
+        item {
+            val name = auth.user?.displayName ?: "You"
+            YouRow(
+                icon = Icons.Outlined.Person,
+                title = if (auth.user?.isAnonymous != false) "Local profile" else name,
+                subtitle = if (auth.user?.isAnonymous != false) {
+                    "Tap to set a display name"
+                } else {
+                    auth.user?.email?.ifBlank { "Signed in on this device" } ?: "Signed in"
+                },
+                onClick = {
+                    if (auth.user?.isAnonymous != false) onSignInLocal(name)
+                    else onSignOut()
+                },
+            )
+        }
+        item {
+            ElevatedSurfaceCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
+                ) {
+                    Icon(Icons.Outlined.Sync, contentDescription = null, tint = LookAfterColors.AccentPrimary)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Cloud sync", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            if (auth.syncEnabled) "Marked enabled (transport pending)"
+                            else "Local-only · enable when backend is ready",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = auth.syncEnabled,
+                        onCheckedChange = onSyncChange,
+                        colors = SwitchDefaults.colors(checkedTrackColor = LookAfterColors.AccentPrimary),
+                    )
+                }
+            }
+        }
+        item {
+            YouRow(
+                icon = Icons.Outlined.Insights,
+                title = "Insights",
+                subtitle = insights.coachingLine.ifBlank { "Weekly depth & streaks" },
+                onClick = onOpenInsights,
+            )
         }
         item {
             val medCount = state.medications.size

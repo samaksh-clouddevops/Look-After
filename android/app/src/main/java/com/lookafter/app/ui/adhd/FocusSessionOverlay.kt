@@ -23,10 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
-import com.lookafter.core.adhd.BodyDoublingPrompts
 import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
 import com.lookafter.core.adhd.FocusSessionState
@@ -64,7 +62,6 @@ fun FocusSessionOverlay(
     val mins = remaining / 60
     val secs = remaining % 60
     val accent = if (session.emergencyMode) LookAfterColors.Warning else LookAfterColors.AccentPrimary
-    val doubleLine = BodyDoublingPrompts.lineFor(elapsed, session.emergencyMode)
     val emergency = session.emergencyMode
     val onBg = if (emergency) LookAfterColors.DarkTextPrimary else MaterialTheme.colorScheme.onBackground
     val muted = if (emergency) LookAfterColors.DarkTextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -108,15 +105,11 @@ fun FocusSessionOverlay(
                 color = muted,
                 modifier = Modifier.padding(top = 8.dp),
             )
-            ElevatedSurfaceCard(modifier = Modifier.padding(top = LookAfterDimens.spacingLG)) {
-                Text("Body double", style = MaterialTheme.typography.labelMedium, color = accent)
-                Text(
-                    text = doubleLine,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
-                )
-            }
+            BodyDoublePresencePanel(
+                emergency = emergency,
+                elapsedActiveSeconds = elapsed,
+                modifier = Modifier.padding(top = LookAfterDimens.spacingLG),
+            )
         }
         Column(verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM)) {
             Row(

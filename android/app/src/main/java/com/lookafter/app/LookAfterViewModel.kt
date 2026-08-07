@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lookafter.app.adhd.BodyDoubleAmbientAudio
+import com.lookafter.app.auth.AuthSessionStore
 import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
@@ -24,11 +25,14 @@ import com.lookafter.core.health.HealthSummary
 import com.lookafter.core.inbox.InboxEngine
 import com.lookafter.core.inbox.InboxIntent
 import com.lookafter.core.inbox.InboxState
+import com.lookafter.core.insights.InsightsEngine
+import com.lookafter.core.insights.InsightsSnapshot
 import com.lookafter.core.notifications.NotificationPolicy
 import com.lookafter.core.onboarding.OnboardingEngine
 import com.lookafter.core.onboarding.OnboardingIntent
 import com.lookafter.core.onboarding.OnboardingState
-import com.lookafter.core.planning.SimplePlanEngine
+import com.lookafter.core.planning.MultiDayPlanEngine
+import com.lookafter.core.planning.PlanMutationApplier
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,9 +58,16 @@ class LookAfterViewModel(
     private val coach: CoachService = app.coachService
     private val systemFocus = SystemFocusController(application)
     private val ambientAudio = BodyDoubleAmbientAudio(application)
+    private val authStore: AuthSessionStore = app.authSessionStore
 
     private val _ambientEnabled = MutableStateFlow(true)
     val ambientEnabled: StateFlow<Boolean> = _ambientEnabled.asStateFlow()
+
+    val auth = authStore.state
+
+    val insights: StateFlow<InsightsSnapshot> = combine(state, health) { life, h ->
+        InsightsEngine.compute(life, h)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsSnapshot.EMPTY)
 
     fun setAmbientEnabled(enabled: Boolean) {
         _ambientEnabled.value = enabled
@@ -248,11 +259,21 @@ class LookAfterViewModel(
         if (trimmed.isEmpty()) return
         _coachTranscript.value = _coachTranscript.value + (true to trimmed)
         viewModelScope.launch {
-            // Prefer deterministic plan mutations when the message matches known commands.
-            val plan = SimplePlanEngine.interpret(trimmed, engine.currentState)
-            if (plan.intents.isNotEmpty()) {
-                plan.intents.forEach { engine.process(it) }
-                _coachTranscript.value = _coachTranscript.value + (false to plan.reply)
+            val life = engine.currentState
+            // Multi-day / mutation proposal path first.
+            val multi = MultiDayPlanEngine.interpret(trimmed, life)
+            if (multi.proposal.mutations.isNotEmpty()) {
+                val applied = PlanMutationApplier.apply(multi.proposal, life)
+                applied.intents.forEach { engine.process(it) }
+                _coachTranscript.value =
+                    _coachTranscript.value + (false to multi.conversationalReply)
+                return@launch
+            }
+            // Single-day deterministic intents (strip / park fluid / someday).
+            val simple = MultiDayPlanEngine.simpleIntents(trimmed, life)
+            if (simple.intents.isNotEmpty()) {
+                simple.intents.forEach { engine.process(it) }
+                _coachTranscript.value = _coachTranscript.value + (false to simple.reply)
                 return@launch
             }
             val reply = coach.reply(
@@ -260,9 +281,22 @@ class LookAfterViewModel(
                 life = engine.currentState,
                 health = healthRepo.summary.value,
             )
-            val finalReply = reply.ifBlank { plan.reply }
+            val finalReply = reply.ifBlank { multi.conversationalReply }
             _coachTranscript.value = _coachTranscript.value + (false to finalReply)
         }
+    }
+
+    fun signInLocal(displayName: String, email: String = "") {
+        authStore.signInLocal(displayName, email)
+    }
+
+    fun signOut() {
+        authStore.signOutToAnonymous()
+    }
+
+    fun setSyncEnabled(enabled: Boolean) {
+        authStore.setSyncEnabled(enabled)
+        if (enabled) authStore.markSyncedNow()
     }
 
     fun startFocusForHero(emergency: Boolean = false) {

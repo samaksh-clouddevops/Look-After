@@ -19,12 +19,13 @@ import com.lookafter.app.ui.briefing.BriefingScreen
 import com.lookafter.app.ui.components.LookAfterBottomNav
 import com.lookafter.app.ui.health.HealthScreen
 import com.lookafter.app.ui.inbox.InboxScreen
+import com.lookafter.app.ui.insights.InsightsScreen
 import com.lookafter.app.ui.medication.MedicationScreen
+import com.lookafter.app.ui.motion.CalmAnimatedContent
 import com.lookafter.app.ui.navigation.AppDestination
 import com.lookafter.app.ui.onboarding.OnboardingScreen
 import com.lookafter.app.ui.review.WeeklyReviewScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
-import com.lookafter.app.ui.motion.CalmAnimatedContent
 import com.lookafter.app.ui.tasks.TaskEditorSheet
 import com.lookafter.app.ui.timeline.TodayTimelineScreen
 import com.lookafter.app.ui.you.YouScreen
@@ -57,6 +58,8 @@ fun LookAfterRootView(
     val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
     val deepLink by viewModel.pendingDeepLink.collectAsStateWithLifecycle()
     val ambientEnabled by viewModel.ambientEnabled.collectAsStateWithLifecycle()
+    val insights by viewModel.insights.collectAsStateWithLifecycle()
+    val auth by viewModel.auth.collectAsStateWithLifecycle()
 
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
@@ -65,6 +68,7 @@ fun LookAfterRootView(
     var medicationOpen by remember { mutableStateOf(false) }
     var healthOpen by remember { mutableStateOf(false) }
     var inboxOpen by remember { mutableStateOf(false) }
+    var insightsOpen by remember { mutableStateOf(false) }
     var captureOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LifeTask?>(null) }
@@ -132,11 +136,16 @@ fun LookAfterRootView(
         bottomBar = {
             LookAfterBottomNav(
                 current = when {
-                    reviewOpen || medicationOpen || healthOpen || inboxOpen -> AppDestination.YOU
+                    reviewOpen || medicationOpen || healthOpen || inboxOpen || insightsOpen ->
+                        AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
-                    reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = false
+                    reviewOpen = false
+                    medicationOpen = false
+                    healthOpen = false
+                    inboxOpen = false
+                    insightsOpen = false
                     destination = dest.name
                 },
                 onCapture = { captureOpen = true },
@@ -167,6 +176,7 @@ fun LookAfterRootView(
             medicationOpen -> "med"
             healthOpen -> "health"
             inboxOpen -> "inbox"
+            insightsOpen -> "insights"
             reviewOpen -> "review"
             else -> current.name
         }
@@ -190,6 +200,11 @@ fun LookAfterRootView(
                     state = inbox,
                     onIntent = viewModel::dispatchInbox,
                     onBack = { inboxOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                insightsOpen -> InsightsScreen(
+                    snapshot = insights,
+                    onBack = { insightsOpen = false },
                     modifier = Modifier.fillMaxSize(),
                 )
                 reviewOpen -> WeeklyReviewScreen(state = state, modifier = Modifier.fillMaxSize())
@@ -233,21 +248,43 @@ fun LookAfterRootView(
                 current == AppDestination.YOU -> YouScreen(
                     state = state,
                     health = health,
+                    insights = insights,
+                    auth = auth,
                     ambientEnabled = ambientEnabled,
                     onAmbientChange = viewModel::setAmbientEnabled,
-                    onOpenReview = { medicationOpen = false; healthOpen = false; inboxOpen = false; reviewOpen = true },
+                    onOpenReview = {
+                        medicationOpen = false; healthOpen = false; inboxOpen = false
+                        insightsOpen = false; reviewOpen = true
+                    },
                     onOpenSimulation = {
                         medicationOpen = false; healthOpen = false; inboxOpen = false
+                        insightsOpen = false
                         hypotheticals = listOf(dummyHypotheticalMeeting(state.currentDay))
                         simulationOpen = true
                     },
-                    onOpenMedication = { reviewOpen = false; healthOpen = false; inboxOpen = false; medicationOpen = true },
-                    onOpenHealth = { reviewOpen = false; medicationOpen = false; inboxOpen = false; healthOpen = true },
-                    onOpenInbox = { reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = true },
+                    onOpenMedication = {
+                        reviewOpen = false; healthOpen = false; inboxOpen = false
+                        insightsOpen = false; medicationOpen = true
+                    },
+                    onOpenHealth = {
+                        reviewOpen = false; medicationOpen = false; inboxOpen = false
+                        insightsOpen = false; healthOpen = true
+                    },
+                    onOpenInbox = {
+                        reviewOpen = false; medicationOpen = false; healthOpen = false
+                        insightsOpen = false; inboxOpen = true
+                    },
+                    onOpenInsights = {
+                        reviewOpen = false; medicationOpen = false; healthOpen = false
+                        inboxOpen = false; insightsOpen = true
+                    },
                     onConnectCalendar = { viewModel.ensureCalendarPermission() },
                     calendarEventCount = calendarEvents.size,
                     canScheduleExactAlarms = viewModel.canScheduleExactAlarms,
                     onRequestExactAlarms = { viewModel.requestExactAlarms() },
+                    onSignInLocal = { viewModel.signInLocal(it) },
+                    onSignOut = { viewModel.signOut() },
+                    onSyncChange = { viewModel.setSyncEnabled(it) },
                     modifier = Modifier.fillMaxSize(),
                 )
             }

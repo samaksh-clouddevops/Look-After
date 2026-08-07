@@ -44,13 +44,34 @@ android {
         )
     }
 
+    signingConfigs {
+        // Optional Play upload key via CI env (LOOKAFTER_STORE_*).
+        val store = System.getenv("LOOKAFTER_STORE_FILE")
+        if (store != null) {
+            create("release") {
+                storeFile = file(store)
+                storePassword = System.getenv("LOOKAFTER_STORE_PASSWORD")
+                keyAlias = System.getenv("LOOKAFTER_KEY_ALIAS")
+                keyPassword = System.getenv("LOOKAFTER_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
-        release {
+        debug {
             isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Unsigned release is fine for CI artifact; sign when config exists.
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 

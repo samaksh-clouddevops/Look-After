@@ -51,12 +51,24 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Build release APK (R8 minify)
+        working-directory: android
+        run: ./gradlew assembleRelease --stacktrace
+
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+
+      - name: Upload release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/app-release*.apk
           if-no-files-found: warn
 
   instrumented:

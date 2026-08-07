@@ -32,7 +32,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.compose.material.icons.outlined.SelfImprovement
 import com.lookafter.app.execution.SystemFocusController
+import com.lookafter.app.ui.components.CalmEmptyState
 import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
@@ -167,10 +169,15 @@ fun TodayTimelineScreen(
 
         if (tasks.isEmpty()) {
             item(key = "empty") {
-                EquilibriumEmptyState(
+                CalmEmptyState(
+                    title = "Equilibrium achieved",
+                    subtitle = "No active work on the board. Protect the quiet — or capture the next intentional block.",
+                    icon = Icons.Outlined.SelfImprovement,
+                    actionLabel = if (onCreateTask != null) "New task" else null,
+                    onAction = onCreateTask,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 72.dp),
+                        .padding(top = 48.dp),
                 )
             }
         } else {
@@ -224,32 +231,6 @@ private fun StrictFocusPermissionBanner(
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun EquilibriumEmptyState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Equilibrium Achieved",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "No active work on the board. Protect the quiet.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
         }
     }
 }
