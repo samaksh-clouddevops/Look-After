@@ -167,6 +167,11 @@ class LookAfterApplication : Application() {
             .apply()
     }
 
+    /** Clear onboarding so the welcome flow shows again after factory reset. */
+    fun resetOnboarding() {
+        persistOnboarding(OnboardingState.fresh)
+    }
+
     private fun loadOnboarding(): OnboardingState {
         val raw = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_ONBOARDING, null)
             ?: return OnboardingState.fresh

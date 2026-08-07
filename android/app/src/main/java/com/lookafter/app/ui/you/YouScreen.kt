@@ -61,6 +61,7 @@ fun YouScreen(
     onOpenHealth: () -> Unit = {},
     onOpenInbox: () -> Unit = {},
     onOpenInsights: () -> Unit = {},
+    onOpenPrivacySettings: () -> Unit = {},
     onConnectCalendar: () -> Unit = {},
     calendarEventCount: Int = 0,
     canScheduleExactAlarms: Boolean = true,
@@ -312,9 +313,9 @@ fun YouScreen(
         item {
             YouRow(
                 icon = Icons.Outlined.Settings,
-                title = "Settings",
-                subtitle = "Notifications, focus, and profile",
-                onClick = { /* Phase shell — wire preferences next */ },
+                title = "Privacy & data",
+                subtitle = "Export, reset, sign-in, policy",
+                onClick = onOpenPrivacySettings,
             )
         }
     }

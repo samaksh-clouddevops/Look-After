@@ -395,6 +395,58 @@ class LookAfterViewModel(
         }
     }
 
+    /**
+     * Wipe local LifeState, focus, inbox, coach transcript, and onboarding.
+     * Does not delete remote Firebase data (user must do that in console).
+     */
+    fun factoryReset() {
+        viewModelScope.launch {
+            engine.process(LookAfterIntent.ReplaceState(LifeState.EMPTY))
+            _focus.value = FocusSessionState()
+            _inbox.value = InboxState()
+            _coachTranscript.value = emptyList()
+            _calendarEvents.value = emptyList()
+            _ambientEnabled.value = true
+            _cameraBodyDouble.value = false
+            systemFocus.releaseFocus()
+            ambientAudio.stop()
+            app.resetOnboarding()
+            _onboarding.value = app.initialOnboarding
+            authStore.signOutToAnonymous()
+            FirebaseAuthBridge.signOut()
+            _lastSyncMessage.value = "Device reset complete"
+            CrashReporting.log("factory reset")
+            TodayWidgetUpdater.requestUpdate(getApplication())
+        }
+    }
+
+    /** Write LifeState JSON to cache and return a share [android.content.Intent]. */
+    fun exportShareIntent(): android.content.Intent? = runCatching {
+        val file = com.lookafter.app.data.DataExportImport.exportToCache(
+            getApplication(),
+            engine.currentState,
+        )
+        com.lookafter.app.data.DataExportImport.shareIntent(getApplication(), file)
+    }.onFailure {
+        CrashReporting.recordNonFatal(it, "export")
+        _lastSyncMessage.value = "Export failed"
+    }.getOrNull()
+
+    fun importLifeStateJson(json: String) {
+        viewModelScope.launch {
+            com.lookafter.app.data.DataExportImport.parseImport(json)
+                .onSuccess { state ->
+                    engine.process(LookAfterIntent.ReplaceState(state))
+                    _lastSyncMessage.value = "Imported backup"
+                    TodayWidgetUpdater.requestUpdate(getApplication())
+                }
+                .onFailure {
+                    CrashReporting.recordNonFatal(it, "import")
+                    _lastSyncMessage.value = "Import failed: ${it.message}"
+                }
+        }
+    }
+
     fun startFocusForHero(emergency: Boolean = false) {
         val tick = brainTick.value
         dispatchFocus(

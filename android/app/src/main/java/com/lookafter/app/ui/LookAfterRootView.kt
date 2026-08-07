@@ -1,5 +1,7 @@
 package com.lookafter.app.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -11,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookafter.app.LookAfterViewModel
 import com.lookafter.app.ui.adhd.FocusSessionOverlay
@@ -25,6 +28,7 @@ import com.lookafter.app.ui.motion.CalmAnimatedContent
 import com.lookafter.app.ui.navigation.AppDestination
 import com.lookafter.app.ui.onboarding.OnboardingScreen
 import com.lookafter.app.ui.review.WeeklyReviewScreen
+import com.lookafter.app.ui.settings.PrivacySettingsScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
 import com.lookafter.app.ui.tasks.TaskEditorSheet
 import com.lookafter.app.ui.timeline.TodayTimelineScreen
@@ -62,6 +66,7 @@ fun LookAfterRootView(
     val auth by viewModel.auth.collectAsStateWithLifecycle()
     val cameraBodyDouble by viewModel.cameraBodyDoubleEnabled.collectAsStateWithLifecycle()
     val syncMessage by viewModel.lastSyncMessage.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
@@ -71,6 +76,7 @@ fun LookAfterRootView(
     var healthOpen by remember { mutableStateOf(false) }
     var inboxOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
+    var privacyOpen by remember { mutableStateOf(false) }
     var captureOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LifeTask?>(null) }
@@ -139,8 +145,8 @@ fun LookAfterRootView(
         bottomBar = {
             LookAfterBottomNav(
                 current = when {
-                    reviewOpen || medicationOpen || healthOpen || inboxOpen || insightsOpen ->
-                        AppDestination.YOU
+                    reviewOpen || medicationOpen || healthOpen || inboxOpen ||
+                        insightsOpen || privacyOpen -> AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
@@ -149,6 +155,7 @@ fun LookAfterRootView(
                     healthOpen = false
                     inboxOpen = false
                     insightsOpen = false
+                    privacyOpen = false
                     destination = dest.name
                 },
                 onCapture = { captureOpen = true },
@@ -180,6 +187,7 @@ fun LookAfterRootView(
             healthOpen -> "health"
             inboxOpen -> "inbox"
             insightsOpen -> "insights"
+            privacyOpen -> "privacy"
             reviewOpen -> "review"
             else -> current.name
         }
@@ -208,6 +216,34 @@ fun LookAfterRootView(
                 insightsOpen -> InsightsScreen(
                     snapshot = insights,
                     onBack = { insightsOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                privacyOpen -> PrivacySettingsScreen(
+                    llmConfigured = viewModel.llmPlanConfigured,
+                    firebaseAvailable = viewModel.firebaseAuthAvailable,
+                    statusMessage = syncMessage,
+                    onExport = {
+                        viewModel.exportShareIntent()?.let { intent ->
+                            context.startActivity(Intent.createChooser(intent, "Export Look After"))
+                        }
+                    },
+                    onFactoryReset = {
+                        viewModel.factoryReset()
+                        privacyOpen = false
+                        destination = AppDestination.TODAY.name
+                    },
+                    onSignInEmail = { email, password ->
+                        viewModel.signInFirebaseEmail(email, password)
+                    },
+                    onOpenPrivacyPolicy = {
+                        val uri = Uri.parse(
+                            "https://samaksh-clouddevops.github.io/Look-After/privacy",
+                        )
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                        }
+                    },
+                    onBack = { privacyOpen = false },
                     modifier = Modifier.fillMaxSize(),
                 )
                 reviewOpen -> WeeklyReviewScreen(state = state, modifier = Modifier.fillMaxSize())
@@ -283,7 +319,11 @@ fun LookAfterRootView(
                     },
                     onOpenInsights = {
                         reviewOpen = false; medicationOpen = false; healthOpen = false
-                        inboxOpen = false; insightsOpen = true
+                        inboxOpen = false; privacyOpen = false; insightsOpen = true
+                    },
+                    onOpenPrivacySettings = {
+                        reviewOpen = false; medicationOpen = false; healthOpen = false
+                        inboxOpen = false; insightsOpen = false; privacyOpen = true
                     },
                     onConnectCalendar = { viewModel.ensureCalendarPermission() },
                     calendarEventCount = calendarEvents.size,
