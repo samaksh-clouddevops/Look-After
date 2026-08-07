@@ -4,7 +4,9 @@ import com.lookafter.core.models.CascadeActionLog
 import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.Priority
 import com.lookafter.core.models.TaskStatus
+import com.lookafter.core.serialization.LocalDateSerializer
 import java.time.LocalDate
+import kotlinx.serialization.Serializable
 
 /**
  * Immutable single source of truth for the Look After operational universe.
@@ -12,6 +14,7 @@ import java.time.LocalDate
  * Pure data — no IO, no Android. Engines reduce intents into a new [LifeState]
  * via [copy]; never mutate in place.
  */
+@Serializable
 data class LifeState(
     val activeTasks: List<LifeTask> = emptyList(),
     val parkedQueue: List<LifeTask> = emptyList(),
@@ -19,6 +22,7 @@ data class LifeState(
     val actionLogs: List<CascadeActionLog> = emptyList(),
     val consecutiveHighLoadDays: Int = 0,
     /** Calendar day the engine last treated as "today" (for midnight sweeps). */
+    @Serializable(with = LocalDateSerializer::class)
     val currentDay: LocalDate? = null,
 ) {
     fun taskById(id: String): LifeTask? =

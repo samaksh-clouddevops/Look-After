@@ -25,11 +25,13 @@ import kotlinx.coroutines.sync.withLock
  * - Exposes immutable [state] via [StateFlow]
  * - Reduces [LookAfterIntent] into pure [LifeState] copies
  * - Wires Phase-1 engines ([DayScheduleReconciler], [ConflictResolutionCascade])
+ * - Optionally persists via [LifeStateRepository] after every successful reduce
  *
  * Zero Android dependencies — safe for JVM unit tests and multiplatform hosts.
  */
 class LifeEngine(
     initialState: LifeState = LifeState.EMPTY,
+    private val repository: LifeStateRepository? = null,
 ) {
     private val mutex = Mutex()
     private val _state = MutableStateFlow(initialState)
@@ -38,13 +40,38 @@ class LifeEngine(
     val currentState: LifeState get() = _state.value
 
     /**
+     * Hydrate from [repository] if present. Falls back to [fallback] when load
+     * returns null (first launch / corrupt snapshot).
+     *
+     * Call once at process start before UI binds to [state].
+     */
+    suspend fun hydrate(fallback: LifeState = LifeState.EMPTY): LifeState {
+        mutex.withLock {
+            val loaded = repository?.load()
+            val next = loaded ?: fallback
+            _state.value = next
+            // Ensure first launch still materializes a durable snapshot.
+            if (loaded == null) {
+                repository?.save(next)
+            }
+            return next
+        }
+    }
+
+    /**
      * Atomically reduce [intent] against the current universe and emit a new state.
-     * Safe for concurrent callers — serialized via [mutex] + [MutableStateFlow.update].
+     * Persists via [repository] after the in-memory update (IO stays off UI when
+     * callers use a background dispatcher / [viewModelScope]).
      */
     suspend fun process(intent: LookAfterIntent) {
-        mutex.withLock {
-            _state.update { current -> reduce(current, intent) }
+        val newState = mutex.withLock {
+            val reduced = reduce(_state.value, intent)
+            _state.value = reduced
+            reduced
         }
+        // Persist outside the reduce lock window of reducers; save is still
+        // serialized with hydrate/process via the same mutex entry points.
+        repository?.save(newState)
     }
 
     /** Pure reducer — exposed for tests that want to assert transitions without the flow. */

@@ -5,12 +5,14 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlinx.serialization.Serializable
 
 /**
  * Same-day fence so Lunch cannot slide into Dinner.
  * Hours are local clock hours in [0, 23].
  * Mirrors iOS `TemporalBoundingBox`.
  */
+@Serializable
 data class TemporalBoundingBox(
     val earliestStartHour: Int,
     val latestStartHour: Int,

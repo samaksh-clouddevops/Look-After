@@ -1,7 +1,9 @@
 package com.lookafter.core.models
 
+import com.lookafter.core.serialization.InstantSerializer
 import java.time.Instant
 import java.util.UUID
+import kotlinx.serialization.Serializable
 
 /**
  * Historical cascade / reaper action recorded for briefing + weekly review.
@@ -9,6 +11,7 @@ import java.util.UUID
  *
  * Phase-1 surface intentionally rich enough for [com.lookafter.core.planning.WeeklyReviewAggregator].
  */
+@Serializable
 data class CascadeActionLog(
     val id: String = UUID.randomUUID().toString(),
     val taskId: String? = null,
@@ -20,12 +23,14 @@ data class CascadeActionLog(
     val reclaimedMinutes: Int = 0,
     /** Minutes a block was shifted later (Stage 1 cascade). */
     val shiftMinutes: Int = 0,
+    @Serializable(with = InstantSerializer::class)
     val recordedAt: Instant = Instant.now(),
 )
 
 /**
  * Macro kinds the weekly aggregator and cascade distiller understand.
  */
+@Serializable
 enum class CascadeActionKind {
     /** Recovery / sabotage lock enforced — time reclaimed for rest. */
     SABOTAGE_AUCTION,

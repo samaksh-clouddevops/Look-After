@@ -31,13 +31,15 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * Phase-3 proof UI — shows active task counts + midnight-sweep button.
+ * Phase-3/4 proof UI — active task counts, midnight-sweep, restore status.
  * Full timeline is intentionally out of scope.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LookAfterRootView(
     viewModel: LookAfterViewModel,
+    restoredFromDisk: Boolean = false,
+    hydrationComplete: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -50,6 +52,8 @@ fun LookAfterRootView(
     ) { padding ->
         ProofContent(
             state = state,
+            restoredFromDisk = restoredFromDisk,
+            hydrationComplete = hydrationComplete,
             onMidnightSweep = {
                 val zone = ZoneOffset.systemDefault()
                 val today = LocalDate.now(zone)
@@ -73,6 +77,8 @@ fun LookAfterRootView(
 @Composable
 private fun ProofContent(
     state: LifeState,
+    restoredFromDisk: Boolean,
+    hydrationComplete: Boolean,
     onMidnightSweep: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -80,9 +86,15 @@ private fun ProofContent(
     val pending = active.count { it.status.isActive }
     val expired = active.count { it.status == TaskStatus.EXPIRED }
     val parked = state.parkedQueue.size
+    val restoreLabel = when {
+        !hydrationComplete -> "Persistence: hydrating…"
+        restoredFromDisk -> "Persistence: restored from disk ✓"
+        else -> "Persistence: fresh seed (first launch)"
+    }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Active tasks: ${active.size}", style = MaterialTheme.typography.headlineSmall)
+        Text(restoreLabel, style = MaterialTheme.typography.bodyMedium)
         Text("Pending / in-progress: $pending")
         Text("Expired in active pool: $expired")
         Text("Parked queue: $parked")

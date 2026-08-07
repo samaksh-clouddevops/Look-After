@@ -1,8 +1,11 @@
 package com.lookafter.core.models
 
+import com.lookafter.core.serialization.InstantSerializer
+import com.lookafter.core.serialization.LocalDateSerializer
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+import kotlinx.serialization.Serializable
 
 /**
  * A task in the Look After physics engine.
@@ -12,6 +15,7 @@ import java.util.UUID
  *
  * Mirrors the scheduling-relevant fields of iOS `LifeTask`.
  */
+@Serializable
 data class LifeTask(
     val id: String = UUID.randomUUID().toString(),
     val title: String,
@@ -23,15 +27,21 @@ data class LifeTask(
     val expirationPolicy: TaskExpirationPolicy = TaskExpirationPolicy.Infinite,
     val collisionStrategy: SemanticCollisionStrategy = SemanticCollisionStrategy.ALLOW_MULTIPLE,
     val temporalBoundingBox: TemporalBoundingBox? = null,
+    @Serializable(with = LocalDateSerializer::class)
     val scheduledDate: LocalDate? = null,
+    @Serializable(with = InstantSerializer::class)
     val scheduledStart: Instant? = null,
+    @Serializable(with = InstantSerializer::class)
     val scheduledEnd: Instant? = null,
     val minimumViableDurationMinutes: Int = DEFAULT_MINIMUM_MINUTES,
     val priority: Priority = Priority.MEDIUM,
     val tags: List<String> = emptyList(),
     val parentTaskId: String? = null,
+    @Serializable(with = InstantSerializer::class)
     val createdAt: Instant = Instant.EPOCH,
+    @Serializable(with = InstantSerializer::class)
     val updatedAt: Instant = Instant.EPOCH,
+    @Serializable(with = InstantSerializer::class)
     val completedAt: Instant? = null,
 ) {
     val isCompleted: Boolean get() = status == TaskStatus.COMPLETED
