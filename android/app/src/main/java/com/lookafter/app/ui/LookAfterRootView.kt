@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +27,7 @@ import com.lookafter.app.ui.review.WeeklyReviewScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
 import com.lookafter.app.ui.timeline.TodayTimelineScreen
 import com.lookafter.app.ui.you.YouScreen
+import com.lookafter.app.widget.LookAfterDeepLink
 import com.lookafter.core.adhd.FocusSessionPhase
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
@@ -51,6 +53,7 @@ fun LookAfterRootView(
     val brainTick by viewModel.brainTick.collectAsStateWithLifecycle()
     val coach by viewModel.coachTranscript.collectAsStateWithLifecycle()
     val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
+    val deepLink by viewModel.pendingDeepLink.collectAsStateWithLifecycle()
 
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
@@ -62,6 +65,26 @@ fun LookAfterRootView(
     var captureOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
     var hypotheticals by remember { mutableStateOf<List<LifeTask>>(emptyList()) }
+
+    LaunchedEffect(deepLink) {
+        val target = deepLink ?: return@LaunchedEffect
+        when (target) {
+            LookAfterDeepLink.TARGET_TODAY -> {
+                destination = AppDestination.TODAY.name
+                reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = false
+            }
+            LookAfterDeepLink.TARGET_BRAIN -> {
+                destination = AppDestination.BRAIN.name
+                reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = false
+            }
+            LookAfterDeepLink.TARGET_FOCUS -> {
+                destination = AppDestination.TODAY.name
+                viewModel.startFocusForHero()
+                focusOpen = true
+            }
+        }
+        viewModel.consumeDeepLink()
+    }
 
     if (!onboarding.completed) {
         OnboardingScreen(
@@ -152,7 +175,11 @@ fun LookAfterRootView(
                 coachTranscript = coach,
                 onSendCoach = viewModel::sendCoachMessage,
                 onStartFocus = {
-                    viewModel.startFocusForHero()
+                    viewModel.startFocusForHero(emergency = false)
+                    focusOpen = true
+                },
+                onEmergencyFocus = {
+                    viewModel.startFocusForHero(emergency = true)
                     focusOpen = true
                 },
                 modifier = contentModifier,

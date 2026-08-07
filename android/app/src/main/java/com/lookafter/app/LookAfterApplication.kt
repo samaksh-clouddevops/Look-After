@@ -9,6 +9,10 @@ import com.lookafter.app.data.DataStoreLifeStateRepository
 import com.lookafter.app.execution.ExecutionService
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
+import com.lookafter.core.brain.CoachService
+import com.lookafter.core.brain.FallbackCoachService
+import com.lookafter.core.brain.OfflineCoachService
+import com.lookafter.core.brain.UnconfiguredRemoteCoachService
 import com.lookafter.core.calendar.CalendarEvent
 import com.lookafter.core.calendar.CalendarEventsProvider
 import com.lookafter.core.calendar.StubCalendarEventsProvider
@@ -61,6 +65,9 @@ class LookAfterApplication : Application() {
     lateinit var notifier: LookAfterNotifier
         private set
 
+    lateinit var coachService: CoachService
+        private set
+
     val initialOnboarding: OnboardingState
         get() = loadOnboarding()
 
@@ -80,6 +87,11 @@ class LookAfterApplication : Application() {
             fallback = StubCalendarEventsProvider(demoCalendar()),
         )
         notifier = LookAfterNotifier(this).also { it.ensureChannels() }
+        // Remote scaffold is blank → offline coach always answers until LLM is wired.
+        coachService = FallbackCoachService(
+            primary = UnconfiguredRemoteCoachService(),
+            fallback = OfflineCoachService(),
+        )
         lifeEngine = LifeEngine(
             initialState = LifeState.EMPTY,
             repository = lifeStateRepository,

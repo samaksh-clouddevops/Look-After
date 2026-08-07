@@ -33,6 +33,7 @@ fun BrainScreen(
     coachTranscript: List<Pair<Boolean, String>>,
     onSendCoach: (String) -> Unit,
     onStartFocus: () -> Unit,
+    onEmergencyFocus: () -> Unit = onStartFocus,
     modifier: Modifier = Modifier,
 ) {
     var draft by remember { mutableStateOf("") }
@@ -59,6 +60,14 @@ fun BrainScreen(
                     modifier = Modifier.fillMaxWidth().padding(top = LookAfterDimens.spacingSM),
                     colors = ButtonDefaults.buttonColors(containerColor = LookAfterColors.AccentPrimary, contentColor = LookAfterColors.AccentOnPrimary),
                 ) { Text(decision.actionLabel) }
+                Button(
+                    onClick = onEmergencyFocus,
+                    modifier = Modifier.fillMaxWidth().padding(top = LookAfterDimens.spacingXS),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LookAfterColors.Warning,
+                        contentColor = LookAfterColors.LightTextPrimary,
+                    ),
+                ) { Text("Emergency 10-min focus") }
             }
         }
         item {
@@ -85,7 +94,13 @@ fun BrainScreen(
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM)) {
-                OutlinedTextField(value = draft, onValueChange = { draft = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Ask the offline coach") }, singleLine = true)
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Ask the coach") },
+                    singleLine = true,
+                )
                 Row {
                     Button(
                         onClick = { onSendCoach(draft); draft = "" },

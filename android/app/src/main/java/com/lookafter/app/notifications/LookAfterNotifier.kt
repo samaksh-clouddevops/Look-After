@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.lookafter.app.MainActivity
+import com.lookafter.app.widget.LookAfterDeepLink
 import com.lookafter.core.notifications.NotificationKind
 import com.lookafter.core.notifications.PlannedNotification
 import java.time.Instant
@@ -128,10 +129,18 @@ class LookAfterNotifier(private val context: Context) {
             NotificationKind.FOCUS_COMPLETE -> CHANNEL_FOCUS
             else -> CHANNEL_SCHEDULE
         }
+        val target = when (plan.kind) {
+            NotificationKind.FOCUS_COMPLETE -> LookAfterDeepLink.TARGET_FOCUS
+            NotificationKind.MEDICATION_DUE -> LookAfterDeepLink.TARGET_TODAY
+            else -> LookAfterDeepLink.TARGET_TODAY
+        }
         val open = PendingIntent.getActivity(
             context,
             plan.id.hashCode() xor 0x1111,
-            Intent(context, MainActivity::class.java),
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(LookAfterDeepLink.EXTRA_TARGET, target)
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notif = NotificationCompat.Builder(context, channel)

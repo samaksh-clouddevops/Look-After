@@ -10,6 +10,7 @@ import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
 import com.lookafter.core.adhd.FocusSessionState
 import com.lookafter.core.brain.BrainTick
+import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.ExecutiveBrainEngine
 import com.lookafter.core.calendar.CalendarEvent
 import com.lookafter.core.calendar.CalendarEventsProvider
@@ -34,7 +35,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Lifecycle bridge: Compose -> LifeEngine + platform adapters + offline brain. */
+/** Lifecycle bridge: Compose -> LifeEngine + platform adapters + pluggable coach. */
 class LookAfterViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
@@ -44,6 +45,20 @@ class LookAfterViewModel(
     private val healthRepo: HealthConnectRepository = app.healthRepository
     private val calendar: CalendarEventsProvider = app.calendarProvider
     private val notifier: LookAfterNotifier = app.notifier
+    private val coach: CoachService = app.coachService
+
+    /** Deep-link destination requested by widget / notifications (e.g. "today", "brain", "focus"). */
+    private val _pendingDeepLink = MutableStateFlow<String?>(null)
+    val pendingDeepLink: StateFlow<String?> = _pendingDeepLink.asStateFlow()
+
+    fun consumeDeepLink() {
+        _pendingDeepLink.value = null
+    }
+
+    fun handleDeepLink(target: String?) {
+        if (target.isNullOrBlank()) return
+        _pendingDeepLink.value = target.lowercase()
+    }
 
     val state: StateFlow<LifeState> = engine.state
     val health: StateFlow<HealthSummary> = healthRepo.summary
@@ -172,21 +187,24 @@ class LookAfterViewModel(
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         _coachTranscript.value = _coachTranscript.value + (true to trimmed)
-        val reply = ExecutiveBrainEngine.coachReply(
-            userMessage = trimmed,
-            life = engine.currentState,
-            health = healthRepo.summary.value,
-        )
-        _coachTranscript.value = _coachTranscript.value + (false to reply)
+        viewModelScope.launch {
+            val reply = coach.reply(
+                userMessage = trimmed,
+                life = engine.currentState,
+                health = healthRepo.summary.value,
+            )
+            _coachTranscript.value = _coachTranscript.value + (false to reply)
+        }
     }
 
-    fun startFocusForHero() {
+    fun startFocusForHero(emergency: Boolean = false) {
         val tick = brainTick.value
         dispatchFocus(
             FocusSessionIntent.Start(
                 taskId = tick.decision.heroTaskId,
                 taskTitle = tick.decision.heroTitle,
-                plannedMinutes = 25,
+                plannedMinutes = if (emergency) 10 else 25,
+                emergencyMode = emergency,
             ),
         )
     }

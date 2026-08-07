@@ -1,6 +1,7 @@
 package com.lookafter.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -21,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookafter.app.health.HealthConnectPermissionHelper
 import com.lookafter.app.ui.LookAfterRootView
 import com.lookafter.app.ui.theme.LookAfterTheme
+import com.lookafter.app.widget.LookAfterDeepLink
 
 /**
  * Compose entry point. Hosts [LookAfterViewModel], requests notification /
@@ -47,6 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        applyDeepLink(intent)
 
         healthPermissionHelper = HealthConnectPermissionHelper(this) { granted ->
             Log.i(TAG, "Health Connect permissions granted=$granted")
@@ -103,6 +106,20 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyDeepLink(intent)
+    }
+
+    private fun applyDeepLink(intent: android.content.Intent?) {
+        val target = intent?.getStringExtra(LookAfterDeepLink.EXTRA_TARGET)
+        if (!target.isNullOrBlank()) {
+            Log.i(TAG, "Deep link target=$target")
+            viewModel.handleDeepLink(target)
         }
     }
 
