@@ -1,0 +1,43 @@
+﻿name: Android CI
+
+on:
+  push:
+    branches:
+      - feature/android-implementation
+      - main
+  pull_request:
+    branches:
+      - feature/android-implementation
+      - main
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lookafter-debug-apk
+          path: android/app/build/outputs/apk/debug/**/*.apk
+          if-no-files-found: error
