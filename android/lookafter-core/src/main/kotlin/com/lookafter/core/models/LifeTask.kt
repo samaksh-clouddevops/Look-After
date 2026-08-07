@@ -35,6 +35,9 @@ data class LifeTask(
     val scheduledEnd: Instant? = null,
     val minimumViableDurationMinutes: Int = DEFAULT_MINIMUM_MINUTES,
     val priority: Priority = Priority.MEDIUM,
+    val recurrence: RecurrenceRule = RecurrenceRule.NONE,
+    /** Optional freeform notes (description). */
+    val notes: String = "",
     val tags: List<String> = emptyList(),
     val parentTaskId: String? = null,
     @Serializable(with = InstantSerializer::class)

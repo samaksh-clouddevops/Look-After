@@ -28,6 +28,7 @@ import com.lookafter.core.notifications.NotificationPolicy
 import com.lookafter.core.onboarding.OnboardingEngine
 import com.lookafter.core.onboarding.OnboardingIntent
 import com.lookafter.core.onboarding.OnboardingState
+import com.lookafter.core.planning.SimplePlanEngine
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -247,12 +248,20 @@ class LookAfterViewModel(
         if (trimmed.isEmpty()) return
         _coachTranscript.value = _coachTranscript.value + (true to trimmed)
         viewModelScope.launch {
+            // Prefer deterministic plan mutations when the message matches known commands.
+            val plan = SimplePlanEngine.interpret(trimmed, engine.currentState)
+            if (plan.intents.isNotEmpty()) {
+                plan.intents.forEach { engine.process(it) }
+                _coachTranscript.value = _coachTranscript.value + (false to plan.reply)
+                return@launch
+            }
             val reply = coach.reply(
                 userMessage = trimmed,
                 life = engine.currentState,
                 health = healthRepo.summary.value,
             )
-            _coachTranscript.value = _coachTranscript.value + (false to reply)
+            val finalReply = reply.ifBlank { plan.reply }
+            _coachTranscript.value = _coachTranscript.value + (false to finalReply)
         }
     }
 

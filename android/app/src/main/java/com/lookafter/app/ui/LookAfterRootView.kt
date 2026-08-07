@@ -16,7 +16,6 @@ import com.lookafter.app.LookAfterViewModel
 import com.lookafter.app.ui.adhd.FocusSessionOverlay
 import com.lookafter.app.ui.brain.BrainScreen
 import com.lookafter.app.ui.briefing.BriefingScreen
-import com.lookafter.app.ui.capture.CaptureSheet
 import com.lookafter.app.ui.components.LookAfterBottomNav
 import com.lookafter.app.ui.health.HealthScreen
 import com.lookafter.app.ui.inbox.InboxScreen
@@ -26,10 +25,12 @@ import com.lookafter.app.ui.onboarding.OnboardingScreen
 import com.lookafter.app.ui.review.WeeklyReviewScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
 import com.lookafter.app.ui.motion.CalmAnimatedContent
+import com.lookafter.app.ui.tasks.TaskEditorSheet
 import com.lookafter.app.ui.timeline.TodayTimelineScreen
 import com.lookafter.app.ui.you.YouScreen
 import com.lookafter.app.widget.LookAfterDeepLink
 import com.lookafter.core.adhd.FocusSessionPhase
+import com.lookafter.core.engine.LookAfterIntent
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.TaskExpirationPolicy
@@ -66,6 +67,7 @@ fun LookAfterRootView(
     var inboxOpen by remember { mutableStateOf(false) }
     var captureOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
+    var editingTask by remember { mutableStateOf<LifeTask?>(null) }
     var hypotheticals by remember { mutableStateOf<List<LifeTask>>(emptyList()) }
 
     LaunchedEffect(deepLink) {
@@ -141,15 +143,22 @@ fun LookAfterRootView(
             )
         },
     ) { padding ->
-        if (captureOpen) {
-            CaptureSheet(
+        if (captureOpen || editingTask != null) {
+            TaskEditorSheet(
                 currentDay = state.currentDay,
+                existing = editingTask,
                 onIntent = { intent ->
                     viewModel.dispatch(intent)
                     destination = AppDestination.TODAY.name
                     reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = false
                 },
-                onDismiss = { captureOpen = false },
+                onDismiss = {
+                    captureOpen = false
+                    editingTask = null
+                },
+                onDelete = { task ->
+                    viewModel.dispatch(LookAfterIntent.DeleteTask(task.id))
+                },
             )
         }
         val contentModifier = Modifier.padding(padding).fillMaxSize()
@@ -199,6 +208,11 @@ fun LookAfterRootView(
                     onStartFocus = {
                         viewModel.startFocusForHero()
                         focusOpen = true
+                    },
+                    onOpenTask = { task -> editingTask = task },
+                    onCreateTask = {
+                        editingTask = null
+                        captureOpen = true
                     },
                     modifier = Modifier.fillMaxSize(),
                 )

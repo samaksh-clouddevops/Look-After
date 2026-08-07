@@ -13,10 +13,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DoNotDisturbOn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +39,7 @@ import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.engine.LookAfterIntent
+import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.TaskStatus
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -54,6 +57,8 @@ fun TodayTimelineScreen(
     heroTitle: String? = null,
     heroReason: String? = null,
     onStartFocus: (() -> Unit)? = null,
+    onOpenTask: ((LifeTask) -> Unit)? = null,
+    onCreateTask: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val policyGrantedState = remember {
@@ -85,11 +90,27 @@ fun TodayTimelineScreen(
         verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
     ) {
         item(key = "header") {
-            SectionHeader(
-                title = "Today",
-                subtitle = subtitle(state, restoredFromDisk, hydrationComplete),
-                modifier = Modifier.padding(bottom = LookAfterDimens.spacingXS),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = LookAfterDimens.spacingXS),
+                verticalAlignment = Alignment.Top,
+            ) {
+                SectionHeader(
+                    title = "Today",
+                    subtitle = subtitle(state, restoredFromDisk, hydrationComplete),
+                    modifier = Modifier.weight(1f),
+                )
+                if (onCreateTask != null) {
+                    IconButton(onClick = onCreateTask) {
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = "New task",
+                            tint = LookAfterColors.AccentPrimary,
+                        )
+                    }
+                }
+            }
         }
 
         if (!heroTitle.isNullOrBlank()) {
@@ -154,7 +175,11 @@ fun TodayTimelineScreen(
             }
         } else {
             items(tasks, key = { it.id }) { task ->
-                TimelineTaskCard(task = task, onIntent = onIntent)
+                TimelineTaskCard(
+                    task = task,
+                    onIntent = onIntent,
+                    onOpen = onOpenTask,
+                )
             }
         }
     }

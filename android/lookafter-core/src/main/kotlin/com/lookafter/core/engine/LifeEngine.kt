@@ -8,11 +8,13 @@ import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.Medication
 import com.lookafter.core.models.Priority
+import com.lookafter.core.models.RecurrenceRule
 import com.lookafter.core.models.TaskStatus
 import com.lookafter.core.planning.ConflictResolutionCascade
 import com.lookafter.core.planning.DayScheduleReconciler
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -202,7 +204,7 @@ class LifeEngine(
         fun List<LifeTask>.replaceOrKeep(): List<LifeTask> =
             map { if (it.id == id) completed else it }
 
-        return when {
+        val base = when {
             current.activeTasks.any { it.id == id } ->
                 current.copy(
                     activeTasks = current.activeTasks.replaceOrKeep(),
@@ -220,6 +222,44 @@ class LifeEngine(
                 )
             else -> current
         }
+        val next = spawnRecurrence(task, completedAt) ?: return base
+        return base.copy(activeTasks = base.activeTasks + next)
+    }
+
+    /** Spawn the next instance when a recurring task is completed. */
+    private fun spawnRecurrence(completed: LifeTask, completedAt: Instant): LifeTask? {
+        if (completed.recurrence == RecurrenceRule.NONE) return null
+        val zone = ZoneId.systemDefault()
+        val baseDay = completed.scheduledDate
+            ?: completedAt.atZone(zone).toLocalDate()
+        val nextDay = when (completed.recurrence) {
+            RecurrenceRule.NONE -> return null
+            RecurrenceRule.DAILY -> baseDay.plusDays(1)
+            RecurrenceRule.WEEKDAYS -> {
+                var d = baseDay.plusDays(1)
+                while (d.dayOfWeek.value >= 6) d = d.plusDays(1) // Sat/Sun → Monday
+                d
+            }
+            RecurrenceRule.WEEKLY -> baseDay.plusWeeks(1)
+        }
+        val duration = completed.durationMinutes.coerceAtLeast(5).toLong()
+        val nextStart = completed.scheduledStart?.let { start ->
+            val tod = start.atZone(zone).toLocalTime()
+            nextDay.atTime(tod).atZone(zone).toInstant()
+        }
+        val nextEnd = nextStart?.plusSeconds(duration * 60)
+        return completed.copy(
+            id = "rec-${UUID.randomUUID()}",
+            status = TaskStatus.PENDING,
+            completedAt = null,
+            scheduledDate = nextDay,
+            scheduledStart = nextStart,
+            scheduledEnd = nextEnd,
+            createdAt = completedAt,
+            updatedAt = completedAt,
+            parentTaskId = completed.id,
+            tags = (completed.tags + "recurrence").distinct(),
+        )
     }
 
     /**

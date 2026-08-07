@@ -141,3 +141,23 @@ enum class Priority(val rankBonus: Int) {
     LOW(2),
     SOMEDAY(0),
 }
+
+/**
+ * Recurrence cadence for scheduled work.
+ * Mirrors the common iOS recurrence surface (simplified).
+ */
+@Serializable
+enum class RecurrenceRule {
+    NONE,
+    DAILY,
+    WEEKDAYS,
+    WEEKLY,
+    ;
+    val label: String
+        get() = when (this) {
+            NONE -> "Does not repeat"
+            DAILY -> "Daily"
+            WEEKDAYS -> "Weekdays"
+            WEEKLY -> "Weekly"
+        }
+}

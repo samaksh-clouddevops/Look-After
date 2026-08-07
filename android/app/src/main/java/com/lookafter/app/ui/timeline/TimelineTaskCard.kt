@@ -1,6 +1,7 @@
 package com.lookafter.app.ui.timeline
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,18 +32,21 @@ import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LookAfterIntent
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.RecurrenceRule
 import com.lookafter.core.models.TaskStatus
 
 /**
  * Timeline row for a single [LifeTask].
  *
  * Left: constraint badge · Center: title + duration · Right: complete control.
+ * Tap body → edit (when [onOpen] provided).
  */
 @Composable
 fun TimelineTaskCard(
     task: LifeTask,
     onIntent: (LookAfterIntent) -> Unit,
     modifier: Modifier = Modifier,
+    onOpen: ((LifeTask) -> Unit)? = null,
 ) {
     val completed = task.status == TaskStatus.COMPLETED
     val expired = task.status == TaskStatus.EXPIRED || task.status == TaskStatus.SUPERSEDED
@@ -70,7 +74,15 @@ fun TimelineTaskCard(
             ConstraintBadge(constraintType = task.constraintType)
 
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (onOpen != null && !completed && !expired) {
+                            Modifier.clickable { onOpen(task) }
+                        } else {
+                            Modifier
+                        },
+                    ),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
@@ -145,6 +157,9 @@ private fun metaLine(task: LifeTask): String {
         ConstraintType.ANCHORED -> "Anchored"
         ConstraintType.FLEXIBLE -> "Flexible"
         ConstraintType.FLUID -> "Fluid"
+    }
+    if (task.recurrence != RecurrenceRule.NONE) {
+        parts += task.recurrence.label
     }
     if (task.status != TaskStatus.PENDING && task.status != TaskStatus.IN_PROGRESS) {
         parts += task.status.name.lowercase().replaceFirstChar { it.titlecase() }
