@@ -7,12 +7,13 @@ plugins {
 
 android {
     namespace = "com.lookafter.app"
-    compileSdk = 34
+    // androidx.core 1.15+ requires compileSdk 35+.
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.lookafter.app"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
