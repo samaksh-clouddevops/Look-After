@@ -74,6 +74,13 @@ dependencies {
     implementation("androidx.datastore:datastore:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
+    // Health Connect SDK (real reads; demo fallback when unavailable)
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
+
+    // Glance home-screen widget
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance-material3:1.1.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 

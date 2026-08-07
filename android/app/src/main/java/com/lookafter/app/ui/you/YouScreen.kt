@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.Science
@@ -40,6 +41,7 @@ fun YouScreen(
     onOpenSimulation: () -> Unit,
     onOpenMedication: () -> Unit,
     onOpenHealth: () -> Unit = {},
+    onOpenInbox: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -97,6 +99,14 @@ fun YouScreen(
                     "Readiness ${health.readinessLabel}"
                 },
                 onClick = onOpenHealth,
+            )
+        }
+        item {
+            YouRow(
+                icon = Icons.Outlined.Inbox,
+                title = "Inbox",
+                subtitle = "Unprocessed captures",
+                onClick = onOpenInbox,
             )
         }
         item {

@@ -1,10 +1,14 @@
 package com.lookafter.app
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import com.lookafter.app.data.DataStoreLifeStateRepository
 import com.lookafter.app.execution.ExecutionService
 import com.lookafter.app.health.HealthConnectRepository
+import com.lookafter.core.calendar.CalendarEvent
+import com.lookafter.core.calendar.CalendarEventsProvider
+import com.lookafter.core.calendar.StubCalendarEventsProvider
 import com.lookafter.core.engine.LifeEngine
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.engine.LifeStateRepository
@@ -13,6 +17,8 @@ import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.Medication
 import com.lookafter.core.models.TaskExpirationPolicy
 import com.lookafter.core.models.TaskStatus
+import com.lookafter.core.onboarding.OnboardingState
+import com.lookafter.core.serialization.LookAfterJson
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
@@ -27,7 +33,7 @@ import kotlinx.coroutines.launch
 /**
  * Process-scoped application shell.
  *
- * Owns [LifeEngine] + [LifeStateRepository] + [HealthConnectRepository].
+ * Owns [LifeEngine] + [LifeStateRepository] + [HealthConnectRepository] + calendar.
  * Hydrates persisted state on launch (falls back to a tiny demo schedule on first run).
  */
 class LookAfterApplication : Application() {
@@ -43,6 +49,12 @@ class LookAfterApplication : Application() {
     lateinit var healthRepository: HealthConnectRepository
         private set
 
+    lateinit var calendarProvider: CalendarEventsProvider
+        private set
+
+    val initialOnboarding: OnboardingState
+        get() = loadOnboarding()
+
     private val _restoredFromDisk = MutableStateFlow(false)
     val restoredFromDisk: StateFlow<Boolean> = _restoredFromDisk.asStateFlow()
 
@@ -52,7 +64,8 @@ class LookAfterApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         lifeStateRepository = DataStoreLifeStateRepository.create(this)
-        healthRepository = HealthConnectRepository()
+        healthRepository = HealthConnectRepository(this)
+        calendarProvider = StubCalendarEventsProvider(demoCalendar())
         lifeEngine = LifeEngine(
             initialState = LifeState.EMPTY,
             repository = lifeStateRepository,
@@ -72,12 +85,42 @@ class LookAfterApplication : Application() {
                     "No snapshot — seeded demo LifeState and persisted"
                 },
             )
-            // Demo: grant health stub so Briefing readiness paints without HC APK.
+            // Prefer real HC when available; mark permission provisional so demo can paint.
+            healthRepository.preferDemoFallback = true
             healthRepository.markPermission(granted = true)
             healthRepository.refresh()
-            // Let ExecutionService decide whether to promote to foreground.
             startExecutionService()
         }
+    }
+
+    fun persistOnboarding(state: OnboardingState) {
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(KEY_ONBOARDING, LookAfterJson.codec.encodeToString(OnboardingState.serializer(), state))
+            .apply()
+    }
+
+    private fun loadOnboarding(): OnboardingState {
+        val raw = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_ONBOARDING, null)
+            ?: return OnboardingState.fresh
+        return runCatching {
+            LookAfterJson.codec.decodeFromString(OnboardingState.serializer(), raw)
+        }.getOrDefault(OnboardingState.fresh)
+    }
+
+    private fun demoCalendar(): List<CalendarEvent> {
+        val zone = ZoneOffset.systemDefault()
+        val today = LocalDate.now(zone)
+        val start = today.atTime(14, 0).atZone(zone).toInstant()
+        val end = today.atTime(14, 45).atZone(zone).toInstant()
+        return listOf(
+            CalendarEvent(
+                id = "demo-cal-1",
+                title = "Team sync",
+                start = start,
+                end = end,
+            ),
+        )
     }
 
     /** Safe to call repeatedly — service is sticky and self-manages lifecycle. */
@@ -141,5 +184,7 @@ class LookAfterApplication : Application() {
 
     companion object {
         private const val TAG = "LookAfterApp"
+        private const val PREFS = "lookafter_app"
+        private const val KEY_ONBOARDING = "onboarding_json"
     }
 }

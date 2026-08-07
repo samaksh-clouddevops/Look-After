@@ -1,19 +1,24 @@
-﻿name: Android CI
+﻿name: Android Build
 
 on:
   push:
-    branches:
-      - feature/android-implementation
-      - main
+    paths:
+      - "android/**"
+      - ".github/workflows/android-build.yml"
   pull_request:
-    branches:
-      - feature/android-implementation
-      - main
+    paths:
+      - "android/**"
+      - ".github/workflows/android-build.yml"
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Unit tests + assembleDebug
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android
 
     steps:
       - name: Checkout
@@ -35,7 +40,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
+        run: chmod +x gradlew
+        working-directory: android
 
       - name: Unit tests (lookafter-core + app)
         working-directory: android
@@ -46,8 +52,48 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: lookafter-debug-apk
-          path: android/app/build/outputs/apk/debug/**/*.apk
-          if-no-files-found: error
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+
+  instrumented:
+    name: Compose UI tests (emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel_4
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: cd android && ./gradlew :app:connectedDebugAndroidTest --stacktrace
