@@ -12,12 +12,13 @@ import com.lookafter.core.planning.ConflictResolutionCascade
 import com.lookafter.core.planning.DayScheduleReconciler
 import java.time.Instant
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Central UDF dispatcher for Look After physics.
@@ -25,7 +26,7 @@ import kotlinx.coroutines.sync.withLock
  * - Exposes immutable [state] via [StateFlow]
  * - Reduces [LookAfterIntent] into pure [LifeState] copies
  * - Wires Phase-1 engines ([DayScheduleReconciler], [ConflictResolutionCascade])
- * - Optionally persists via [LifeStateRepository] after every successful reduce
+ * - Persists via [LifeStateRepository] **outside** the mutex on [Dispatchers.IO]
  *
  * Zero Android dependencies — safe for JVM unit tests and multiplatform hosts.
  */
@@ -43,25 +44,31 @@ class LifeEngine(
      * Hydrate from [repository] if present. Falls back to [fallback] when load
      * returns null (first launch / corrupt snapshot).
      *
+     * Disk I/O runs on [Dispatchers.IO] and **never** holds [mutex].
      * Call once at process start before UI binds to [state].
      */
     suspend fun hydrate(fallback: LifeState = LifeState.EMPTY): LifeState {
-        mutex.withLock {
-            val loaded = repository?.load()
-            val next = loaded ?: fallback
-            _state.value = next
-            // Ensure first launch still materializes a durable snapshot.
-            if (loaded == null) {
-                repository?.save(next)
-            }
-            return next
+        val loaded = withContext(Dispatchers.IO) {
+            repository?.load()
         }
+        val next = loaded ?: fallback
+        mutex.withLock {
+            _state.value = next
+        }
+        // First launch: materialize a durable snapshot without holding the reduce lock.
+        if (loaded == null && repository != null) {
+            withContext(Dispatchers.IO) {
+                repository.save(next)
+            }
+        }
+        return next
     }
 
     /**
      * Atomically reduce [intent] against the current universe and emit a new state.
-     * Persists via [repository] after the in-memory update (IO stays off UI when
-     * callers use a background dispatcher / [viewModelScope]).
+     *
+     * 1. [mutex] only guards pure functional reduction + in-memory emission.
+     * 2. Repository I/O runs after the lock is released, on [Dispatchers.IO].
      */
     suspend fun process(intent: LookAfterIntent) {
         val newState = mutex.withLock {
@@ -69,9 +76,11 @@ class LifeEngine(
             _state.value = reduced
             reduced
         }
-        // Persist outside the reduce lock window of reducers; save is still
-        // serialized with hydrate/process via the same mutex entry points.
-        repository?.save(newState)
+        if (repository != null) {
+            withContext(Dispatchers.IO) {
+                repository.save(newState)
+            }
+        }
     }
 
     /** Pure reducer — exposed for tests that want to assert transitions without the flow. */
