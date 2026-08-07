@@ -3,9 +3,12 @@ package com.lookafter.app
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import com.lookafter.app.calendar.CompositeCalendarEventsProvider
+import com.lookafter.app.calendar.DeviceCalendarEventsProvider
 import com.lookafter.app.data.DataStoreLifeStateRepository
 import com.lookafter.app.execution.ExecutionService
 import com.lookafter.app.health.HealthConnectRepository
+import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.core.calendar.CalendarEvent
 import com.lookafter.core.calendar.CalendarEventsProvider
 import com.lookafter.core.calendar.StubCalendarEventsProvider
@@ -52,6 +55,12 @@ class LookAfterApplication : Application() {
     lateinit var calendarProvider: CalendarEventsProvider
         private set
 
+    lateinit var deviceCalendar: DeviceCalendarEventsProvider
+        private set
+
+    lateinit var notifier: LookAfterNotifier
+        private set
+
     val initialOnboarding: OnboardingState
         get() = loadOnboarding()
 
@@ -65,7 +74,12 @@ class LookAfterApplication : Application() {
         super.onCreate()
         lifeStateRepository = DataStoreLifeStateRepository.create(this)
         healthRepository = HealthConnectRepository(this)
-        calendarProvider = StubCalendarEventsProvider(demoCalendar())
+        deviceCalendar = DeviceCalendarEventsProvider(this)
+        calendarProvider = CompositeCalendarEventsProvider(
+            device = deviceCalendar,
+            fallback = StubCalendarEventsProvider(demoCalendar()),
+        )
+        notifier = LookAfterNotifier(this).also { it.ensureChannels() }
         lifeEngine = LifeEngine(
             initialState = LifeState.EMPTY,
             repository = lifeStateRepository,
@@ -85,10 +99,14 @@ class LookAfterApplication : Application() {
                     "No snapshot — seeded demo LifeState and persisted"
                 },
             )
-            // Prefer real HC when available; mark permission provisional so demo can paint.
-            healthRepository.preferDemoFallback = true
-            healthRepository.markPermission(granted = true)
+            // Try real HC first; if empty, demo fills Briefing readiness.
+            healthRepository.preferDemoFallback = false
             healthRepository.refresh()
+            if (healthRepository.summary.value.readinessScore == null) {
+                healthRepository.preferDemoFallback = true
+                healthRepository.markPermission(granted = true)
+                healthRepository.refresh()
+            }
             startExecutionService()
         }
     }

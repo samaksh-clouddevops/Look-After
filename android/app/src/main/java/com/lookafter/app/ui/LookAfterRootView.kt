@@ -50,6 +50,7 @@ fun LookAfterRootView(
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     val brainTick by viewModel.brainTick.collectAsStateWithLifecycle()
     val coach by viewModel.coachTranscript.collectAsStateWithLifecycle()
+    val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
 
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
@@ -156,6 +157,8 @@ fun LookAfterRootView(
                 onOpenMedication = { reviewOpen = false; healthOpen = false; inboxOpen = false; medicationOpen = true },
                 onOpenHealth = { reviewOpen = false; medicationOpen = false; inboxOpen = false; healthOpen = true },
                 onOpenInbox = { reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = true },
+                onConnectCalendar = { viewModel.ensureCalendarPermission() },
+                calendarEventCount = calendarEvents.size,
                 modifier = contentModifier,
             )
         }

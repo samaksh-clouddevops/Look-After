@@ -4,12 +4,14 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lookafter.app.health.HealthConnectRepository
+import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.core.adhd.FocusSessionEngine
 import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
 import com.lookafter.core.adhd.FocusSessionState
 import com.lookafter.core.brain.BrainTick
 import com.lookafter.core.brain.ExecutiveBrainEngine
+import com.lookafter.core.calendar.CalendarEvent
 import com.lookafter.core.calendar.CalendarEventsProvider
 import com.lookafter.core.engine.LifeEngine
 import com.lookafter.core.engine.LifeState
@@ -18,6 +20,7 @@ import com.lookafter.core.health.HealthSummary
 import com.lookafter.core.inbox.InboxEngine
 import com.lookafter.core.inbox.InboxIntent
 import com.lookafter.core.inbox.InboxState
+import com.lookafter.core.notifications.NotificationPolicy
 import com.lookafter.core.onboarding.OnboardingEngine
 import com.lookafter.core.onboarding.OnboardingIntent
 import com.lookafter.core.onboarding.OnboardingState
@@ -40,11 +43,13 @@ class LookAfterViewModel(
     private val engine: LifeEngine = app.lifeEngine
     private val healthRepo: HealthConnectRepository = app.healthRepository
     private val calendar: CalendarEventsProvider = app.calendarProvider
+    private val notifier: LookAfterNotifier = app.notifier
 
     val state: StateFlow<LifeState> = engine.state
     val health: StateFlow<HealthSummary> = healthRepo.summary
     val healthPermissionGranted: StateFlow<Boolean> = healthRepo.permissionGranted
     val healthUsingDemo: StateFlow<Boolean> = healthRepo.usingDemo
+    val healthRequiredPermissions: Set<String> get() = healthRepo.requiredPermissions()
 
     private val _onboarding = MutableStateFlow(app.initialOnboarding)
     val onboarding: StateFlow<OnboardingState> = _onboarding.asStateFlow()
@@ -58,20 +63,73 @@ class LookAfterViewModel(
     private val _coachTranscript = MutableStateFlow<List<Pair<Boolean, String>>>(emptyList())
     val coachTranscript: StateFlow<List<Pair<Boolean, String>>> = _coachTranscript.asStateFlow()
 
-    val brainTick: StateFlow<BrainTick> = combine(state, health, focus) { life, h, f ->
+    private val _calendarEvents = MutableStateFlow<List<CalendarEvent>>(emptyList())
+    val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
+
+    /** Set by MainActivity to launch the HC permission contract. */
+    var requestHealthPermissions: ((Set<String>) -> Unit)? = null
+    /** Set by MainActivity to request READ_CALENDAR. */
+    var requestCalendarPermission: (() -> Unit)? = null
+
+    val brainTick: StateFlow<BrainTick> = combine(
+        state,
+        health,
+        focus,
+        _calendarEvents,
+    ) { life, h, f, cal ->
         ExecutiveBrainEngine.tick(
             life = life,
             health = h,
+            calendarEvents = cal.map { it.toWorldCalendarEvent() },
             isInFlowSession = f.phase == FocusSessionPhase.RUNNING,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrainTick())
+
+    init {
+        viewModelScope.launch { refreshCalendarDay() }
+        // Re-plan notifications whenever brain tick updates.
+        viewModelScope.launch {
+            brainTick.collect { tick ->
+                val inFocus = focus.value.phase == FocusSessionPhase.RUNNING
+                val plans = NotificationPolicy.plan(
+                    life = engine.currentState,
+                    world = tick.world,
+                    inFocusSession = inFocus,
+                )
+                notifier.scheduleAll(plans)
+            }
+        }
+    }
 
     fun dispatch(intent: LookAfterIntent) {
         viewModelScope.launch { engine.process(intent) }
     }
 
     fun setHealthPermission(granted: Boolean) {
+        if (granted) {
+            // Prefer the real SDK permission contract when MainActivity wired it.
+            val perms = healthRepo.requiredPermissions()
+            val launcher = requestHealthPermissions
+            if (launcher != null && perms.isNotEmpty()) {
+                healthRepo.preferDemoFallback = false
+                launcher(perms)
+                return
+            }
+        }
+        healthRepo.preferDemoFallback = granted
         healthRepo.markPermission(granted)
+        viewModelScope.launch { healthRepo.refresh() }
+    }
+
+    fun onHealthPermissionResult(granted: Boolean) {
+        healthRepo.markPermission(granted)
+        if (!granted) {
+            // Keep Briefing usable with demo metrics when HC is denied/missing.
+            healthRepo.preferDemoFallback = true
+            healthRepo.markPermission(true)
+        } else {
+            healthRepo.preferDemoFallback = false
+        }
         viewModelScope.launch { healthRepo.refresh() }
     }
 
@@ -92,6 +150,17 @@ class LookAfterViewModel(
 
     fun dispatchFocus(intent: FocusSessionIntent) {
         _focus.value = FocusSessionEngine.reduce(_focus.value, intent)
+        if (_focus.value.phase == FocusSessionPhase.COMPLETED) {
+            notifier.postNow(
+                com.lookafter.core.notifications.PlannedNotification(
+                    id = "focus-complete",
+                    kind = com.lookafter.core.notifications.NotificationKind.FOCUS_COMPLETE,
+                    title = "Focus complete",
+                    body = _focus.value.taskTitle.ifBlank { "Session finished" },
+                    fireAt = java.time.Instant.now(),
+                ),
+            )
+        }
     }
 
     fun sendCoachMessage(text: String) {
@@ -119,7 +188,14 @@ class LookAfterViewModel(
 
     fun refreshCalendarDay() {
         viewModelScope.launch {
-            calendar.eventsForDay(LocalDate.now(), ZoneId.systemDefault())
+            _calendarEvents.value = calendar.eventsForDay(
+                LocalDate.now(),
+                ZoneId.systemDefault(),
+            )
         }
+    }
+
+    fun ensureCalendarPermission() {
+        requestCalendarPermission?.invoke()
     }
 }

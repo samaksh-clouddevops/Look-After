@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Insights
@@ -42,6 +43,8 @@ fun YouScreen(
     onOpenMedication: () -> Unit,
     onOpenHealth: () -> Unit = {},
     onOpenInbox: () -> Unit = {},
+    onConnectCalendar: () -> Unit = {},
+    calendarEventCount: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -107,6 +110,18 @@ fun YouScreen(
                 title = "Inbox",
                 subtitle = "Unprocessed captures",
                 onClick = onOpenInbox,
+            )
+        }
+        item {
+            YouRow(
+                icon = Icons.Outlined.CalendarMonth,
+                title = "Calendar",
+                subtitle = if (calendarEventCount == 0) {
+                    "Connect device calendar"
+                } else {
+                    "$calendarEventCount events today"
+                },
+                onClick = onConnectCalendar,
             )
         }
         item {

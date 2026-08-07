@@ -18,12 +18,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lookafter.app.health.HealthConnectPermissionHelper
 import com.lookafter.app.ui.LookAfterRootView
 import com.lookafter.app.ui.theme.LookAfterTheme
 
 /**
- * Compose entry point. Hosts [LookAfterViewModel] inside [LookAfterTheme],
- * requests notification permission, and ensures [ExecutionService] is running.
+ * Compose entry point. Hosts [LookAfterViewModel], requests notification /
+ * calendar / Health Connect permissions, and starts ExecutionService.
  */
 class MainActivity : ComponentActivity() {
 
@@ -32,13 +33,38 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             Log.i(TAG, "POST_NOTIFICATIONS granted=$granted")
-            // Start regardless — service self-stops if nothing focus-eligible.
             (application as LookAfterApplication).startExecutionService()
         }
+
+    private val calendarPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            Log.i(TAG, "READ_CALENDAR granted=$granted")
+            if (granted) viewModel.refreshCalendarDay()
+        }
+
+    private lateinit var healthPermissionHelper: HealthConnectPermissionHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        healthPermissionHelper = HealthConnectPermissionHelper(this) { granted ->
+            Log.i(TAG, "Health Connect permissions granted=$granted")
+            viewModel.onHealthPermissionResult(granted)
+        }
+        viewModel.requestHealthPermissions = { perms ->
+            healthPermissionHelper.launch(perms)
+        }
+        viewModel.requestCalendarPermission = {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+            } else {
+                viewModel.refreshCalendarDay()
+            }
+        }
+
         requestNotificationPermissionAndStartService()
 
         setContent {
@@ -58,6 +84,7 @@ class MainActivity : ComponentActivity() {
                         Log.i(TAG, message)
                         Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
                         app.startExecutionService()
+                        viewModel.refreshCalendarDay()
                     }
 
                     LookAfterRootView(
