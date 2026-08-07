@@ -25,6 +25,7 @@ import com.lookafter.app.ui.navigation.AppDestination
 import com.lookafter.app.ui.onboarding.OnboardingScreen
 import com.lookafter.app.ui.review.WeeklyReviewScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
+import com.lookafter.app.ui.motion.CalmAnimatedContent
 import com.lookafter.app.ui.timeline.TodayTimelineScreen
 import com.lookafter.app.ui.you.YouScreen
 import com.lookafter.app.widget.LookAfterDeepLink
@@ -54,6 +55,7 @@ fun LookAfterRootView(
     val coach by viewModel.coachTranscript.collectAsStateWithLifecycle()
     val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
     val deepLink by viewModel.pendingDeepLink.collectAsStateWithLifecycle()
+    val ambientEnabled by viewModel.ambientEnabled.collectAsStateWithLifecycle()
 
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
@@ -151,57 +153,90 @@ fun LookAfterRootView(
             )
         }
         val contentModifier = Modifier.padding(padding).fillMaxSize()
-        when {
-            medicationOpen -> MedicationScreen(state = state, onIntent = viewModel::dispatch, onBack = { medicationOpen = false }, modifier = contentModifier)
-            healthOpen -> HealthScreen(summary = health, permissionGranted = healthGranted, onPermissionChange = viewModel::setHealthPermission, onRefresh = viewModel::refreshHealth, onBack = { healthOpen = false }, modifier = contentModifier)
-            inboxOpen -> InboxScreen(state = inbox, onIntent = viewModel::dispatchInbox, onBack = { inboxOpen = false }, modifier = contentModifier)
-            reviewOpen -> WeeklyReviewScreen(state = state, modifier = contentModifier)
-            current == AppDestination.BRIEFING -> BriefingScreen(state = state, health = health, modifier = contentModifier)
-            current == AppDestination.TODAY -> TodayTimelineScreen(
-                state = state,
-                onIntent = viewModel::dispatch,
-                restoredFromDisk = restoredFromDisk,
-                hydrationComplete = hydrationComplete,
-                heroTitle = brainTick.decision.heroTitle,
-                heroReason = brainTick.decision.reason,
-                onStartFocus = {
-                    viewModel.startFocusForHero()
-                    focusOpen = true
-                },
-                modifier = contentModifier,
-            )
-            current == AppDestination.BRAIN -> BrainScreen(
-                tick = brainTick,
-                coachTranscript = coach,
-                onSendCoach = viewModel::sendCoachMessage,
-                onStartFocus = {
-                    viewModel.startFocusForHero(emergency = false)
-                    focusOpen = true
-                },
-                onEmergencyFocus = {
-                    viewModel.startFocusForHero(emergency = true)
-                    focusOpen = true
-                },
-                modifier = contentModifier,
-            )
-            current == AppDestination.YOU -> YouScreen(
-                state = state,
-                health = health,
-                onOpenReview = { medicationOpen = false; healthOpen = false; inboxOpen = false; reviewOpen = true },
-                onOpenSimulation = {
-                    medicationOpen = false; healthOpen = false; inboxOpen = false
-                    hypotheticals = listOf(dummyHypotheticalMeeting(state.currentDay))
-                    simulationOpen = true
-                },
-                onOpenMedication = { reviewOpen = false; healthOpen = false; inboxOpen = false; medicationOpen = true },
-                onOpenHealth = { reviewOpen = false; medicationOpen = false; inboxOpen = false; healthOpen = true },
-                onOpenInbox = { reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = true },
-                onConnectCalendar = { viewModel.ensureCalendarPermission() },
-                calendarEventCount = calendarEvents.size,
-                canScheduleExactAlarms = viewModel.canScheduleExactAlarms,
-                onRequestExactAlarms = { viewModel.requestExactAlarms() },
-                modifier = contentModifier,
-            )
+        // Calm cross-fade when switching tabs / sub-surfaces (iOS-like ease).
+        val surfaceKey = when {
+            medicationOpen -> "med"
+            healthOpen -> "health"
+            inboxOpen -> "inbox"
+            reviewOpen -> "review"
+            else -> current.name
+        }
+        CalmAnimatedContent(targetState = surfaceKey, modifier = contentModifier) {
+            when {
+                medicationOpen -> MedicationScreen(
+                    state = state,
+                    onIntent = viewModel::dispatch,
+                    onBack = { medicationOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                healthOpen -> HealthScreen(
+                    summary = health,
+                    permissionGranted = healthGranted,
+                    onPermissionChange = viewModel::setHealthPermission,
+                    onRefresh = viewModel::refreshHealth,
+                    onBack = { healthOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                inboxOpen -> InboxScreen(
+                    state = inbox,
+                    onIntent = viewModel::dispatchInbox,
+                    onBack = { inboxOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                reviewOpen -> WeeklyReviewScreen(state = state, modifier = Modifier.fillMaxSize())
+                current == AppDestination.BRIEFING -> BriefingScreen(
+                    state = state,
+                    health = health,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                current == AppDestination.TODAY -> TodayTimelineScreen(
+                    state = state,
+                    onIntent = viewModel::dispatch,
+                    restoredFromDisk = restoredFromDisk,
+                    hydrationComplete = hydrationComplete,
+                    heroTitle = brainTick.decision.heroTitle,
+                    heroReason = brainTick.decision.reason,
+                    onStartFocus = {
+                        viewModel.startFocusForHero()
+                        focusOpen = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                current == AppDestination.BRAIN -> BrainScreen(
+                    tick = brainTick,
+                    coachTranscript = coach,
+                    onSendCoach = viewModel::sendCoachMessage,
+                    onStartFocus = {
+                        viewModel.startFocusForHero(emergency = false)
+                        focusOpen = true
+                    },
+                    onEmergencyFocus = {
+                        viewModel.startFocusForHero(emergency = true)
+                        focusOpen = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                current == AppDestination.YOU -> YouScreen(
+                    state = state,
+                    health = health,
+                    ambientEnabled = ambientEnabled,
+                    onAmbientChange = viewModel::setAmbientEnabled,
+                    onOpenReview = { medicationOpen = false; healthOpen = false; inboxOpen = false; reviewOpen = true },
+                    onOpenSimulation = {
+                        medicationOpen = false; healthOpen = false; inboxOpen = false
+                        hypotheticals = listOf(dummyHypotheticalMeeting(state.currentDay))
+                        simulationOpen = true
+                    },
+                    onOpenMedication = { reviewOpen = false; healthOpen = false; inboxOpen = false; medicationOpen = true },
+                    onOpenHealth = { reviewOpen = false; medicationOpen = false; inboxOpen = false; healthOpen = true },
+                    onOpenInbox = { reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = true },
+                    onConnectCalendar = { viewModel.ensureCalendarPermission() },
+                    calendarEventCount = calendarEvents.size,
+                    canScheduleExactAlarms = viewModel.canScheduleExactAlarms,
+                    onRequestExactAlarms = { viewModel.requestExactAlarms() },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }

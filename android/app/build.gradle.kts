@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     kotlin("plugin.serialization")
 }
+
+// Optional LLM keys from android/local.properties (never commit secrets).
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun localProp(key: String, default: String = ""): String =
+    (localProps.getProperty(key) ?: default).replace("\"", "\\\"")
 
 android {
     namespace = "com.lookafter.app"
@@ -20,6 +30,18 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        // OpenAI-compatible chat endpoint (empty key → offline coach only).
+        buildConfigField("String", "LLM_API_KEY", "\"${localProp("LOOKAFTER_LLM_API_KEY")}\"")
+        buildConfigField(
+            "String",
+            "LLM_BASE_URL",
+            "\"${localProp("LOOKAFTER_LLM_BASE_URL", "https://api.openai.com/v1")}\"",
+        )
+        buildConfigField(
+            "String",
+            "LLM_MODEL",
+            "\"${localProp("LOOKAFTER_LLM_MODEL", "gpt-4o-mini")}\"",
+        )
     }
 
     buildTypes {
@@ -43,6 +65,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -67,6 +90,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
@@ -88,6 +112,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

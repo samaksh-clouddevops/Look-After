@@ -19,8 +19,11 @@ import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,6 +42,8 @@ import kotlin.math.roundToInt
 fun YouScreen(
     state: LifeState,
     health: HealthSummary = HealthSummary.EMPTY,
+    ambientEnabled: Boolean = true,
+    onAmbientChange: (Boolean) -> Unit = {},
     onOpenReview: () -> Unit,
     onOpenSimulation: () -> Unit,
     onOpenMedication: () -> Unit,
@@ -135,6 +140,30 @@ fun YouScreen(
                     subtitle = "Allow precise med & schedule reminders",
                     onClick = onRequestExactAlarms,
                 )
+            }
+        }
+        item {
+            ElevatedSurfaceCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
+                ) {
+                    Icon(Icons.Outlined.VolumeUp, contentDescription = null, tint = LookAfterColors.AccentPrimary)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Body-double ambience", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Soft pad during focus sessions",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = ambientEnabled,
+                        onCheckedChange = onAmbientChange,
+                        colors = SwitchDefaults.colors(checkedTrackColor = LookAfterColors.AccentPrimary),
+                    )
+                }
             }
         }
         item {

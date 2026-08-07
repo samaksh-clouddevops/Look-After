@@ -3,6 +3,7 @@ package com.lookafter.app
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lookafter.app.adhd.BodyDoubleAmbientAudio
 import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
@@ -51,6 +52,18 @@ class LookAfterViewModel(
     private val notifier: LookAfterNotifier = app.notifier
     private val coach: CoachService = app.coachService
     private val systemFocus = SystemFocusController(application)
+    private val ambientAudio = BodyDoubleAmbientAudio(application)
+
+    private val _ambientEnabled = MutableStateFlow(true)
+    val ambientEnabled: StateFlow<Boolean> = _ambientEnabled.asStateFlow()
+
+    fun setAmbientEnabled(enabled: Boolean) {
+        _ambientEnabled.value = enabled
+        if (!enabled) ambientAudio.stop()
+        else if (_focus.value.phase == FocusSessionPhase.RUNNING) {
+            ambientAudio.start(emergency = _focus.value.emergencyMode)
+        }
+    }
 
     /** Deep-link destination requested by widget / notifications (e.g. "today", "brain", "focus"). */
     private val _pendingDeepLink = MutableStateFlow<String?>(null)
@@ -202,13 +215,19 @@ class LookAfterViewModel(
 
     private fun syncSystemFocus(previousPhase: FocusSessionPhase, session: FocusSessionState) {
         when (session.phase) {
-            FocusSessionPhase.RUNNING -> systemFocus.applySessionFocus(emergency = session.emergencyMode)
+            FocusSessionPhase.RUNNING -> {
+                systemFocus.applySessionFocus(emergency = session.emergencyMode)
+                if (_ambientEnabled.value) {
+                    ambientAudio.start(emergency = session.emergencyMode)
+                }
+            }
             FocusSessionPhase.PAUSED,
             FocusSessionPhase.COMPLETED,
             FocusSessionPhase.ABORTED,
             FocusSessionPhase.IDLE,
             -> {
-                // Release only when leaving an active/paused session.
+                ambientAudio.stop()
+                // Release DND only when leaving an active/paused session.
                 if (previousPhase == FocusSessionPhase.RUNNING ||
                     previousPhase == FocusSessionPhase.PAUSED
                 ) {
@@ -216,6 +235,11 @@ class LookAfterViewModel(
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        ambientAudio.release()
+        super.onCleared()
     }
 
     fun sendCoachMessage(text: String) {

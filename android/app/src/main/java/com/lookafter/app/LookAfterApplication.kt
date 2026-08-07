@@ -8,11 +8,11 @@ import com.lookafter.app.calendar.DeviceCalendarEventsProvider
 import com.lookafter.app.data.DataStoreLifeStateRepository
 import com.lookafter.app.execution.ExecutionService
 import com.lookafter.app.health.HealthConnectRepository
+import com.lookafter.app.brain.HttpLlmCoachService
 import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.FallbackCoachService
 import com.lookafter.core.brain.OfflineCoachService
-import com.lookafter.core.brain.UnconfiguredRemoteCoachService
 import com.lookafter.core.calendar.CalendarEvent
 import com.lookafter.core.calendar.CalendarEventsProvider
 import com.lookafter.core.calendar.StubCalendarEventsProvider
@@ -87,11 +87,21 @@ class LookAfterApplication : Application() {
             fallback = StubCalendarEventsProvider(demoCalendar()),
         )
         notifier = LookAfterNotifier(this).also { it.ensureChannels() }
-        // Remote scaffold is blank → offline coach always answers until LLM is wired.
+        // OpenAI-compatible HTTPS coach when LOOKAFTER_LLM_API_KEY is set; else offline.
+        val httpCoach = HttpLlmCoachService(
+            apiKey = BuildConfig.LLM_API_KEY,
+            baseUrl = BuildConfig.LLM_BASE_URL,
+            model = BuildConfig.LLM_MODEL,
+        )
         coachService = FallbackCoachService(
-            primary = UnconfiguredRemoteCoachService(),
+            primary = httpCoach,
             fallback = OfflineCoachService(),
         )
+        if (httpCoach.isConfigured) {
+            Log.i(TAG, "LLM coach configured (model=${BuildConfig.LLM_MODEL})")
+        } else {
+            Log.i(TAG, "LLM coach offline — set LOOKAFTER_LLM_API_KEY in local.properties")
+        }
         lifeEngine = LifeEngine(
             initialState = LifeState.EMPTY,
             repository = lifeStateRepository,

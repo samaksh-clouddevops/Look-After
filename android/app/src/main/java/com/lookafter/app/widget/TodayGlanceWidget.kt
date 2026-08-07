@@ -12,6 +12,7 @@ import androidx.glance.LocalContext
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.action.actionSendBroadcast
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -60,6 +61,7 @@ class TodayGlanceWidget : GlanceAppWidget() {
                     reason = tick?.decision?.reason ?: "Open the app to load Today",
                     open = tick?.world?.openTaskCount ?: 0,
                     readiness = tick?.world?.healthReadiness,
+                    hasHero = !tick?.decision?.heroTaskId.isNullOrBlank(),
                 )
             }
         }
@@ -72,60 +74,39 @@ private fun WidgetContent(
     reason: String,
     open: Int,
     readiness: Double?,
+    hasHero: Boolean,
 ) {
     val context = LocalContext.current
     val openToday = LookAfterDeepLink.openApp(context, LookAfterDeepLink.TARGET_TODAY)
     val openFocus = LookAfterDeepLink.openApp(context, LookAfterDeepLink.TARGET_FOCUS)
     val openBrain = LookAfterDeepLink.openApp(context, LookAfterDeepLink.TARGET_BRAIN)
+    val completeHero = Intent(context, WidgetActionReceiver::class.java).apply {
+        action = WidgetActionReceiver.ACTION_COMPLETE_HERO
+    }
 
-    val primary = ColorProvider(
-        day = LookAfterColors.LightTextPrimary,
-        night = LookAfterColors.DarkTextPrimary,
-    )
-    val secondary = ColorProvider(
-        day = LookAfterColors.LightTextSecondary,
-        night = LookAfterColors.DarkTextSecondary,
-    )
-    val muted = ColorProvider(
-        day = LookAfterColors.LightTextMuted,
-        night = LookAfterColors.DarkTextMuted,
-    )
-    val accent = ColorProvider(
-        day = LookAfterColors.AccentPrimary,
-        night = LookAfterColors.AccentOnDark,
-    )
+    val primary = ColorProvider(day = LookAfterColors.LightTextPrimary, night = LookAfterColors.DarkTextPrimary)
+    val secondary = ColorProvider(day = LookAfterColors.LightTextSecondary, night = LookAfterColors.DarkTextSecondary)
+    val muted = ColorProvider(day = LookAfterColors.LightTextMuted, night = LookAfterColors.DarkTextMuted)
+    val accent = ColorProvider(day = LookAfterColors.AccentPrimary, night = LookAfterColors.AccentOnDark)
 
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(
-                ColorProvider(
-                    day = LookAfterColors.LightSurface,
-                    night = LookAfterColors.DarkSurface,
-                ),
-            )
+            .background(ColorProvider(day = LookAfterColors.LightSurface, night = LookAfterColors.DarkSurface))
             .padding(14.dp),
         verticalAlignment = Alignment.Vertical.Top,
     ) {
-        // Header + open count
-        Row(
-            modifier = GlanceModifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Vertical.CenterVertically,
-        ) {
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Vertical.CenterVertically) {
             Text(
                 text = "Today",
                 style = TextStyle(color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold),
                 modifier = GlanceModifier.defaultWeight(),
             )
-            Text(
-                text = "$open open",
-                style = TextStyle(color = muted, fontSize = 11.sp),
-            )
+            Text(text = "$open open", style = TextStyle(color = muted, fontSize = 11.sp))
         }
 
         Spacer(GlanceModifier.height(6.dp))
 
-        // Hero block → opens Today
         Column(
             modifier = GlanceModifier
                 .fillMaxWidth()
@@ -145,7 +126,7 @@ private fun WidgetContent(
             if (readiness != null) {
                 Spacer(GlanceModifier.height(4.dp))
                 Text(
-                    text = "Readiness ${"%.0f".format(readiness * 100)}%",
+                    text = "Readiness " + "%.0f".format(readiness * 100) + "%",
                     style = TextStyle(color = muted, fontSize = 11.sp),
                 )
             }
@@ -153,7 +134,6 @@ private fun WidgetContent(
 
         Spacer(GlanceModifier.height(10.dp))
 
-        // Action row: Focus | Brain
         Row(modifier = GlanceModifier.fillMaxWidth()) {
             Text(
                 text = "Focus",
@@ -161,6 +141,18 @@ private fun WidgetContent(
                 modifier = GlanceModifier
                     .defaultWeight()
                     .clickable(actionStartActivity(openFocus))
+                    .padding(vertical = 4.dp),
+            )
+            Text(
+                text = "Done",
+                style = TextStyle(
+                    color = if (hasHero) accent else muted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                modifier = GlanceModifier
+                    .defaultWeight()
+                    .clickable(actionSendBroadcast(completeHero))
                     .padding(vertical = 4.dp),
             )
             Text(
