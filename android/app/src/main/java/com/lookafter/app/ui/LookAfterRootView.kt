@@ -134,7 +134,19 @@ fun LookAfterRootView(
             inboxOpen -> InboxScreen(state = inbox, onIntent = viewModel::dispatchInbox, onBack = { inboxOpen = false }, modifier = contentModifier)
             reviewOpen -> WeeklyReviewScreen(state = state, modifier = contentModifier)
             current == AppDestination.BRIEFING -> BriefingScreen(state = state, health = health, modifier = contentModifier)
-            current == AppDestination.TODAY -> TodayTimelineScreen(state = state, onIntent = viewModel::dispatch, restoredFromDisk = restoredFromDisk, hydrationComplete = hydrationComplete, modifier = contentModifier)
+            current == AppDestination.TODAY -> TodayTimelineScreen(
+                state = state,
+                onIntent = viewModel::dispatch,
+                restoredFromDisk = restoredFromDisk,
+                hydrationComplete = hydrationComplete,
+                heroTitle = brainTick.decision.heroTitle,
+                heroReason = brainTick.decision.reason,
+                onStartFocus = {
+                    viewModel.startFocusForHero()
+                    focusOpen = true
+                },
+                modifier = contentModifier,
+            )
             current == AppDestination.BRAIN -> BrainScreen(
                 tick = brainTick,
                 coachTranscript = coach,
@@ -159,6 +171,8 @@ fun LookAfterRootView(
                 onOpenInbox = { reviewOpen = false; medicationOpen = false; healthOpen = false; inboxOpen = true },
                 onConnectCalendar = { viewModel.ensureCalendarPermission() },
                 calendarEventCount = calendarEvents.size,
+                canScheduleExactAlarms = viewModel.canScheduleExactAlarms,
+                onRequestExactAlarms = { viewModel.requestExactAlarms() },
                 modifier = contentModifier,
             )
         }

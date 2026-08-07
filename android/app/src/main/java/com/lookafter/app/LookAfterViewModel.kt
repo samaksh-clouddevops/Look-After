@@ -70,6 +70,11 @@ class LookAfterViewModel(
     var requestHealthPermissions: ((Set<String>) -> Unit)? = null
     /** Set by MainActivity to request READ_CALENDAR. */
     var requestCalendarPermission: (() -> Unit)? = null
+    /** Set by MainActivity to open exact-alarm settings (Android 12+). */
+    var openExactAlarmSettings: (() -> Unit)? = null
+
+    val canScheduleExactAlarms: Boolean
+        get() = notifier.canScheduleExactAlarms()
 
     val brainTick: StateFlow<BrainTick> = combine(
         state,
@@ -197,5 +202,14 @@ class LookAfterViewModel(
 
     fun ensureCalendarPermission() {
         requestCalendarPermission?.invoke()
+    }
+
+    fun requestExactAlarms() {
+        openExactAlarmSettings?.invoke()
+            ?: notifier.exactAlarmSettingsIntent()?.let { intent ->
+                runCatching {
+                    getApplication<Application>().startActivity(intent)
+                }
+            }
     }
 }

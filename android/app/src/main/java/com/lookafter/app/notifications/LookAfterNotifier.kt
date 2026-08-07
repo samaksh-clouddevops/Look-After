@@ -21,8 +21,13 @@ import java.time.Instant
 /**
  * Schedules [PlannedNotification]s via AlarmManager and posts them when due.
  * Pure planning stays in lookafter-core [com.lookafter.core.notifications.NotificationPolicy].
+ *
+ * Android 14+ uses exact alarms only when [AlarmManager.canScheduleExactAlarms] is true;
+ * otherwise falls back to inexact `setAndAllowWhileIdle`.
  */
 class LookAfterNotifier(private val context: Context) {
+
+    private val planStore = NotificationPlanStore(context)
 
     fun ensureChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -35,10 +40,29 @@ class LookAfterNotifier(private val context: Context) {
         channels.forEach { mgr.createNotificationChannel(it) }
     }
 
+    /** True when we can use setExactAndAllowWhileIdle (or pre-S always true). */
+    fun canScheduleExactAlarms(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarm = context.getSystemService(AlarmManager::class.java) ?: return false
+        return alarm.canScheduleExactAlarms()
+    }
+
     fun scheduleAll(plans: List<PlannedNotification>) {
         ensureChannels()
-        // Cancel previously known keys by reusing stable ids when possible.
+        planStore.save(plans)
         plans.forEach { schedule(it) }
+    }
+
+    /** Re-arm from disk after boot / process death. */
+    fun reschedulePersisted() {
+        val plans = planStore.load()
+        if (plans.isEmpty()) return
+        // Drop plans already far in the past (keep due-now within 2 min).
+        val now = Instant.now()
+        val fresh = plans.filter {
+            !it.fireAt.isBefore(now.minusSeconds(120))
+        }
+        scheduleAll(fresh)
     }
 
     fun schedule(plan: PlannedNotification) {
@@ -58,16 +82,42 @@ class LookAfterNotifier(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val triggerAt = plan.fireAt.toEpochMilli().coerceAtLeast(System.currentTimeMillis())
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
-            } else {
-                alarm.set(AlarmManager.RTC_WAKEUP, triggerAt, pending)
-            }
-        }
-        // Immediate fires (already due) post now.
+
+        // Immediate fires (already due) post now and skip alarm.
         if (!plan.fireAt.isAfter(Instant.now().plusSeconds(2))) {
             postNow(plan)
+            return
+        }
+
+        runCatching {
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && canScheduleExactAlarms() -> {
+                    // Prefer exact when permitted (Android 12+ gate).
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        alarm.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            triggerAt,
+                            pending,
+                        )
+                    } else {
+                        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+                    }
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                    // Inexact fallback when exact-alarm permission denied.
+                    alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+                }
+                else -> alarm.set(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+            }
+        }
+    }
+
+    /** Settings intent for SCHEDULE_EXACT_ALARM (Android 12+). */
+    fun exactAlarmSettingsIntent(): Intent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+        return Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+            data = android.net.Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }
 

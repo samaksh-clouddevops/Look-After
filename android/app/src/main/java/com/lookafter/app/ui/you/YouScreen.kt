@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Inbox
@@ -45,6 +46,8 @@ fun YouScreen(
     onOpenInbox: () -> Unit = {},
     onConnectCalendar: () -> Unit = {},
     calendarEventCount: Int = 0,
+    canScheduleExactAlarms: Boolean = true,
+    onRequestExactAlarms: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -123,6 +126,16 @@ fun YouScreen(
                 },
                 onClick = onConnectCalendar,
             )
+        }
+        if (!canScheduleExactAlarms) {
+            item {
+                YouRow(
+                    icon = Icons.Outlined.Alarm,
+                    title = "Exact alarms",
+                    subtitle = "Allow precise med & schedule reminders",
+                    onClick = onRequestExactAlarms,
+                )
+            }
         }
         item {
             YouRow(

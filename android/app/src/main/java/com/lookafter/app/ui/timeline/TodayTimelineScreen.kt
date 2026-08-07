@@ -31,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.lookafter.app.execution.SystemFocusController
+import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
+import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.engine.LookAfterIntent
@@ -40,7 +42,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
- * Primary Today surface — Golden Ratio header + timeline of active tasks.
+ * Primary Today surface — hero card + timeline of active tasks (iOS Today parity).
  */
 @Composable
 fun TodayTimelineScreen(
@@ -49,6 +51,9 @@ fun TodayTimelineScreen(
     modifier: Modifier = Modifier,
     restoredFromDisk: Boolean = false,
     hydrationComplete: Boolean = true,
+    heroTitle: String? = null,
+    heroReason: String? = null,
+    onStartFocus: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val policyGrantedState = remember {
@@ -85,6 +90,46 @@ fun TodayTimelineScreen(
                 subtitle = subtitle(state, restoredFromDisk, hydrationComplete),
                 modifier = Modifier.padding(bottom = LookAfterDimens.spacingXS),
             )
+        }
+
+        if (!heroTitle.isNullOrBlank()) {
+            item(key = "hero") {
+                ElevatedSurfaceCard(
+                    modifier = if (onStartFocus != null) {
+                        Modifier.clickable(onClick = onStartFocus)
+                    } else {
+                        Modifier
+                    },
+                ) {
+                    Text(
+                        text = "Next up",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.AccentPrimary,
+                    )
+                    Text(
+                        text = heroTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                    )
+                    if (!heroReason.isNullOrBlank()) {
+                        Text(
+                            text = heroReason,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                        )
+                    }
+                    if (onStartFocus != null) {
+                        Text(
+                            text = "Tap to begin focus",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LookAfterColors.AccentPrimary,
+                            modifier = Modifier.padding(top = LookAfterDimens.spacingSM),
+                        )
+                    }
+                }
+            }
         }
 
         if (!policyGranted) {

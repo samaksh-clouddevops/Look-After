@@ -64,8 +64,17 @@ class MainActivity : ComponentActivity() {
                 viewModel.refreshCalendarDay()
             }
         }
+        viewModel.openExactAlarmSettings = {
+            val intent = (application as LookAfterApplication).notifier.exactAlarmSettingsIntent()
+            if (intent != null) {
+                runCatching { startActivity(intent) }
+                    .onFailure { Log.w(TAG, "Unable to open exact alarm settings", it) }
+            }
+        }
 
         requestNotificationPermissionAndStartService()
+        // Re-arm any plans saved before process death.
+        (application as LookAfterApplication).notifier.reschedulePersisted()
 
         setContent {
             LookAfterTheme {
