@@ -17,12 +17,16 @@ import java.time.ZoneId
 import java.util.UUID
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonClassDiscriminator
 
 /**
  * Declarative plan mutations — mirrors iOS `PlanMutation` (subset).
  * Produced by offline or LLM planners; applied via [PlanMutationApplier].
+ *
+ * JSON uses `"type"` discriminator (see [PlanProposalJson.SCHEMA_HINT]).
  */
 @Serializable
+@JsonClassDiscriminator("type")
 sealed class PlanMutation {
     @Serializable
     @SerialName("createTask")

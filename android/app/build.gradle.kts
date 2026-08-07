@@ -15,6 +15,13 @@ val localProps = Properties().apply {
 fun localProp(key: String, default: String = ""): String =
     (localProps.getProperty(key) ?: default).replace("\"", "\\\"")
 
+// Firebase only when google-services.json is committed/copied into app/.
+val hasGoogleServices = file("google-services.json").exists()
+if (hasGoogleServices) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
+
 android {
     namespace = "com.lookafter.app"
     // androidx.core 1.15+ requires compileSdk 35+.
@@ -125,6 +132,22 @@ dependencies {
     // Glance home-screen widget
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.glance:glance-material3:1.1.1")
+
+    // CameraX front-camera body double
+    val cameraX = "1.4.0"
+    implementation("androidx.camera:camera-core:$cameraX")
+    implementation("androidx.camera:camera-camera2:$cameraX")
+    implementation("androidx.camera:camera-lifecycle:$cameraX")
+    implementation("androidx.camera:camera-view:$cameraX")
+
+    // Firebase BOM + SDKs only when google-services.json is present.
+    // Bridges use reflection so the app still compiles/runs without Firebase.
+    if (hasGoogleServices) {
+        implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+        implementation("com.google.firebase:firebase-auth-ktx")
+        implementation("com.google.firebase:firebase-firestore-ktx")
+        implementation("com.google.firebase:firebase-crashlytics-ktx")
+    }
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

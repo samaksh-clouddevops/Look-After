@@ -60,6 +60,8 @@ fun LookAfterRootView(
     val ambientEnabled by viewModel.ambientEnabled.collectAsStateWithLifecycle()
     val insights by viewModel.insights.collectAsStateWithLifecycle()
     val auth by viewModel.auth.collectAsStateWithLifecycle()
+    val cameraBodyDouble by viewModel.cameraBodyDoubleEnabled.collectAsStateWithLifecycle()
+    val syncMessage by viewModel.lastSyncMessage.collectAsStateWithLifecycle()
 
     var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY.name) }
     val current = AppDestination.entries.firstOrNull { it.name == destination } ?: AppDestination.TODAY
@@ -108,6 +110,7 @@ fun LookAfterRootView(
             session = focus,
             onIntent = viewModel::dispatchFocus,
             onClose = { focusOpen = false },
+            cameraBodyDouble = cameraBodyDouble,
             modifier = modifier.fillMaxSize(),
         )
         return
@@ -252,6 +255,10 @@ fun LookAfterRootView(
                     auth = auth,
                     ambientEnabled = ambientEnabled,
                     onAmbientChange = viewModel::setAmbientEnabled,
+                    cameraBodyDouble = cameraBodyDouble,
+                    onCameraBodyDoubleChange = viewModel::setCameraBodyDoubleEnabled,
+                    firebaseAvailable = viewModel.firebaseAuthAvailable,
+                    syncMessage = syncMessage,
                     onOpenReview = {
                         medicationOpen = false; healthOpen = false; inboxOpen = false
                         insightsOpen = false; reviewOpen = true
@@ -283,8 +290,11 @@ fun LookAfterRootView(
                     canScheduleExactAlarms = viewModel.canScheduleExactAlarms,
                     onRequestExactAlarms = { viewModel.requestExactAlarms() },
                     onSignInLocal = { viewModel.signInLocal(it) },
+                    onSignInFirebaseAnonymous = { viewModel.signInFirebaseAnonymous() },
                     onSignOut = { viewModel.signOut() },
                     onSyncChange = { viewModel.setSyncEnabled(it) },
+                    onPushSync = { viewModel.pushSync() },
+                    onPullSync = { viewModel.pullSync() },
                     modifier = Modifier.fillMaxSize(),
                 )
             }

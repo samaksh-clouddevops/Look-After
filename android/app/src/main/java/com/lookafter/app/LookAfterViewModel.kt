@@ -5,9 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lookafter.app.adhd.BodyDoubleAmbientAudio
 import com.lookafter.app.auth.AuthSessionStore
+import com.lookafter.app.auth.AuthUser
+import com.lookafter.app.auth.FirebaseAuthBridge
+import com.lookafter.app.brain.HttpLlmPlanService
+import com.lookafter.app.diagnostics.CrashReporting
 import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
+import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.widget.TodayWidgetUpdater
 import com.lookafter.core.adhd.FocusSessionEngine
 import com.lookafter.core.adhd.FocusSessionIntent
@@ -56,6 +61,8 @@ class LookAfterViewModel(
     private val calendar: CalendarEventsProvider = app.calendarProvider
     private val notifier: LookAfterNotifier = app.notifier
     private val coach: CoachService = app.coachService
+    private val planService: HttpLlmPlanService = app.planService
+    private val syncTransport: LifeStateSyncTransport = app.syncTransport
     private val systemFocus = SystemFocusController(application)
     private val ambientAudio = BodyDoubleAmbientAudio(application)
     private val authStore: AuthSessionStore = app.authSessionStore
@@ -63,11 +70,23 @@ class LookAfterViewModel(
     private val _ambientEnabled = MutableStateFlow(true)
     val ambientEnabled: StateFlow<Boolean> = _ambientEnabled.asStateFlow()
 
+    private val _cameraBodyDouble = MutableStateFlow(false)
+    val cameraBodyDoubleEnabled: StateFlow<Boolean> = _cameraBodyDouble.asStateFlow()
+
+    private val _lastSyncMessage = MutableStateFlow<String?>(null)
+    val lastSyncMessage: StateFlow<String?> = _lastSyncMessage.asStateFlow()
+
     val auth = authStore.state
+    val firebaseAuthAvailable: Boolean get() = FirebaseAuthBridge.isAvailable()
+    val llmPlanConfigured: Boolean get() = planService.isConfigured
 
     val insights: StateFlow<InsightsSnapshot> = combine(state, health) { life, h ->
         InsightsEngine.compute(life, h)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsSnapshot.EMPTY)
+
+    fun setCameraBodyDoubleEnabled(enabled: Boolean) {
+        _cameraBodyDouble.value = enabled
+    }
 
     fun setAmbientEnabled(enabled: Boolean) {
         _ambientEnabled.value = enabled
@@ -260,29 +279,45 @@ class LookAfterViewModel(
         _coachTranscript.value = _coachTranscript.value + (true to trimmed)
         viewModelScope.launch {
             val life = engine.currentState
-            // Multi-day / mutation proposal path first.
-            val multi = MultiDayPlanEngine.interpret(trimmed, life)
-            if (multi.proposal.mutations.isNotEmpty()) {
-                val applied = PlanMutationApplier.apply(multi.proposal, life)
-                applied.intents.forEach { engine.process(it) }
-                _coachTranscript.value =
-                    _coachTranscript.value + (false to multi.conversationalReply)
-                return@launch
+            val healthSnap = healthRepo.summary.value
+            // 1) LLM JSON multi-day planner (falls back offline inside service).
+            val looksLikePlan = trimmed.length > 12 ||
+                trimmed.contains("spread") ||
+                trimmed.contains("plan") ||
+                trimmed.contains("tomorrow") ||
+                trimmed.contains("week") ||
+                trimmed.contains("reschedule") ||
+                trimmed.contains("morning")
+            if (looksLikePlan) {
+                val planned = planService.plan(trimmed, life, healthSnap)
+                if (planned.proposal.mutations.isNotEmpty()) {
+                    val applied = PlanMutationApplier.apply(planned.proposal, life)
+                    applied.intents.forEach { engine.process(it) }
+                    val src = if (planned.source == HttpLlmPlanService.PlanResult.Source.LLM) {
+                        " (LLM plan)"
+                    } else {
+                        " (offline plan)"
+                    }
+                    _coachTranscript.value =
+                        _coachTranscript.value + (false to planned.conversationalReply + src)
+                    return@launch
+                }
             }
-            // Single-day deterministic intents (strip / park fluid / someday).
+            // 2) Single-day deterministic intents (strip / park fluid / someday).
             val simple = MultiDayPlanEngine.simpleIntents(trimmed, life)
             if (simple.intents.isNotEmpty()) {
                 simple.intents.forEach { engine.process(it) }
                 _coachTranscript.value = _coachTranscript.value + (false to simple.reply)
                 return@launch
             }
+            // 3) Conversational coach (HTTP LLM → offline).
             val reply = coach.reply(
                 userMessage = trimmed,
                 life = engine.currentState,
-                health = healthRepo.summary.value,
+                health = healthSnap,
             )
-            val finalReply = reply.ifBlank { multi.conversationalReply }
-            _coachTranscript.value = _coachTranscript.value + (false to finalReply)
+            _coachTranscript.value = _coachTranscript.value +
+                (false to reply.ifBlank { "I'm here — try a plan command or ask what next." })
         }
     }
 
@@ -290,13 +325,74 @@ class LookAfterViewModel(
         authStore.signInLocal(displayName, email)
     }
 
+    fun signInFirebaseAnonymous() {
+        viewModelScope.launch {
+            FirebaseAuthBridge.signInAnonymously()
+                .onSuccess { user -> authStore.applyRemoteUser(user) }
+                .onFailure {
+                    CrashReporting.recordNonFatal(it, "firebase anonymous sign-in")
+                    _lastSyncMessage.value = "Firebase sign-in failed — staying local"
+                }
+        }
+    }
+
+    fun signInFirebaseEmail(email: String, password: String) {
+        viewModelScope.launch {
+            FirebaseAuthBridge.signInWithEmail(email, password)
+                .onSuccess { user -> authStore.applyRemoteUser(user) }
+                .onFailure {
+                    CrashReporting.recordNonFatal(it, "firebase email sign-in")
+                    _lastSyncMessage.value = "Email sign-in failed"
+                }
+        }
+    }
+
     fun signOut() {
+        FirebaseAuthBridge.signOut()
         authStore.signOutToAnonymous()
     }
 
     fun setSyncEnabled(enabled: Boolean) {
         authStore.setSyncEnabled(enabled)
-        if (enabled) authStore.markSyncedNow()
+        if (enabled) {
+            pushSync()
+        }
+    }
+
+    fun pushSync() {
+        viewModelScope.launch {
+            val userId = authStore.state.value.user?.id ?: return@launch
+            syncTransport.push(userId, engine.currentState)
+                .onSuccess {
+                    authStore.markSyncedNow()
+                    _lastSyncMessage.value = "Synced via ${syncTransport.name}"
+                    CrashReporting.log("sync push ok ${syncTransport.name}")
+                }
+                .onFailure {
+                    CrashReporting.recordNonFatal(it, "sync push")
+                    _lastSyncMessage.value = "Sync failed: ${it.message}"
+                }
+        }
+    }
+
+    fun pullSync() {
+        viewModelScope.launch {
+            val userId = authStore.state.value.user?.id ?: return@launch
+            syncTransport.pull(userId)
+                .onSuccess { remote ->
+                    if (remote != null) {
+                        engine.process(LookAfterIntent.ReplaceState(remote))
+                        authStore.markSyncedNow()
+                        _lastSyncMessage.value = "Pulled LifeState via ${syncTransport.name}"
+                    } else {
+                        _lastSyncMessage.value = "No remote snapshot"
+                    }
+                }
+                .onFailure {
+                    CrashReporting.recordNonFatal(it, "sync pull")
+                    _lastSyncMessage.value = "Pull failed: ${it.message}"
+                }
+        }
     }
 
     fun startFocusForHero(emergency: Boolean = false) {

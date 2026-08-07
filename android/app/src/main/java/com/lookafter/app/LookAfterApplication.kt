@@ -10,7 +10,11 @@ import com.lookafter.app.execution.ExecutionService
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.auth.AuthSessionStore
 import com.lookafter.app.brain.HttpLlmCoachService
+import com.lookafter.app.brain.HttpLlmPlanService
+import com.lookafter.app.diagnostics.CrashReporting
 import com.lookafter.app.notifications.LookAfterNotifier
+import com.lookafter.app.sync.LifeStateSyncTransport
+import com.lookafter.app.sync.SyncTransportFactory
 import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.FallbackCoachService
 import com.lookafter.core.brain.OfflineCoachService
@@ -72,6 +76,12 @@ class LookAfterApplication : Application() {
     lateinit var authSessionStore: AuthSessionStore
         private set
 
+    lateinit var planService: HttpLlmPlanService
+        private set
+
+    lateinit var syncTransport: LifeStateSyncTransport
+        private set
+
     val initialOnboarding: OnboardingState
         get() = loadOnboarding()
 
@@ -83,6 +93,7 @@ class LookAfterApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporting.install(this)
         lifeStateRepository = DataStoreLifeStateRepository.create(this)
         healthRepository = HealthConnectRepository(this)
         deviceCalendar = DeviceCalendarEventsProvider(this)
@@ -102,10 +113,21 @@ class LookAfterApplication : Application() {
             primary = httpCoach,
             fallback = OfflineCoachService(),
         )
+        planService = HttpLlmPlanService(
+            apiKey = BuildConfig.LLM_API_KEY,
+            baseUrl = BuildConfig.LLM_BASE_URL,
+            model = BuildConfig.LLM_MODEL,
+        )
+        // Prefer Firebase sync when SDK present; otherwise local file export.
+        syncTransport = SyncTransportFactory.create(
+            context = this,
+            preferFirebase = true,
+        )
+        Log.i(TAG, "Sync transport=${syncTransport.name}")
         if (httpCoach.isConfigured) {
-            Log.i(TAG, "LLM coach configured (model=${BuildConfig.LLM_MODEL})")
+            Log.i(TAG, "LLM coach/planner configured (model=${BuildConfig.LLM_MODEL})")
         } else {
-            Log.i(TAG, "LLM coach offline — set LOOKAFTER_LLM_API_KEY in local.properties")
+            Log.i(TAG, "LLM offline — set LOOKAFTER_LLM_API_KEY in local.properties")
         }
         lifeEngine = LifeEngine(
             initialState = LifeState.EMPTY,

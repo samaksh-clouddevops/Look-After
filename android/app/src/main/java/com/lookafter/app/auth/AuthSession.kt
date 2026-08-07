@@ -59,6 +59,11 @@ class AuthSessionStore(context: Context) {
         persist(_state.value.copy(user = user, syncEnabled = false))
     }
 
+    /** Adopt a Firebase (or other remote) identity after successful remote sign-in. */
+    fun applyRemoteUser(user: AuthUser) {
+        persist(_state.value.copy(user = user, syncEnabled = _state.value.syncEnabled || !user.isAnonymous))
+    }
+
     fun signOutToAnonymous() {
         val user = AuthUser(
             id = "anon-" + UUID.randomUUID(),

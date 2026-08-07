@@ -31,12 +31,13 @@ import com.lookafter.core.adhd.FocusSessionState
 import java.time.Instant
 import kotlinx.coroutines.delay
 
-/** Full-screen ADHD focus lock - body-doubling prompts + timer (iOS parity). */
+/** Full-screen ADHD focus lock - camera/presence body-double + timer (iOS parity). */
 @Composable
 fun FocusSessionOverlay(
     session: FocusSessionState,
     onIntent: (FocusSessionIntent) -> Unit,
     onClose: () -> Unit,
+    cameraBodyDouble: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var remaining by remember(session.phase, session.startedAt, session.accumulatedActiveSeconds) {
@@ -105,9 +106,10 @@ fun FocusSessionOverlay(
                 color = muted,
                 modifier = Modifier.padding(top = 8.dp),
             )
-            BodyDoublePresencePanel(
+            CameraBodyDouble(
                 emergency = emergency,
                 elapsedActiveSeconds = elapsed,
+                enabled = cameraBodyDouble,
                 modifier = Modifier.padding(top = LookAfterDimens.spacingLG),
             )
         }

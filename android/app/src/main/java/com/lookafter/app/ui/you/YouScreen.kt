@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import com.lookafter.app.auth.AuthSessionState
 import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
@@ -50,6 +51,10 @@ fun YouScreen(
     auth: AuthSessionState = AuthSessionState(),
     ambientEnabled: Boolean = true,
     onAmbientChange: (Boolean) -> Unit = {},
+    cameraBodyDouble: Boolean = false,
+    onCameraBodyDoubleChange: (Boolean) -> Unit = {},
+    firebaseAvailable: Boolean = false,
+    syncMessage: String? = null,
     onOpenReview: () -> Unit,
     onOpenSimulation: () -> Unit,
     onOpenMedication: () -> Unit,
@@ -61,8 +66,11 @@ fun YouScreen(
     canScheduleExactAlarms: Boolean = true,
     onRequestExactAlarms: () -> Unit = {},
     onSignInLocal: (String) -> Unit = {},
+    onSignInFirebaseAnonymous: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onSyncChange: (Boolean) -> Unit = {},
+    onPushSync: () -> Unit = {},
+    onPullSync: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -131,17 +139,45 @@ fun YouScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Cloud sync", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            if (auth.syncEnabled) "Marked enabled (transport pending)"
-                            else "Local-only · enable when backend is ready",
+                            when {
+                                auth.syncEnabled && firebaseAvailable -> "Firebase / local transport ready"
+                                auth.syncEnabled -> "Local file transport"
+                                else -> "Local-only · toggle to enable push/pull"
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (!syncMessage.isNullOrBlank()) {
+                            Text(
+                                syncMessage,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = LookAfterColors.AccentPrimary,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                     }
                     Switch(
                         checked = auth.syncEnabled,
                         onCheckedChange = onSyncChange,
                         colors = SwitchDefaults.colors(checkedTrackColor = LookAfterColors.AccentPrimary),
                     )
+                }
+                if (auth.syncEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = LookAfterDimens.spacingSM),
+                        horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = onPushSync) { Text("Push") }
+                        androidx.compose.material3.TextButton(onClick = onPullSync) { Text("Pull") }
+                    }
+                }
+                if (firebaseAvailable) {
+                    androidx.compose.material3.TextButton(
+                        onClick = onSignInFirebaseAnonymous,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                    ) { Text("Firebase anonymous sign-in") }
                 }
             }
         }
@@ -228,6 +264,30 @@ fun YouScreen(
                     Switch(
                         checked = ambientEnabled,
                         onCheckedChange = onAmbientChange,
+                        colors = SwitchDefaults.colors(checkedTrackColor = LookAfterColors.AccentPrimary),
+                    )
+                }
+            }
+        }
+        item {
+            ElevatedSurfaceCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
+                ) {
+                    Icon(Icons.Outlined.Person, contentDescription = null, tint = LookAfterColors.AccentPrimary)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Camera body double", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Front camera mirror during focus (falls back to presence)",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = cameraBodyDouble,
+                        onCheckedChange = onCameraBodyDoubleChange,
                         colors = SwitchDefaults.colors(checkedTrackColor = LookAfterColors.AccentPrimary),
                     )
                 }
