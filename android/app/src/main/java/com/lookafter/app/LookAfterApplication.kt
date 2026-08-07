@@ -3,6 +3,7 @@ package com.lookafter.app
 import android.app.Application
 import android.util.Log
 import com.lookafter.app.data.DataStoreLifeStateRepository
+import com.lookafter.app.execution.ExecutionService
 import com.lookafter.core.engine.LifeEngine
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.engine.LifeStateRepository
@@ -64,36 +65,53 @@ class LookAfterApplication : Application() {
                     "No snapshot — seeded demo LifeState and persisted"
                 },
             )
+            // Let ExecutionService decide whether to promote to foreground.
+            startExecutionService()
+        }
+    }
+
+    /** Safe to call repeatedly — service is sticky and self-manages lifecycle. */
+    fun startExecutionService() {
+        try {
+            ExecutionService.start(this)
+            Log.i(TAG, "ExecutionService start requested")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Unable to start ExecutionService", t)
         }
     }
 
     private fun demoState(): LifeState {
-        val zone = ZoneOffset.UTC
-        val yesterday = LocalDate.now(zone).minusDays(1)
-        val meal = LifeTask(
-            id = "demo-dinner",
-            title = "Dinner (EndOfDay)",
-            durationMinutes = 45,
+        val zone = ZoneOffset.systemDefault()
+        val today = LocalDate.now(zone)
+        val now = java.time.ZonedDateTime.now(zone)
+        // Live focus block spanning "now" so Phase-7 notification can engage.
+        val focusStart = now.minusMinutes(10).toInstant()
+        val focusEnd = now.plusMinutes(50).toInstant()
+        val liveFocus = LifeTask(
+            id = "demo-live-focus",
+            title = "Deep work session",
+            durationMinutes = 60,
+            constraintType = ConstraintType.ANCHORED,
+            status = TaskStatus.IN_PROGRESS,
+            expirationPolicy = TaskExpirationPolicy.Infinite,
+            scheduledDate = today,
+            scheduledStart = focusStart,
+            scheduledEnd = focusEnd,
+        )
+        val nextFlexible = LifeTask(
+            id = "demo-next-flex",
+            title = "Inbox triage",
+            durationMinutes = 30,
             constraintType = ConstraintType.FLEXIBLE,
             status = TaskStatus.PENDING,
             expirationPolicy = TaskExpirationPolicy.EndOfDay,
-            scheduledDate = yesterday,
-            scheduledStart = yesterday.atTime(19, 0).atZone(zone).toInstant(),
-            scheduledEnd = yesterday.atTime(19, 45).atZone(zone).toInstant(),
-        )
-        val work = LifeTask(
-            id = "demo-deep-work",
-            title = "Deep work draft",
-            durationMinutes = 90,
-            constraintType = ConstraintType.FLEXIBLE,
-            status = TaskStatus.PENDING,
-            expirationPolicy = TaskExpirationPolicy.Infinite,
-            scheduledDate = yesterday,
-            scheduledStart = yesterday.atTime(14, 0).atZone(zone).toInstant(),
+            scheduledDate = today,
+            scheduledStart = focusEnd.plusSeconds(5 * 60),
+            scheduledEnd = focusEnd.plusSeconds(35 * 60),
         )
         return LifeState(
-            activeTasks = listOf(meal, work),
-            currentDay = yesterday,
+            activeTasks = listOf(liveFocus, nextFlexible),
+            currentDay = today,
         )
     }
 
