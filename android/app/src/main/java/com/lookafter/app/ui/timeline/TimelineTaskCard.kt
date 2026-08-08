@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.PauseCircle
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Snooze
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -32,14 +35,16 @@ import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.engine.LookAfterIntent
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.Priority
 import com.lookafter.core.models.RecurrenceRule
 import com.lookafter.core.models.TaskStatus
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Timeline row for a single [LifeTask].
  *
- * Left: constraint badge · Center: title + duration · Right: complete control.
- * Tap body → edit (when [onOpen] provided).
+ * Badge · title/meta · start/pause · park · complete. Tap body → edit.
  */
 @Composable
 fun TimelineTaskCard(
@@ -47,9 +52,12 @@ fun TimelineTaskCard(
     onIntent: (LookAfterIntent) -> Unit,
     modifier: Modifier = Modifier,
     onOpen: ((LifeTask) -> Unit)? = null,
+    showFocus: Boolean = false,
+    onFocus: (() -> Unit)? = null,
 ) {
     val completed = task.status == TaskStatus.COMPLETED
     val expired = task.status == TaskStatus.EXPIRED || task.status == TaskStatus.SUPERSEDED
+    val active = task.status.isActive
 
     Card(
         modifier = modifier
@@ -98,6 +106,44 @@ fun TimelineTaskCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            if (active && !expired) {
+                // Start / pause toggle
+                IconButton(
+                    onClick = {
+                        when (task.status) {
+                            TaskStatus.IN_PROGRESS ->
+                                onIntent(LookAfterIntent.UpdateTask(task.copy(status = TaskStatus.PAUSED)))
+                            TaskStatus.PAUSED, TaskStatus.PENDING -> {
+                                onIntent(LookAfterIntent.UpdateTask(task.copy(status = TaskStatus.IN_PROGRESS)))
+                                onFocus?.invoke()
+                            }
+                            else -> Unit
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = if (task.status == TaskStatus.IN_PROGRESS) {
+                            Icons.Outlined.PauseCircle
+                        } else {
+                            Icons.Outlined.PlayCircle
+                        },
+                        contentDescription = if (task.status == TaskStatus.IN_PROGRESS) "Pause" else "Start",
+                        tint = LookAfterColors.Focus,
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        onIntent(LookAfterIntent.ParkTask(task.id, reason = "today_snooze"))
+                    },
+                ) {
+                    Icon(
+                        Icons.Outlined.Snooze,
+                        contentDescription = "Park",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             CompletionButton(
@@ -151,6 +197,8 @@ private fun CompletionButton(
     }
 }
 
+private val timeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+
 private fun metaLine(task: LifeTask): String {
     val parts = mutableListOf("${task.durationMinutes} min")
     parts += when (task.constraintType) {
@@ -158,10 +206,22 @@ private fun metaLine(task: LifeTask): String {
         ConstraintType.FLEXIBLE -> "Flexible"
         ConstraintType.FLUID -> "Fluid"
     }
+    task.scheduledStart?.let { start ->
+        val z = start.atZone(ZoneId.systemDefault())
+        parts += z.format(timeFmt)
+    }
+    if (task.priority == Priority.CRITICAL || task.priority == Priority.HIGH) {
+        parts += task.priority.name.lowercase().replaceFirstChar { it.titlecase() }
+    }
     if (task.recurrence != RecurrenceRule.NONE) {
         parts += task.recurrence.label
     }
-    if (task.status != TaskStatus.PENDING && task.status != TaskStatus.IN_PROGRESS) {
+    if (task.status == TaskStatus.IN_PROGRESS) parts += "Live"
+    if (task.status == TaskStatus.PAUSED) parts += "Paused"
+    if (task.status != TaskStatus.PENDING &&
+        task.status != TaskStatus.IN_PROGRESS &&
+        task.status != TaskStatus.PAUSED
+    ) {
         parts += task.status.name.lowercase().replaceFirstChar { it.titlecase() }
     }
     return parts.joinToString(" · ")
