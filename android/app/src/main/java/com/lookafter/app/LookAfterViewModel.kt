@@ -14,6 +14,9 @@ import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.widget.TodayWidgetUpdater
+import com.lookafter.core.adhd.BodyDoubleRoomEngine
+import com.lookafter.core.adhd.BodyDoubleRoomIntent
+import com.lookafter.core.adhd.BodyDoubleRoomState
 import com.lookafter.core.adhd.FocusSessionEngine
 import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
@@ -38,6 +41,9 @@ import com.lookafter.core.onboarding.OnboardingIntent
 import com.lookafter.core.onboarding.OnboardingState
 import com.lookafter.core.planning.MultiDayPlanEngine
 import com.lookafter.core.planning.PlanMutationApplier
+import com.lookafter.core.planning.PlanningConversationEngine
+import com.lookafter.core.planning.PlanningConversationIntent
+import com.lookafter.core.planning.PlanningConversationState
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -124,8 +130,16 @@ class LookAfterViewModel(
     private val _focus = MutableStateFlow(FocusSessionState())
     val focus: StateFlow<FocusSessionState> = _focus.asStateFlow()
 
-    private val _coachTranscript = MutableStateFlow<List<Pair<Boolean, String>>>(emptyList())
-    val coachTranscript: StateFlow<List<Pair<Boolean, String>>> = _coachTranscript.asStateFlow()
+    private val _planning = MutableStateFlow(PlanningConversationState())
+    val planning: StateFlow<PlanningConversationState> = _planning.asStateFlow()
+
+    /** Back-compat transcript projection for Brain UI. */
+    val coachTranscript: StateFlow<List<Pair<Boolean, String>>> =
+        _planning.map { it.transcript }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _bodyDoubleRoom = MutableStateFlow(BodyDoubleRoomState())
+    val bodyDoubleRoom: StateFlow<BodyDoubleRoomState> = _bodyDoubleRoom.asStateFlow()
 
     private val _calendarEvents = MutableStateFlow<List<CalendarEvent>>(emptyList())
     val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
@@ -276,49 +290,121 @@ class LookAfterViewModel(
     fun sendCoachMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
-        _coachTranscript.value = _coachTranscript.value + (true to trimmed)
+        // Append user turn into multi-turn planning conversation.
+        _planning.value = PlanningConversationEngine.reduce(
+            _planning.value,
+            PlanningConversationIntent.UserMessage(trimmed),
+        ).state
         viewModelScope.launch {
             val life = engine.currentState
             val healthSnap = healthRepo.summary.value
-            // 1) LLM JSON multi-day planner (falls back offline inside service).
             val looksLikePlan = trimmed.length > 12 ||
                 trimmed.contains("spread") ||
                 trimmed.contains("plan") ||
                 trimmed.contains("tomorrow") ||
                 trimmed.contains("week") ||
                 trimmed.contains("reschedule") ||
-                trimmed.contains("morning")
+                trimmed.contains("morning") ||
+                trimmed.contains("overwhelm") ||
+                trimmed.contains("park fluid")
             if (looksLikePlan) {
                 val planned = planService.plan(trimmed, life, healthSnap)
                 if (planned.proposal.mutations.isNotEmpty()) {
-                    val applied = PlanMutationApplier.apply(planned.proposal, life)
-                    applied.intents.forEach { engine.process(it) }
                     val src = if (planned.source == HttpLlmPlanService.PlanResult.Source.LLM) {
-                        " (LLM plan)"
+                        "LLM"
                     } else {
-                        " (offline plan)"
+                        "offline"
                     }
-                    _coachTranscript.value =
-                        _coachTranscript.value + (false to planned.conversationalReply + src)
+                    // Offer plan for accept/reject — do not auto-apply mutations.
+                    _planning.value = PlanningConversationEngine.reduce(
+                        _planning.value,
+                        PlanningConversationIntent.OfferPlan(
+                            proposal = planned.proposal,
+                            reply = planned.conversationalReply,
+                            sourceLabel = src,
+                        ),
+                    ).state
+                    _lastSyncMessage.value = "Plan ready · review in Brain"
+                    return@launch
+                }
+                // Deterministic single-day intents still apply immediately (strip/park).
+                val simple = MultiDayPlanEngine.simpleIntents(trimmed, life)
+                if (simple.intents.isNotEmpty()) {
+                    simple.intents.forEach { engine.process(it) }
+                    _planning.value = PlanningConversationEngine.reduce(
+                        _planning.value,
+                        PlanningConversationIntent.CoachReply(simple.reply),
+                    ).state
                     return@launch
                 }
             }
-            // 2) Single-day deterministic intents (strip / park fluid / someday).
-            val simple = MultiDayPlanEngine.simpleIntents(trimmed, life)
-            if (simple.intents.isNotEmpty()) {
-                simple.intents.forEach { engine.process(it) }
-                _coachTranscript.value = _coachTranscript.value + (false to simple.reply)
-                return@launch
-            }
-            // 3) Conversational coach (HTTP LLM → offline).
             val reply = coach.reply(
                 userMessage = trimmed,
                 life = engine.currentState,
                 health = healthSnap,
             )
-            _coachTranscript.value = _coachTranscript.value +
-                (false to reply.ifBlank { "I'm here — try a plan command or ask what next." })
+            _planning.value = PlanningConversationEngine.reduce(
+                _planning.value,
+                PlanningConversationIntent.CoachReply(
+                    reply.ifBlank { "I'm here — try a plan command or ask what next." },
+                ),
+            ).state
         }
+    }
+
+    fun acceptPendingPlan() {
+        viewModelScope.launch {
+            val pending = _planning.value.pending ?: return@launch
+            if (pending.accepted != null) return@launch
+            val intents = PlanningConversationEngine.intentsForPending(pending, engine.currentState)
+            intents.forEach { engine.process(it) }
+            _planning.value = PlanningConversationEngine.reduce(
+                _planning.value,
+                PlanningConversationIntent.AcceptPending,
+            ).state
+            _lastSyncMessage.value = "Applied ${intents.size} plan change(s)"
+            TodayWidgetUpdater.requestUpdate(getApplication())
+        }
+    }
+
+    fun rejectPendingPlan() {
+        _planning.value = PlanningConversationEngine.reduce(
+            _planning.value,
+            PlanningConversationIntent.RejectPending,
+        ).state
+        _lastSyncMessage.value = "Plan discarded"
+    }
+
+    fun createBodyDoubleRoom(displayName: String) {
+        _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+            _bodyDoubleRoom.value,
+            BodyDoubleRoomIntent.Create(
+                displayName = displayName,
+                useCamera = _cameraBodyDouble.value,
+            ),
+        )
+    }
+
+    fun joinBodyDoubleRoom(roomId: String, displayName: String) {
+        _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+            _bodyDoubleRoom.value,
+            BodyDoubleRoomIntent.Join(
+                roomId = roomId,
+                displayName = displayName,
+                useCamera = _cameraBodyDouble.value,
+            ),
+        )
+    }
+
+    fun demoConnectBodyDoubleRoom() {
+        _bodyDoubleRoom.value = BodyDoubleRoomEngine.demoConnect(_bodyDoubleRoom.value)
+    }
+
+    fun leaveBodyDoubleRoom() {
+        _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+            _bodyDoubleRoom.value,
+            BodyDoubleRoomIntent.Leave,
+        )
     }
 
     fun signInLocal(displayName: String, email: String = "") {
@@ -404,7 +490,8 @@ class LookAfterViewModel(
             engine.process(LookAfterIntent.ReplaceState(LifeState.EMPTY))
             _focus.value = FocusSessionState()
             _inbox.value = InboxState()
-            _coachTranscript.value = emptyList()
+            _planning.value = PlanningConversationState()
+            _bodyDoubleRoom.value = BodyDoubleRoomState()
             _calendarEvents.value = emptyList()
             _ambientEnabled.value = true
             _cameraBodyDouble.value = false

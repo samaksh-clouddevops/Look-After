@@ -34,6 +34,10 @@ fun BrainScreen(
     onSendCoach: (String) -> Unit,
     onStartFocus: () -> Unit,
     onEmergencyFocus: () -> Unit = onStartFocus,
+    pendingPlanSummary: String? = null,
+    pendingMutationCount: Int = 0,
+    onAcceptPlan: () -> Unit = {},
+    onRejectPlan: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var draft by remember { mutableStateOf("") }
@@ -83,12 +87,50 @@ fun BrainScreen(
                 }
             }
         }
+        if (!pendingPlanSummary.isNullOrBlank() && pendingMutationCount > 0) {
+            item {
+                ElevatedSurfaceCard {
+                    Text("Pending plan", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.Warning)
+                    Text(
+                        pendingPlanSummary,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                    )
+                    Text(
+                        "$pendingMutationCount mutation(s) ready — accept to apply to LifeState.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = LookAfterDimens.spacingSM),
+                        horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
+                    ) {
+                        Button(
+                            onClick = onRejectPlan,
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Discard") }
+                        Button(
+                            onClick = onAcceptPlan,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = LookAfterColors.AccentPrimary),
+                        ) { Text("Accept plan") }
+                    }
+                }
+            }
+        }
         item { Text("Coach", style = MaterialTheme.typography.titleMedium) }
         items(coachTranscript) { pair ->
             val isUser = pair.first
             val line = pair.second
             ElevatedSurfaceCard {
-                Text(if (isUser) "You" else "Look After", style = MaterialTheme.typography.labelMedium, color = if (isUser) MaterialTheme.colorScheme.onSurfaceVariant else LookAfterColors.AccentPrimary)
+                Text(
+                    if (isUser) "You" else "Look After",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isUser) MaterialTheme.colorScheme.onSurfaceVariant else LookAfterColors.AccentPrimary,
+                )
                 Text(line, style = MaterialTheme.typography.bodyLarge)
             }
         }
@@ -98,7 +140,7 @@ fun BrainScreen(
                     value = draft,
                     onValueChange = { draft = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Ask the coach") },
+                    label = { Text("Plan or ask the coach") },
                     singleLine = true,
                 )
                 Row {

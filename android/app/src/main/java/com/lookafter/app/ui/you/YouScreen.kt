@@ -62,6 +62,7 @@ fun YouScreen(
     onOpenInbox: () -> Unit = {},
     onOpenInsights: () -> Unit = {},
     onOpenPrivacySettings: () -> Unit = {},
+    onOpenBodyDoubleRoom: () -> Unit = {},
     onConnectCalendar: () -> Unit = {},
     calendarEventCount: Int = 0,
     canScheduleExactAlarms: Boolean = true,
@@ -293,6 +294,14 @@ fun YouScreen(
                     )
                 }
             }
+        }
+        item {
+            YouRow(
+                icon = Icons.Outlined.Person,
+                title = "Body double room",
+                subtitle = "Create or join a multi-person focus room",
+                onClick = onOpenBodyDoubleRoom,
+            )
         }
         item {
             YouRow(

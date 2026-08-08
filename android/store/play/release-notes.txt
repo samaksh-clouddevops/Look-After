@@ -1,0 +1,9 @@
+Look After 0.1.0
+
+• Today board with task create/edit and recurrence
+• Brain coach + multi-day plan review (accept/discard)
+• Focus sessions with ambient audio and camera body double
+• Multi-person body double room (demo WebRTC signaling)
+• Medications, Health Connect, Insights, Inbox
+• Privacy & data: export/import backups, factory reset
+• Optional Firebase Auth/sync and cloud LLM when configured

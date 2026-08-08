@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookafter.app.LookAfterViewModel
 import com.lookafter.app.data.DataExportImport
+import com.lookafter.app.ui.adhd.BodyDoubleRoomScreen
 import com.lookafter.app.ui.adhd.FocusSessionOverlay
 import com.lookafter.app.ui.brain.BrainScreen
 import com.lookafter.app.ui.briefing.BriefingScreen
@@ -69,6 +70,8 @@ fun LookAfterRootView(
     val auth by viewModel.auth.collectAsStateWithLifecycle()
     val cameraBodyDouble by viewModel.cameraBodyDoubleEnabled.collectAsStateWithLifecycle()
     val syncMessage by viewModel.lastSyncMessage.collectAsStateWithLifecycle()
+    val planning by viewModel.planning.collectAsStateWithLifecycle()
+    val bodyDoubleRoom by viewModel.bodyDoubleRoom.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val importBackupLauncher = rememberLauncherForActivityResult(
@@ -92,6 +95,7 @@ fun LookAfterRootView(
     var inboxOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
     var privacyOpen by remember { mutableStateOf(false) }
+    var bodyDoubleRoomOpen by remember { mutableStateOf(false) }
     var captureOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LifeTask?>(null) }
@@ -161,7 +165,7 @@ fun LookAfterRootView(
             LookAfterBottomNav(
                 current = when {
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
-                        insightsOpen || privacyOpen -> AppDestination.YOU
+                        insightsOpen || privacyOpen || bodyDoubleRoomOpen -> AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
@@ -171,6 +175,7 @@ fun LookAfterRootView(
                     inboxOpen = false
                     insightsOpen = false
                     privacyOpen = false
+                    bodyDoubleRoomOpen = false
                     destination = dest.name
                 },
                 onCapture = { captureOpen = true },
@@ -203,11 +208,21 @@ fun LookAfterRootView(
             inboxOpen -> "inbox"
             insightsOpen -> "insights"
             privacyOpen -> "privacy"
+            bodyDoubleRoomOpen -> "bd-room"
             reviewOpen -> "review"
             else -> current.name
         }
         CalmAnimatedContent(targetState = surfaceKey, modifier = contentModifier) {
             when {
+                bodyDoubleRoomOpen -> BodyDoubleRoomScreen(
+                    room = bodyDoubleRoom,
+                    onCreate = viewModel::createBodyDoubleRoom,
+                    onJoin = viewModel::joinBodyDoubleRoom,
+                    onDemoConnect = viewModel::demoConnectBodyDoubleRoom,
+                    onLeave = viewModel::leaveBodyDoubleRoom,
+                    onBack = { bodyDoubleRoomOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
                 medicationOpen -> MedicationScreen(
                     state = state,
                     onIntent = viewModel::dispatch,
@@ -309,6 +324,18 @@ fun LookAfterRootView(
                         viewModel.startFocusForHero(emergency = true)
                         focusOpen = true
                     },
+                    pendingPlanSummary = planning.pending
+                        ?.takeIf { it.accepted == null }
+                        ?.proposal
+                        ?.summary,
+                    pendingMutationCount = planning.pending
+                        ?.takeIf { it.accepted == null }
+                        ?.proposal
+                        ?.mutations
+                        ?.size
+                        ?: 0,
+                    onAcceptPlan = viewModel::acceptPendingPlan,
+                    onRejectPlan = viewModel::rejectPendingPlan,
                     modifier = Modifier.fillMaxSize(),
                 )
                 current == AppDestination.YOU -> YouScreen(
@@ -350,7 +377,13 @@ fun LookAfterRootView(
                     },
                     onOpenPrivacySettings = {
                         reviewOpen = false; medicationOpen = false; healthOpen = false
-                        inboxOpen = false; insightsOpen = false; privacyOpen = true
+                        inboxOpen = false; insightsOpen = false
+                        bodyDoubleRoomOpen = false; privacyOpen = true
+                    },
+                    onOpenBodyDoubleRoom = {
+                        reviewOpen = false; medicationOpen = false; healthOpen = false
+                        inboxOpen = false; insightsOpen = false; privacyOpen = false
+                        bodyDoubleRoomOpen = true
                     },
                     onConnectCalendar = { viewModel.ensureCalendarPermission() },
                     calendarEventCount = calendarEvents.size,
