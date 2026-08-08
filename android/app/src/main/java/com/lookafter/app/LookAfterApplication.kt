@@ -11,10 +11,12 @@ import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.auth.AuthSessionStore
 import com.lookafter.app.brain.HttpLlmCoachService
 import com.lookafter.app.brain.HttpLlmPlanService
+import com.lookafter.app.brain.StreamingLlmClient
 import com.lookafter.app.diagnostics.CrashReporting
 import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.sync.SyncTransportFactory
+import com.lookafter.core.adhd.IceServerConfig
 import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.FallbackCoachService
 import com.lookafter.core.brain.OfflineCoachService
@@ -79,6 +81,12 @@ class LookAfterApplication : Application() {
     lateinit var planService: HttpLlmPlanService
         private set
 
+    lateinit var streamingLlm: StreamingLlmClient
+        private set
+
+    lateinit var iceConfig: IceServerConfig
+        private set
+
     lateinit var syncTransport: LifeStateSyncTransport
         private set
 
@@ -118,14 +126,26 @@ class LookAfterApplication : Application() {
             baseUrl = BuildConfig.LLM_BASE_URL,
             model = BuildConfig.LLM_MODEL,
         )
+        streamingLlm = StreamingLlmClient(
+            apiKey = BuildConfig.LLM_API_KEY,
+            baseUrl = BuildConfig.LLM_BASE_URL,
+            model = BuildConfig.LLM_MODEL,
+        )
+        iceConfig = IceServerConfig.fromTurn(
+            turnUrl = BuildConfig.TURN_URL.ifBlank { null },
+            turnUser = BuildConfig.TURN_USER.ifBlank { null },
+            turnPass = BuildConfig.TURN_PASS.ifBlank { null },
+            forceRelay = BuildConfig.TURN_FORCE_RELAY,
+        )
         // Prefer Firebase sync when SDK present; otherwise local file export.
         syncTransport = SyncTransportFactory.create(
             context = this,
             preferFirebase = true,
         )
         Log.i(TAG, "Sync transport=${syncTransport.name}")
+        Log.i(TAG, "ICE servers=${iceConfig.servers.size} policy=${iceConfig.iceTransportPolicy}")
         if (httpCoach.isConfigured) {
-            Log.i(TAG, "LLM coach/planner configured (model=${BuildConfig.LLM_MODEL})")
+            Log.i(TAG, "LLM coach/planner/stream configured (model=${BuildConfig.LLM_MODEL})")
         } else {
             Log.i(TAG, "LLM offline — set LOOKAFTER_LLM_API_KEY in local.properties")
         }

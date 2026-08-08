@@ -49,6 +49,17 @@ android {
             "LLM_MODEL",
             "\"${localProp("LOOKAFTER_LLM_MODEL", "gpt-4o-mini")}\"",
         )
+        // Optional TURN relay for WebRTC body-double (STUN defaults always on).
+        buildConfigField("String", "TURN_URL", "\"${localProp("LOOKAFTER_TURN_URL")}\"")
+        buildConfigField("String", "TURN_USER", "\"${localProp("LOOKAFTER_TURN_USER")}\"")
+        buildConfigField("String", "TURN_PASS", "\"${localProp("LOOKAFTER_TURN_PASS")}\"")
+        buildConfigField(
+            "boolean",
+            "TURN_FORCE_RELAY",
+            (localProps.getProperty("LOOKAFTER_TURN_FORCE_RELAY") ?: "false")
+                .equals("true", ignoreCase = true)
+                .toString(),
+        )
     }
 
     signingConfigs {

@@ -72,6 +72,8 @@ fun LookAfterRootView(
     val syncMessage by viewModel.lastSyncMessage.collectAsStateWithLifecycle()
     val planning by viewModel.planning.collectAsStateWithLifecycle()
     val bodyDoubleRoom by viewModel.bodyDoubleRoom.collectAsStateWithLifecycle()
+    val isStreaming by viewModel.streamingCoach.collectAsStateWithLifecycle()
+    val webRtcState by viewModel.webRtcConnectionState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val importBackupLauncher = rememberLauncherForActivityResult(
@@ -216,6 +218,7 @@ fun LookAfterRootView(
             when {
                 bodyDoubleRoomOpen -> BodyDoubleRoomScreen(
                     room = bodyDoubleRoom,
+                    webRtcStateLabel = webRtcState.name.lowercase(),
                     onCreate = viewModel::createBodyDoubleRoom,
                     onJoin = viewModel::joinBodyDoubleRoom,
                     onDemoConnect = viewModel::demoConnectBodyDoubleRoom,
@@ -336,6 +339,7 @@ fun LookAfterRootView(
                         ?: 0,
                     onAcceptPlan = viewModel::acceptPendingPlan,
                     onRejectPlan = viewModel::rejectPendingPlan,
+                    isStreaming = isStreaming,
                     modifier = Modifier.fillMaxSize(),
                 )
                 current == AppDestination.YOU -> YouScreen(

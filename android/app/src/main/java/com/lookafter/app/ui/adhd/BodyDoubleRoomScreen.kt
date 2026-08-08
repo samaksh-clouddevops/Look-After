@@ -34,6 +34,7 @@ import com.lookafter.core.adhd.BodyDoubleRoomState
 @Composable
 fun BodyDoubleRoomScreen(
     room: BodyDoubleRoomState,
+    webRtcStateLabel: String = "new",
     onCreate: (displayName: String) -> Unit,
     onJoin: (roomId: String, displayName: String) -> Unit,
     onDemoConnect: () -> Unit,
@@ -70,6 +71,12 @@ fun BodyDoubleRoomScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                )
+                Text(
+                    "WebRTC: $webRtcStateLabel · ICE STUN/TURN ready",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LookAfterColors.AccentPrimary,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
                 room.remotePeers.forEach { peer ->
                     Text(

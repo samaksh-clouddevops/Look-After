@@ -5,22 +5,25 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lookafter.app.adhd.BodyDoubleAmbientAudio
 import com.lookafter.app.auth.AuthSessionStore
-import com.lookafter.app.auth.AuthUser
 import com.lookafter.app.auth.FirebaseAuthBridge
 import com.lookafter.app.brain.HttpLlmPlanService
+import com.lookafter.app.brain.StreamingLlmClient
 import com.lookafter.app.diagnostics.CrashReporting
 import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.sync.LifeStateSyncTransport
+import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
 import com.lookafter.core.adhd.BodyDoubleRoomEngine
 import com.lookafter.core.adhd.BodyDoubleRoomIntent
 import com.lookafter.core.adhd.BodyDoubleRoomState
+import com.lookafter.core.adhd.BodyDoubleSignalType
 import com.lookafter.core.adhd.FocusSessionEngine
 import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
 import com.lookafter.core.adhd.FocusSessionState
+import com.lookafter.core.adhd.IceServerConfig
 import com.lookafter.core.brain.BrainTick
 import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.ExecutiveBrainEngine
@@ -46,6 +49,7 @@ import com.lookafter.core.planning.PlanningConversationIntent
 import com.lookafter.core.planning.PlanningConversationState
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -68,10 +72,14 @@ class LookAfterViewModel(
     private val notifier: LookAfterNotifier = app.notifier
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
+    private val streamingLlm: StreamingLlmClient = app.streamingLlm
+    private val iceConfig: IceServerConfig = app.iceConfig
     private val syncTransport: LifeStateSyncTransport = app.syncTransport
     private val systemFocus = SystemFocusController(application)
     private val ambientAudio = BodyDoubleAmbientAudio(application)
     private val authStore: AuthSessionStore = app.authSessionStore
+    private var streamJob: Job? = null
+    private var webRtc: WebRtcPeerController? = null
 
     private val _ambientEnabled = MutableStateFlow(true)
     val ambientEnabled: StateFlow<Boolean> = _ambientEnabled.asStateFlow()
@@ -82,9 +90,18 @@ class LookAfterViewModel(
     private val _lastSyncMessage = MutableStateFlow<String?>(null)
     val lastSyncMessage: StateFlow<String?> = _lastSyncMessage.asStateFlow()
 
+    private val _streamingCoach = MutableStateFlow(false)
+    val streamingCoach: StateFlow<Boolean> = _streamingCoach.asStateFlow()
+
+    private val _webRtcState =
+        MutableStateFlow(WebRtcPeerController.ConnectionState.NEW)
+    val webRtcConnectionState: StateFlow<WebRtcPeerController.ConnectionState> =
+        _webRtcState.asStateFlow()
+
     val auth = authStore.state
     val firebaseAuthAvailable: Boolean get() = FirebaseAuthBridge.isAvailable()
     val llmPlanConfigured: Boolean get() = planService.isConfigured
+    val streamingLlmConfigured: Boolean get() = streamingLlm.isConfigured
 
     val insights: StateFlow<InsightsSnapshot> = combine(state, health) { life, h ->
         InsightsEngine.compute(life, h)
@@ -283,6 +300,8 @@ class LookAfterViewModel(
     }
 
     override fun onCleared() {
+        streamJob?.cancel()
+        webRtc?.close()
         ambientAudio.release()
         super.onCleared()
     }
@@ -338,17 +357,73 @@ class LookAfterViewModel(
                     return@launch
                 }
             }
-            val reply = coach.reply(
-                userMessage = trimmed,
-                life = engine.currentState,
-                health = healthSnap,
-            )
-            _planning.value = PlanningConversationEngine.reduce(
-                _planning.value,
-                PlanningConversationIntent.CoachReply(
-                    reply.ifBlank { "I'm here — try a plan command or ask what next." },
-                ),
-            ).state
+            // Streaming coach tokens when LLM is configured; else offline block reply.
+            streamCoachReply(trimmed, life, healthSnap)
+        }
+    }
+
+    private fun streamCoachReply(
+        userMessage: String,
+        life: LifeState,
+        healthSnap: HealthSummary,
+    ) {
+        streamJob?.cancel()
+        if (!streamingLlm.isConfigured) {
+            viewModelScope.launch {
+                val reply = coach.reply(userMessage, life, healthSnap)
+                appendCoach(reply.ifBlank { "I'm here — try a plan command or ask what next." })
+            }
+            return
+        }
+        streamJob = viewModelScope.launch {
+            _streamingCoach.value = true
+            // Seed empty coach bubble that we grow as tokens arrive.
+            appendCoach("")
+            val system = buildString {
+                append("You are Look After, a calm executive coach. Be brief (2-4 sentences). ")
+                append("Hero context from offline brain may follow user message.")
+            }
+            val assembled = StringBuilder()
+            var emitted = false
+            runCatching {
+                streamingLlm.streamChat(
+                    messages = listOf(
+                        StreamingLlmClient.ChatMessage("system", system),
+                        StreamingLlmClient.ChatMessage("user", userMessage),
+                    ),
+                ).collect { delta ->
+                    emitted = true
+                    assembled.append(delta)
+                    replaceLastCoach(assembled.toString())
+                }
+            }
+            if (!emitted || assembled.isBlank()) {
+                val fallback = coach.reply(userMessage, life, healthSnap)
+                replaceLastCoach(
+                    fallback.ifBlank { "I'm here — try a plan command or ask what next." },
+                )
+            }
+            _streamingCoach.value = false
+        }
+    }
+
+    private fun appendCoach(text: String) {
+        _planning.value = PlanningConversationEngine.reduce(
+            _planning.value,
+            PlanningConversationIntent.CoachReply(text),
+        ).state
+    }
+
+    private fun replaceLastCoach(text: String) {
+        val msgs = _planning.value.messages.toMutableList()
+        val lastCoach = msgs.indexOfLast {
+            it.speaker == com.lookafter.core.planning.PlanningSpeaker.COACH
+        }
+        if (lastCoach >= 0) {
+            msgs[lastCoach] = msgs[lastCoach].copy(text = text)
+            _planning.value = _planning.value.copy(messages = msgs)
+        } else {
+            appendCoach(text)
         }
     }
 
@@ -376,17 +451,19 @@ class LookAfterViewModel(
     }
 
     fun createBodyDoubleRoom(displayName: String) {
-        _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+        val next = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Create(
                 displayName = displayName,
                 useCamera = _cameraBodyDouble.value,
             ),
         )
+        _bodyDoubleRoom.value = next
+        bindWebRtc(next.localPeerId)
     }
 
     fun joinBodyDoubleRoom(roomId: String, displayName: String) {
-        _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+        val next = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Join(
                 roomId = roomId,
@@ -394,17 +471,67 @@ class LookAfterViewModel(
                 useCamera = _cameraBodyDouble.value,
             ),
         )
+        _bodyDoubleRoom.value = next
+        bindWebRtc(next.localPeerId)
     }
 
     fun demoConnectBodyDoubleRoom() {
-        _bodyDoubleRoom.value = BodyDoubleRoomEngine.demoConnect(_bodyDoubleRoom.value)
+        val before = _bodyDoubleRoom.value
+        var next = BodyDoubleRoomEngine.demoConnect(before)
+        // Drive WebRTC offer/answer over the room signal bus (simulator or native).
+        val remote = next.remotePeers.firstOrNull()
+        val rtc = webRtc
+        if (rtc != null && remote != null) {
+            rtc.startAsOfferer(remote.id)
+            // Feed simulated remote answer path: controller also emits local signals into room.
+            next.signals
+                .filter { it.fromPeerId != next.localPeerId }
+                .forEach { rtc.handleRemoteSignal(it) }
+            // Local loopback: treat our offer as remote for the answer path
+            next.signals
+                .filter { it.type == BodyDoubleSignalType.OFFER && it.fromPeerId == next.localPeerId }
+                .lastOrNull()
+                ?.let { offer ->
+                    // Peer B simulation already done in demoConnect; mark connected.
+                    next = BodyDoubleRoomEngine.reduce(
+                        next,
+                        BodyDoubleRoomIntent.MarkConnected(remote.id),
+                    )
+                }
+            viewModelScope.launch {
+                rtc.connectionState.collect { _webRtcState.value = it }
+            }
+        }
+        _bodyDoubleRoom.value = next
     }
 
     fun leaveBodyDoubleRoom() {
+        webRtc?.close()
+        webRtc = null
+        _webRtcState.value = WebRtcPeerController.ConnectionState.CLOSED
         _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Leave,
         )
+    }
+
+    private fun bindWebRtc(localPeerId: String) {
+        webRtc?.close()
+        val controller = WebRtcPeerController(
+            context = getApplication(),
+            ice = iceConfig,
+            localPeerId = localPeerId,
+        )
+        controller.addOutboundListener { signal ->
+            _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+                _bodyDoubleRoom.value,
+                BodyDoubleRoomIntent.SignalReceived(signal),
+            )
+        }
+        webRtc = controller
+        viewModelScope.launch {
+            controller.connectionState.collect { _webRtcState.value = it }
+        }
     }
 
     fun signInLocal(displayName: String, email: String = "") {

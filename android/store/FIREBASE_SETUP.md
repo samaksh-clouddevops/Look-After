@@ -21,7 +21,7 @@ service cloud.firestore {
 
 6. Enable Crashlytics in the console.
 
-## LLM planner
+## LLM planner + streaming coach
 
 In `android/local.properties`:
 
@@ -31,7 +31,22 @@ LOOKAFTER_LLM_BASE_URL=https://api.openai.com/v1
 LOOKAFTER_LLM_MODEL=gpt-4o-mini
 ```
 
-Brain chat messages that look like plans request JSON `PlanProposal` mutations.
+Brain chat streams assistant tokens via SSE when the key is set.
+Plan-like messages still request JSON `PlanProposal` mutations (accept/reject in UI).
+
+## WebRTC TURN (optional)
+
+Defaults use public Google STUN. For symmetric NATs:
+
+```
+LOOKAFTER_TURN_URL=turn:turn.example.com:3478
+LOOKAFTER_TURN_USER=user
+LOOKAFTER_TURN_PASS=secret
+LOOKAFTER_TURN_FORCE_RELAY=false
+```
+
+Without a native WebRTC AAR, the peer controller runs a loopback signal simulator
+that still exercises offer/answer + ICE wiring.
 
 ## Play release signing
 

@@ -38,6 +38,7 @@ fun BrainScreen(
     pendingMutationCount: Int = 0,
     onAcceptPlan: () -> Unit = {},
     onRejectPlan: () -> Unit = {},
+    isStreaming: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var draft by remember { mutableStateOf("") }
@@ -121,7 +122,21 @@ fun BrainScreen(
                 }
             }
         }
-        item { Text("Coach", style = MaterialTheme.typography.titleMedium) }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Coach", style = MaterialTheme.typography.titleMedium)
+                if (isStreaming) {
+                    Text(
+                        "streaming…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.AccentPrimary,
+                    )
+                }
+            }
+        }
         items(coachTranscript) { pair ->
             val isUser = pair.first
             val line = pair.second
@@ -131,7 +146,10 @@ fun BrainScreen(
                     style = MaterialTheme.typography.labelMedium,
                     color = if (isUser) MaterialTheme.colorScheme.onSurfaceVariant else LookAfterColors.AccentPrimary,
                 )
-                Text(line, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    line.ifBlank { if (isStreaming && !isUser) "…" else line },
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
         }
         item {
@@ -142,13 +160,14 @@ fun BrainScreen(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Plan or ask the coach") },
                     singleLine = true,
+                    enabled = !isStreaming,
                 )
                 Row {
                     Button(
                         onClick = { onSendCoach(draft); draft = "" },
-                        enabled = draft.trim().isNotEmpty(),
+                        enabled = draft.trim().isNotEmpty() && !isStreaming,
                         colors = ButtonDefaults.buttonColors(containerColor = LookAfterColors.AccentPrimary),
-                    ) { Text("Send") }
+                    ) { Text(if (isStreaming) "Streaming…" else "Send") }
                 }
             }
         }
