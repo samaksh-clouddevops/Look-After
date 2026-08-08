@@ -85,6 +85,39 @@ class TodayBoardTest {
         assertEquals(setOf("today", "inbox"), board.map { it.id }.toSet())
     }
 
+    @Test
+    fun weekDaysMondayStart() {
+        // 2026-08-08 is Saturday
+        val week = TodayBoard.weekDays(day)
+        assertEquals(7, week.size)
+        assertEquals(1, week.first().dayOfWeek.value) // Monday
+        assertEquals(7, week.last().dayOfWeek.value) // Sunday
+        assertTrue(week.contains(day))
+    }
+
+    @Test
+    fun areaProjectFilters() {
+        val tasks = listOf(
+            task("a", ConstraintType.FLEXIBLE, TaskStatus.PENDING).copy(area = "Work", project = "App"),
+            task("b", ConstraintType.FLEXIBLE, TaskStatus.PENDING).copy(area = "Work", project = "Ops"),
+            task("c", ConstraintType.FLEXIBLE, TaskStatus.PENDING).copy(area = "Home", project = ""),
+        )
+        assertEquals(listOf("Home", "Work"), TodayBoard.availableAreas(tasks))
+        assertEquals(listOf("App", "Ops"), TodayBoard.availableProjects(tasks, "Work"))
+        assertEquals(listOf("a"), TodayBoard.filterByAreaProject(tasks, "Work", "App").map { it.id })
+    }
+
+    @Test
+    fun applySortOrderAndSortedForBoard() {
+        val tasks = listOf(
+            task("a", ConstraintType.FLEXIBLE, TaskStatus.PENDING).copy(sortIndex = 5),
+            task("b", ConstraintType.FLEXIBLE, TaskStatus.PENDING).copy(sortIndex = 1),
+            task("c", ConstraintType.FLEXIBLE, TaskStatus.PENDING).copy(sortIndex = 9),
+        )
+        val ordered = TodayBoard.applySortOrder(tasks, listOf("c", "a", "b"))
+        assertEquals(listOf("c", "a", "b"), TodayBoard.sortedForBoard(ordered).map { it.id })
+    }
+
     private fun task(
         id: String,
         c: ConstraintType,

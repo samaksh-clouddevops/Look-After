@@ -82,11 +82,23 @@ fun TodayTimelineScreen(
 
     var filter by remember { mutableStateOf(TodayFilter.ALL) }
     var tag by remember { mutableStateOf<String?>(null) }
+    var area by remember { mutableStateOf<String?>(null) }
+    var project by remember { mutableStateOf<String?>(null) }
+    var reorderMode by remember { mutableStateOf(false) }
 
     val day = state.currentDay ?: LocalDate.now()
+    val today = LocalDate.now()
+    val weekPills = remember(state.activeTasks, day, today) {
+        TodayBoard.weekPills(state, selected = day, today = today)
+    }
     val dayTasks = remember(state.activeTasks, day) { TodayBoard.dayTasks(state, day) }
     val tags = remember(dayTasks) { TodayBoard.availableTags(dayTasks) }
-    val tagged = remember(dayTasks, tag) { TodayBoard.filterByTag(dayTasks, tag) }
+    val areas = remember(dayTasks) { TodayBoard.availableAreas(dayTasks) }
+    val projects = remember(dayTasks, area) { TodayBoard.availableProjects(dayTasks, area) }
+    val hierarchyFiltered = remember(dayTasks, area, project) {
+        TodayBoard.filterByAreaProject(dayTasks, area, project)
+    }
+    val tagged = remember(hierarchyFiltered, tag) { TodayBoard.filterByTag(hierarchyFiltered, tag) }
     val sections = remember(tagged, filter) { TodayBoard.sections(tagged, filter) }
     val load = remember(dayTasks) { TodayBoard.loadSummary(dayTasks) }
     val meds = remember(state.medications) { TodayBoard.medsStrip(state.medications, LocalTime.now()) }
@@ -94,6 +106,7 @@ fun TodayTimelineScreen(
     val displayHeroTitle = heroTitle ?: hero.task?.title
     val displayHeroReason = heroReason ?: hero.reason
     val dayLabel = day.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+    val filtersClear = filter == TodayFilter.ALL && tag == null && area == null && project == null
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -110,12 +123,29 @@ fun TodayTimelineScreen(
                     subtitle = "$dayLabel\n" + subtitle(state, load, restoredFromDisk, hydrationComplete),
                     modifier = Modifier.weight(1f),
                 )
+                Text(
+                    text = if (reorderMode) "Done" else "Reorder",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LookAfterColors.AccentPrimary,
+                    modifier = Modifier
+                        .clickable { reorderMode = !reorderMode }
+                        .padding(8.dp),
+                )
                 if (onCreateTask != null) {
                     IconButton(onClick = onCreateTask) {
                         Icon(Icons.Filled.Add, contentDescription = "New task", tint = LookAfterColors.AccentPrimary)
                     }
                 }
             }
+        }
+        item(key = "week") {
+            WeekDayStrip(
+                pills = weekPills,
+                onSelect = { d -> onIntent(LookAfterIntent.SetCurrentDay(d)) },
+                onShiftWeek = { delta ->
+                    onIntent(LookAfterIntent.SetCurrentDay(day.plusWeeks(delta.toLong())))
+                },
+            )
         }
         item(key = "load") { DayLoadCard(load) }
         if (!displayHeroTitle.isNullOrBlank()) {
@@ -138,17 +168,41 @@ fun TodayTimelineScreen(
         item(key = "filters") {
             FilterRow(filter, { filter = it }, tags, tag) { t -> tag = if (tag == t) null else t }
         }
+        if (areas.isNotEmpty() || projects.isNotEmpty()) {
+            item(key = "hierarchy") {
+                HierarchyFilterRow(
+                    areas = areas,
+                    projects = projects,
+                    selectedArea = area,
+                    selectedProject = project,
+                    onArea = { a ->
+                        area = if (area == a) null else a
+                        project = null
+                    },
+                    onProject = { p -> project = if (project == p) null else p },
+                )
+            }
+        }
         if (!policyGranted) item(key = "dnd") { DndCard() }
+        if (reorderMode) {
+            item(key = "reorder-hint") {
+                Text(
+                    "Use ↑ ↓ to reorder within the board, then tap Done.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         if (sections.isEmpty()) {
             item(key = "empty") {
                 CalmEmptyState(
-                    title = if (filter == TodayFilter.ALL && tag == null) "Equilibrium achieved" else "Nothing in this view",
-                    subtitle = if (filter == TodayFilter.ALL && tag == null) {
+                    title = if (filtersClear) "Equilibrium achieved" else "Nothing in this view",
+                    subtitle = if (filtersClear) {
                         "Capture a thought, schedule deep work, or protect the quiet."
-                    } else "Try another filter or clear the tag chip.",
+                    } else "Try another filter, day, or clear area/tag chips.",
                     icon = Icons.Outlined.SelfImprovement,
-                    actionLabel = if (onCreateTask != null && filter == TodayFilter.ALL) "New task" else null,
+                    actionLabel = if (onCreateTask != null && filtersClear) "New task" else null,
                     onAction = onCreateTask,
                     modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
                 )
@@ -159,13 +213,23 @@ fun TodayTimelineScreen(
                     SectionLabel(section.kind, section.title, section.count)
                 }
                 items(section.tasks, key = { it.id }) { task ->
-                    TimelineTaskCard(
-                        task = task,
-                        onIntent = onIntent,
-                        onOpen = onOpenTask,
-                        showFocus = onStartFocus != null && task.status.isActive,
-                        onFocus = onStartFocus,
-                    )
+                    if (reorderMode && task.status.isActive) {
+                        ReorderableTaskRow(
+                            task = task,
+                            sectionTasks = section.tasks.filter { it.status.isActive },
+                            onIntent = onIntent,
+                            onOpen = onOpenTask,
+                        )
+                    } else {
+                        SwipeableTaskRow(
+                            task = task,
+                            onIntent = onIntent,
+                            onOpen = onOpenTask,
+                            showFocus = onStartFocus != null && task.status.isActive,
+                            onFocus = onStartFocus,
+                            enabled = !reorderMode,
+                        )
+                    }
                 }
             }
         }
@@ -337,6 +401,115 @@ private fun DndCard() {
                 Text("Allow Do Not Disturb access for focus sessions.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+@Composable
+private fun HierarchyFilterRow(
+    areas: List<String>,
+    projects: List<String>,
+    selectedArea: String?,
+    selectedProject: String?,
+    onArea: (String) -> Unit,
+    onProject: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingXS)) {
+        if (areas.isNotEmpty()) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingXS),
+            ) {
+                areas.forEach { a ->
+                    FilterChip(
+                        selected = selectedArea == a,
+                        onClick = { onArea(a) },
+                        label = { Text(a) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = LookAfterColors.AccentSoft,
+                            selectedLabelColor = LookAfterColors.AccentPrimary,
+                        ),
+                    )
+                }
+            }
+        }
+        if (projects.isNotEmpty()) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingXS),
+            ) {
+                projects.forEach { p ->
+                    FilterChip(
+                        selected = selectedProject == p,
+                        onClick = { onProject(p) },
+                        label = { Text("› $p") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = LookAfterColors.AccentSoft,
+                            selectedLabelColor = LookAfterColors.AccentPrimary,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReorderableTaskRow(
+    task: LifeTask,
+    sectionTasks: List<LifeTask>,
+    onIntent: (LookAfterIntent) -> Unit,
+    onOpen: ((LifeTask) -> Unit)?,
+) {
+    val ids = sectionTasks.map { it.id }
+    val index = ids.indexOf(task.id)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Column {
+            Text(
+                "↑",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (index > 0) LookAfterColors.AccentPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clickable(enabled = index > 0) {
+                        if (index <= 0) return@clickable
+                        val next = ids.toMutableList()
+                        val tmp = next[index - 1]
+                        next[index - 1] = next[index]
+                        next[index] = tmp
+                        onIntent(LookAfterIntent.ReorderTasks(next))
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+            Text(
+                "↓",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (index >= 0 && index < ids.lastIndex) {
+                    LookAfterColors.AccentPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier
+                    .clickable(enabled = index >= 0 && index < ids.lastIndex) {
+                        if (index < 0 || index >= ids.lastIndex) return@clickable
+                        val next = ids.toMutableList()
+                        val tmp = next[index + 1]
+                        next[index + 1] = next[index]
+                        next[index] = tmp
+                        onIntent(LookAfterIntent.ReorderTasks(next))
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+        TimelineTaskCard(
+            task = task,
+            onIntent = onIntent,
+            onOpen = onOpen,
+            showFocus = false,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

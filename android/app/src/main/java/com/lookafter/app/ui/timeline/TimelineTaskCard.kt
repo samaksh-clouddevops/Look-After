@@ -213,6 +213,9 @@ private fun metaLine(task: LifeTask): String {
     if (task.priority == Priority.CRITICAL || task.priority == Priority.HIGH) {
         parts += task.priority.name.lowercase().replaceFirstChar { it.titlecase() }
     }
+    if (task.area.isNotBlank()) {
+        parts += if (task.project.isNotBlank()) "${task.area}/${task.project}" else task.area
+    }
     if (task.recurrence != RecurrenceRule.NONE) {
         parts += task.recurrence.label
     }

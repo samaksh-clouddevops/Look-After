@@ -72,6 +72,8 @@ fun TaskEditorSheet(
     var recurrence by remember(existing?.id) {
         mutableStateOf(existing?.recurrence ?: RecurrenceRule.NONE)
     }
+    var area by remember(existing?.id) { mutableStateOf(existing?.area.orEmpty()) }
+    var project by remember(existing?.id) { mutableStateOf(existing?.project.orEmpty()) }
     // Simple wall-clock hour for optional schedule (empty = unscheduled flexible/fluid).
     var hourText by remember(existing?.id) {
         val h = existing?.scheduledStart
@@ -160,6 +162,21 @@ fun TaskEditorSheet(
                 }
             }
 
+            OutlinedTextField(
+                value = area,
+                onValueChange = { area = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Area (e.g. Work)") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = project,
+                onValueChange = { project = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Project (optional)") },
+                singleLine = true,
+            )
+
             Text("Start time (optional)", style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM)) {
                 OutlinedTextField(
@@ -216,6 +233,8 @@ fun TaskEditorSheet(
                             constraintType = constraint,
                             priority = priority,
                             recurrence = recurrence,
+                            area = area.trim(),
+                            project = project.trim(),
                             scheduledDate = day,
                             scheduledStart = start,
                             scheduledEnd = end,

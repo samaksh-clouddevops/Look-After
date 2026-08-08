@@ -92,6 +92,8 @@ class LifeEngine(
         is LookAfterIntent.AddTask -> reduceAddTask(current, intent.task)
         is LookAfterIntent.DeleteTask -> reduceDeleteTask(current, intent.id)
         is LookAfterIntent.UpdateTask -> reduceUpdateTask(current, intent.task)
+        is LookAfterIntent.ReorderTasks -> reduceReorderTasks(current, intent.orderedIds)
+        is LookAfterIntent.SetCurrentDay -> current.copy(currentDay = intent.day)
         is LookAfterIntent.ParkTask -> reduceParkTask(current, intent.id, intent.reason)
         is LookAfterIntent.MoveToSomeday -> reduceMoveToSomeday(current, intent.id)
         is LookAfterIntent.UnparkTask -> reduceUnparkTask(current, intent.id)
@@ -139,6 +141,16 @@ class LifeEngine(
                 current.copy(somedayVault = current.somedayVault.replace())
             else -> reduceAddTask(current, task)
         }
+    }
+
+    private fun reduceReorderTasks(current: LifeState, orderedIds: List<String>): LifeState {
+        if (orderedIds.isEmpty()) return current
+        val indexById = orderedIds.withIndex().associate { it.value to it.index }
+        val next = current.activeTasks.map { task ->
+            val idx = indexById[task.id]
+            if (idx != null) task.copy(sortIndex = idx, updatedAt = Instant.now()) else task
+        }
+        return current.copy(activeTasks = next)
     }
 
     private fun reduceParkTask(current: LifeState, id: String, reason: String): LifeState {

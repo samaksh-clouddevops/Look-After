@@ -97,14 +97,14 @@ object TodayBoard {
         filter: TodayFilter = TodayFilter.ALL,
     ): List<TodaySection> {
         val filtered = filter(tasks, filter)
-        fun sortKey(t: LifeTask): Instant = t.scheduledStart ?: Instant.MAX
 
-        val inProgress = filtered.filter { it.status == TaskStatus.IN_PROGRESS || it.status == TaskStatus.PAUSED }
-            .sortedBy(::sortKey)
+        val inProgress = sortedForBoard(
+            filtered.filter { it.status == TaskStatus.IN_PROGRESS || it.status == TaskStatus.PAUSED },
+        )
         val active = filtered.filter { it.status == TaskStatus.PENDING }
-        val anchored = active.filter { it.constraintType == ConstraintType.ANCHORED }.sortedBy(::sortKey)
-        val flexible = active.filter { it.constraintType == ConstraintType.FLEXIBLE }.sortedBy(::sortKey)
-        val fluid = active.filter { it.constraintType == ConstraintType.FLUID }.sortedBy(::sortKey)
+        val anchored = sortedForBoard(active.filter { it.constraintType == ConstraintType.ANCHORED })
+        val flexible = sortedForBoard(active.filter { it.constraintType == ConstraintType.FLEXIBLE })
+        val fluid = sortedForBoard(active.filter { it.constraintType == ConstraintType.FLUID })
         val done = filtered.filter { it.status == TaskStatus.COMPLETED }
             .sortedByDescending { it.completedAt ?: Instant.EPOCH }
 
@@ -191,6 +191,82 @@ object TodayBoard {
         return tasks.filter { tag in it.tags }
     }
 
+    fun availableAreas(tasks: List<LifeTask>): List<String> =
+        tasks.map { it.area.trim() }.filter { it.isNotEmpty() }.distinct().sorted()
+
+    fun availableProjects(tasks: List<LifeTask>, area: String? = null): List<String> =
+        tasks
+            .filter { area.isNullOrBlank() || it.area.equals(area, ignoreCase = true) }
+            .map { it.project.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+
+    fun filterByAreaProject(
+        tasks: List<LifeTask>,
+        area: String? = null,
+        project: String? = null,
+    ): List<LifeTask> {
+        var out = tasks
+        if (!area.isNullOrBlank()) {
+            out = out.filter { it.area.equals(area, ignoreCase = true) }
+        }
+        if (!project.isNullOrBlank()) {
+            out = out.filter { it.project.equals(project, ignoreCase = true) }
+        }
+        return out
+    }
+
+    /** Mon–Sun week window containing [center] (ISO Monday start). */
+    fun weekDays(center: LocalDate = LocalDate.now()): List<LocalDate> {
+        val monday = center.minusDays((center.dayOfWeek.value - 1).toLong())
+        return (0..6).map { monday.plusDays(it.toLong()) }
+    }
+
+    data class DayPill(
+        val day: LocalDate,
+        val openCount: Int,
+        val doneCount: Int,
+        val isToday: Boolean,
+        val isSelected: Boolean,
+    )
+
+    fun weekPills(
+        state: LifeState,
+        selected: LocalDate,
+        today: LocalDate = LocalDate.now(),
+    ): List<DayPill> = weekDays(selected).map { d ->
+        val tasks = dayTasks(state, d)
+        val summary = loadSummary(tasks)
+        DayPill(
+            day = d,
+            openCount = summary.openCount,
+            doneCount = summary.doneCount,
+            isToday = d == today,
+            isSelected = d == selected,
+        )
+    }
+
+    /**
+     * Apply manual order: [orderedIds] become sortIndex 0..n-1.
+     * Tasks not listed keep existing sortIndex offset after the list.
+     */
+    fun applySortOrder(tasks: List<LifeTask>, orderedIds: List<String>): List<LifeTask> {
+        val indexById = orderedIds.withIndex().associate { it.value to it.index }
+        return tasks.map { t ->
+            val idx = indexById[t.id]
+            if (idx != null) t.copy(sortIndex = idx) else t
+        }
+    }
+
+    /** Stable section sort: sortIndex, then start, then title. */
+    fun sortedForBoard(tasks: List<LifeTask>): List<LifeTask> =
+        tasks.sortedWith(
+            compareBy<LifeTask> { it.sortIndex }
+                .thenBy { it.scheduledStart ?: Instant.MAX }
+                .thenBy { it.title.lowercase() },
+        )
+
     private fun section(kind: TodaySectionKind, title: String, tasks: List<LifeTask>): TodaySection? =
-        if (tasks.isEmpty()) null else TodaySection(kind, title, tasks)
+        if (tasks.isEmpty()) null else TodaySection(kind, title, sortedForBoard(tasks))
 }

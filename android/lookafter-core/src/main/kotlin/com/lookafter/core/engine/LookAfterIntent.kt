@@ -24,6 +24,15 @@ sealed interface LookAfterIntent {
     /** Replace an existing task (matched by [LifeTask.id]) with an updated copy. */
     data class UpdateTask(val task: LifeTask) : LookAfterIntent
 
+    /**
+     * Apply manual board order: [orderedIds] get sortIndex 0..n-1 on matching
+     * active tasks (Today drag-reorder).
+     */
+    data class ReorderTasks(val orderedIds: List<String>) : LookAfterIntent
+
+    /** Week scrubber — sets the board's [LifeState.currentDay]. */
+    data class SetCurrentDay(val day: LocalDate) : LookAfterIntent
+
     /** Move a task into the parked recovery queue and clear its clock. */
     data class ParkTask(val id: String, val reason: String = "manual_park") : LookAfterIntent
 

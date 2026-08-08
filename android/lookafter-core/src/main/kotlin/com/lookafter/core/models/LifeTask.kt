@@ -39,6 +39,12 @@ data class LifeTask(
     /** Optional freeform notes (description). */
     val notes: String = "",
     val tags: List<String> = emptyList(),
+    /** Life area (e.g. Work, Health) — hierarchical filter on Today. */
+    val area: String = "",
+    /** Project within an area (e.g. Look After app). */
+    val project: String = "",
+    /** Manual board order within a day/section (lower = higher). */
+    val sortIndex: Int = 0,
     val parentTaskId: String? = null,
     @Serializable(with = InstantSerializer::class)
     val createdAt: Instant = Instant.EPOCH,
