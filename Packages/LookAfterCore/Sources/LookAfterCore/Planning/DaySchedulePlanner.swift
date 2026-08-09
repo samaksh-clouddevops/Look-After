@@ -91,6 +91,7 @@ public enum DaySchedulePlanner {
         // Phase 2 — allocate remaining movable tasks with preferred starts.
         let slottedIDs = Set(slots.map(\.taskID))
         let remaining = active.filter { !slottedIDs.contains($0.id) && $0.isSchedulerMovable }
+        let remainingByID = Dictionary.uniquingFirstValue(remaining.map { ($0.id, $0) })
         let windows = SchedulingWindows.from(profile: profile, lifeModel: model)
         let requests = remaining.map { task in
             DaySlotAllocator.Request(
@@ -107,9 +108,8 @@ public enum DaySchedulePlanner {
             )
         }
 
-        let existingTasks = tasks.filter { task in
-            slots.contains { $0.taskID == task.id }
-        }
+        // O(slotted) not O(tasks×slots) (PERF-020).
+        let existingTasks = tasks.filter { slottedIDs.contains($0.id) }
         let allocations = DaySlotAllocator.allocateAcrossWindows(
             requests: requests,
             existingTasks: existingTasks,
@@ -120,20 +120,22 @@ public enum DaySchedulePlanner {
         )
 
         for allocation in allocations {
-            guard let task = remaining.first(where: { $0.id == allocation.id }) else { continue }
+            guard let task = remainingByID[allocation.id] else { continue }
             let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
             let end = allocation.scheduledTime.addingTimeInterval(TimeInterval(duration * 60))
             appendSlot(taskID: task.id, start: allocation.scheduledTime, end: end, to: &slots, occupied: &occupied)
         }
 
         // Phase 3 — resolve overlaps via cascade on synthetic task set.
-        var synthetic = active
+        var syntheticByID = Dictionary.uniquingFirstValue(active.map { ($0.id, $0) })
         for slot in slots {
-            guard let index = synthetic.firstIndex(where: { $0.id == slot.taskID }) else { continue }
-            synthetic[index].scheduledDate = dayStart
-            synthetic[index].scheduledTime = slot.start
-            synthetic[index].scheduledEndTime = slot.end
+            guard var task = syntheticByID[slot.taskID] else { continue }
+            task.scheduledDate = dayStart
+            task.scheduledTime = slot.start
+            task.scheduledEndTime = slot.end
+            syntheticByID[slot.taskID] = task
         }
+        let synthetic = active.map { syntheticByID[$0.id] ?? $0 }
 
         let cascade = ConflictResolutionCascade.resolve(
             tasks: synthetic.filter { $0.scheduledTime != nil },
