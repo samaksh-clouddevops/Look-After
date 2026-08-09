@@ -30,6 +30,7 @@ import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.brain.BrainTick
+import com.lookafter.core.brain.CoachHistoryState
 import com.lookafter.core.brain.CognitiveLoadLevel
 import com.lookafter.core.capacity.ExecutiveCapacity
 import com.lookafter.core.planning.PlanMutationDiff
@@ -51,6 +52,11 @@ fun BrainScreen(
     onAcceptPlan: () -> Unit = {},
     onRejectPlan: () -> Unit = {},
     onClearConversation: () -> Unit = {},
+    coachHistory: CoachHistoryState = CoachHistoryState.EMPTY,
+    onPinHistory: (id: String, pinned: Boolean) -> Unit = { _, _ -> },
+    onRemoveHistory: (id: String) -> Unit = {},
+    onClearUnpinnedHistory: () -> Unit = {},
+    onPinCurrentHero: () -> Unit = {},
     isStreaming: Boolean = false,
     isPlanning: Boolean = false,
     planDraftPreview: String? = null,
@@ -245,6 +251,15 @@ fun BrainScreen(
                     }
                 }
             }
+        }
+        item {
+            CoachHistorySection(
+                history = coachHistory,
+                onPin = onPinHistory,
+                onRemove = onRemoveHistory,
+                onClearUnpinned = onClearUnpinnedHistory,
+                onPinCurrentHero = onPinCurrentHero,
+            )
         }
         item {
             Row(

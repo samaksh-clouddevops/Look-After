@@ -78,6 +78,7 @@ fun LookAfterRootView(
     val isStreaming by viewModel.streamingCoach.collectAsStateWithLifecycle()
     val isPlanning by viewModel.streamingPlan.collectAsStateWithLifecycle()
     val planDraftPreview by viewModel.planDraftPreview.collectAsStateWithLifecycle()
+    val coachHistory by viewModel.coachHistory.collectAsStateWithLifecycle()
     val webRtcState by viewModel.webRtcConnectionState.collectAsStateWithLifecycle()
     val notificationPrefs by viewModel.notificationPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -378,6 +379,11 @@ fun LookAfterRootView(
                     onAcceptPlan = viewModel::acceptPendingPlan,
                     onRejectPlan = viewModel::rejectPendingPlan,
                     onClearConversation = viewModel::clearPlanningConversation,
+                    coachHistory = coachHistory,
+                    onPinHistory = viewModel::pinCoachHistory,
+                    onRemoveHistory = viewModel::removeCoachHistory,
+                    onClearUnpinnedHistory = viewModel::clearUnpinnedCoachHistory,
+                    onPinCurrentHero = viewModel::pinCurrentHeroDecision,
                     isStreaming = isStreaming,
                     isPlanning = isPlanning,
                     planDraftPreview = planDraftPreview,

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.lookafter.app.adhd.BodyDoubleAmbientAudio
 import com.lookafter.app.auth.AuthSessionStore
 import com.lookafter.app.auth.FirebaseAuthBridge
+import com.lookafter.app.brain.CoachHistoryStore
 import com.lookafter.app.brain.HttpLlmPlanService
 import com.lookafter.app.brain.StreamingLlmClient
 import com.lookafter.app.diagnostics.CrashReporting
@@ -28,6 +29,9 @@ import com.lookafter.core.adhd.FocusSessionState
 import com.lookafter.core.adhd.IceServerConfig
 import com.lookafter.core.brain.BrainContextPack
 import com.lookafter.core.brain.BrainTick
+import com.lookafter.core.brain.CoachHistoryEngine
+import com.lookafter.core.brain.CoachHistoryIntent
+import com.lookafter.core.brain.CoachHistoryState
 import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.ExecutiveBrainEngine
 import com.lookafter.core.calendar.CalendarEvent
@@ -55,6 +59,7 @@ import com.lookafter.core.planning.PlanningConversationEngine
 import com.lookafter.core.planning.PlanningConversationIntent
 import com.lookafter.core.planning.PlanningConversationState
 import com.lookafter.core.planning.PlanningHorizons
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.Job
@@ -80,6 +85,7 @@ class LookAfterViewModel(
     private val notifier: LookAfterNotifier = app.notifier
     private val notificationPrefsStore: NotificationPreferencesStore = app.notificationPrefs
     private val planningStore: PlanningConversationStore = app.planningConversationStore
+    private val coachHistoryStore: CoachHistoryStore = app.coachHistoryStore
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -90,8 +96,12 @@ class LookAfterViewModel(
     private val authStore: AuthSessionStore = app.authSessionStore
     private var streamJob: Job? = null
     private var webRtc: WebRtcPeerController? = null
+    private var lastAutoHeroKey: String? = null
 
     val notificationPreferences: StateFlow<NotificationPreferences> = notificationPrefsStore.state
+
+    private val _coachHistory = MutableStateFlow(app.coachHistoryStore.load())
+    val coachHistory: StateFlow<CoachHistoryState> = _coachHistory.asStateFlow()
 
     private val _ambientEnabled = MutableStateFlow(true)
     val ambientEnabled: StateFlow<Boolean> = _ambientEnabled.asStateFlow()
@@ -110,6 +120,39 @@ class LookAfterViewModel(
     private fun persistPlanning(next: PlanningConversationState) {
         _planning.value = next
         planningStore.save(next)
+    }
+
+    private fun persistCoachHistory(next: CoachHistoryState) {
+        _coachHistory.value = next
+        coachHistoryStore.save(next)
+    }
+
+    private fun recordCoachHistory(intent: CoachHistoryIntent) {
+        persistCoachHistory(CoachHistoryEngine.reduce(_coachHistory.value, intent))
+    }
+
+    fun pinCoachHistory(id: String, pinned: Boolean) {
+        recordCoachHistory(CoachHistoryIntent.Pin(id, pinned))
+    }
+
+    fun removeCoachHistory(id: String) {
+        recordCoachHistory(CoachHistoryIntent.Remove(id))
+    }
+
+    fun clearUnpinnedCoachHistory() {
+        recordCoachHistory(CoachHistoryIntent.ClearUnpinned)
+    }
+
+    /** Pin current brain hero decision as "why this hero". */
+    fun pinCurrentHeroDecision() {
+        val tick = brainTick.value
+        val entry = CoachHistoryEngine.fromHeroDecision(
+            decision = tick.decision,
+            world = tick.world,
+            now = Instant.now(),
+        ).copy(pinned = true)
+        recordCoachHistory(CoachHistoryIntent.Record(entry))
+        _lastSyncMessage.value = "Pinned hero · ${entry.title}"
     }
 
     private val _cameraBodyDouble = MutableStateFlow(false)
@@ -252,6 +295,29 @@ class LookAfterViewModel(
                 )
                 notifier.scheduleAll(plans)
             }
+        }
+        // Soft-record hero decision when it changes (unpinned; user can pin).
+        viewModelScope.launch {
+            brainTick
+                .map { it.decision.heroTaskId to it.decision.heroTitle }
+                .distinctUntilChanged()
+                .collect { (id, title) ->
+                    val key = "${id.orEmpty()}|$title"
+                    if (key == lastAutoHeroKey || title.isBlank() || title == "Nothing queued") {
+                        return@collect
+                    }
+                    lastAutoHeroKey = key
+                    val tick = brainTick.value
+                    recordCoachHistory(
+                        CoachHistoryIntent.Record(
+                            CoachHistoryEngine.fromHeroDecision(
+                                decision = tick.decision,
+                                world = tick.world,
+                                now = Instant.now(),
+                            ),
+                        ),
+                    )
+                }
         }
         // Keep home-screen Glance widget in sync with hero / open count.
         viewModelScope.launch {
@@ -555,8 +621,18 @@ class LookAfterViewModel(
                 )
             }
             _streamingCoach.value = false
-            // Final stream snapshot to disk.
+            // Final stream snapshot to disk + history (once).
             planningStore.save(_planning.value)
+            val finalText = assembled.toString().ifBlank {
+                _planning.value.messages.lastOrNull {
+                    it.speaker == com.lookafter.core.planning.PlanningSpeaker.COACH
+                }?.text.orEmpty()
+            }
+            if (finalText.isNotBlank()) {
+                recordCoachHistory(
+                    CoachHistoryIntent.Record(CoachHistoryEngine.fromCoachReply(finalText)),
+                )
+            }
         }
     }
 
@@ -567,6 +643,11 @@ class LookAfterViewModel(
                 PlanningConversationIntent.CoachReply(text),
             ).state,
         )
+        if (text.isNotBlank()) {
+            recordCoachHistory(
+                CoachHistoryIntent.Record(CoachHistoryEngine.fromCoachReply(text)),
+            )
+        }
     }
 
     private fun replaceLastCoach(text: String) {
@@ -595,22 +676,44 @@ class LookAfterViewModel(
                     PlanningConversationIntent.AcceptPending,
                 ).state,
             )
+            recordCoachHistory(
+                CoachHistoryIntent.Record(
+                    CoachHistoryEngine.fromPlanOutcome(
+                        accepted = true,
+                        summary = pending.proposal.summary,
+                        mutationCount = pending.proposal.mutations.size,
+                    ),
+                ),
+            )
             _lastSyncMessage.value = "Applied ${intents.size} plan change(s)"
             TodayWidgetUpdater.requestUpdate(getApplication())
         }
     }
 
     fun rejectPendingPlan() {
+        val pending = _planning.value.pending
         persistPlanning(
             PlanningConversationEngine.reduce(
                 _planning.value,
                 PlanningConversationIntent.RejectPending,
             ).state,
         )
+        if (pending != null && pending.accepted == null) {
+            recordCoachHistory(
+                CoachHistoryIntent.Record(
+                    CoachHistoryEngine.fromPlanOutcome(
+                        accepted = false,
+                        summary = pending.proposal.summary,
+                        mutationCount = pending.proposal.mutations.size,
+                    ),
+                ),
+            )
+        }
         _lastSyncMessage.value = "Plan discarded"
     }
 
     fun clearPlanningConversation() {
+        // Chat only — pinned coach history survives.
         persistPlanning(
             PlanningConversationEngine.reduce(
                 _planning.value,
@@ -793,6 +896,9 @@ class LookAfterViewModel(
             _inbox.value = InboxState()
             planningStore.clear()
             _planning.value = PlanningConversationState()
+            coachHistoryStore.clear()
+            _coachHistory.value = CoachHistoryState.EMPTY
+            lastAutoHeroKey = null
             _bodyDoubleRoom.value = BodyDoubleRoomState()
             _calendarEvents.value = emptyList()
             _ambientEnabled.value = true
