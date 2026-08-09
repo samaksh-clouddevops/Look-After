@@ -181,25 +181,33 @@ public final class TaskRepository: ObservableObject {
         syncTaskToFirestore(mutableTask, merge: true)
     }
 
-    /// Batch local update — one SQLite replace for N tasks (PERF-005 cascade/reconcile).
+    /// Batch local update — upsert only touched rows (PERF-005 / PERF-011).
     public func updateMany(_ tasks: [LifeTask]) async throws {
         guard !tasks.isEmpty else { return }
-        var working = allLocalTasks()
         let deleted = TaskDeletionRegistry.load()
         var touched: [LifeTask] = []
         for var task in tasks {
             guard !deleted.contains(task.id) else { continue }
             ScheduleNormalization.normalizeFields(&task)
             task.updatedAt = Date()
-            if let index = working.firstIndex(where: { $0.id == task.id }) {
-                working[index] = task
-            } else {
-                working.insert(task, at: 0)
-            }
             touched.append(task)
         }
         guard !touched.isEmpty else { return }
-        try await persistAllLocallyAwait(working)
+
+        var working = allLocalTasks()
+        let touchedByID = Dictionary.uniquingFirstValue(touched.map { ($0.id, $0) })
+        for (index, existing) in working.enumerated() {
+            if let updated = touchedByID[existing.id] {
+                working[index] = updated
+            }
+        }
+        for task in touched where !working.contains(where: { $0.id == task.id }) {
+            working.insert(task, at: 0)
+        }
+
+        try await taskStore.upsertMany(touched)
+        Self.cachedAll = working
+        TaskPersistenceLog.localSave(count: working.count)
         for task in touched {
             TaskPersistenceLog.update(task)
             syncTaskToFirestore(task, merge: true)
@@ -210,8 +218,10 @@ public final class TaskRepository: ObservableObject {
         TaskDeletionRegistry.markDeleted(id)
         var tasks = allLocalTasks()
         tasks.removeAll { $0.id == id }
-        try await persistAllLocallyAwait(tasks)
+        try await taskStore.deleteId(id)
+        Self.cachedAll = tasks
         TaskPersistenceLog.delete(id)
+        TaskPersistenceLog.localSave(count: tasks.count)
         deleteTaskFromFirestore(id)
     }
 
@@ -219,13 +229,11 @@ public final class TaskRepository: ObservableObject {
     private func syncTaskToFirestore(_ task: LifeTask, merge: Bool = false) {
         Task {
             guard let ref = firebase.userCollection(collection) else { return }
-            
+
             do {
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .secondsSince1970
-                let data = try encoder.encode(task)
+                let data = try SharedFormatters.jsonEncoderSeconds.encode(task)
                 guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-                
+
                 if merge {
                     try await ref.document(task.id).setData(dict, merge: true)
                 } else {
@@ -236,7 +244,7 @@ public final class TaskRepository: ObservableObject {
             }
         }
     }
-    
+
     private func deleteTaskFromFirestore(_ id: String) {
         Task {
             guard let ref = firebase.userCollection(collection) else { return }
@@ -252,7 +260,13 @@ public final class TaskRepository: ObservableObject {
         } else {
             tasks.insert(task, at: 0)
         }
-        persistAllLocally(tasks)
+        Self.cachedAll = tasks
+        TaskPersistenceLog.localSave(count: tasks.count)
+        // Fire-and-forget single-row upsert (PERF-011).
+        let store = taskStore
+        Task.detached(priority: .userInitiated) {
+            try? await store.upsert(task)
+        }
     }
 
     private func saveLocallyAwait(_ task: LifeTask) async throws {
@@ -263,7 +277,9 @@ public final class TaskRepository: ObservableObject {
         } else {
             tasks.insert(task, at: 0)
         }
-        try await persistAllLocallyAwait(tasks)
+        try await taskStore.upsert(task)
+        Self.cachedAll = tasks
+        TaskPersistenceLog.localSave(count: tasks.count)
     }
 
     private static let perfLog = OSLog(subsystem: "com.samaksh.flowos.app", category: "TaskRepository")
@@ -280,16 +296,15 @@ public final class TaskRepository: ObservableObject {
         return []
     }
 
-    /// Best-effort cache + async disk write (reassign / merge paths).
+    /// Best-effort cache + async full replace (reassign / merge paths only).
     private func persistAllLocally(_ tasks: [LifeTask]) {
         Self.cachedAll = tasks
         TaskPersistenceLog.localSave(count: tasks.count)
         taskStore.replaceAllAsync(tasks)
     }
 
-    /// Durable disk write before returning — mutation API paths.
+    /// Full rewrite — compact / forced rebuild only.
     private func persistAllLocallyAwait(_ tasks: [LifeTask]) async throws {
-        // Keep in-memory cache optimistic only after disk accepts the write.
         try await taskStore.replaceAllAwait(tasks)
         Self.cachedAll = tasks
         TaskPersistenceLog.localSave(count: tasks.count)

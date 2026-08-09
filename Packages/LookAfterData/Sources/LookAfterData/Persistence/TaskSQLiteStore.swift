@@ -159,7 +159,54 @@ public final class TaskSQLiteStore: @unchecked Sendable {
 
     // MARK: - Writes
 
-    /// Fire-and-forget full replace — prefer `replaceAllAwait` on mutation paths.
+    /// Upsert a single task by primary key (PERF-011) — O(1) row, not full-table rewrite.
+    public func upsert(_ task: LifeTask) async throws {
+        do {
+            try await dbQueue.write { db in
+                try TaskRecord(task: task).save(db)
+            }
+        } catch {
+            logger.error("upsert failed: \(error.localizedDescription, privacy: .public)")
+            throw StoreError.writeFailed(error.localizedDescription)
+        }
+    }
+
+    /// Upsert many tasks in one transaction (PERF-011).
+    public func upsertMany(_ tasks: [LifeTask]) async throws {
+        guard !tasks.isEmpty else { return }
+        do {
+            try await dbQueue.write { db in
+                for task in tasks {
+                    try TaskRecord(task: task).save(db)
+                }
+            }
+        } catch {
+            logger.error("upsertMany failed: \(error.localizedDescription, privacy: .public)")
+            throw StoreError.writeFailed(error.localizedDescription)
+        }
+    }
+
+    /// Delete tasks by id without touching other rows (PERF-011).
+    public func deleteIds(_ ids: [String]) async throws {
+        let unique = Array(Set(ids.filter { !$0.isEmpty }))
+        guard !unique.isEmpty else { return }
+        do {
+            try await dbQueue.write { db in
+                for id in unique {
+                    try TaskRecord.deleteOne(db, key: id)
+                }
+            }
+        } catch {
+            logger.error("deleteIds failed: \(error.localizedDescription, privacy: .public)")
+            throw StoreError.writeFailed(error.localizedDescription)
+        }
+    }
+
+    public func deleteId(_ id: String) async throws {
+        try await deleteIds([id])
+    }
+
+    /// Fire-and-forget full replace — prefer upsert on mutation paths; keep for cache cold rebuilds.
     public func replaceAllAsync(_ tasks: [LifeTask]) {
         let dbQueue = dbQueue
         Task.detached(priority: .userInitiated) {
@@ -173,7 +220,7 @@ public final class TaskSQLiteStore: @unchecked Sendable {
         }
     }
 
-    /// Awaitable full replace — throws on write failure so callers can roll back UI.
+    /// Awaitable full replace — factory reset, compact, forced rebuild only.
     public func replaceAllAwait(_ tasks: [LifeTask]) async throws {
         do {
             try await dbQueue.write { db in
