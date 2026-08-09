@@ -22,9 +22,12 @@ import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
+import com.lookafter.core.health.HealthHistorySeries
 import com.lookafter.core.health.HealthSummary
+import com.lookafter.core.health.RollingHealthAverages
+import kotlin.math.roundToInt
 
-/** Health readiness surface — iOS Health tab / metric detail parity (stub data). */
+/** Health readiness surface — snapshot + 7-day charts (Phase D1). */
 @Composable
 fun HealthScreen(
     summary: HealthSummary,
@@ -32,6 +35,9 @@ fun HealthScreen(
     onPermissionChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
+    history: HealthHistorySeries = HealthHistorySeries.EMPTY,
+    rolling: RollingHealthAverages = RollingHealthAverages(),
+    usingDemo: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -45,7 +51,7 @@ fun HealthScreen(
         item {
             SectionHeader(
                 title = "Health",
-                subtitle = "Readiness, sleep, and recovery signals.",
+                subtitle = "Readiness, sleep, and 7-day trends.",
             )
         }
         item {
@@ -61,10 +67,10 @@ fun HealthScreen(
                             style = MaterialTheme.typography.titleLarge,
                         )
                         Text(
-                            text = if (permissionGranted) {
-                                "Demo data connected"
-                            } else {
-                                "Grant access to load readiness"
+                            text = when {
+                                !permissionGranted -> "Grant access to load readiness"
+                                usingDemo -> "Using demo history · ${history.sourceLabel}"
+                                else -> "Live history · ${history.sourceLabel}"
                             },
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -92,10 +98,51 @@ fun HealthScreen(
                     style = MaterialTheme.typography.displayLarge,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
+                rolling.readinessScore?.let { avg ->
+                    Text(
+                        "7-day avg ${(avg * 100).roundToInt()}% · trend ${rolling.readinessTrendLabel}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                    )
+                }
             }
         }
         item {
-            MetricRow("Sleep", summary.sleepHours?.let { "%.1f h".format(it) } ?: "—")
+            HealthSparkBarsCard(
+                title = "Sleep (h)",
+                series = history,
+                values = HealthChartValues.sleepHours(history),
+                barColor = LookAfterColors.Focus,
+                averageLabel = rolling.sleepHours?.let { "avg %.1fh".format(it) } ?: "avg —",
+                trendLabel = rolling.sleepTrendLabel,
+                valueFormatter = { "%.1fh".format(it) },
+            )
+        }
+        item {
+            HealthSparkBarsCard(
+                title = "Readiness (%)",
+                series = history,
+                values = HealthChartValues.readiness(history),
+                barColor = LookAfterColors.Health,
+                averageLabel = rolling.readinessScore?.let { "avg ${(it * 100).roundToInt()}%" } ?: "avg —",
+                trendLabel = rolling.readinessTrendLabel,
+                valueFormatter = { "${it.roundToInt()}%" },
+            )
+        }
+        item {
+            HealthSparkBarsCard(
+                title = "Steps",
+                series = history,
+                values = HealthChartValues.steps(history),
+                barColor = LookAfterColors.AccentPrimary,
+                averageLabel = rolling.steps?.let { "avg $it" } ?: "avg —",
+                trendLabel = "7d",
+                valueFormatter = HealthChartValues::stepLabel,
+            )
+        }
+        item {
+            MetricRow("Sleep today", summary.sleepHours?.let { "%.1f h".format(it) } ?: "—")
         }
         item {
             MetricRow(
@@ -107,7 +154,7 @@ fun HealthScreen(
             MetricRow("HRV (SDNN)", summary.hrvSdnn?.let { "${it.toInt()} ms" } ?: "—")
         }
         item {
-            MetricRow("Steps", summary.steps?.toString() ?: "—")
+            MetricRow("Steps today", summary.steps?.toString() ?: "—")
         }
         item {
             MetricRow(

@@ -1,8 +1,13 @@
 package com.lookafter.app.health
 
 import android.content.Context
+import com.lookafter.core.health.HealthDayPoint
+import com.lookafter.core.health.HealthHistoryEngine
+import com.lookafter.core.health.HealthHistorySeries
 import com.lookafter.core.health.HealthSummary
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /** Capability / availability of the Health Connect backend. */
@@ -21,6 +26,11 @@ interface HealthDataSource {
     suspend fun hasAllPermissions(): Boolean
     fun requiredPermissions(): Set<String>
     suspend fun readSummary(now: Instant = Instant.now()): HealthSummary
+    suspend fun readHistory(
+        endInclusive: LocalDate = LocalDate.now(),
+        dayCount: Int = 7,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): HealthHistorySeries = HealthHistorySeries.EMPTY
 }
 
 /**
@@ -34,16 +44,27 @@ class DemoHealthDataSource : HealthDataSource {
 
     override fun requiredPermissions(): Set<String> = emptySet()
 
-    override suspend fun readSummary(now: Instant): HealthSummary = HealthSummary(
-        totalSleepMinutes = 420.0,
-        sleepQualityScore = 0.78,
-        restingHeartRate = 58.0,
-        hrvSdnn = 42.0,
-        steps = 3200,
-        activeEnergyKcal = 180.0,
-        readinessScore = 0.72,
-        capturedAt = now,
-    )
+    override suspend fun readSummary(now: Instant): HealthSummary {
+        val day = now.atZone(ZoneId.systemDefault()).toLocalDate()
+        val series = HealthHistoryEngine.demoSeries(endInclusive = day, dayCount = 7)
+        val last = series.last() ?: return HealthSummary(capturedAt = now)
+        return HealthSummary(
+            totalSleepMinutes = last.sleepMinutes,
+            sleepQualityScore = last.readinessScore,
+            restingHeartRate = last.restingHeartRate,
+            hrvSdnn = 42.0,
+            steps = last.steps,
+            activeEnergyKcal = last.activeEnergyKcal,
+            readinessScore = last.readinessScore,
+            capturedAt = now,
+        )
+    }
+
+    override suspend fun readHistory(
+        endInclusive: LocalDate,
+        dayCount: Int,
+        zone: ZoneId,
+    ): HealthHistorySeries = HealthHistoryEngine.demoSeries(endInclusive, dayCount)
 }
 
 /**
@@ -122,6 +143,42 @@ class HealthConnectDataSource(
             readinessScore = readiness,
             capturedAt = now,
         )
+    }
+
+    override suspend fun readHistory(
+        endInclusive: LocalDate,
+        dayCount: Int,
+        zone: ZoneId,
+    ): HealthHistorySeries {
+        val c = client ?: return HealthHistorySeries.EMPTY
+        if (!hasAllPermissions()) return HealthHistorySeries.EMPTY
+        val n = dayCount.coerceIn(3, 30)
+        val startDay = endInclusive.minusDays((n - 1).toLong())
+        val points = (0 until n).map { i ->
+            val day = startDay.plusDays(i.toLong())
+            val dayStart = day.atStartOfDay(zone).toInstant()
+            val dayEnd = day.plusDays(1).atStartOfDay(zone).toInstant()
+            val sleepMin = readSleepMinutes(c, dayStart, dayEnd)
+            val steps = readSteps(c, dayStart, dayEnd)
+            val rhr = readRestingHr(c, dayStart, dayEnd)
+            val hrv = readHrv(c, dayStart, dayEnd)
+            val kcal = readActiveKcal(c, dayStart, dayEnd)
+            val readiness = estimateReadiness(sleepMin, rhr, hrv)
+            HealthDayPoint(
+                day = day,
+                sleepHours = sleepMin?.div(60.0)?.let { (it * 10).toInt() / 10.0 },
+                readinessScore = readiness,
+                steps = steps,
+                restingHeartRate = rhr,
+                activeEnergyKcal = kcal,
+            )
+        }
+        // If every day is empty, treat as no data.
+        val hasAny = points.any {
+            it.sleepHours != null || it.steps != null || it.readinessScore != null
+        }
+        if (!hasAny) return HealthHistorySeries.EMPTY
+        return HealthHistoryEngine.fromDailySummaries(points, sourceLabel = "health-connect")
     }
 
     private suspend fun readSteps(

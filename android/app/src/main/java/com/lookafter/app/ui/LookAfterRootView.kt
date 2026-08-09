@@ -60,6 +60,9 @@ fun LookAfterRootView(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val health by viewModel.health.collectAsStateWithLifecycle()
     val healthGranted by viewModel.healthPermissionGranted.collectAsStateWithLifecycle()
+    val healthHistory by viewModel.healthHistory.collectAsStateWithLifecycle()
+    val healthRolling by viewModel.healthRolling.collectAsStateWithLifecycle()
+    val healthUsingDemo by viewModel.healthUsingDemo.collectAsStateWithLifecycle()
     val onboarding by viewModel.onboarding.collectAsStateWithLifecycle()
     val inbox by viewModel.inbox.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
@@ -279,6 +282,9 @@ fun LookAfterRootView(
                     onPermissionChange = viewModel::setHealthPermission,
                     onRefresh = viewModel::refreshHealth,
                     onBack = { healthOpen = false },
+                    history = healthHistory,
+                    rolling = healthRolling,
+                    usingDemo = healthUsingDemo,
                     modifier = Modifier.fillMaxSize(),
                 )
                 inboxOpen -> InboxScreen(

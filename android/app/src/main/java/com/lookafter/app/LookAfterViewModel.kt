@@ -296,6 +296,8 @@ class LookAfterViewModel(
 
     val state: StateFlow<LifeState> = engine.state
     val health: StateFlow<HealthSummary> = healthRepo.summary
+    val healthHistory = healthRepo.history
+    val healthRolling = healthRepo.rollingAverages
     val healthPermissionGranted: StateFlow<Boolean> = healthRepo.permissionGranted
     val healthUsingDemo: StateFlow<Boolean> = healthRepo.usingDemo
     val healthRequiredPermissions: Set<String> get() = healthRepo.requiredPermissions()
