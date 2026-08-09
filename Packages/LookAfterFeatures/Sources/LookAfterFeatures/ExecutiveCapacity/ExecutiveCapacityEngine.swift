@@ -163,11 +163,34 @@ public final class ExecutiveCapacityEngine {
     }
 
     private func band(for score: Double, input: ExecutiveCapacityInput) -> ExecutiveCapacityBand {
-        if score >= 0.82 { return .peakFocus }
+        // Never claim Peak Focus without fresh sleep signal (BUG-013 / R-003).
+        let canClaimPeak = hasSufficientSleepEvidence(input)
+        if score >= 0.82, canClaimPeak { return .peakFocus }
+        if score >= 0.82 { return .goodCapacity }
         if score >= 0.64 { return .goodCapacity }
         if score >= 0.46 { return .moderateCapacity }
         if score >= 0.30 { return .lowCapacity }
         return .recoveryMode
+    }
+
+    /// Peak requires last-night sleep of at least ~5h (or explicit good/excellent quality).
+    private func hasSufficientSleepEvidence(_ input: ExecutiveCapacityInput) -> Bool {
+        let summary = input.healthSummary
+        let hasFreshSleep: Bool = {
+            guard let summary else { return false }
+            return HealthSummaryFreshness.hasLastNightSleep(summary, now: input.now)
+        }()
+        guard hasFreshSleep, let summary else { return false }
+
+        if let minutes = summary.totalSleepMinutes, minutes >= 300 {
+            return true
+        }
+        switch input.snapshot?.sleepQuality ?? .unknown {
+        case .good, .excellent:
+            return (summary.totalSleepMinutes ?? 0) >= 240
+        case .fair, .poor, .unknown:
+            return false
+        }
     }
 
     private func buildReasons(input: ExecutiveCapacityInput, band: ExecutiveCapacityBand, score: Double) -> [String] {
@@ -355,7 +378,12 @@ public final class ExecutiveCapacityEngine {
 
         var state = baseline
         if let bandLabel = decoded.band, let mapped = mapBand(label: bandLabel) {
-            state.band = mapped
+            // LLM cannot invent Peak without sleep evidence.
+            if mapped == .peakFocus, !hasSufficientSleepEvidence(input) {
+                state.band = .goodCapacity
+            } else {
+                state.band = mapped
+            }
         }
         if let reasons = decoded.reasons, !reasons.isEmpty {
             state.reasoning.reasons = Array(reasons.prefix(3))
