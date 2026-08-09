@@ -18,10 +18,12 @@ public enum TaskListSorter {
         tasks.sorted { lhs, rhs in
             if lhs.priority != rhs.priority { return lhs.priority > rhs.priority }
             switch (lhs.scheduledTime, rhs.scheduledTime) {
-            case let (left?, right?): return left < right
+            case let (left?, right?): return left == right ? lhs.id < rhs.id : left < right
             case (_?, nil): return true
             case (nil, _?): return false
-            case (nil, nil): return lhs.createdAt < rhs.createdAt
+            case (nil, nil):
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+                return lhs.id < rhs.id
             }
         }
     }
@@ -34,7 +36,9 @@ public enum TaskListSorter {
         now: Date
     ) -> Bool {
         if lhs.isFixedTimeEvent && rhs.isFixedTimeEvent {
-            return (lhs.scheduledTime ?? .distantFuture) < (rhs.scheduledTime ?? .distantFuture)
+            let left = lhs.scheduledTime ?? .distantFuture
+            let right = rhs.scheduledTime ?? .distantFuture
+            return left == right ? lhs.id < rhs.id : left < right
         }
 
         let lhsOverdue = isOverdue(lhs, calendar: calendar, todayStart: todayStart, now: now)
@@ -53,13 +57,16 @@ public enum TaskListSorter {
         }
 
         switch (lhs.scheduledTime, rhs.scheduledTime) {
-        case let (left?, right?): return left < right
+        case let (left?, right?): return left == right ? lhs.id < rhs.id : left < right
         case (_?, nil): return true
         case (nil, _?): return false
         case (nil, nil): break
         }
 
-        return lhs.createdAt < rhs.createdAt
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt < rhs.createdAt
+        }
+        return lhs.id < rhs.id
     }
 
     private static func isOverdue(

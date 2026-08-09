@@ -1,0 +1,258 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "17644858348181186871"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "lookafter",
+      "metadata": {
+        "description": "Base name used for resource naming"
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "metadata": {
+        "description": "Container image (e.g. myregistry.azurecr.io/lookafter-auth-proxy:latest)"
+      }
+    },
+    "firebaseProjectId": {
+      "type": "string",
+      "metadata": {
+        "description": "Firebase project ID"
+      }
+    },
+    "adminApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin API key for minting product keys"
+      }
+    },
+    "firebaseServiceAccountJson": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Firebase service account JSON (stringified)"
+      }
+    },
+    "glmApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "GLM API key stored as a Container App secret and exposed as GLM_API_KEY"
+      }
+    },
+    "minReplicas": {
+      "type": "int",
+      "defaultValue": 0,
+      "metadata": {
+        "description": "Min replicas (0 = scale to zero / free-grant friendly)"
+      }
+    },
+    "maxReplicas": {
+      "type": "int",
+      "defaultValue": 3,
+      "metadata": {
+        "description": "Max replicas"
+      }
+    },
+    "allowInsecureDevAuth": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Local-only dev auth (Bearer dev:<uid>). Never enable in production."
+      }
+    },
+    "dockerHubUsername": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Docker Hub username for pulling a private image"
+      }
+    },
+    "dockerHubPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Docker Hub access token for pulling a private image"
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[uniqueString(resourceGroup().id)]",
+    "useDockerHubRegistry": "[and(not(empty(parameters('dockerHubUsername'))), not(empty(parameters('dockerHubPassword'))))]",
+    "envName": "[format('{0}-env-{1}', parameters('namePrefix'), variables('uniqueSuffix'))]",
+    "appName": "[format('{0}-auth-{1}', parameters('namePrefix'), variables('uniqueSuffix'))]",
+    "storageName": "[take(format('{0}st{1}', parameters('namePrefix'), variables('uniqueSuffix')), 24)]",
+    "logName": "[format('{0}-logs-{1}', parameters('namePrefix'), variables('uniqueSuffix'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('logName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "allowBlobPublicAccess": false,
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/tableServices",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/{1}', variables('storageName'), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageName'), 'default', 'lookafterlicenses')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', variables('storageName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('envName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logName')), '2022-10-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logName')), '2022-10-01').primarySharedKey]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('appName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('envName'))]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "transport": "auto",
+            "allowInsecure": false
+          },
+          "registries": "[if(variables('useDockerHubRegistry'), createArray(createObject('server', 'index.docker.io', 'username', parameters('dockerHubUsername'), 'passwordSecretRef', 'dockerhub-password')), createArray())]",
+          "secrets": "[concat(createArray(createObject('name', 'admin-api-key', 'value', parameters('adminApiKey')), createObject('name', 'firebase-sa', 'value', parameters('firebaseServiceAccountJson')), createObject('name', 'glm-api-key', 'value', parameters('glmApiKey')), createObject('name', 'storage-connection', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', variables('storageName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-01-01').keys[0].value, environment().suffixes.storage))), if(variables('useDockerHubRegistry'), createArray(createObject('name', 'dockerhub-password', 'value', parameters('dockerHubPassword'))), createArray()))]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "auth-proxy",
+              "image": "[parameters('containerImage')]",
+              "resources": {
+                "cpu": "[json('0.25')]",
+                "memory": "0.5Gi"
+              },
+              "env": [
+                {
+                  "name": "PORT",
+                  "value": "8080"
+                },
+                {
+                  "name": "FIREBASE_PROJECT_ID",
+                  "value": "[parameters('firebaseProjectId')]"
+                },
+                {
+                  "name": "FIREBASE_SERVICE_ACCOUNT_JSON",
+                  "secretRef": "firebase-sa"
+                },
+                {
+                  "name": "ADMIN_API_KEY",
+                  "secretRef": "admin-api-key"
+                },
+                {
+                  "name": "GLM_API_KEY",
+                  "secretRef": "glm-api-key"
+                },
+                {
+                  "name": "AZURE_STORAGE_CONNECTION_STRING",
+                  "secretRef": "storage-connection"
+                },
+                {
+                  "name": "AZURE_TABLE_NAME",
+                  "value": "lookafterlicenses"
+                },
+                {
+                  "name": "RATE_LIMIT_PER_MINUTE",
+                  "value": "30"
+                },
+                {
+                  "name": "DAILY_TOKEN_BUDGET",
+                  "value": "200000"
+                },
+                {
+                  "name": "AUTH_DEV_ALLOW_INSECURE",
+                  "value": "[if(parameters('allowInsecureDevAuth'), 'true', 'false')]"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('minReplicas')]",
+            "maxReplicas": "[parameters('maxReplicas')]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('envName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "containerAppFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('appName')), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "containerAppName": {
+      "type": "string",
+      "value": "[variables('appName')]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageName')]"
+    }
+  }
+}

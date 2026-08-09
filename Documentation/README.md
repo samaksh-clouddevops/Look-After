@@ -10,6 +10,7 @@ Architecture and contributor guides for the LifeOS monorepo.
 | [build-and-test.md](build-and-test.md) | xcodebuild and swift test commands |
 | [package-guide.md](package-guide.md) | Where to put new code |
 | [architecture/dependencies.md](architecture/dependencies.md) | Package dependency graph |
+| [architecture/mobile-infrastructure-roadmap.md](architecture/mobile-infrastructure-roadmap.md) | Persistence, sync, and state upgrade plan |
 | [architecture/macOS-shared-views.md](architecture/macOS-shared-views.md) | Why macOS compiles iOS views |
 | [architecture/adr/](architecture/adr/) | Architecture decision records |
 | [ATTENTION_OS_SPEC.md](ATTENTION_OS_SPEC.md) | Attention OS product spec |

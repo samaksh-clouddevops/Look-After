@@ -34,6 +34,7 @@ public enum NotificationCandidateBuilder {
             sessionToken: input.focusSessionToken,
             now: now
         )
+        candidates += ProactiveNotificationAdapter.candidates(from: input.proactiveActions, now: now, calendar: calendar)
 
         return candidates
     }
@@ -123,10 +124,13 @@ public enum NotificationCandidateBuilder {
             guard task.status.isActive else { return nil }
 
             let fireDate: Date?
+            let day = calendar.startOfDay(for: now)
             if task.isOverdue {
                 fireDate = now.addingTimeInterval(60)
-            } else if let scheduled = task.scheduledTime, scheduled > now, calendar.isDateInToday(scheduled) {
-                fireDate = scheduled
+            } else if let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),
+                      start > now,
+                      calendar.isDateInToday(start) {
+                fireDate = start
             } else if let deadline = task.deadline, deadline > now, calendar.isDateInToday(deadline) {
                 fireDate = deadline.addingTimeInterval(-15 * 60)
             } else {

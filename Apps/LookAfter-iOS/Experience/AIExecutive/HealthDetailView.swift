@@ -1,10 +1,21 @@
 import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
+import LookAfterHealth
+import LookAfterData
 
 struct HealthDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var shell: AppShellState
+    @StateObject private var healthSync = HealthSyncService.shared
+
+    let userId: String
+    var onLogMood: () -> Void = {}
+
+    init(userId: String = "", onLogMood: @escaping () -> Void = {}) {
+        self.userId = userId
+        self.onLogMood = onLogMood
+    }
 
     var body: some View {
         ZStack {
@@ -12,15 +23,30 @@ struct HealthDetailView: View {
 
             ScrollView {
                 VStack(spacing: DesignSystem.spacingLG) {
-                    if let summary = shell.brainVM.healthSummary {
+                    if let status = healthSync.connectionStatus, status.needsAttention {
+                        HealthStatusBanner(
+                            status: status,
+                            style: .full,
+                            onPrimaryAction: { handlePrimaryAction(status.primaryAction) },
+                            onSeeDetails: nil
+                        )
+                    }
+
+                    if let summary = shell.brainVM.healthSummary, hasVisibleMetrics(summary) {
                         sleepHeroCard(summary)
                         metricsGrid(summary)
-                    } else {
+                    } else if healthSync.connectionStatus == nil || healthSync.connectionStatus?.needsAttention != true {
                         Text("Connect Apple Health to see recovery metrics.")
                             .font(.dsSecondary())
                             .foregroundColor(DesignSystem.textSecondary)
                             .padding(.top, DesignSystem.spacingHero)
                     }
+
+                    if let report = healthSync.verificationReport, report.hasUsableData == false || report.overallPassed == false {
+                        HealthVerificationReportView(report: report)
+                    }
+
+                    actionButtons
                 }
                 .padding(DesignSystem.screenHorizontal)
                 .padding(.top, DesignSystem.spacingXL)
@@ -41,7 +67,40 @@ struct HealthDetailView: View {
             }
             .padding(.horizontal, DesignSystem.spacingMD)
         }
+        .onAppear {
+            let resolvedId = resolvedUserId
+            healthSync.refreshConnectionStatus(userId: resolvedId, healthSummary: shell.brainVM.healthSummary)
+        }
         .accessibilityIdentifier("screen-health-detail")
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: DesignSystem.spacingSM) {
+            Button(action: onLogMood) {
+                Label("Log how you feel", systemImage: "face.smiling")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("health-log-mood-capture")
+
+            HStack(spacing: DesignSystem.spacingSM) {
+                Button(action: syncNow) {
+                    Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(healthSync.isSyncing)
+
+                Button(action: openHealthApp) {
+                    Label("Open Health", systemImage: "heart.text.square.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
     }
 
     private func sleepHeroCard(_ summary: HealthSummary) -> some View {
@@ -111,5 +170,41 @@ struct HealthDetailView: View {
         let h = Int(minutes) / 60
         let m = Int(minutes) % 60
         return "\(h)h \(String(format: "%02d", m))m"
+    }
+
+    private func hasVisibleMetrics(_ summary: HealthSummary) -> Bool {
+        (summary.totalSleepMinutes ?? 0) > 0
+            || (summary.stepCount ?? 0) > 0
+            || summary.hrvAverage != nil
+            || summary.restingHeartRate != nil
+    }
+
+    private var resolvedUserId: String {
+        if !userId.isEmpty { return userId }
+        return FirebaseManager.shared.resolvedUserId
+    }
+
+    private func handlePrimaryAction(_ action: HealthStatusAction) {
+        HealthStatusActionHandler.perform(
+            action,
+            onConnect: { /* sheet opened from connected context */ },
+            onSync: syncNow,
+            onOpenSettings: { dismiss() }
+        )
+    }
+
+    private func syncNow() {
+        let id = resolvedUserId
+        guard !id.isEmpty else { return }
+        Task {
+            await healthSync.syncHealthData(userId: id)
+            healthSync.refreshConnectionStatus(userId: id, healthSummary: shell.brainVM.healthSummary)
+        }
+    }
+
+    private func openHealthApp() {
+        if let url = HealthAppLinks.healthAppURL {
+            UIApplication.shared.open(url)
+        }
     }
 }

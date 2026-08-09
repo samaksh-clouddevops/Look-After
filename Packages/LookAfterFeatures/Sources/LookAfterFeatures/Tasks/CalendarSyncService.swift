@@ -50,6 +50,17 @@ public final class CalendarSyncService {
         }
 
         for var task in relevant {
+            let day = calendar.startOfDay(for: task.scheduledDate ?? Date())
+            if TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task, calendar: calendar)
+                || TaskScheduleInterval.displaySchedule(for: task, on: day) == .unslottedFlexible {
+                if let eventID = task.calendarEventIdentifier {
+                    removeEvent(identifier: eventID)
+                    task.calendarEventIdentifier = nil
+                    changedTasks.append(task)
+                }
+                continue
+            }
+
             let shouldRemove = !task.status.isActive
                 || task.scheduledTime == nil
                 || task.isRecurrenceTemplateTask

@@ -28,6 +28,7 @@ public struct WidgetSnapshot: Codable, Sendable {
     public var stepCount: Int?
     public var hrvMs: Int?
     public var tasks: [WidgetTaskItem]
+    public var heroTaskId: String?
     public var updatedAt: Date
 
     // Pin Live Activity — execution-aligned display fields.
@@ -38,6 +39,8 @@ public struct WidgetSnapshot: Codable, Sendable {
     public var pinNextUpSummary: String
     public var pinProgressFraction: Double
     public var pinSectionLabel: String
+    public var pinWindowStart: Date?
+    public var pinWindowEnd: Date?
     
     public init(
         topTaskTitle: String? = nil,
@@ -51,6 +54,7 @@ public struct WidgetSnapshot: Codable, Sendable {
         stepCount: Int? = nil,
         hrvMs: Int? = nil,
         tasks: [WidgetTaskItem] = [],
+        heroTaskId: String? = nil,
         updatedAt: Date = Date(),
         pinContextLine: String = "",
         pinScheduleLabel: String = "",
@@ -58,7 +62,9 @@ public struct WidgetSnapshot: Codable, Sendable {
         pinCategoryIcon: String = "sparkles",
         pinNextUpSummary: String = "",
         pinProgressFraction: Double = 0,
-        pinSectionLabel: String = "NOW"
+        pinSectionLabel: String = "NOW",
+        pinWindowStart: Date? = nil,
+        pinWindowEnd: Date? = nil
     ) {
         self.topTaskTitle = topTaskTitle
         self.topTaskMinutes = topTaskMinutes
@@ -71,6 +77,7 @@ public struct WidgetSnapshot: Codable, Sendable {
         self.stepCount = stepCount
         self.hrvMs = hrvMs
         self.tasks = tasks
+        self.heroTaskId = heroTaskId
         self.updatedAt = updatedAt
         self.pinContextLine = pinContextLine
         self.pinScheduleLabel = pinScheduleLabel
@@ -79,6 +86,8 @@ public struct WidgetSnapshot: Codable, Sendable {
         self.pinNextUpSummary = pinNextUpSummary
         self.pinProgressFraction = min(1, max(0, pinProgressFraction))
         self.pinSectionLabel = pinSectionLabel
+        self.pinWindowStart = pinWindowStart
+        self.pinWindowEnd = pinWindowEnd
     }
     
     public static let empty = WidgetSnapshot()

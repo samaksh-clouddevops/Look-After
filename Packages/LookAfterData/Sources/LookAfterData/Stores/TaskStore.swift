@@ -147,6 +147,17 @@ public final class TaskStore: ObservableObject, TaskStoring {
 
     // MARK: - Private
 
+    private var notificationSuppressionDepth = 0
+
+    /// Coalesce TaskStore notifications during batched schedule sync.
+    public func beginSuppressingNotifications() {
+        notificationSuppressionDepth += 1
+    }
+
+    public func endSuppressingNotifications() {
+        notificationSuppressionDepth = max(0, notificationSuppressionDepth - 1)
+    }
+
     private func republishAfterMutation(userId: String) {
         let uid = userId.isEmpty ? lastUserId : userId
         if !uid.isEmpty {
@@ -156,6 +167,7 @@ public final class TaskStore: ObservableObject, TaskStoring {
     }
 
     private func notifyChange() {
+        guard notificationSuppressionDepth == 0 else { return }
         NotificationCenter.default.post(name: .taskListDidChange, object: nil)
     }
 }

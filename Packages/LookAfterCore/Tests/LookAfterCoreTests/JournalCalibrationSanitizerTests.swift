@@ -47,3 +47,12 @@ final class JournalCalibrationSanitizerTests: XCTestCase {
         )
     }
 }
+
+final class SystemImageTests: XCTestCase {
+    func testResolvedUsesFallbackForNilAndEmpty() {
+        XCTAssertEqual(SystemImage.resolved(nil), "circle")
+        XCTAssertEqual(SystemImage.resolved(""), "circle")
+        XCTAssertEqual(SystemImage.resolved("   "), "circle")
+        XCTAssertEqual(SystemImage.resolved("sparkles", fallback: "circle"), "sparkles")
+    }
+}

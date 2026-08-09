@@ -2,9 +2,10 @@ import Foundation
 import WidgetKit
 import LookAfterCore
 import LookAfterData
+import LookAfterAI
 import ExecutiveBrain
 
-/// Orchestrates a complete factory reset — every persisted layer except API keys and dev flags.
+/// Orchestrates a complete factory reset — every persisted layer except auth session and dev flags.
 @MainActor
 public final class FactoryResetManager {
     public static let shared = FactoryResetManager()
@@ -41,7 +42,11 @@ public final class FactoryResetManager {
     /// Phase 1 — synchronous local wipe. UI should update immediately after this.
     public func performLocalReset(userId: String) {
         FreshInstallGuard.enter()
-        taskStore.resetLocalStore()
+        CascadeActionLog.shared.clear()
+        BriefingNarrativeCache.shared.clear()
+        UserCalibrationStore.reset()
+        HabitCompletionStore.reset()
+        TaskStore.shared.resetLocalStore()
         local.deleteAllJSONFiles()
         local.deleteBehaviorMemoryDirectory()
         local.clearApplicationCaches()
@@ -67,7 +72,6 @@ public final class FactoryResetManager {
 
     /// Phase 2 — cloud wipe (background). Skipped when Firestore is unavailable (mock/offline).
     public func resetCloudIfAvailable() async {
-        defer { FreshInstallGuard.exit() }
         guard firebase.isCloudSyncAvailable else { return }
 
         await withTaskGroup(of: Void.self) { group in
@@ -75,6 +79,11 @@ public final class FactoryResetManager {
                 group.addTask { await self.deleteAllDocuments(in: collection) }
             }
         }
+    }
+
+    /// Ends fresh-install guard after local wipe, cloud delete, and bootstrap complete.
+    public func finishFreshInstall() {
+        FreshInstallGuard.exit()
     }
 
     public var isPendingFreshStart: Bool {

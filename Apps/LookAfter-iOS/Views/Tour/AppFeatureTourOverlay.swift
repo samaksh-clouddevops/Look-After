@@ -108,6 +108,8 @@ struct AppFeatureTourOverlay: View {
             }
             .frame(width: localCard.width, alignment: .topLeading)
             .offset(x: localCard.minX, y: localCard.minY)
+            .animation(nil, value: coordinator.stepIndex)
+            .animation(nil, value: coordinator.layoutProposal?.cardFrame)
             .accessibilityFocused($focusTourCard)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(tourAccessibilityLabel)
@@ -117,7 +119,7 @@ struct AppFeatureTourOverlay: View {
         guard size.width > 1, size.height > 1 else { return }
         let deltaW = abs(size.width - measuredCardSize.width)
         let deltaH = abs(size.height - measuredCardSize.height)
-        guard deltaW > 2 || deltaH > 2 else { return }
+        guard deltaW > 4 || deltaH > 4 else { return }
         measuredCardSize = size
         publishChrome(geo: geo)
     }
@@ -201,9 +203,7 @@ struct AppFeatureTourOverlay: View {
                 if coordinator.stepIndex > 0 {
                     Button("Back") {
                         HapticManager.impact(.light)
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                            coordinator.goBack()
-                        }
+                        coordinator.goBack()
                     }
                     .buttonStyle(.plain)
                     .font(.dsBody(weight: .semibold))
@@ -216,9 +216,7 @@ struct AppFeatureTourOverlay: View {
 
                 Button(coordinator.isLastStep ? "Get started" : "Next") {
                     HapticManager.impact(.medium)
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                        coordinator.advance()
-                    }
+                    coordinator.advance()
                 }
                 .buttonStyle(.plain)
                 .font(.dsBody(weight: .semibold))

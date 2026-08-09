@@ -12,6 +12,8 @@ struct ExecutiveAssistantSheet: View {
     var onSubmit: (_ text: String, _ startedWithVoice: Bool) -> Void
     var onNegotiationSelect: (String) -> Void
     var onRedesignWithAI: (String) -> Void = { _ in }
+    var onPostWake: () -> Void = {}
+    var onGoingOut: () -> Void = {}
 
     @State private var isExpanded = false
     @State private var dragTranslation: CGFloat = 0
@@ -183,7 +185,9 @@ struct ExecutiveAssistantSheet: View {
                 expand()
                 planningVM.setInputMode(.voice)
             },
-            onStartTyping: { expand() }
+            onStartTyping: { expand() },
+            onPostWake: onPostWake,
+            onGoingOut: onGoingOut
         )
     }
 

@@ -9,6 +9,14 @@ public enum NotificationKind: String, Codable, CaseIterable, Sendable, Identifia
     case taskDue
     case medication
     case focusBreak
+    case transitionShield
+    case waitingMode
+    case patternInsight
+    case initiationBridge
+    case wakeRecovery
+    case weekPrimer
+    case endOfDayClose
+    case postCompletionMomentum
 
     public var id: String { rawValue }
 
@@ -20,16 +28,32 @@ public enum NotificationKind: String, Codable, CaseIterable, Sendable, Identifia
         case .taskDue: return "Task reminders"
         case .medication: return "Medication"
         case .focusBreak: return "Focus breaks"
+        case .transitionShield: return "Transition alerts"
+        case .waitingMode: return "Waiting-mode tasks"
+        case .patternInsight: return "Pattern insights"
+        case .initiationBridge: return "Initiation nudges"
+        case .wakeRecovery: return "Wake recovery"
+        case .weekPrimer: return "Week primer"
+        case .endOfDayClose: return "End of day close"
+        case .postCompletionMomentum: return "Completion momentum"
         }
     }
 
     public var priority: Int {
         switch self {
         case .medication: return 1
-        case .meetingPrep: return 2
-        case .taskDue: return 3
-        case .morningBriefing: return 4
-        case .brainHero: return 5
+        case .transitionShield: return 2
+        case .meetingPrep: return 3
+        case .taskDue: return 4
+        case .initiationBridge: return 5
+        case .waitingMode: return 6
+        case .wakeRecovery: return 6
+        case .postCompletionMomentum: return 6
+        case .endOfDayClose: return 7
+        case .weekPrimer: return 7
+        case .morningBriefing: return 8
+        case .patternInsight: return 9
+        case .brainHero: return 10
         case .focusBreak: return 0
         }
     }
@@ -47,6 +71,8 @@ public enum NotificationRoute: String, Codable, Sendable {
     case task
     case medication
     case focusSession
+    case emergency
+    case capture
 }
 
 // MARK: - Candidate & payload
@@ -59,6 +85,8 @@ public struct NotificationCandidate: Identifiable, Sendable, Equatable {
     public let fireDate: Date
     public let route: NotificationRoute
     public let routePayload: String?
+    public let proactiveKind: String?
+    public let anchorEventID: String?
 
     public init(
         id: String,
@@ -67,7 +95,9 @@ public struct NotificationCandidate: Identifiable, Sendable, Equatable {
         body: String,
         fireDate: Date,
         route: NotificationRoute,
-        routePayload: String? = nil
+        routePayload: String? = nil,
+        proactiveKind: String? = nil,
+        anchorEventID: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -76,6 +106,8 @@ public struct NotificationCandidate: Identifiable, Sendable, Equatable {
         self.fireDate = fireDate
         self.route = route
         self.routePayload = routePayload
+        self.proactiveKind = proactiveKind
+        self.anchorEventID = anchorEventID
     }
 }
 
@@ -84,6 +116,8 @@ public struct NotificationPayloadKeys {
     public static let route = "route"
     public static let routePayload = "routePayload"
     public static let candidateID = "candidateID"
+    public static let proactiveKind = "proactiveKind"
+    public static let proactiveActionID = "proactiveActionID"
 }
 
 public enum NotificationIdentifier {
@@ -178,6 +212,7 @@ public struct NotificationRefreshInput: Sendable {
     public var focusBreakFireDate: Date?
     public var focusSessionToken: String?
     public var userDisplayName: String
+    public var proactiveActions: [ProactiveAction]
 
     public init(
         now: Date = Date(),
@@ -190,7 +225,8 @@ public struct NotificationRefreshInput: Sendable {
         focusSessionActive: Bool = false,
         focusBreakFireDate: Date? = nil,
         focusSessionToken: String? = nil,
-        userDisplayName: String = ""
+        userDisplayName: String = "",
+        proactiveActions: [ProactiveAction] = []
     ) {
         self.now = now
         self.medications = medications
@@ -203,5 +239,6 @@ public struct NotificationRefreshInput: Sendable {
         self.focusBreakFireDate = focusBreakFireDate
         self.focusSessionToken = focusSessionToken
         self.userDisplayName = userDisplayName
+        self.proactiveActions = proactiveActions
     }
 }

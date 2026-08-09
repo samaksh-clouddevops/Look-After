@@ -31,22 +31,30 @@ public struct DayScheduleChange: Identifiable, Sendable, Equatable {
 }
 
 /// Preview payload returned before applying an AI-generated day plan.
+public enum DayPlanSource: Sendable, Equatable {
+    case ai(model: String)
+    case local
+}
+
 public struct DayRescheduleProposal: Identifiable, Sendable, Equatable {
     public let id: String
     public let summary: String
     public let changes: [DayScheduleChange]
     public let suggestions: [DayScheduleSuggestion]
+    public let source: DayPlanSource
 
     public init(
         id: String = UUID().uuidString,
         summary: String,
         changes: [DayScheduleChange],
-        suggestions: [DayScheduleSuggestion]
+        suggestions: [DayScheduleSuggestion],
+        source: DayPlanSource = .local
     ) {
         self.id = id
         self.summary = summary
         self.changes = changes
         self.suggestions = suggestions
+        self.source = source
     }
 
     public var movedCount: Int {

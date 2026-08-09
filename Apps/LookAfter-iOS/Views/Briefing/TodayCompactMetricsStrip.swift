@@ -1,6 +1,8 @@
 import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
+import LookAfterHealth
+import LookAfterData
 
 /// Compact horizontal metrics strip — timeline stays hero; details expand on demand.
 struct TodayCompactMetricsStrip: View {
@@ -256,32 +258,68 @@ struct TodayMetricDetailSheet: View {
     }
 
     private var sleepDetail: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let hours = briefingVM.sleep.totalHours {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+            if briefingVM.sleep.isAvailable, let hours = briefingVM.sleep.totalHours {
                 Text(formatSleep(hours))
                     .font(.system(size: 32, weight: .light))
                     .foregroundColor(DesignSystem.textPrimary)
-            }
-            if let quality = briefingVM.healthSnapshot.sleepQuality {
-                detailRow("Quality", value: quality)
-            }
-            if briefingVM.sleep.sleepDebtHours >= 1 {
-                detailRow("Sleep debt", value: String(format: "%.1fh", briefingVM.sleep.sleepDebtHours))
-            }
-            if let ideal = briefingVM.dayBriefing?.idealSleepLine {
-                detailRow("Ideal tonight", value: ideal.replacingOccurrences(of: "Ideal tonight: ", with: ""))
+                if let quality = briefingVM.healthSnapshot.sleepQuality {
+                    detailRow("Quality", value: quality)
+                }
+                if briefingVM.sleep.sleepDebtHours >= 1 {
+                    detailRow("Sleep debt", value: String(format: "%.1fh", briefingVM.sleep.sleepDebtHours))
+                }
+                if let ideal = briefingVM.dayBriefing?.idealSleepLine {
+                    detailRow("Ideal tonight", value: ideal.replacingOccurrences(of: "Ideal tonight: ", with: ""))
+                }
+            } else if let status = HealthSyncService.shared.connectionStatus, status.needsAttention {
+                HealthStatusBanner(
+                    status: status,
+                    style: .full,
+                    onPrimaryAction: {
+                        HealthStatusActionHandler.perform(
+                            status.primaryAction,
+                            onConnect: { },
+                            onSync: { Task { await HealthSyncService.shared.syncHealthData(userId: FirebaseManager.shared.resolvedUserId) } },
+                            onOpenSettings: { }
+                        )
+                    }
+                )
+            } else {
+                Text("No sleep data available yet.")
+                    .font(.system(size: 14))
+                    .foregroundColor(DesignSystem.textSecondary)
             }
         }
     }
 
     private var recoveryDetail: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(briefingVM.healthSnapshot.recoveryLabel)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(DesignSystem.textPrimary)
-            detailRow("Readiness", value: briefingVM.healthSnapshot.readinessBand)
-            if briefingVM.health.isAvailable, let hrv = briefingVM.health.hrv {
-                detailRow("HRV", value: "\(hrv) ms")
+        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+            if briefingVM.health.isAvailable || briefingVM.healthSnapshot.hasOvernightHealthSignal {
+                Text(briefingVM.healthSnapshot.recoveryLabel)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(DesignSystem.textPrimary)
+                detailRow("Readiness", value: briefingVM.healthSnapshot.readinessBand)
+                if briefingVM.health.isAvailable, let hrv = briefingVM.health.hrv {
+                    detailRow("HRV", value: "\(hrv) ms")
+                }
+            } else if let status = HealthSyncService.shared.connectionStatus, status.needsAttention {
+                HealthStatusBanner(
+                    status: status,
+                    style: .full,
+                    onPrimaryAction: {
+                        HealthStatusActionHandler.perform(
+                            status.primaryAction,
+                            onConnect: { },
+                            onSync: { Task { await HealthSyncService.shared.syncHealthData(userId: FirebaseManager.shared.resolvedUserId) } },
+                            onOpenSettings: { }
+                        )
+                    }
+                )
+            } else {
+                Text("Connect Apple Health for recovery metrics.")
+                    .font(.system(size: 14))
+                    .foregroundColor(DesignSystem.textSecondary)
             }
         }
     }

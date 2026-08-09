@@ -1,20 +1,24 @@
 import AVFoundation
 import Foundation
 import LookAfterCore
+import LookAfterData
 
-/// Natural speech via OpenAI's TTS API (tts-1-hd).
+/// Natural speech via the licensed auth proxy (OpenAI TTS on the server).
 enum OpenAICloudTTSService {
 
     enum TTSError: LocalizedError {
-        case missingAPIKey
+        case proxyUnavailable
+        case licenseRequired
         case emptyInput
         case badResponse(String)
         case playbackFailed(String)
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey:
-                return "Add an OpenAI API key in Settings → Voice & Speech, or set OPENAI_API_KEY."
+            case .proxyUnavailable:
+                return "Cloud voice requires the Look After AI proxy."
+            case .licenseRequired:
+                return "Activate your product key in Settings → License to use cloud voice."
             case .emptyInput: return "Nothing to speak."
             case .badResponse(let detail): return "Cloud voice failed: \(detail)"
             case .playbackFailed(let detail): return "Could not play voice: \(detail)"
@@ -22,35 +26,24 @@ enum OpenAICloudTTSService {
         }
     }
 
+    @MainActor
     static func synthesizeMP3(text: String) async throws -> Data {
-        guard let apiKey = SpeechVoiceSettings.cloudAPIKey else { throw TTSError.missingAPIKey }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw TTSError.emptyInput }
 
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/speech")!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body: [String: Any] = [
-            "model": "tts-1-hd",
-            "input": String(trimmed.prefix(4096)),
-            "voice": SpeechVoiceSettings.cloudVoice,
-            "response_format": "mp3",
-            "speed": cloudSpeed,
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw TTSError.badResponse("No HTTP response")
+        guard let proxy = LicenseManager.shared.proxyClient else {
+            throw TTSError.proxyUnavailable
         }
-        guard (200...299).contains(http.statusCode) else {
-            let snippet = String(data: data.prefix(200), encoding: .utf8) ?? "HTTP \(http.statusCode)"
-            throw TTSError.badResponse(snippet)
+        guard LicenseManager.shared.isLicensed else {
+            throw TTSError.licenseRequired
         }
-        guard !data.isEmpty else { throw TTSError.badResponse("Empty audio") }
-        return data
+
+        return try await proxy.speech(
+            input: String(trimmed.prefix(4096)),
+            voice: SpeechVoiceSettings.cloudVoice,
+            speed: cloudSpeed,
+            model: "tts-1-hd"
+        )
     }
 
     /// Maps user rate preference (0.35…0.65) into OpenAI's 0.25…4.0 speed band.

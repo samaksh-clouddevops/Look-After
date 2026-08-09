@@ -13,11 +13,22 @@ public final class SpeechRecognitionManager: ObservableObject {
     @Published public var permissionDenied: Bool = false
     @Published public var errorMessage: String?
     
+    /// When enabled, fires `onUtteranceComplete` after silence or a final recognition result.
+    public var autoCommitEnabled = false
+    /// Seconds of silence after speech before auto-committing the transcript.
+    public var autoCommitSilenceDuration: TimeInterval = 1.8
+    /// Called once per utterance with the final transcript (auto-commit or manual stop).
+    public var onUtteranceComplete: ((String) -> Void)?
+    
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var levelTimer: Timer?
+    private var silenceTimer: Timer?
+    private var lastTranscriptChange = Date()
+    private var hasReceivedSpeech = false
+    private var utteranceCommitted = false
     
     public init() {}
     
@@ -70,9 +81,12 @@ public final class SpeechRecognitionManager: ObservableObject {
             return
         }
         
-        stopListening()
+        stopListening(resetTranscript: false)
         transcript = ""
         errorMessage = nil
+        utteranceCommitted = false
+        hasReceivedSpeech = false
+        lastTranscriptChange = Date()
         
         do {
             #if os(iOS)
@@ -120,11 +134,23 @@ public final class SpeechRecognitionManager: ObservableObject {
             
             recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
                 Task { @MainActor in
+                    guard let self else { return }
                     if let result {
-                        self?.transcript = result.bestTranscription.formattedString
+                        self.transcript = result.bestTranscription.formattedString
+                        self.noteTranscriptActivity()
                     }
-                    if error != nil || (result?.isFinal ?? false) {
-                        self?.stopListening()
+                    if result?.isFinal == true {
+                        if self.autoCommitEnabled {
+                            self.completeUtterance()
+                        } else {
+                            self.stopListening()
+                        }
+                    } else if error != nil {
+                        if self.autoCommitEnabled, self.hasReceivedSpeech {
+                            self.completeUtterance()
+                        } else {
+                            self.stopListening()
+                        }
                     }
                 }
             }
@@ -133,6 +159,9 @@ public final class SpeechRecognitionManager: ObservableObject {
             try audioEngine.start()
             isListening = true
             startLevelAnimation()
+            if autoCommitEnabled {
+                startSilenceMonitoring()
+            }
         } catch {
             errorMessage = "Could not start recording: \(error.localizedDescription)"
             stopListening()
@@ -140,9 +169,11 @@ public final class SpeechRecognitionManager: ObservableObject {
     }
     
     /// Stop speech recognition and release audio resources.
-    public func stopListening() {
+    public func stopListening(resetTranscript: Bool = true) {
         levelTimer?.invalidate()
         levelTimer = nil
+        silenceTimer?.invalidate()
+        silenceTimer = nil
 
         recognitionRequest?.endAudio()
         recognitionRequest = nil
@@ -156,6 +187,9 @@ public final class SpeechRecognitionManager: ObservableObject {
 
         isListening = false
         audioLevels = Array(repeating: 0.1, count: 20)
+        if resetTranscript {
+            hasReceivedSpeech = false
+        }
 
         VoiceSessionKeepAlive.end("speech-recognition")
 
@@ -180,5 +214,40 @@ public final class SpeechRecognitionManager: ObservableObject {
                 }
             }
         }
+    }
+
+    private func noteTranscriptActivity() {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        hasReceivedSpeech = true
+        lastTranscriptChange = Date()
+    }
+
+    private func startSilenceMonitoring() {
+        silenceTimer?.invalidate()
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.checkSilenceTimeout()
+            }
+        }
+    }
+
+    private func checkSilenceTimeout() {
+        guard isListening, autoCommitEnabled, hasReceivedSpeech, !utteranceCommitted else { return }
+        let elapsed = Date().timeIntervalSince(lastTranscriptChange)
+        if elapsed >= autoCommitSilenceDuration {
+            completeUtterance()
+        }
+    }
+
+    private func completeUtterance() {
+        guard isListening, !utteranceCommitted else { return }
+        utteranceCommitted = true
+        silenceTimer?.invalidate()
+        silenceTimer = nil
+
+        let message = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        stopListening(resetTranscript: false)
+        onUtteranceComplete?(message)
     }
 }

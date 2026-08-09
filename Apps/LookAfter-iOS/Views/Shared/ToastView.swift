@@ -103,14 +103,20 @@ extension View {
         isShowing: Binding<Bool>,
         message: String,
         duration: TimeInterval = 4,
+        showsUndo: Bool = true,
         onUndo: @escaping () -> Void,
+        onView: (() -> Void)? = nil,
+        viewLabel: String = "View",
         onDismiss: (() -> Void)? = nil
     ) -> some View {
         modifier(UndoToastModifier(
             isShowing: isShowing,
             message: message,
             duration: duration,
+            showsUndo: showsUndo,
             onUndo: onUndo,
+            onView: onView,
+            viewLabel: viewLabel,
             onDismiss: onDismiss
         ))
     }
@@ -122,7 +128,10 @@ struct UndoToastModifier: ViewModifier {
     @Binding var isShowing: Bool
     let message: String
     var duration: TimeInterval = 4
+    var showsUndo: Bool = true
     let onUndo: () -> Void
+    var onView: (() -> Void)?
+    var viewLabel: String = "View"
     var onDismiss: (() -> Void)?
 
     @State private var dismissToken = UUID()
@@ -144,16 +153,31 @@ struct UndoToastModifier: ViewModifier {
 
                     Spacer(minLength: 8)
 
-                    Button("Undo") {
-                        dismissToken = UUID()
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isShowing = false
+                    if let onView {
+                        Button(viewLabel) {
+                            dismissToken = UUID()
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isShowing = false
+                            }
+                            onView()
                         }
-                        onUndo()
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundColor(DesignSystem.textSecondary)
+                        .frame(minHeight: 44)
                     }
-                    .font(.dsCaption(weight: .semibold))
-                    .foregroundColor(DesignSystem.accentPrimary)
-                    .frame(minWidth: 44, minHeight: 44)
+
+                    if showsUndo {
+                        Button("Undo") {
+                            dismissToken = UUID()
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isShowing = false
+                            }
+                            onUndo()
+                        }
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundColor(DesignSystem.accentPrimary)
+                        .frame(minWidth: 44, minHeight: 44)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -170,6 +194,7 @@ struct UndoToastModifier: ViewModifier {
                 .padding(.top, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .zIndex(999)
+                .accessibilityIdentifier("capture-outcome-toast")
                 .task(id: dismissToken) {
                     try? await Task.sleep(for: .seconds(duration))
                     guard !Task.isCancelled else { return }

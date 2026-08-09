@@ -192,6 +192,9 @@ public final class ParkedTaskRecoveryService {
             }
             cursor = end.addingTimeInterval(TimeInterval(ConflictResolutionCascade.defaultBufferMinutes * 60))
         }
+        if !placed.isEmpty, !userId.isEmpty {
+            tasksVM.requestDebouncedScheduleReconcile(userId: userId, immediate: true)
+        }
         return placed
     }
 

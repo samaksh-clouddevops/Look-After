@@ -25,7 +25,7 @@ public enum PlanningResponseSource: String, Codable, Sendable, Equatable {
 public struct PlanningConversationTurn: Identifiable, Sendable, Equatable {
     public let id: String
     public let role: PlanningTurnRole
-    public let text: String
+    public var text: String
     public let createdAt: Date
     /// User message this assistant reply was based on — used for AI redesign.
     public var sourceUserMessage: String?
@@ -56,11 +56,46 @@ public struct PlanningConversationTurn: Identifiable, Sendable, Equatable {
 
 // MARK: - LLM structured response
 
+public struct PlanVariant: Identifiable, Codable, Sendable, Equatable {
+    public var id: String
+    public var label: String
+    public var summary: String
+    public var tradeoffs: [String]
+    public var scheduleChanges: [DayReplanScheduleChange]
+    public var timelineDeltas: [PlanningTimelineDelta]
+    public var recommended: Bool
+
+    public init(
+        id: String = UUID().uuidString,
+        label: String,
+        summary: String,
+        tradeoffs: [String] = [],
+        scheduleChanges: [DayReplanScheduleChange] = [],
+        timelineDeltas: [PlanningTimelineDelta] = [],
+        recommended: Bool = false
+    ) {
+        self.id = id
+        self.label = label
+        self.summary = summary
+        self.tradeoffs = tradeoffs
+        self.scheduleChanges = scheduleChanges
+        self.timelineDeltas = timelineDeltas
+        self.recommended = recommended
+    }
+}
+
+public enum PlanningNegotiationPhase: String, Sendable, Equatable {
+    case idle
+    case proposingVariants
+    case awaitingSelection
+}
+
 public struct PlanningTurnResponse: Sendable, Equatable {
     public var reply: String
     public var thinkingSteps: [String]
     public var mutations: [PlanMutation]
     public var negotiation: PlanningNegotiation?
+    public var planVariants: [PlanVariant]?
     public var multiDayDraft: MultiDayPlanDraft?
     public var multiDayPlanning: PlanningNegotiation?
     public var timelineDeltas: [PlanningTimelineDelta]
@@ -72,6 +107,7 @@ public struct PlanningTurnResponse: Sendable, Equatable {
         thinkingSteps: [String] = [],
         mutations: [PlanMutation] = [],
         negotiation: PlanningNegotiation? = nil,
+        planVariants: [PlanVariant]? = nil,
         multiDayDraft: MultiDayPlanDraft? = nil,
         multiDayPlanning: PlanningNegotiation? = nil,
         timelineDeltas: [PlanningTimelineDelta] = [],
@@ -81,6 +117,7 @@ public struct PlanningTurnResponse: Sendable, Equatable {
         self.thinkingSteps = thinkingSteps
         self.mutations = mutations
         self.negotiation = negotiation
+        self.planVariants = planVariants
         self.multiDayDraft = multiDayDraft
         self.multiDayPlanning = multiDayPlanning
         self.timelineDeltas = timelineDeltas
@@ -90,7 +127,7 @@ public struct PlanningTurnResponse: Sendable, Equatable {
 
 extension PlanningTurnResponse: Codable {
     enum CodingKeys: String, CodingKey {
-        case reply, thinkingSteps, mutations, negotiation, multiDayDraft, multiDayPlanning, timelineDeltas
+        case reply, thinkingSteps, mutations, negotiation, planVariants, multiDayDraft, multiDayPlanning, timelineDeltas
     }
 
     public init(from decoder: Decoder) throws {
@@ -99,6 +136,7 @@ extension PlanningTurnResponse: Codable {
         thinkingSteps = try container.decodeIfPresent([String].self, forKey: .thinkingSteps) ?? []
         mutations = try container.decodeIfPresent([PlanMutation].self, forKey: .mutations) ?? []
         negotiation = try container.decodeIfPresent(PlanningNegotiation.self, forKey: .negotiation)
+        planVariants = try container.decodeIfPresent([PlanVariant].self, forKey: .planVariants)
         multiDayDraft = try container.decodeIfPresent(MultiDayPlanDraft.self, forKey: .multiDayDraft)
         multiDayPlanning = try container.decodeIfPresent(PlanningNegotiation.self, forKey: .multiDayPlanning)
         timelineDeltas = try container.decodeIfPresent([PlanningTimelineDelta].self, forKey: .timelineDeltas) ?? []
@@ -111,6 +149,7 @@ extension PlanningTurnResponse: Codable {
         try container.encode(thinkingSteps, forKey: .thinkingSteps)
         try container.encode(mutations, forKey: .mutations)
         try container.encodeIfPresent(negotiation, forKey: .negotiation)
+        try container.encodeIfPresent(planVariants, forKey: .planVariants)
         try container.encodeIfPresent(multiDayDraft, forKey: .multiDayDraft)
         try container.encodeIfPresent(multiDayPlanning, forKey: .multiDayPlanning)
         try container.encode(timelineDeltas, forKey: .timelineDeltas)
@@ -120,14 +159,23 @@ extension PlanningTurnResponse: Codable {
 public struct PlanningNegotiation: Codable, Sendable, Equatable {
     public var question: String
     public var options: [String]
+    /// Maps option label at same index to a pre-built plan variant id.
+    public var optionVariantIDs: [String]?
 
-    public init(question: String, options: [String]) {
+    public init(question: String, options: [String], optionVariantIDs: [String]? = nil) {
         self.question = question
         self.options = options
+        self.optionVariantIDs = optionVariantIDs
     }
 
     public var isActive: Bool {
         !question.isEmpty && !options.isEmpty
+    }
+
+    public func variantID(forOption option: String) -> String? {
+        guard let ids = optionVariantIDs, ids.count == options.count,
+              let index = options.firstIndex(of: option) else { return nil }
+        return ids[index]
     }
 }
 
@@ -443,10 +491,22 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
     public var isFixedEvent: Bool
     /// Semantic time lock for interactive physics (defaults flexible).
     public var timeConstraint: TimeConstraint
+    public var scheduleKind: TimelineScheduleKind = .fixedWindow
+    /// Display-only slot from planner when task could not be persisted (overcommitted day).
+    public var isSuggestedSlot: Bool = false
+    public var suggestedStart: Date?
+    /// Flexible task with no user-set clock slot — rail shows a gap-anchor time.
+    public var isUnslottedFlexible: Bool = false
 
     public var canReschedule: Bool {
         guard taskId != nil, !isCompleted else { return false }
         if isFixedEvent || timeConstraint == .anchored, !isPast { return false }
+        return timeConstraint.isSchedulerMovable
+    }
+
+    public var canRemoveFromTimeline: Bool {
+        guard taskId != nil, !isCompleted else { return false }
+        if isFixedEvent || timeConstraint == .anchored { return false }
         return timeConstraint.isSchedulerMovable
     }
 
@@ -471,7 +531,11 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         estimatedMinutes: Int? = nil,
         completedAt: Date? = nil,
         isFixedEvent: Bool = false,
-        timeConstraint: TimeConstraint = .flexible
+        timeConstraint: TimeConstraint = .flexible,
+        scheduleKind: TimelineScheduleKind = .fixedWindow,
+        isSuggestedSlot: Bool = false,
+        suggestedStart: Date? = nil,
+        isUnslottedFlexible: Bool = false
     ) {
         self.id = id
         self.sortDate = sortDate
@@ -496,6 +560,10 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         self.completedAt = completedAt
         self.isFixedEvent = isFixedEvent
         self.timeConstraint = isFixedEvent && timeConstraint == .flexible ? .anchored : timeConstraint
+        self.scheduleKind = scheduleKind
+        self.isSuggestedSlot = isSuggestedSlot
+        self.suggestedStart = suggestedStart
+        self.isUnslottedFlexible = isUnslottedFlexible
     }
 }
 

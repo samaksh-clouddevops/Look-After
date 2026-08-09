@@ -135,7 +135,7 @@ public final class ADHDViewModel: ObservableObject {
     /// Start a focus/pomodoro session — uses the scheduled window when set, else task estimate.
     /// Performance: flips `isFocusSessionActive` immediately so UI can paint; timer starts next run-loop.
     public func startFocusSession(task: LifeTask, durationMinutes: Int? = nil) {
-        PerformanceMonitor.measure("ADHDViewModel.startFocusSession", warnAfterMs: 16) {
+        PerformanceMonitor.signpostInterval("FocusTimerOpen", warnAfterMs: 16) {
             let duration = durationMinutes ?? Self.focusDuration(for: task, defaultMinutes: focusDurationMinutes)
             cancelCountdownIfNeeded()
             stopFocusTick()

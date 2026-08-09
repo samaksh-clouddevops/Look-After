@@ -45,7 +45,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
 
         VoiceSessionKeepAlive.begin("speech-synthesis")
 
-        if SpeechVoiceSettings.provider == .cloud, SpeechVoiceSettings.cloudAPIKey != nil {
+        if SpeechVoiceSettings.isCloudTTSAvailable {
             speakCloud(prepared)
             return
         }
@@ -124,7 +124,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
     }
 
     private func refreshActiveVoiceLabel() {
-        if SpeechVoiceSettings.provider == .cloud, SpeechVoiceSettings.cloudAPIKey != nil {
+        if SpeechVoiceSettings.isCloudTTSAvailable {
             let voice = SpeechVoiceSettings.cloudVoice
             activeVoiceName = SpeechVoiceSettings.cloudVoices.first(where: { $0.id == voice })?.label ?? voice
         } else {

@@ -23,17 +23,11 @@ public enum LifeStateProgressResolver {
         healthSnapshot: BriefingHealthSnapshot,
         sleep: BriefingSleepData = BriefingSleepData(isAvailable: false)
     ) -> Progress {
-        let energy: Double
-        if healthSnapshot.hasOvernightHealthSignal {
-            energy = Double(healthSnapshot.energyPercent) / 100.0
-        } else {
-            energy = 0
-        }
-
+        let energy = Double(healthSnapshot.energyPercent) / 100.0
         let focus = Double(healthSnapshot.readinessScore) / 100.0
 
         let wellbeing: Double
-        if healthSnapshot.hasOvernightHealthSignal {
+        if healthSnapshot.hasOvernightHealthSignal || healthSnapshot.recoveryPercent > 0 {
             wellbeing = Double(healthSnapshot.recoveryPercent) / 100.0
         } else if sleep.isAvailable, let hours = sleep.totalHours {
             // When recovery isn't available yet, mirror the Sleep tile until overnight metrics land.

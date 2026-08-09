@@ -70,6 +70,9 @@ actor NotificationScheduler {
         if let payload = candidate.routePayload {
             content.userInfo[NotificationPayloadKeys.routePayload] = payload
         }
+        if let proactiveKind = candidate.proactiveKind {
+            content.userInfo[NotificationPayloadKeys.proactiveKind] = proactiveKind
+        }
 
         let components = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute, .second],

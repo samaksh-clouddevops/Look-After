@@ -10,6 +10,10 @@ public final class GLMService: @unchecked Sendable {
     private let usageLogger: GLMUsageLogger
     private let session: URLSession
 
+    /// When set and license is active, chat/complete go through the Azure proxy (no local API keys).
+    public var authProxyClient: AuthProxyClient?
+    public var licenseStatusProvider: (any LicenseStatusProviding)?
+
     public init(
         configurationStore: GLMConfigurationStore = .shared,
         keyManager: GLMKeyManager = .shared,
@@ -39,9 +43,20 @@ public final class GLMService: @unchecked Sendable {
 
     public var keyManagerAccess: GLMKeyManager { keyManager }
 
-    /// True when at least one enabled GLM API key is configured.
+    /// True when the licensed auth proxy is ready for AI calls.
     public var hasConfiguredAPIKey: Bool {
-        keyManager.allRecords().contains(where: \.isEnabled)
+        usesLicensedProxy
+    }
+
+    public var usesLicensedProxy: Bool {
+        authProxyClient != nil && (licenseStatusProvider?.isLicensed == true)
+    }
+
+    private func requireLicensedProxy() throws -> AuthProxyClient {
+        guard authProxyClient != nil else { throw GLMServiceError.proxyNotConfigured }
+        guard licenseStatusProvider?.isLicensed == true else { throw GLMServiceError.licenseRequired }
+        guard let proxy = authProxyClient else { throw GLMServiceError.proxyNotConfigured }
+        return proxy
     }
 
 #if DEBUG
@@ -57,33 +72,37 @@ public final class GLMService: @unchecked Sendable {
         _ message: String,
         systemPrompt: String? = nil,
         history: [ChatMessage] = [],
-        tier: AIModelTier = .premium
+        tier: AIModelTier = .premium,
+        maxTokens: Int = 4096
     ) async throws -> String {
 #if DEBUG
         if let debugSendMessageHandler {
             return try await debugSendMessageHandler(message, systemPrompt, history, tier)
         }
 #endif
+        let proxy = try requireLicensedProxy()
         let config = configurationStore.load()
         var lastError: Error?
-
         for attemptTier in config.fallbackTiers(startingAt: tier) {
             do {
-                let response = try await chatCompletion(
-                    messages: buildMessages(message: message, systemPrompt: systemPrompt, history: history),
-                    temperature: 0.7,
-                    maxTokens: 4096,
-                    tier: attemptTier
-                )
-                guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    continue
+                let historyPayload = history.map { msg -> [String: String] in
+                    let role = msg.role == .assistant ? "assistant" : (msg.role == .system ? "system" : "user")
+                    return ["role": role, "content": msg.content]
                 }
-                return response.content
+                let result = try await proxy.chat(
+                    message: message,
+                    systemPrompt: systemPrompt,
+                    history: historyPayload,
+                    model: config.model(for: attemptTier),
+                    maxTokens: maxTokens
+                )
+                let text = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                return result.content
             } catch {
                 lastError = error
             }
         }
-
         throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 
@@ -98,27 +117,24 @@ public final class GLMService: @unchecked Sendable {
             return try await debugCompleteHandler(prompt, tier)
         }
 #endif
-        let system = systemPrompt ?? LookAfterPrompts.structuredOutputSystem
+        let proxy = try requireLicensedProxy()
         let config = configurationStore.load()
+        let system = systemPrompt ?? LookAfterPrompts.structuredOutputSystem
         var lastError: Error?
-
         for attemptTier in config.fallbackTiers(startingAt: tier) {
             do {
-                let response = try await chatCompletion(
-                    messages: buildMessages(message: prompt, systemPrompt: system, history: []),
-                    temperature: 0.3,
-                    maxTokens: 8192,
-                    tier: attemptTier
+                let result = try await proxy.complete(
+                    prompt: prompt,
+                    systemPrompt: system,
+                    model: config.model(for: attemptTier)
                 )
-                guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    continue
-                }
-                return response.content
+                let text = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                return result.content
             } catch {
                 lastError = error
             }
         }
-
         throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 
@@ -132,74 +148,14 @@ public final class GLMService: @unchecked Sendable {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let config = self.configurationStore.load()
-                    guard config.streamingEnabled else {
-                        let text = try await self.sendMessage(
-                            message,
-                            systemPrompt: systemPrompt,
-                            history: history,
-                            tier: tier
-                        )
-                        continuation.yield(text)
-                        continuation.finish()
-                        return
-                    }
-
-                    let messages = self.buildMessages(message: message, systemPrompt: systemPrompt, history: history)
-                    let primaryModel = config.model(for: tier)
-                    let models = config.modelsToAttempt(primary: primaryModel)
-                    var lastError: Error?
-
-                    for model in models {
-                        do {
-                            try await self.executeWithRotation { apiKey, keyId in
-                                let started = Date()
-                                var promptTokens = 0
-                                var completionTokens = 0
-                                var resolvedModel = model
-
-                                for try await chunk in self.streamCompletion(
-                                    apiKey: apiKey,
-                                    configuration: config,
-                                    model: model,
-                                    messages: messages,
-                                    temperature: 0.7,
-                                    maxTokens: 4096
-                                ) {
-                                    if let token = chunk.content, !token.isEmpty {
-                                        continuation.yield(token)
-                                    }
-                                    if let m = chunk.model { resolvedModel = m }
-                                    promptTokens = chunk.promptTokens ?? promptTokens
-                                    completionTokens = chunk.completionTokens ?? completionTokens
-                                }
-
-                                let latency = Int(Date().timeIntervalSince(started) * 1000)
-                                self.keyManager.recordSuccess(keyId: keyId)
-                                self.usageLogger.log(GLMUsageRecord(
-                                    model: resolvedModel,
-                                    promptTokens: promptTokens,
-                                    completionTokens: completionTokens,
-                                    estimatedCostUSD: GLMUsageLogger.estimateCostUSD(
-                                        model: resolvedModel,
-                                        promptTokens: promptTokens,
-                                        completionTokens: completionTokens
-                                    ),
-                                    latencyMs: latency,
-                                    success: true
-                                ))
-                            }
-                            continuation.finish()
-                            return
-                        } catch {
-                            lastError = error
-                            guard model != models.last, Self.shouldAttemptModelFallback(after: error) else {
-                                throw error
-                            }
-                        }
-                    }
-
-                    throw lastError ?? GLMServiceError.parseError("Empty model response")
+                    let text = try await self.sendMessage(
+                        message,
+                        systemPrompt: systemPrompt,
+                        history: history,
+                        tier: tier
+                    )
+                    continuation.yield(text)
+                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }

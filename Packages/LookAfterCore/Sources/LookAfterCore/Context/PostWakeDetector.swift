@@ -31,6 +31,7 @@ public enum PostWakeDetector {
     public enum DetectionSource: String, Sendable, Equatable {
         case healthKit
         case overnightGap
+        case explicitUser
         case none
     }
 
@@ -50,6 +51,18 @@ public enum PostWakeDetector {
         if let dismissed = input.dismissedOnDay,
            calendar.isDate(dismissed, inSameDayAs: input.now) {
             return .inactive
+        }
+
+        if let explicit = PostWakeSessionStore.explicitWakeTime(for: input.now, calendar: calendar) {
+            let minutes = Int(input.now.timeIntervalSince(explicit) / 60)
+            if minutes >= 0, minutes <= postWakeWindowMinutes {
+                return Result(
+                    isPostWake: true,
+                    wakeTime: explicit,
+                    minutesSinceWake: minutes,
+                    source: .explicitUser
+                )
+            }
         }
 
         if let wake = input.wakeTime, calendar.isDate(wake, inSameDayAs: input.now) {
@@ -84,6 +97,7 @@ public enum PostWakeDetector {
 public enum PostWakeSessionStore {
     private static let lastBackgroundKey = "lifeos_post_wake_last_background"
     private static let dismissedDayKey = "lifeos_post_wake_dismissed_day"
+    private static let explicitWakeKey = "lifeos_post_wake_explicit_wake"
 
     public static func recordBackground(at date: Date = Date()) {
         UserDefaults.standard.set(date.timeIntervalSince1970, forKey: lastBackgroundKey)
@@ -108,8 +122,21 @@ public enum PostWakeSessionStore {
         return Date(timeIntervalSince1970: value)
     }
 
+    public static func recordExplicitWake(at date: Date = Date()) {
+        UserDefaults.standard.set(date.timeIntervalSince1970, forKey: explicitWakeKey)
+    }
+
+    public static func explicitWakeTime(for day: Date = Date(), calendar: Calendar = .current) -> Date? {
+        let value = UserDefaults.standard.double(forKey: explicitWakeKey)
+        guard value > 0 else { return nil }
+        let wake = Date(timeIntervalSince1970: value)
+        guard calendar.isDate(wake, inSameDayAs: day) else { return nil }
+        return wake
+    }
+
     public static func resetForFactoryReset() {
         UserDefaults.standard.removeObject(forKey: lastBackgroundKey)
         UserDefaults.standard.removeObject(forKey: dismissedDayKey)
+        UserDefaults.standard.removeObject(forKey: explicitWakeKey)
     }
 }

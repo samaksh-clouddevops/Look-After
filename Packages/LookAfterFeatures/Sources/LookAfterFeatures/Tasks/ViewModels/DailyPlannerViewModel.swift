@@ -91,16 +91,24 @@ public final class DailyPlannerViewModel: ObservableObject {
         defer { isScheduling = false }
 
         do {
+            let tier: AIModelTier = TaskManagementPreferences.highQualitySchedulingEnabled ? .premium : .standard
+            let modelName = glm.configuration.model(for: tier)
             let response = try await glm.complete(
                 prompt: schedulingPrompt(healthContext: healthContext, dayLabel: dayLabel),
                 systemPrompt: LookAfterPrompts.dailySchedulerSystem,
-                tier: .standard
+                tier: tier
             )
-            let suggestions = try decodeSuggestions(from: response)
+            let decoded = try decodeSuggestions(from: response)
+            let allowedIDs = Set(schedulableFlexibleTasks().map(\.id))
+            let suggestions = DayScheduleSuggestionValidator.validated(decoded, allowedTaskIDs: allowedIDs)
             let summary = dayLabel == "tomorrow"
                 ? "AI organized tomorrow's flexible tasks around fixed commitments."
                 : "AI reorganized your flexible tasks around fixed commitments."
-            rescheduleProposal = buildProposal(from: suggestions, summary: summary)
+            rescheduleProposal = buildProposal(
+                from: suggestions,
+                summary: summary,
+                source: .ai(model: modelName)
+            )
         } catch {
             rescheduleProposal = buildLocalProposal()
         }
@@ -165,7 +173,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         await proposeDayReschedule(userId: userId, healthContext: healthContext)
     }
 
-    public func applyRescheduleProposal(userId: String) async {
+    public func applyRescheduleProposal(userId: String, tasksViewModel: TasksViewModel? = nil) async {
         guard let proposal = rescheduleProposal else { return }
         let wasPlanningTomorrow = !calendar.isDateInToday(planningDay)
         isScheduling = true
@@ -173,7 +181,16 @@ public final class DailyPlannerViewModel: ObservableObject {
         defer { isScheduling = false }
 
         do {
-            try await apply(changes: proposal.changes)
+            if let tasksViewModel {
+                try await tasksViewModel.scheduleMutation.applyDayScheduleChanges(
+                    proposal.changes,
+                    userId: userId,
+                    planningDay: planningDay,
+                    calendar: calendar
+                )
+            } else {
+                try await apply(changes: proposal.changes)
+            }
             try? await calendarSyncService.syncToCalendar(tasks: todayTasks)
             message = wasPlanningTomorrow ? "Tomorrow's plan is ready." : "Your updated plan is live."
             rescheduleProposal = nil
@@ -312,7 +329,11 @@ public final class DailyPlannerViewModel: ObservableObject {
         }
     }
 
-    private func buildProposal(from suggestions: [DayScheduleSuggestion], summary: String) -> DayRescheduleProposal {
+    private func buildProposal(
+        from suggestions: [DayScheduleSuggestion],
+        summary: String,
+        source: DayPlanSource = .local
+    ) -> DayRescheduleProposal {
         let taskByID = Dictionary(uniqueKeysWithValues: todayTasks.map { ($0.id, $0) })
         let movable = schedulableFlexibleTasks()
         var merged = suggestions.filter { suggestion in
@@ -379,7 +400,8 @@ public final class DailyPlannerViewModel: ObservableObject {
         return DayRescheduleProposal(
             summary: summary,
             changes: changes,
-            suggestions: merged
+            suggestions: merged,
+            source: source
         )
     }
 
@@ -391,7 +413,8 @@ public final class DailyPlannerViewModel: ObservableObject {
         )
         return buildProposal(
             from: suggestions,
-            summary: "\(UserFacingCopy.productName) created a focused local plan (AI planner unavailable)."
+            summary: "\(UserFacingCopy.productName) created a focused local plan (AI planner unavailable).",
+            source: .local
         )
     }
 

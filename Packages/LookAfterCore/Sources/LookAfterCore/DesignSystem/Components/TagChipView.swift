@@ -21,7 +21,7 @@ public struct TagChipView: View {
 
     public var body: some View {
         HStack(spacing: DesignSystem.spacingXS) {
-            if let icon {
+            if let icon, !icon.isEmpty {
                 Image(systemName: icon)
                     .font(.dsChip())
             }

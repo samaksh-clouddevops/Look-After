@@ -161,7 +161,8 @@ public enum DaySlotAllocator {
     }
 
     private static func resolveStart(_ input: ResolveStartInput) -> Date? {
-        if let preferred = input.preferred,
+        let preferred = sanitizedPreferred(input.preferred, calendar: input.calendar)
+        if let preferred,
            preferred >= input.now,
            fits(
             preferred,
@@ -181,6 +182,14 @@ public enum DaySlotAllocator {
             now: input.now,
             calendar: input.calendar
         )
+    }
+
+    private static func sanitizedPreferred(_ preferred: Date?, calendar: Calendar) -> Date? {
+        guard let preferred else { return nil }
+        if TaskScheduleInterval.isMidnightTimeOfDay(preferred, calendar: calendar) {
+            return nil
+        }
+        return preferred
     }
 
     private static func nextOpenSlot(

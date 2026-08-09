@@ -4,13 +4,15 @@ import LookAfterCore
 import LookAfterAI
 import LookAfterData
 import LookAfterHealth
+import LookAfterFeatures
 
-/// Settings View — configure GLM API key, health tracking, ADHD features, and profile.
+/// Settings View — health tracking, ADHD features, license, and profile.
 struct SettingsView: View {
     @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("enableHealth") private var enableHealth: Bool = true
+    @AppStorage("gmail_integration_enabled") private var gmailIntegrationEnabled: Bool = false
     @State private var lifeProfile = UserLifeProfileStore.load()
     @State private var lifeProfileMarkdown: String = ""
     @State private var structuredProfileSections = StructuredLifeProfileSections()
@@ -36,9 +38,11 @@ struct SettingsView: View {
     @AppStorage(SpeechVoiceSettings.rateKey) private var speechRate = 0.48
     @AppStorage(SpeechVoiceSettings.pitchKey) private var speechPitch = 1.0
     @AppStorage(SpeechVoiceSettings.autoSpeakRepliesKey) private var autoSpeakReplies = true
+    @AppStorage(SpeechVoiceSettings.autoSpeakProactiveKey) private var autoSpeakProactive = false
     @AppStorage(SpeechVoiceSettings.spokenStyleKey) private var preferSpokenStyle = true
+    @AppStorage("lookafter.accountability.enabled") private var accountabilityEnabled = false
+    @AppStorage(AccountabilitySettings.contactNameKey) private var accountabilityContactName = ""
     @AppStorage(SpeechVoiceSettings.cloudVoiceKey) private var cloudVoice = "nova"
-    @State private var cloudAPIKeyDraft = SpeechVoiceSettings.cloudAPIKey ?? ""
     @StateObject private var speechPreview = PlanningSpeechSynthesizer()
     @StateObject private var notificationPermission = NotificationPermissionService.shared
     @State private var notificationPreferences = NotificationPreferencesStore.load()
@@ -70,8 +74,8 @@ struct SettingsView: View {
     }
     
     @StateObject private var healthSync = HealthSyncService.shared
-    @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
     @State private var aiUsageSummary = GLMUsageSummary()
+    @State private var showHealthVerification = false
     
     private let focusChallenges = ADHDFocusChallenge.allCases
     
@@ -218,6 +222,18 @@ struct SettingsView: View {
                 })
 
                 Section(content: {
+                    Toggle("Accountability nudges", isOn: $accountabilityEnabled)
+                    TextField("Contact name", text: $accountabilityContactName)
+                        .textInputAutocapitalization(.words)
+                }, header: {
+                    Text("Accountability")
+                }, footer: {
+                    Text("Optional local reminder to ping someone when a micro-start window opens. Share sheet only — no SMS from the app.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.textMuted)
+                })
+
+                Section(content: {
                     Button(action: startAppTour) {
                         Label("Start tour", systemImage: "map")
                     }
@@ -226,7 +242,7 @@ struct SettingsView: View {
                 }, header: {
                     Text("Help")
                 }, footer: {
-                    Text("Walk through Briefing, Today, Capture, Brain, and profile — useful if you started before the tour existed or want a refresher.")
+                    Text("Walk through Briefing, Today, Review, Capture, Brain, and You — useful if you started before the tour existed or want a refresher.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 })
@@ -299,22 +315,14 @@ struct SettingsView: View {
                     }
 
                     if speechProviderRaw == SpeechVoiceProvider.cloud.rawValue {
-                        SecureField("OpenAI API key", text: $cloudAPIKeyDraft)
-                            .textContentType(.password)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .onChange(of: cloudAPIKeyDraft) { _, newValue in
-                                SpeechVoiceSettings.cloudAPIKey = newValue
-                            }
-
                         Picker("Cloud voice", selection: $cloudVoice) {
                             ForEach(SpeechVoiceSettings.cloudVoices, id: \.id) { voice in
                                 Text(voice.label).tag(voice.id)
                             }
                         }
 
-                        if SpeechVoiceSettings.cloudAPIKey == nil {
-                            Text("Add a key above, or set \(SpeechVoiceSettings.cloudAPIKeyEnvVar) in your environment.")
+                        if !LicenseManager.shared.isLicensed {
+                            Text("Activate your product key in Settings → License to use cloud voice.")
                                 .font(.system(size: 12))
                                 .foregroundColor(DesignSystem.warning)
                         }
@@ -350,6 +358,7 @@ struct SettingsView: View {
                     }
 
                     Toggle("Auto-speak AI replies", isOn: $autoSpeakReplies)
+                    Toggle("Auto-speak proactive alerts", isOn: $autoSpeakProactive)
                     Toggle("Write replies for speech", isOn: $preferSpokenStyle)
 
                     Button {
@@ -372,7 +381,7 @@ struct SettingsView: View {
                     Text("Voice & Speech")
                 }, footer: {
                     if speechProviderRaw == SpeechVoiceProvider.cloud.rawValue {
-                        Text("Cloud uses OpenAI's neural TTS (tts-1-hd) — much more natural than on-device Apple voices. Requires a separate OpenAI API key (not your GLM key). Falls back to Apple if the request fails.")
+                        Text("Cloud voice uses OpenAI neural TTS through the licensed secure proxy — no API keys on your device.")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
                     } else {
@@ -398,21 +407,30 @@ struct SettingsView: View {
                     }
                     .listRowBackground(DesignSystem.backgroundSecondary)
 
-                    if let active = apiKeysVM.activeKey {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Active API Key")
-                                    .font(.system(size: 14, weight: .semibold, design: .default))
-                                Text("\(active.name) · \(active.maskedDisplay)")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(DesignSystem.textSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: active.status.iconName)
-                                .foregroundColor(active.status == .active ? DesignSystem.success : DesignSystem.warning)
+                    Toggle(isOn: $gmailIntegrationEnabled) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Gmail triage", systemImage: "envelope.badge")
+                            Text("Read unread mail for AI triage and travel alerts")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textSecondary)
                         }
-                        .listRowBackground(DesignSystem.backgroundSecondary)
                     }
+                    .onChange(of: gmailIntegrationEnabled) { _, enabled in
+                        GmailIntegrationSettings.isEnabled = enabled
+                    }
+                    .listRowBackground(DesignSystem.backgroundSecondary)
+
+                    NavigationLink(destination: {
+                        LicenseSettingsView()
+                    }, label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("License", systemImage: "checkmark.seal.fill")
+                            Text(LicenseManager.shared.isLicensed ? "Licensed AI via secure proxy" : "Enter product key to unlock AI")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textSecondary)
+                        }
+                    })
+                    .listRowBackground(DesignSystem.backgroundSecondary)
 
                     NavigationLink(destination: {
                         GLMUsageSettingsView()
@@ -434,21 +452,44 @@ struct SettingsView: View {
                     })
                     .listRowBackground(DesignSystem.backgroundSecondary)
 
-                    NavigationLink(destination: {
-                        APIKeysSettingsView()
-                    }, label: {
-                        Label("Manage API Keys", systemImage: "key.fill")
-                    })
-                    .listRowBackground(DesignSystem.backgroundSecondary)
-
-                    Text("Add a GLM API key in API Keys to enable AI features, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
+                    Text(LicenseManager.shared.isLicensed
+                         ? "All AI runs through the secure proxy. Keys never leave the server."
+                         : "Redeem a product key to unlock AI and cloud voice.")
                         .font(.system(size: 12, design: .default))
                         .foregroundColor(DesignSystem.textMuted)
                         .listRowBackground(DesignSystem.backgroundSecondary)
+
+                    Toggle(isOn: Binding(
+                        get: { TaskManagementPreferences.highQualitySchedulingEnabled },
+                        set: { TaskManagementPreferences.highQualitySchedulingEnabled = $0 }
+                    )) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("High-quality scheduling")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Uses GLM 5.2 (premium tier) for Adjust schedule previews.")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textMuted)
+                        }
+                    }
+                    .listRowBackground(DesignSystem.backgroundSecondary)
+
+                    Toggle(isOn: Binding(
+                        get: { TaskManagementPreferences.smarterFocusTipsEnabled },
+                        set: { TaskManagementPreferences.smarterFocusTipsEnabled = $0 }
+                    )) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Smarter focus tips")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Optional AI refinement on All Tasks duration labels.")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textMuted)
+                        }
+                    }
+                    .listRowBackground(DesignSystem.backgroundSecondary)
                 } header: {
                     Text("AI Engine")
                 } footer: {
-                    Text("Keys are stored securely in the Keychain.")
+                    Text("Premium = \(GLMService.shared.configuration.defaultModel). Standard = \(GLMService.shared.configuration.standardModel). Economy = \(GLMService.shared.configuration.economyModel).")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 }
@@ -505,6 +546,32 @@ struct SettingsView: View {
                 
                 if enableHealth {
                     Section(content: {
+                        if let status = healthSync.connectionStatus {
+                            HStack(alignment: .top, spacing: DesignSystem.spacingSM) {
+                                Image(systemName: settingsStatusIcon(status.kind))
+                                    .font(.system(size: 22))
+                                    .foregroundColor(settingsStatusColor(status.kind))
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(status.headline)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(DesignSystem.textPrimary)
+                                    Text(status.explanation)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(DesignSystem.textMuted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .listRowBackground(DesignSystem.backgroundSecondary)
+                            .accessibilityIdentifier("settings-health-status-row")
+
+                            if status.needsAttention {
+                                Button(action: { showHealthVerification = true }) {
+                                    Label("What's wrong?", systemImage: "questionmark.circle")
+                                }
+                                .listRowBackground(DesignSystem.backgroundSecondary)
+                            }
+                        }
+
                         HStack {
                             Image(systemName: "applewatch.watchface")
                                 .font(.system(size: 28))
@@ -559,6 +626,22 @@ struct SettingsView: View {
                             }
                         }
                         .disabled(healthSync.isSyncing)
+                        .listRowBackground(DesignSystem.backgroundSecondary)
+
+                        Button(action: openHealthApp) {
+                            Label("Open Health app", systemImage: "heart.text.square.fill")
+                        }
+                        .listRowBackground(DesignSystem.backgroundSecondary)
+
+                        NavigationLink(destination: {
+                            HealthTroubleshootingView(
+                                healthSync: healthSync,
+                                userId: FirebaseManager.shared.resolvedUserId
+                            )
+                            .environmentObject(shell)
+                        }, label: {
+                            Label("Help with Watch data", systemImage: "lifepreserver")
+                        })
                         .listRowBackground(DesignSystem.backgroundSecondary)
                     }, header: {
                         Text("Health Data Sync")
@@ -741,7 +824,6 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.large)
             #endif
             .onAppear {
-                apiKeysVM.refresh()
                 refreshAIUsageSummary()
                 lifeProfile = UserLifeProfileStore.load()
                 notificationPreferences = NotificationPreferencesStore.load()
@@ -752,6 +834,49 @@ struct SettingsView: View {
                 }
                 adhdFocusChallengeRaw = ADHDFocusChallenge.normalizeStorage().rawValue
                 Task { await notificationPermission.refreshStatus() }
+                let userId = FirebaseManager.shared.resolvedUserId
+                healthSync.refreshConnectionStatus(userId: userId, healthSummary: shell.brainVM.healthSummary)
+            }
+            .sheet(isPresented: $showHealthVerification) {
+                NavigationStack {
+                    ScrollView {
+                        VStack(spacing: DesignSystem.spacingMD) {
+                            if let status = healthSync.connectionStatus {
+                                HealthStatusBanner(
+                                    status: status,
+                                    style: .full,
+                                    onPrimaryAction: {
+                                        HealthStatusActionHandler.perform(
+                                            status.primaryAction,
+                                            onConnect: { showHealthVerification = false },
+                                            onSync: {
+                                                Task {
+                                                    let userId = FirebaseManager.shared.resolvedUserId
+                                                    await healthSync.syncHealthData(userId: userId)
+                                                    await refreshAfterHealthSync(userId: userId)
+                                                }
+                                            },
+                                            onOpenSettings: { }
+                                        )
+                                    }
+                                )
+                            }
+                            if let report = healthSync.verificationReport {
+                                HealthVerificationReportView(report: report)
+                            }
+                        }
+                        .padding(DesignSystem.spacingLG)
+                    }
+                    .background(DesignSystem.backgroundPrimary.ignoresSafeArea())
+                    .navigationTitle("What's wrong?")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showHealthVerification = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
             }
             .onChange(of: structuredProfileSections.personality) { _, _ in syncStructuredProfileToStore() }
             .onChange(of: structuredProfileSections.adhdFocusPatterns) { _, _ in syncStructuredProfileToStore() }
@@ -894,11 +1019,34 @@ struct SettingsView: View {
 
     private func refreshAfterHealthSync(userId: String) async {
         guard !userId.isEmpty, healthSync.syncPhase == .complete else { return }
+        healthSync.refreshConnectionStatus(userId: userId, healthSummary: shell.brainVM.healthSummary)
         await shell.refreshContext(
             userId: userId,
             userName: UserLifeProfileStore.resolvedDisplayName(),
             peakStartHour: UserLifeProfileStore.load().peakStartHour
         )
         shell.refreshWidgetData()
+    }
+
+    private func openHealthApp() {
+        if let url = HealthAppLinks.healthAppURL {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func settingsStatusIcon(_ kind: HealthConnectionKind) -> String {
+        switch kind {
+        case .allGood: return "checkmark.circle.fill"
+        case .partialData, .syncStale, .waitingForData: return "exclamationmark.triangle.fill"
+        case .accessBlocked, .trackingOff, .notSetUp: return "xmark.circle.fill"
+        }
+    }
+
+    private func settingsStatusColor(_ kind: HealthConnectionKind) -> Color {
+        switch kind {
+        case .allGood: return DesignSystem.success
+        case .partialData, .syncStale, .waitingForData: return DesignSystem.warning
+        case .accessBlocked, .trackingOff, .notSetUp: return DesignSystem.error
+        }
     }
 }

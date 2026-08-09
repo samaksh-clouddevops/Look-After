@@ -245,7 +245,7 @@ public final class CascadeActionLog: @unchecked Sendable {
             actions.append(action)
         }
         if !records.isEmpty {
-            history.append(contentsOf: records)
+            history = CascadeHistoryDedup.merge(incoming: records, into: history, calendar: calendar)
             pruneHistoryLocked(now: now, calendar: calendar)
         }
         let snapshot = actions
@@ -265,7 +265,7 @@ public final class CascadeActionLog: @unchecked Sendable {
     public func appendHistory(_ records: [CascadeActionRecord], now: Date = Date(), calendar: Calendar = .current) {
         guard !records.isEmpty else { return }
         lock.lock()
-        history.append(contentsOf: records)
+        history = CascadeHistoryDedup.merge(incoming: records, into: history, calendar: calendar)
         pruneHistoryLocked(now: now, calendar: calendar)
         let snap = history
         lock.unlock()
@@ -339,6 +339,6 @@ public final class CascadeActionLog: @unchecked Sendable {
         guard let historyURL,
               let data = try? Data(contentsOf: historyURL),
               let decoded = try? JSONDecoder().decode([CascadeActionRecord].self, from: data) else { return }
-        history = decoded
+        history = CascadeHistoryDedup.compact(decoded)
     }
 }

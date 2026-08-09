@@ -251,7 +251,9 @@ public enum DayScheduleReconciler {
         updated.scheduledEndTime = end
         updated.estimatedMinutes = commitment.defaultMinutes
         if commitment.isNonNegotiable || block.protection == .neverSchedule || block.protection == .priorityOnly {
-            updated.schedulingMode = .fixedTime
+            updated.applyTimeConstraint(.anchored)
+        } else if updated.schedulingModeValue == .fixedTime {
+            updated.applyTimeConstraint(.flexible)
         }
         return updated
     }

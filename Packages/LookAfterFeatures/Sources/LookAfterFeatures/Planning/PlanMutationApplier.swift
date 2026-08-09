@@ -44,13 +44,15 @@ public struct PlanMutationApplier {
         userId: String,
         medications: inout [Medication],
         userMessage: String? = nil,
-        lifeProfile: UserLifeProfile = UserLifeProfile()
+        lifeProfile: UserLifeProfile = UserLifeProfile(),
+        deferReconcile: Bool = false
     ) async -> ApplyResult {
         var result = ApplyResult()
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: lifeProfile)
-        let taskByID = Dictionary(uniqueKeysWithValues: tasksVM.tasks.map { ($0.id, $0) })
+        let allTasks = tasksVM.schedulingContext
+        let taskByID = Dictionary(uniqueKeysWithValues: allTasks.map { ($0.id, $0) })
         let taskByTitle = Dictionary(
-            tasksVM.tasks.map { ($0.title.lowercased(), $0) },
+            allTasks.map { ($0.title.lowercased(), $0) },
             uniquingKeysWith: { first, _ in first }
         )
         var pendingCreates: [PendingCreate] = []
@@ -76,8 +78,24 @@ public struct PlanMutationApplier {
                     continue
                 }
                 if let existing = TaskDuplicateMatcher.findMatch(for: title, in: tasksVM.tasks) {
+                    if let hour = mutation.startHour, let minute = mutation.startMinute,
+                       var task = tasksVM.tasks.first(where: { $0.id == existing.id }),
+                       !task.isFixedTimeEvent,
+                       let scheduled = PlanningSchedulePolicy.validatedSchedule(
+                           hour: hour,
+                           minute: minute,
+                           workHours: workHours
+                       ) {
+                        task.scheduledTime = scheduled
+                        task.scheduledDate = calendar.startOfDay(for: Date())
+                        task.scheduledEndTime = scheduled.addingTimeInterval(TimeInterval(task.estimatedMinutes * 60))
+                        task.updatedAt = Date()
+                        await tasksVM.updateTaskAndPersist(task)
+                        result.appliedCount += 1
+                        continue
+                    }
                     result.reusedTasks.append(.init(requestedTitle: title, existingTitle: existing.title))
-                    result.skippedReasons.append("Skipped duplicate: \"\(title)\" matches existing \"\(existing.title)\"")
+                    result.appliedCount += 1
                     continue
                 }
                 let minutes = TaskDurationPolicy.resolve(
@@ -110,22 +128,43 @@ public struct PlanMutationApplier {
 
             case .rescheduleTask:
                 guard let id = resolvedTaskID(mutation: mutation, taskByID: taskByID, taskByTitle: taskByTitle),
-                      var task = taskByID[id] ?? tasksVM.tasks.first(where: { $0.id == id }),
-                      !task.isFixedTimeEvent,
-                      let hour = mutation.startHour, let minute = mutation.startMinute else {
+                      var task = taskByID[id] ?? allTasks.first(where: { $0.id == id }),
+                      !task.isFixedTimeEvent else {
                     result.skippedReasons.append("Could not reschedule task")
                     continue
                 }
-                guard let scheduled = PlanningSchedulePolicy.validatedSchedule(
-                    hour: hour,
-                    minute: minute,
-                    workHours: workHours
-                ) else {
+
+                let dayStart = calendar.startOfDay(for: Date())
+                task.scheduledDate = dayStart
+
+                let scheduled: Date?
+                if let hour = mutation.startHour, let minute = mutation.startMinute {
+                    scheduled = PlanningSchedulePolicy.validatedSchedule(
+                        hour: hour,
+                        minute: minute,
+                        workHours: workHours
+                    )
+                } else {
+                    let allocation = DaySlotAllocator.allocate(
+                        requests: [
+                            DaySlotAllocator.Request(
+                                id: task.id,
+                                estimatedMinutes: task.estimatedMinutes,
+                                priority: task.priority,
+                                preferredStart: nil
+                            )
+                        ],
+                        existingTasks: schedulingPool,
+                        workHours: workHours
+                    )
+                    scheduled = allocation.first?.scheduledTime
+                }
+
+                guard let scheduled else {
                     result.skippedReasons.append("Could not reschedule \"\(task.title)\" — outside work hours or past")
                     continue
                 }
-                let dayStart = calendar.startOfDay(for: Date())
-                task.scheduledDate = dayStart
+
                 task.scheduledTime = scheduled
                 let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
                 task.scheduledEndTime = scheduled.addingTimeInterval(TimeInterval(duration * 60))
@@ -134,11 +173,15 @@ public struct PlanMutationApplier {
                 if let window = TaskScheduleInterval.window(for: task, on: dayStart, calendar: calendar),
                    TaskScheduleInterval.intervals(from: others, on: dayStart, calendar: calendar)
                     .contains(where: { window.overlaps($0) }) {
-                    result.skippedReasons.append("Could not reschedule \"\(task.title)\" — overlaps an existing task")
-                    continue
+                    if let shifted = shiftToAvoidOverlap(task: task, others: others, dayStart: dayStart, workHours: workHours) {
+                        task = shifted
+                    } else {
+                        result.skippedReasons.append("Could not reschedule \"\(task.title)\" — overlaps an existing task")
+                        continue
+                    }
                 }
 
-                tasksVM.updateTask(task)
+                await tasksVM.updateTaskAndPersist(task)
                 schedulingPool.removeAll { $0.id == task.id }
                 schedulingPool.append(task)
                 result.appliedCount += 1
@@ -156,6 +199,15 @@ public struct PlanMutationApplier {
                 task.scheduledEndTime = nil
                 tasksVM.updateTask(task)
                 result.appliedCount += 1
+                Task {
+                    if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
+                        NotificationCenter.default.post(
+                            name: .deferralRecoveryScriptReady,
+                            object: nil,
+                            userInfo: ["script": script]
+                        )
+                    }
+                }
 
             case .completeTask:
                 guard let id = resolvedTaskID(mutation: mutation, taskByID: taskByID, taskByTitle: taskByTitle),
@@ -188,6 +240,15 @@ public struct PlanMutationApplier {
                 result.appliedCount += 1
 
             case .captureNote:
+                if let note = mutation.captureNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                    let request = CaptureRequest(
+                        text: note,
+                        hintedIntent: .task,
+                        source: .planning,
+                        contextHints: CaptureContextHints(screen: "planning")
+                    )
+                    _ = await CaptureRouter.shared.route(request, userId: userId)
+                }
                 result.appliedCount += 1
 
             case .createMultiDayTask:
@@ -251,7 +312,10 @@ public struct PlanMutationApplier {
             }
         }
 
-        await tasksVM.reconcileTodaySchedule(userId: userId)
+        if !deferReconcile {
+            tasksVM.requestForceReplan()
+            await tasksVM.reconcileTodaySchedule(userId: userId)
+        }
 
         return result
     }
@@ -339,5 +403,31 @@ public struct PlanMutationApplier {
             return area
         }
         return .work
+    }
+
+    private func shiftToAvoidOverlap(
+        task: LifeTask,
+        others: [LifeTask],
+        dayStart: Date,
+        workHours: PlanningSchedulePolicy.WorkHours
+    ) -> LifeTask? {
+        guard var start = task.scheduledTime else { return nil }
+        let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        for _ in 0..<12 {
+            start = start.addingTimeInterval(15 * 60)
+            guard let validated = PlanningSchedulePolicy.validatedSchedule(
+                hour: calendar.component(.hour, from: start),
+                minute: calendar.component(.minute, from: start),
+                workHours: workHours
+            ) else { break }
+            var candidate = task
+            candidate.scheduledTime = validated
+            candidate.scheduledEndTime = validated.addingTimeInterval(TimeInterval(duration * 60))
+            guard let window = TaskScheduleInterval.window(for: candidate, on: dayStart, calendar: calendar) else { continue }
+            let overlaps = TaskScheduleInterval.intervals(from: others, on: dayStart, calendar: calendar)
+                .contains(where: { window.overlaps($0) })
+            if !overlaps { return candidate }
+        }
+        return nil
     }
 }

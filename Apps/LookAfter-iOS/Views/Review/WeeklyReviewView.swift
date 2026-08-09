@@ -1,11 +1,14 @@
 import SwiftUI
 import LookAfterCore
+import LookAfterFeatures
 
 // MARK: - Weekly Review View
 
 /// Weekly Debrief surface — pure summary in, calm narrative out.
 struct WeeklyReviewView: View {
     let summary: WeeklyReviewSummary
+    var aiRetrospective: WeeklyAIRetrospective?
+    var onRefresh: (() async -> Void)?
 
     private let columns = [
         GridItem(.flexible(), spacing: DesignSystem.spacingSM),
@@ -18,6 +21,9 @@ struct WeeklyReviewView: View {
                 header
                 if hasWeeklyActivity {
                     heroCard
+                    if let retro = aiRetrospective {
+                        aiRetrospectiveCard(retro)
+                    }
                     metricsGrid
                     executiveSummaryCard
                 } else {
@@ -27,6 +33,9 @@ struct WeeklyReviewView: View {
             .padding(.horizontal, DesignSystem.spacingMD)
             .padding(.top, DesignSystem.spacingMD)
             .padding(.bottom, 48)
+        }
+        .refreshable {
+            await onRefresh?()
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .accessibilityIdentifier("screen-weekly-review")
@@ -45,6 +54,8 @@ struct WeeklyReviewView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+        .featureTourAnchor(.reviewHero, cornerRadius: DesignSystem.radiusMD)
+        .id(AppFeatureTourAnchorID.reviewHero.rawValue)
     }
 
     // MARK: - Hero (Time-Bank Balance)
@@ -86,16 +97,22 @@ struct WeeklyReviewView: View {
     }
 
     private var equilibriumBadge: some View {
-        Text("\(summary.equilibriumPercent)%")
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundColor(DesignSystem.accentOnPrimary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(DesignSystem.accentPrimary)
-            )
-            .accessibilityLabel("Equilibrium score \(summary.equilibriumPercent) percent")
+        VStack(alignment: .trailing, spacing: 2) {
+            Text("Equilibrium")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(DesignSystem.textMuted)
+                .tracking(0.4)
+            Text("\(summary.equilibriumPercent)%")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(DesignSystem.accentOnPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(DesignSystem.accentPrimary)
+                )
+        }
+        .accessibilityLabel("Equilibrium score \(summary.equilibriumPercent) percent")
     }
 
     // MARK: - Metrics grid
@@ -163,6 +180,35 @@ struct WeeklyReviewView: View {
     }
 
     // MARK: - Executive Summary
+
+    private func aiRetrospectiveCard(_ retro: WeeklyAIRetrospective) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            HStack {
+                Text("AI Retrospective")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(DesignSystem.textPrimary)
+                Spacer()
+                Text(retro.source == "ai" ? "AI" : "Offline")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(DesignSystem.textMuted)
+            }
+            Text(retro.narrative)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(DesignSystem.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if !retro.experimentForNextWeek.isEmpty {
+                Text("Try this week: \(retro.experimentForNextWeek)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.accentPrimary)
+            }
+        }
+        .padding(DesignSystem.spacingLG)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                .fill(DesignSystem.backgroundSecondary)
+        )
+    }
 
     private var executiveSummaryCard: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {

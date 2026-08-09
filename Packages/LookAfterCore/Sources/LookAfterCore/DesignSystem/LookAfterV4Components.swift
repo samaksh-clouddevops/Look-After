@@ -431,8 +431,11 @@ public struct LABriefingGlanceRow: View {
                     Text(title)
                         .textStyleCardTitle()
                         .multilineTextAlignment(.leading)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                     Text(timeRange)
                         .textStyleCaption()
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 

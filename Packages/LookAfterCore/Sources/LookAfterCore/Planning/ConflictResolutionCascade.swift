@@ -118,7 +118,8 @@ public enum ConflictResolutionCascade {
             if rl != rr { return rl > rr }
             let ls = TaskScheduleInterval.window(for: lhs, on: dayStart, calendar: calendar)?.start ?? .distantFuture
             let rs = TaskScheduleInterval.window(for: rhs, on: dayStart, calendar: calendar)?.start ?? .distantFuture
-            return ls < rs
+            if ls != rs { return ls < rs }
+            return lhs.id < rhs.id
         }
 
         var blocked: [TaskScheduleInterval] = []
@@ -164,6 +165,12 @@ public enum ConflictResolutionCascade {
                 decisions.append(.init(taskID: task.id, action: .keep, reason: "no_overlap"))
                 byID[task.id] = task
                 continue
+            }
+
+            // Mis-anchored meal routines must shift — not preserve overlap as anchored.
+            if task.timeConstraintValue == .anchored,
+               OnboardingTaskSeeder.isMealRoutineTitle(task.title) {
+                task.applyTimeConstraint(.flexible)
             }
 
             let hash = BehavioralSemanticHash.make(for: task)
@@ -314,8 +321,8 @@ public enum ConflictResolutionCascade {
                 continue
             }
 
-            // Stage 4: park + recovery queue (fluid / flexible only).
-            // Anchored blocks keep their clock — overlap is shown, not stripped to "Flexible today".
+            // Stage 5: park + recovery queue (fluid / flexible only).
+            // True anchored immovables keep their clock when no shift path exists.
             if task.timeConstraintValue == .anchored {
                 blocked.append(interval)
                 blocked.sort { $0.start < $1.start }
@@ -369,6 +376,11 @@ public enum ConflictResolutionCascade {
     }
 
     public static func canMove(_ task: LifeTask) -> Bool {
+        // Meals always yield to anchored commitments — even when user-placed.
+        if OnboardingTaskSeeder.isMealRoutineTitle(task.title) { return true }
+        if TaskConstraintAlignment.isUserPlaced(task) { return false }
+        if task.isLifeCommitmentTask, task.timeConstraintValue == .anchored { return false }
+        if task.timeConstraintValue == .anchored { return false }
         switch task.timeConstraintValue {
         case .anchored:
             return false

@@ -76,21 +76,15 @@ final class AppFeatureTourCoordinator: ObservableObject {
 
         if !force, let restored = AppFeatureTourStore.restoreProgress() {
             stepIndex = min(restored.stepIndex, max(steps.count - 1, 0))
-            requestedTab = currentStep.tab
             isActive = true
-            persistProgress()
-            requestScrollIfNeeded()
-            scheduleLayoutRecompute(delay: 0.2)
+            applyStepNavigation()
             return
         }
 
         guard force || AppFeatureTourStore.shouldPresent else { return }
         stepIndex = 0
-        requestedTab = currentStep.tab
         isActive = true
-        persistProgress()
-        requestScrollIfNeeded()
-        scheduleLayoutRecompute(delay: 0.2)
+        applyStepNavigation()
     }
 
     func advance() {
@@ -100,21 +94,13 @@ final class AppFeatureTourCoordinator: ObservableObject {
             return
         }
         stepIndex += 1
-        requestedTab = currentStep.tab
-        layoutProposal = nil
-        persistProgress()
-        requestScrollIfNeeded()
-        scheduleLayoutRecompute(delay: 0.2)
+        applyStepNavigation()
     }
 
     func goBack() {
         guard isActive, stepIndex > 0 else { return }
         stepIndex -= 1
-        requestedTab = currentStep.tab
-        layoutProposal = nil
-        persistProgress()
-        requestScrollIfNeeded()
-        scheduleLayoutRecompute(delay: 0.2)
+        applyStepNavigation()
     }
 
     func skip() { complete() }
@@ -127,6 +113,41 @@ final class AppFeatureTourCoordinator: ObservableObject {
         requestedTab = nil
         layoutProposal = nil
         isAwaitingScroll = false
+        anchors.removeAll()
+    }
+
+    /// Applies tab + layout for the current step. Steps with `tab: nil` keep the visible screen (e.g. Capture highlights bottom nav only).
+    private func applyStepNavigation() {
+        layoutProposal = nil
+        if let tab = currentStep.tab {
+            requestedTab = tab
+        }
+        pruneAnchorsForCurrentStep()
+        persistProgress()
+        requestScrollIfNeeded()
+        scheduleLayoutRecompute(delay: stepSettleDelay)
+    }
+
+    private var stepSettleDelay: TimeInterval {
+        switch currentStep.id {
+        case "review", "brain", "you":
+            return 0.32
+        case "briefing-health", "today", "assistant":
+            return 0.22
+        default:
+            return 0.1
+        }
+    }
+
+    private static let tabBarAnchorIDs: Set<AppFeatureTourAnchorID> = [
+        .tabBriefing, .tabToday, .tabReview, .tabCapture, .tabBrain, .tabYou
+    ]
+
+    private func pruneAnchorsForCurrentStep() {
+        let keep = Set(
+            Self.tabBarAnchorIDs + [currentStep.anchor].compactMap { $0 }
+        )
+        anchors = anchors.filter { keep.contains($0.key) }
     }
 
     // MARK: - Anchor API
@@ -158,7 +179,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
         anchors = next
         guard isActive else { return }
         if anchorMeaningfullyChanged(from: prior, to: next, focus: currentStep.anchor) {
-            scheduleLayoutRecompute(delay: 0.12)
+            scheduleLayoutRecompute(delay: 0.06)
         }
     }
 
@@ -176,7 +197,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
         guard !anchorGeometryEqual(anchors[id], geometry) else { return }
         anchors[id] = geometry
         guard isActive, currentStep.anchor == id else { return }
-        scheduleLayoutRecompute(delay: 0.12)
+        scheduleLayoutRecompute(delay: 0.06)
     }
 
     func clearAnchor(_ id: AppFeatureTourAnchorID) {
@@ -322,10 +343,10 @@ final class AppFeatureTourCoordinator: ObservableObject {
 
     func scheduleLayoutRecomputeIfActive() {
         guard isActive else { return }
-        scheduleLayoutRecompute(delay: 0.12)
+        scheduleLayoutRecompute(delay: 0.06)
     }
 
-    private func scheduleLayoutRecompute(delay: TimeInterval = 0.12) {
+    private func scheduleLayoutRecompute(delay: TimeInterval = 0.06) {
         layoutWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.recomputeLayout()
@@ -340,7 +361,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
         postScrollRequest(anchor: anchor, offset: 0)
         scrollWaitTask?.cancel()
         scrollWaitTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
+            try? await Task.sleep(for: .milliseconds(160))
             guard let self, !Task.isCancelled else { return }
             self.isAwaitingScroll = false
             self.recomputeLayout()
@@ -349,7 +370,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
 
     private func postScrollRequest(anchor: AppFeatureTourAnchorID, offset: CGFloat) {
         let now = Date()
-        guard now.timeIntervalSince(lastScrollPostAt) > 0.45 else { return }
+        guard now.timeIntervalSince(lastScrollPostAt) > 0.2 else { return }
         lastScrollPostAt = now
         NotificationCenter.default.post(
             name: .tourScrollToAnchor,

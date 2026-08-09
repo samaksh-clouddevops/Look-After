@@ -12,15 +12,6 @@ struct GLMConfigurationSettingsView: View {
 
             List {
                 Section(content: {
-                    TextField("Base URL", text: $viewModel.baseURL)
-                        .font(.system(size: 13, design: .monospaced))
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
-                        .autocorrectionDisabled()
-                        .onSubmit { viewModel.save() }
-                        .listRowBackground(Color.white.opacity(0.05))
-
                     TextField("Premium model", text: $viewModel.defaultModel)
                         .font(.system(size: 13, design: .monospaced))
                         #if os(iOS)
@@ -67,7 +58,7 @@ struct GLMConfigurationSettingsView: View {
                 }, header: {
                     Text("Model tiers")
                 }, footer: {
-                    Text("Premium: coach and day planning. Standard: scheduling and inbox. Economy: task analysis and auto-fill. Failed economy/standard calls automatically retry on stronger tiers.")
+                    Text("Model names are sent to the licensed secure proxy. Premium: coach and day planning (default \(GLMConfiguration.defaultModel)). Standard: \(GLMConfiguration.defaultStandardModel). Economy: \(GLMConfiguration.defaultEconomyModel). Failed economy/standard calls automatically retry on stronger tiers.")
                         .font(.system(size: 11))
                         .foregroundColor(DesignSystem.textMuted)
                 })
@@ -103,7 +94,6 @@ struct GLMConfigurationSettingsView: View {
 
 @MainActor
 final class GLMConfigurationSettingsViewModel: ObservableObject {
-    @Published var baseURL: String = GLMConfiguration.defaultBaseURL
     @Published var defaultModel: String = GLMConfiguration.defaultModel
     @Published var standardModel: String = GLMConfiguration.defaultStandardModel
     @Published var economyModel: String = GLMConfiguration.defaultEconomyModel
@@ -115,7 +105,6 @@ final class GLMConfigurationSettingsViewModel: ObservableObject {
 
     func refresh() {
         let config = glm.configuration
-        baseURL = config.baseURL
         defaultModel = config.defaultModel
         standardModel = config.standardModel
         economyModel = config.economyModel
@@ -126,7 +115,6 @@ final class GLMConfigurationSettingsViewModel: ObservableObject {
 
     func save() {
         var config = glm.configuration
-        config.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         config.defaultModel = defaultModel.trimmingCharacters(in: .whitespacesAndNewlines)
         config.standardModel = standardModel.trimmingCharacters(in: .whitespacesAndNewlines)
         config.economyModel = economyModel.trimmingCharacters(in: .whitespacesAndNewlines)

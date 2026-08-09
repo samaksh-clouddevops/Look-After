@@ -8,6 +8,7 @@ struct ReschedulePreviewSheet: View {
     let proposal: DayRescheduleProposal
     let userId: String
 
+    @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -27,6 +28,10 @@ struct ReschedulePreviewSheet: View {
                                 .font(.dsCaption(weight: .semibold))
                                 .foregroundColor(DesignSystem.accentPrimary)
                         }
+
+                        Text(planSourceLabel)
+                            .font(.dsCaption())
+                            .foregroundColor(DesignSystem.textMuted)
 
                         ForEach(proposal.changes) { change in
                             changeRow(change)
@@ -61,7 +66,10 @@ struct ReschedulePreviewSheet: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Apply") {
                         Task {
-                            await plannerVM.applyRescheduleProposal(userId: userId)
+                            await plannerVM.applyRescheduleProposal(
+                                userId: userId,
+                                tasksViewModel: shell.tasksVM
+                            )
                             dismiss()
                         }
                     }
@@ -70,6 +78,15 @@ struct ReschedulePreviewSheet: View {
             }
         }
         .accessibilityIdentifier("screen-reschedule-preview")
+    }
+
+    private var planSourceLabel: String {
+        switch proposal.source {
+        case .ai(let model):
+            return "Planned with \(model)"
+        case .local:
+            return "Local planner (no AI)"
+        }
     }
 
     @ViewBuilder

@@ -13,6 +13,7 @@ public struct LookAfterRootCanvas: View {
     @State private var showCoach = false
     @State private var showDailyPlan = false
     @State private var showTasks = false
+    @State private var taskListInitialFilter: TaskFilter = .all
     @State private var showInsights = false
     @State private var showDecideForMe = false
     @State private var decideForMeResult: DecideForMeResult?
@@ -23,8 +24,18 @@ public struct LookAfterRootCanvas: View {
     @State private var showHealthDetail = false
     @State private var showMedication = false
     @State private var showFullTimeline = false
+    @State private var fullTimelineScrollDisabled = false
     @State private var showBrainCapture = false
     @State private var showInbox = false
+    @State private var captureSource: CaptureSource = .bottomNav
+    @State private var captureContextHints = CaptureContextHints()
+    @State private var showCaptureToast = false
+    @State private var captureToastMessage = ""
+    @State private var captureUndoTaskId: String?
+    @State private var captureUndoInboxId: String?
+    @State private var captureViewAction: (() -> Void)?
+    @State private var captureViewLabel = "View"
+    @State private var lastFocusedTaskId: String?
     @State private var showWelcomeToast = false
     @State private var welcomeToastMessage = ""
     @AppStorage(FlowDirectorFeature.userDefaultsKey) private var enableFlowDirector = false
@@ -40,6 +51,14 @@ public struct LookAfterRootCanvas: View {
     @State private var selectedTab: LookAfterTab = .briefing
     @State private var tabBeforeFocus: LookAfterTab = .briefing
     @State private var showTomorrowPlanPreview = false
+    @State private var weeklyReviewSummaryCache: WeeklyReviewSummary?
+    @State private var weeklyAIRetrospective: WeeklyAIRetrospective?
+    @State private var accountabilityShareMessage = ""
+    @State private var showAccountabilityShare = false
+    @State private var weeklyReviewManualRefreshGeneration = 0
+    @State private var showPostWakeSheet = false
+    @State private var showGoingOutSheet = false
+    @State private var showContextualReplanPreview = false
 
     public init() {}
 
@@ -113,13 +132,17 @@ public struct LookAfterRootCanvas: View {
     }
 
     public var body: some View {
+        canvasWithChrome
+    }
+
+    private var mainCanvasStack: some View {
         ZStack {
             PremiumBackground()
 
             tabContent
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if showsBottomNav {
-                        LookAfterBottomNav(selection: $selectedTab, onCapture: { showBrainCapture = true })
+                        LookAfterBottomNav(selection: $selectedTab, onCapture: { openCapture(source: .bottomNav) })
                     }
                 }
 
@@ -178,6 +201,11 @@ public struct LookAfterRootCanvas: View {
                     .zIndex(200)
             }
         }
+    }
+
+    @ViewBuilder
+    private var canvasWithChrome: some View {
+        mainCanvasStack
         .onChange(of: featureTour.requestedTab) { _, tab in
             guard let tab else { return }
             selectedTab = tab
@@ -198,56 +226,15 @@ public struct LookAfterRootCanvas: View {
             DailyPlanView(userId: firebase.resolvedUserId)
         }
         .sheet(isPresented: $showFullTimeline) {
-            NavigationStack {
-                ScrollView {
-                    ExecutiveLiveTimelineView(
-                        rows: planningVM.timelineRows,
-                        thinkingStep: planningVM.visibleThinkingStep,
-                        isProcessing: planningVM.isProcessing,
-                        title: "Full timeline",
-                        onViewAll: { showFullTimeline = false },
-                        onCompleteTask: { taskId in
-                            Task { await completeTimelineTask(taskId: taskId) }
-                        },
-                        onUncompleteTask: { taskId in
-                            Task { await uncompleteTimelineTask(taskId: taskId) }
-                        },
-                        onStartTask: { taskId in
-                            if let task = resolveTimelineTask(id: taskId) {
-                                showFullTimeline = false
-                                startBrainHeroTask(task, instant: true)
-                            }
-                        },
-                        onEditTask: { taskId in
-                            if let task = resolveTimelineTask(id: taskId) {
-                                shell.tasksVM.selectedTask = task
-                                showFullTimeline = false
-                                showTasks = true
-                            }
-                        },
-                        onRescheduleTask: { taskId in
-                            Task { await rescheduleTimelineTask(taskId: taskId) }
-                        }
-                    )
-                    .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
-                    .padding(.vertical, DesignSystem.spacingMD)
-                }
-                .background(PremiumBackground())
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Done") { showFullTimeline = false }
-                    }
-                }
-            }
-            .environmentObject(shell)
+            fullTimelineSheet
         }
         .sheet(isPresented: $showTasks) {
             TaskListView(
                 tasksVM: shell.tasksVM,
                 adhdVM: shell.adhdVM,
                 brainVM: shell.brainVM,
-                userId: firebase.resolvedUserId
+                userId: firebase.resolvedUserId,
+                initialFilter: taskListInitialFilter
             )
         }
         .sheet(isPresented: $showInsights) {
@@ -284,8 +271,17 @@ public struct LookAfterRootCanvas: View {
             PhysiologicalResetView()
         }
         .sheet(isPresented: $showHealthDetail) {
-            HealthDetailView()
-                .environmentObject(shell)
+            HealthDetailView(
+                userId: firebase.resolvedUserId,
+                onLogMood: {
+                    showHealthDetail = false
+                    openCapture(
+                        source: .healthDetail,
+                        hints: CaptureContextHints(screen: "healthDetail", preselectedIntent: .mood)
+                    )
+                }
+            )
+            .environmentObject(shell)
         }
         .sheet(isPresented: $showMedication) {
             NavigationStack {
@@ -293,11 +289,17 @@ public struct LookAfterRootCanvas: View {
             }
         }
         .sheet(isPresented: $showBrainCapture) {
-            ExecutiveCaptureSheet(userId: firebase.resolvedUserId, onOpenInbox: {
-                showBrainCapture = false
-                showInbox = true
-            })
-                .environmentObject(shell)
+            ExecutiveCaptureSheet(
+                userId: firebase.resolvedUserId,
+                source: captureSource,
+                contextHints: captureContextHints,
+                onOpenInbox: {
+                    showBrainCapture = false
+                    showInbox = true
+                },
+                onRouted: handleCaptureRouted
+            )
+            .environmentObject(shell)
         }
         .sheet(isPresented: $showInbox) {
             NavigationStack {
@@ -319,12 +321,74 @@ public struct LookAfterRootCanvas: View {
                 )
             }
         }
+        .modifier(
+            ContextualReplanSheetsModifier(
+                showPostWakeSheet: $showPostWakeSheet,
+                showGoingOutSheet: $showGoingOutSheet,
+                showContextualReplanPreview: $showContextualReplanPreview,
+                suggestedWakeTime: shell.brainVM.healthSummary?.wakeTime,
+                planningVM: planningVM,
+                taskTitles: contextualReplanTaskTitles,
+                userId: firebase.resolvedUserId,
+                onPostWakeSubmit: submitPostWakeReplan,
+                onGoingOutSubmit: submitGoingOutReplan
+            )
+        )
+        .sheet(isPresented: $shell.showManualSleepSheet) {
+            ManualSleepSheet(
+                onSubmit: { rating in
+                    Task {
+                        await shell.submitManualSleep(rating, userId: firebase.resolvedUserId)
+                    }
+                },
+                onSkip: {
+                    shell.dismissManualSleepPromptForToday()
+                }
+            )
+        }
+        .sheet(isPresented: $showAccountabilityShare) {
+            ActivityView(activityItems: [accountabilityShareMessage])
+        }
+        .onChange(of: notificationRouter.pendingSpeakBody) { _, body in
+            guard let body else { return }
+            ProactiveSpeechService(synthesizer: planningSpeech).speakNotificationBody(body)
+            notificationRouter.pendingSpeakBody = nil
+        }
+        .sheet(isPresented: $shell.showInitiationScriptSheet) {
+            if let script = shell.pendingInitiationScript {
+                InitiationScriptSheet(
+                    script: script,
+                    speechSynthesizer: planningSpeech,
+                    onStartFocus: {
+                        if let task = shell.tasksVM.tasks.first(where: { $0.id == script.taskID }) {
+                            tabBeforeFocus = selectedTab
+                            shell.adhdVM.startFocusSession(task: task, durationMinutes: script.durationMinutes)
+                        }
+                        shell.showInitiationScriptSheet = false
+                    },
+                    onDismiss: {
+                        shell.showInitiationScriptSheet = false
+                        shell.pendingInitiationScript = nil
+                    }
+                )
+                .environmentObject(shell)
+            }
+        }
         .onChange(of: tomorrowPlannerVM.rescheduleProposal?.id) { _, newID in
             showTomorrowPlanPreview = newID != nil
         }
         .onChange(of: showTomorrowPlanPreview) { wasShowing, isShowing in
             if wasShowing && !isShowing {
                 Task { await refreshTimelinePage(userId: firebase.resolvedUserId) }
+            }
+        }
+        .onChange(of: shell.pendingCalendarChange?.summaryLine) { _, summary in
+            guard summary != nil else { return }
+            Task { await triggerCalendarChangeReplan() }
+        }
+        .onChange(of: planningVM.contextualReplanResult?.summary) { _, summary in
+            if summary != nil, planningVM.contextualReplanTrigger == .calendarChange {
+                showContextualReplanPreview = true
             }
         }
         .fullScreenCover(isPresented: Binding<Bool>(
@@ -334,6 +398,25 @@ public struct LookAfterRootCanvas: View {
             AuthView()
         }
         .toast(isShowing: $showWelcomeToast, message: welcomeToastMessage, type: .success)
+        .undoToast(
+            isShowing: $showCaptureToast,
+            message: captureToastMessage,
+            duration: 5,
+            showsUndo: captureUndoTaskId != nil,
+            onUndo: undoLastCapture,
+            onView: captureViewAction,
+            viewLabel: captureViewLabel,
+            onDismiss: {
+                captureUndoTaskId = nil
+                captureUndoInboxId = nil
+                captureViewAction = nil
+            }
+        )
+        .onReceive(NotificationCenter.default.publisher(for: .captureDidRoute)) { note in
+            if let box = note.userInfo?[CaptureNotificationKey.result] as? CaptureRouteResultBox {
+                handleCaptureRouted(box.result)
+            }
+        }
         .onChange(of: firebase.isAuthenticated) { _, authenticated in
             if authenticated {
                 showAuth = false
@@ -355,6 +438,18 @@ public struct LookAfterRootCanvas: View {
         .onChange(of: shell.adhdVM.isFocusSessionActive) { wasActive, isActive in
             if wasActive && !isActive {
                 selectedTab = tabBeforeFocus
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    openCapture(
+                        source: .postFocus,
+                        hints: CaptureContextHints(
+                            screen: "postFocus",
+                            activeTaskId: lastFocusedTaskId,
+                            preselectedIntent: .note
+                        )
+                    )
+                }
+            } else if !wasActive && isActive {
+                lastFocusedTaskId = shell.adhdVM.currentFocusTask?.id
             }
         }
         .onChange(of: selectedTab) { _, tab in
@@ -369,12 +464,13 @@ public struct LookAfterRootCanvas: View {
         .task {
             await weatherService.refresh()
             planningVM.bind(timelineService: shell.timelineService)
-            planningVM.onSpeakReply = { text in
-                guard SpeechVoiceSettings.autoSpeakReplies else { return }
-                planningSpeech.speak(text)
-            }
+            bindPlanningSpeechHandler()
         }
         .onChange(of: shell.factoryResetGeneration) { _, _ in
+            if featureTour.isActive {
+                featureTour.complete()
+            }
+            selectedTab = .briefing
             planningVM.factoryReset()
         }
         .onChange(of: notificationRouter.pendingRoute) { _, route in
@@ -391,16 +487,29 @@ public struct LookAfterRootCanvas: View {
                 if let taskId = notificationRouter.pendingRoutePayload,
                    let task = shell.tasksVM.tasks.first(where: { $0.id == taskId }) {
                     shell.tasksVM.selectedTask = task
-                    showTasks = true
+                    openTaskList()
                 } else {
-                    showTasks = true
+                    openTaskList()
                 }
             case .medication:
                 showMedication = true
             case .focusSession:
-                break
+                selectedTab = .brain
+            case .emergency:
+                selectedTab = .briefing
+            case .capture:
+                if let text = notificationRouter.pendingRoutePayload, !text.isEmpty {
+                    captureSource = .shortcuts
+                    captureContextHints = CaptureContextHints(screen: "shortcuts")
+                    showBrainCapture = true
+                } else {
+                    openCapture(source: .shortcuts, hints: CaptureContextHints(screen: "shortcuts"))
+                }
             }
             _ = notificationRouter.consumeRoute()
+            if let body = notificationRouter.consumeSpeakBody() {
+                ProactiveSpeechService(synthesizer: planningSpeech).speakNotificationBody(body)
+            }
         }
         .accessibilityIdentifier("screen-briefing")
     }
@@ -418,13 +527,16 @@ public struct LookAfterRootCanvas: View {
                 healthSync: healthSync,
                 userId: firebase.resolvedUserId,
                 onOpenToday: { selectedTab = .today },
-                onOpenTasks: { showTasks = true },
+                onOpenTasks: { openTaskList() },
                 onOpenCoach: { showCoach = true },
                 onOpenDailyPlan: { showDailyPlan = true },
                 onOpenSettings: { showSettings = true },
-                onCapture: { showBrainCapture = true },
+                onCapture: { openCapture(source: .briefing, hints: CaptureContextHints(screen: "briefing")) },
                 onStartTask: { task in startBrainHeroTask(task, instant: true) },
-                onReplanDay: { showDailyPlan = true }
+                onReplanDay: { showDailyPlan = true },
+                onPostWake: { showPostWakeSheet = true },
+                isPostWake: shell.briefingVM.isPostWake,
+                onDismissPostWake: { shell.briefingVM.dismissPostWakeForToday() }
             )
         case .today:
             TodayView(
@@ -440,14 +552,19 @@ public struct LookAfterRootCanvas: View {
                 onSettings: {
                     if firebase.isAuthenticated { showSettings = true } else { showAuth = true }
                 },
-                onOpenTasks: { showTasks = true },
+                onOpenTasks: { openTaskList() },
                 onViewTimeline: { showFullTimeline = true },
                 onReplanDay: { Task { await triggerReplanDay() } },
                 onPlanTomorrow: { Task { await triggerPlanTomorrow(userId: firebase.resolvedUserId) } },
+                onPostWake: { showPostWakeSheet = true },
+                onGoingOut: { showGoingOutSheet = true },
                 onRefresh: { await refreshTimelinePage(userId: firebase.resolvedUserId) },
                 onPlanningSubmit: submitPlanningTurn,
                 onNegotiationSelect: { option in
-                    Task { await submitPlanningNegotiation(option) }
+                    Task { await handleProactiveNegotiation(option) }
+                },
+                onProactiveBannerAppear: { action in
+                    ProactiveSpeechService(synthesizer: planningSpeech).speakProactiveAction(action)
                 },
                 onRedesignWithAI: { message in
                     Task { await redesignPlanningWithAI(userMessage: message) }
@@ -464,16 +581,35 @@ public struct LookAfterRootCanvas: View {
                 onRescheduleTimelineTask: { taskId in
                     Task { await rescheduleTimelineTask(taskId: taskId) }
                 },
+                onRemoveFromTimelineTask: { taskId in
+                    Task { await removeFromTimelineAndReplanSlot(taskId: taskId) }
+                },
                 onStartTask: { task in startBrainHeroTask(task, instant: true) },
                 onEditTask: { task in
                     shell.tasksVM.selectedTask = task
-                    showTasks = true
+                    openTaskList()
+                },
+                onCapture: {
+                    openCapture(
+                        source: .todayTimeline,
+                        hints: CaptureContextHints(screen: "todayTimeline")
+                    )
                 },
                 isPlanningTomorrow: tomorrowPlannerVM.isScheduling
             )
         case .review:
-            WeeklyReviewView(summary: weeklyReviewSummary)
-                .id(weeklyReviewRefreshKey)
+            WeeklyReviewView(
+                summary: displayedWeeklyReviewSummary,
+                aiRetrospective: weeklyAIRetrospective,
+                onRefresh: { await refreshWeeklyReview() }
+            )
+            .id(weeklyReviewRefreshKey)
+            .onChange(of: weeklyReviewRefreshKey) { _, _ in
+                recomputeWeeklyReviewSummary()
+            }
+            .onAppear {
+                recomputeWeeklyReviewSummary()
+            }
         case .brain:
             BrainDashboardView(
                 brainVM: shell.brainVM,
@@ -487,10 +623,10 @@ public struct LookAfterRootCanvas: View {
                     Task { await rescheduleBrainHeroTask(task) }
                 },
                 onDecideForMe: { showDecideForMe = true },
-                onCapture: { showBrainCapture = true },
+                onCapture: { openCapture(source: .brain, hints: CaptureContextHints(screen: "brain")) },
                 onResume: { taskID in resumeBrainSession(taskID: taskID) },
                 onMarkMedicationTaken: { medID in markBrainMedicationTaken(medID) },
-                onNavigateToTasks: { showTasks = true },
+                onNavigateToTasks: { openTaskList() },
                 onNavigateToCoach: { showCoach = true },
                 onReset: { showResetMode = true },
                 onRefresh: {
@@ -498,30 +634,48 @@ public struct LookAfterRootCanvas: View {
                     let name = UserLifeProfileStore.resolvedDisplayName()
                     let peak = UserLifeProfileStore.load().peakStartHour
                     await shell.refreshContext(userId: userId, userName: name, peakStartHour: peak)
-                }
+                },
+                onExecutivePlan: { message in
+                    await submitPlanningTurnAndGetReply(text: message, startedWithVoice: true)
+                },
+                hasPriorVoiceConversation: !planningVM.turns.isEmpty
             )
         case .you:
             ExecutiveProfileView(userId: firebase.resolvedUserId)
         }
     }
 
-    /// Tasks for weekly metrics — persisted history when available, else in-memory scheduling context.
+    /// Tasks for weekly metrics — always uses live scheduling context.
     private var weeklyReviewTasks: [LifeTask] {
-        let persisted = shell.taskStore.allTasks
-        if !persisted.isEmpty { return persisted }
-        return shell.tasksVM.schedulingContext
+        shell.tasksVM.schedulingContext
     }
 
     /// Bumps when task or cascade data changes so the Review tab refreshes.
     private var weeklyReviewRefreshKey: String {
         let tasks = weeklyReviewTasks
         let completed = tasks.filter { $0.status == .completed }.count
-        return "review-\(tasks.count)-\(completed)-\(LifeEngine.shared.behavioralVaultHistory.count)"
+        return "review-\(tasks.count)-\(completed)-\(LifeEngine.shared.behavioralVaultHistory.count)-\(weeklyReviewManualRefreshGeneration)"
     }
 
-    /// Pull cascade history from BehavioralVault-adjacent `CascadeActionLog` via `LifeEngine`.
-    private var weeklyReviewSummary: WeeklyReviewSummary {
-        LifeEngine.shared.weeklyReview(tasks: weeklyReviewTasks)
+    private var displayedWeeklyReviewSummary: WeeklyReviewSummary {
+        weeklyReviewSummaryCache ?? LifeEngine.shared.weeklyReview(tasks: weeklyReviewTasks)
+    }
+
+    private func recomputeWeeklyReviewSummary() {
+        weeklyReviewSummaryCache = LifeEngine.shared.weeklyReview(tasks: weeklyReviewTasks)
+    }
+
+    private func refreshWeeklyReview() async {
+        shell.tasksVM.syncFromTaskStore()
+        weeklyReviewManualRefreshGeneration += 1
+        recomputeWeeklyReviewSummary()
+        let behavior = await ProactiveActionsBuilder.loadBehaviorMemory()
+        let analytics = BackgroundAnalyticsService.shared.cachedAIContext(userId: firebase.resolvedUserId)
+        weeklyAIRetrospective = await WeeklyAIRetrospectiveGenerator().generate(
+            summary: displayedWeeklyReviewSummary,
+            analytics: analytics,
+            behaviorMemory: behavior
+        )
     }
 
     private func activeFlowSessionState() -> FlowSessionState? {
@@ -545,6 +699,107 @@ public struct LookAfterRootCanvas: View {
                 durationMs: shell.brainVM.lastOrchestrationDurationMs
             )
         }
+    }
+
+    private var contextualReplanTaskTitles: [String: String] {
+        Dictionary(uniqueKeysWithValues: shell.tasksVM.tasks.map { ($0.id, $0.title) })
+    }
+
+    private func submitPostWakeReplan(wakeTime: Date) async {
+        PostWakeSessionStore.recordExplicitWake(at: wakeTime)
+        let constraint = UserDayConstraint.postWake(wakeTime: wakeTime)
+        UserDayConstraintStore.set(constraint)
+        await triggerContextualReplan(trigger: .postWake, constraint: constraint)
+    }
+
+    private func submitGoingOutReplan(departure: Date, durationMinutes: Int) async {
+        let constraint = UserDayConstraint.goingOut(departure: departure, durationMinutes: durationMinutes)
+        UserDayConstraintStore.set(constraint)
+        await triggerContextualReplan(trigger: .goingOut, constraint: constraint)
+    }
+
+    private func triggerContextualReplan(trigger: DayReplanTrigger, constraint: UserDayConstraint) async {
+        let replanContext = buildContextualReplanContext(trigger: trigger, constraint: constraint)
+        let title = trigger == .postWake ? "After Wake-Up" : "Around Your Outing"
+        await planningVM.proposeContextualReplan(context: replanContext, title: title)
+    }
+
+    private func removeFromTimelineAndReplanSlot(taskId: String) async {
+        let userId = firebase.resolvedUserId
+        guard !userId.isEmpty,
+              let task = shell.tasksVM.tasks.first(where: { $0.id == taskId && $0.status.isActive }),
+              task.isSchedulerMovable,
+              let slot = FreedSlotWindow.from(task: task) else {
+            return
+        }
+
+        let removedTitle = task.title
+        guard await shell.tasksVM.scheduleMutation.removeFromTimelineToday(taskID: taskId, userId: userId) != nil else {
+            return
+        }
+
+        HapticManager.impact(.medium)
+        await refreshTimelinePage(userId: userId)
+
+        let replanContext = buildFreedSlotReplanContext(slot: slot, removedTitle: removedTitle)
+        await planningVM.proposeContextualReplan(context: replanContext, title: "Fill This Slot")
+    }
+
+    private func buildFreedSlotReplanContext(
+        slot: DayReplanAwayWindow,
+        removedTitle: String
+    ) -> DayReplanContext {
+        DayReplanContext(
+            planningContext: planningContext(),
+            completedTasks: shell.tasksVM.completedToday,
+            weatherSummary: weatherService.snapshot.chipSecondary,
+            sleepHours: shell.brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60.0 },
+            userGoals: UserDefaults.standard.string(forKey: "userKeyGoals"),
+            trigger: .freedSlot,
+            freedSlotWindow: slot,
+            removedTaskTitle: removedTitle
+        )
+    }
+
+    private func buildContextualReplanContext(
+        trigger: DayReplanTrigger,
+        constraint: UserDayConstraint
+    ) -> DayReplanContext {
+        let now = Date()
+        let calendar = Calendar.current
+        let profile = UserLifeProfileStore.load()
+        let wakeTime = constraint.wakeTime ?? now
+
+        var awayWindow: DayReplanAwayWindow?
+        if trigger == .goingOut,
+           let departure = constraint.departureTime,
+           let end = constraint.awayWindowEnd {
+            awayWindow = DayReplanAwayWindow(start: departure, end: end)
+        }
+
+        let analysis = MissedTaskAnalyzer.analyze(
+            MissedTaskAnalyzer.Input(
+                tasks: shell.tasksVM.tasks,
+                now: now,
+                wakeTime: trigger == .postWake ? wakeTime : nil,
+                expectedWakeHour: max(profile.workStartHour - 2, 6),
+                awayWindow: awayWindow.map { MissedTaskAnalyzer.AwayWindow(start: $0.start, end: $0.end) },
+                calendar: calendar
+            )
+        )
+
+        return DayReplanContext(
+            planningContext: planningContext(),
+            completedTasks: shell.tasksVM.completedToday,
+            weatherSummary: weatherService.snapshot.chipSecondary,
+            sleepHours: shell.brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60.0 },
+            userGoals: UserDefaults.standard.string(forKey: "userKeyGoals"),
+            trigger: trigger,
+            activeConstraint: constraint,
+            missedTasks: analysis.missed,
+            awayWindow: awayWindow,
+            minutesLate: analysis.minutesLate
+        )
     }
 
     private func triggerReplanDay() async {
@@ -610,6 +865,27 @@ public struct LookAfterRootCanvas: View {
         }
     }
 
+    private func submitPlanningTurnAndGetReply(text: String, startedWithVoice: Bool) async -> String {
+        let userId = firebase.resolvedUserId
+        let context = planningContext()
+        let countBefore = planningVM.turns.count
+        await planningVM.submit(
+            text: text,
+            startedWithVoice: startedWithVoice,
+            context: context,
+            tasksVM: shell.tasksVM,
+            modulesVM: shell.modulesVM,
+            userId: userId,
+            refreshContext: planningRefreshContext(userId: userId)
+        )
+        if let last = planningVM.turns.last,
+           planningVM.turns.count > countBefore,
+           last.role == .assistant {
+            return last.text
+        }
+        return "Done — I updated your plan."
+    }
+
     private func redesignPlanningWithAI(userMessage: String) async {
         let userId = firebase.resolvedUserId
         let context = planningContext()
@@ -623,18 +899,23 @@ public struct LookAfterRootCanvas: View {
         )
     }
 
-    private func refreshTimelinePage(userId: String) async {
+    private func refreshTimelinePage(userId: String, lightweight: Bool = false) async {
+        if lightweight {
+            await refreshTimelineAfterPlanning(userId: userId)
+            return
+        }
         let name = UserLifeProfileStore.resolvedDisplayName()
         let peak = UserLifeProfileStore.load().peakStartHour
-        await shell.tasksVM.loadTasks(userId: userId)
-        if LifeModelStore.hasCompiledModel {
-            await shell.assembleTomorrowFromLifeModel(userId: userId)
-        }
         await shell.refreshContext(
             userId: userId,
             userName: name,
             peakStartHour: peak
         )
+    }
+
+    private func refreshTimelineAfterPlanning(userId: String) async {
+        await shell.syncScheduleAfterRescheduleApply(userId: userId)
+        planningVM.refreshTimeline(from: shell.timelineService.snapshot.today)
     }
 
     private func triggerPlanTomorrow(userId: String) async {
@@ -660,9 +941,8 @@ public struct LookAfterRootCanvas: View {
             return
         }
         planningVM.markTimelineTaskCompleted(taskId: taskId)
-        shell.rebuildTimelineFromTasks()
-        planningVM.refreshTimeline(from: shell.timelineService.snapshot.today)
-        shell.refreshWidgetData()
+        shell.syncBrainLiveProgress(userId: userId)
+        shell.refreshWidgetData(rebuildTimeline: false)
     }
 
     private func uncompleteTimelineTask(taskId: String) async {
@@ -676,9 +956,8 @@ public struct LookAfterRootCanvas: View {
             return
         }
         planningVM.markTimelineTaskUncompleted(taskId: taskId)
-        shell.rebuildTimelineFromTasks()
-        planningVM.refreshTimeline(from: shell.timelineService.snapshot.today)
-        shell.refreshWidgetData()
+        shell.syncBrainLiveProgress(userId: userId)
+        shell.refreshWidgetData(rebuildTimeline: false)
     }
 
     private func rescheduleTimelineTask(taskId: String) async {
@@ -693,19 +972,75 @@ public struct LookAfterRootCanvas: View {
         await refreshTimelinePage(userId: userId)
     }
 
-    private func startBrainHeroTask(_ task: LifeTask?, instant: Bool = false) {
+    private func openTaskList(filter: TaskFilter = .all) {
+        taskListInitialFilter = filter
+        showTasks = true
+    }
+
+    private func startBrainHeroTask(_ task: LifeTask?, instant: Bool = false, durationMinutes: Int? = nil) {
         if let task {
             tabBeforeFocus = selectedTab
             if instant {
-                shell.adhdVM.startFocusSession(task: task)
+                shell.adhdVM.startFocusSession(task: task, durationMinutes: durationMinutes)
             } else {
                 shell.adhdVM.startCountdown(for: task) {
-                    shell.adhdVM.startFocusSession(task: task)
+                    shell.adhdVM.startFocusSession(task: task, durationMinutes: durationMinutes)
                 }
             }
             return
         }
+        openCapture(source: .brain, hints: CaptureContextHints(screen: "brain"))
+    }
+
+    private func openCapture(source: CaptureSource, hints: CaptureContextHints = CaptureContextHints()) {
+        captureSource = source
+        captureContextHints = hints
         showBrainCapture = true
+    }
+
+    private func handleCaptureRouted(_ result: CaptureRouteResult) {
+        captureToastMessage = result.outcome.plainToastMessage
+        captureUndoTaskId = result.createdTaskId
+        captureUndoInboxId = result.inboxItemId
+        let view = viewAction(for: result)
+        captureViewAction = view?.action
+        captureViewLabel = view?.label ?? "View"
+        showCaptureToast = true
+        shell.refreshWidgetData()
+    }
+
+    private func viewAction(for result: CaptureRouteResult) -> (label: String, action: () -> Void)? {
+        switch result.outcome {
+        case .taskCreated(let taskId, _), .scheduledEvent(let taskId, _, _):
+            return ("View", {
+                selectedTab = .today
+                if let task = shell.tasksVM.tasks.first(where: { $0.id == taskId }) {
+                    shell.tasksVM.selectedTask = task
+                    openTaskList()
+                }
+            })
+        case .needsReview, .queuedOffline:
+            return ("Inbox", { showInbox = true })
+        case .journalEntry, .insightSaved:
+            return ("Journal", { selectedTab = .brain })
+        case .healthLog:
+            return ("Health", { showHealthDetail = true })
+        case .archived:
+            return nil
+        }
+    }
+
+    private func undoLastCapture() {
+        guard let taskId = captureUndoTaskId else { return }
+        Task {
+            await CaptureRouter.shared.undoTask(
+                taskId: taskId,
+                inboxItemId: captureUndoInboxId,
+                userId: firebase.resolvedUserId,
+                taskRepo: TaskRepository()
+            )
+            shell.refreshWidgetData()
+        }
     }
 
     private func resumeBrainSession(taskID: String?) {
@@ -743,8 +1078,86 @@ public struct LookAfterRootCanvas: View {
 
     private func planningRefreshContext(userId: String) -> () async -> Void {
         {
-            await refreshTimelinePage(userId: userId)
+            await refreshTimelinePage(userId: userId, lightweight: true)
         }
+    }
+
+    private func triggerCalendarChangeReplan() async {
+        guard shell.pendingCalendarChange != nil else { return }
+        let replanContext = DayReplanContext(
+            planningContext: planningContext(),
+            completedTasks: shell.tasksVM.completedToday,
+            weatherSummary: weatherService.snapshot.chipSecondary,
+            sleepHours: shell.brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60.0 },
+            userGoals: UserDefaults.standard.string(forKey: "userKeyGoals"),
+            trigger: .calendarChange
+        )
+        await planningVM.proposeContextualReplan(context: replanContext, title: "Calendar Change")
+        shell.clearPendingCalendarChange()
+    }
+
+    private func bindPlanningSpeechHandler() {
+        planningVM.onSpeakReply = { text in
+            guard planningVM.inputMode == .voice else { return }
+            guard SpeechVoiceSettings.autoSpeakReplies else { return }
+            guard selectedTab != .brain else { return }
+            planningSpeech.speak(text)
+        }
+    }
+
+    private func handleProactiveNegotiation(_ option: String) async {
+        let action = shell.proactiveActions.first {
+            $0.surface == .banner || $0.surface == .autoApplyPreview
+        }
+        let env = ProactiveActionRouter.Environment(
+            shell: shell,
+            planningVM: planningVM,
+            userId: firebase.resolvedUserId,
+            planningContext: { planningContext() },
+            refreshContext: planningRefreshContext(userId: firebase.resolvedUserId),
+            startFocusSession: { task, minutes in
+                tabBeforeFocus = selectedTab
+                shell.adhdVM.startFocusSession(task: task, durationMinutes: minutes)
+            },
+            showModules: { showModules = true },
+            triggerCalendarReplan: { await triggerCalendarChangeReplan() },
+            applyRecoveryTemplate: { await applyRecoveryTemplate(from: $0) },
+            submitPlanningNegotiation: { await submitPlanningNegotiation($0) },
+            shareAccountabilityMessage: { message in
+                accountabilityShareMessage = message
+                showAccountabilityShare = true
+            }
+        )
+        _ = await ProactiveActionRouter.handle(option: option, action: action, env: env)
+    }
+
+    private func applyRecoveryTemplate(from option: String) async {
+        let template: RecoveryDayTemplate
+        if option.lowercased().contains("recovery") {
+            template = .recovery
+        } else if option.lowercased().contains("gentle") {
+            template = .gentlePush
+        } else {
+            template = .minimumViable
+        }
+        let context = DayReplanContext(
+            planningContext: planningContext(),
+            completedTasks: shell.tasksVM.completedToday,
+            trigger: .badDay
+        )
+        let variant = RecoveryTemplateApplier.apply(
+            template: template,
+            tasks: shell.tasksVM.tasks,
+            context: context
+        )
+        await planningVM.applySelectedVariant(
+            variant,
+            context: planningContext(),
+            tasksVM: shell.tasksVM,
+            modulesVM: shell.modulesVM,
+            userId: firebase.resolvedUserId,
+            refreshContext: planningRefreshContext(userId: firebase.resolvedUserId)
+        )
     }
 
     private func submitPlanningNegotiation(_ option: String) async {
@@ -758,5 +1171,70 @@ public struct LookAfterRootCanvas: View {
             userId: userId,
             refreshContext: planningRefreshContext(userId: userId)
         )
+    }
+
+    @ViewBuilder
+    private var fullTimelineSheet: some View {
+        NavigationStack {
+            ScrollView {
+                ExecutiveLiveTimelineView(
+                    rows: planningVM.timelineRows,
+                    thinkingStep: planningVM.visibleThinkingStep,
+                    isProcessing: planningVM.isProcessing,
+                    title: "Full timeline",
+                    onViewAll: { showFullTimeline = false },
+                    onCompleteTask: { taskId in
+                        Task { await completeTimelineTask(taskId: taskId) }
+                    },
+                    onUncompleteTask: { taskId in
+                        Task { await uncompleteTimelineTask(taskId: taskId) }
+                    },
+                    onStartTask: { taskId in
+                        if let task = resolveTimelineTask(id: taskId) {
+                            showFullTimeline = false
+                            startBrainHeroTask(task, instant: true)
+                        }
+                    },
+                    onEditTask: { taskId in
+                        if let task = resolveTimelineTask(id: taskId) {
+                            shell.tasksVM.selectedTask = task
+                            showFullTimeline = false
+                            openTaskList()
+                        }
+                    },
+                    onRescheduleTask: { taskId in
+                        Task { await rescheduleTimelineTask(taskId: taskId) }
+                    },
+                    onRemoveFromTimelineTask: { taskId in
+                        Task { await removeFromTimelineAndReplanSlot(taskId: taskId) }
+                    },
+                    onPersistScheduleChange: { task in
+                        let userId = firebase.resolvedUserId
+                        guard !userId.isEmpty else { return }
+                        Task {
+                            await shell.tasksVM.scheduleMutation.persist(
+                                task,
+                                userId: userId,
+                                userPlaced: true
+                            )
+                        }
+                    },
+                    taskForID: resolveTimelineTask,
+                    parentScrollDisabled: $fullTimelineScrollDisabled
+                )
+                .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
+                .padding(.vertical, DesignSystem.spacingMD)
+            }
+            .scrollDisabled(fullTimelineScrollDisabled)
+            .scrollViewScrollLock(fullTimelineScrollDisabled)
+            .background(PremiumBackground())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { showFullTimeline = false }
+                }
+            }
+        }
+        .environmentObject(shell)
     }
 }

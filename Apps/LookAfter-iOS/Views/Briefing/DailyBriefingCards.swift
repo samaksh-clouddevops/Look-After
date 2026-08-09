@@ -1,6 +1,7 @@
 import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
+import LookAfterHealth
 
 // MARK: - Health Snapshot
 
@@ -93,7 +94,11 @@ struct BriefingDailySummaryCard: View {
 struct BriefingSleepCard: View {
     let sleep: BriefingSleepData
     var compact: Bool
+    var connectionStatus: HealthConnectionStatus?
     var onConnectHealth: () -> Void
+    var onHealthPrimaryAction: () -> Void
+    var onSeeHealthDetails: (() -> Void)?
+    var onLearnMore: (() -> Void)?
 
     var body: some View {
         BriefingCardContainer(
@@ -115,7 +120,13 @@ struct BriefingSleepCard: View {
                         .foregroundColor(DesignSystem.warning)
                 }
             } else {
-                emptyHealthPrompt(onConnect: onConnectHealth)
+                healthStatusEmptyState(
+                    status: connectionStatus,
+                    onPrimaryAction: onHealthPrimaryAction,
+                    onConnectFallback: onConnectHealth,
+                    onSeeDetails: onSeeHealthDetails,
+                    onLearnMore: onLearnMore
+                )
             }
         }
     }
@@ -162,24 +173,37 @@ struct BriefingMissionCard: View {
                         .font(.system(size: 11, weight: .medium, design: .default))
                         .foregroundColor(DesignSystem.textSecondary)
 
-                    ForEach(mission.tasks.prefix(compact ? 3 : 5)) { task in
+                    ForEach(mission.tasks.prefix(compact ? 3 : 8)) { task in
                         HStack(alignment: .top, spacing: DesignSystem.spacingSM) {
                             Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                                 .foregroundColor(task.isCompleted ? DesignSystem.success : DesignSystem.textMuted)
                                 .layoutPriority(1)
 
-                            Text(task.title)
-                                .font(.dsBody(weight: .semibold))
-                                .foregroundColor(task.isCompleted ? DesignSystem.textMuted : DesignSystem.textPrimary)
-                                .strikethrough(task.isCompleted)
-                                .dsPrimaryText(lineLimit: 2)
-                                .layoutPriority(0)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(task.title)
+                                    .font(.dsBody(weight: .semibold))
+                                    .foregroundColor(task.isCompleted ? DesignSystem.textMuted : DesignSystem.textPrimary)
+                                    .strikethrough(task.isCompleted)
+                                    .dsPrimaryText(lineLimit: 2)
+                                if let scheduleLabel = task.scheduleLabel {
+                                    Text(scheduleLabel)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(DesignSystem.textMuted)
+                                }
+                            }
+                            .layoutPriority(0)
 
                             Spacer(minLength: DesignSystem.spacingSM)
 
                             PriorityBadgeView(priority: task.priority)
                                 .layoutPriority(1)
                         }
+                    }
+
+                    if mission.hiddenCompletedCount > 0 {
+                        Text("+\(mission.hiddenCompletedCount) more completed")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(DesignSystem.textSecondary)
                     }
 
                     if let onReplanDay {
@@ -248,7 +272,11 @@ struct BriefingHealthCard: View {
     let health: BriefingHealthMetrics
     var compact: Bool
     var showsTitle: Bool = true
+    var connectionStatus: HealthConnectionStatus?
     var onConnectHealth: () -> Void
+    var onHealthPrimaryAction: () -> Void
+    var onSeeHealthDetails: (() -> Void)?
+    var onLearnMore: (() -> Void)?
 
     var body: some View {
         BriefingCardContainer(title: "Health", icon: "heart.fill", iconGradient: DesignSystem.healthGradient, compact: compact, showsHeader: showsTitle) {
@@ -262,7 +290,13 @@ struct BriefingHealthCard: View {
                     miniMetric("HRV", value: formattedHRV, icon: "waveform.path.ecg")
                 }
             } else {
-                emptyHealthPrompt(onConnect: onConnectHealth)
+                healthStatusEmptyState(
+                    status: connectionStatus,
+                    onPrimaryAction: onHealthPrimaryAction,
+                    onConnectFallback: onConnectHealth,
+                    onSeeDetails: onSeeHealthDetails,
+                    onLearnMore: onLearnMore
+                )
             }
         }
     }
@@ -477,7 +511,7 @@ struct BriefingProgressCard: View {
                     .font(.system(size: 12, weight: .medium, design: .default))
                     .foregroundColor(DesignSystem.textMuted)
                 Spacer()
-                Text("\(progress.productivityScore)")
+                Text("\(progress.productivityScore)/100")
                     .font(.system(size: 20, weight: .bold, design: .default))
                     .foregroundColor(DesignSystem.textMuted)
             }
@@ -539,7 +573,7 @@ struct BriefingAlertsCard: View {
             BriefingCardContainer(title: "Needs Attention", icon: "bell.badge.fill", iconGradient: DesignSystem.warmGradient) {
                 ForEach(alerts) { alert in
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: alert.icon)
+                        Image.safeSystemName(alert.icon, fallback: "exclamationmark.circle")
                             .foregroundColor(color(for: alert.severity))
                             .frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
@@ -567,22 +601,35 @@ struct BriefingAlertsCard: View {
     }
 }
 
-// MARK: - Shared empty state
+// MARK: - Shared health status empty state
 
-private func emptyHealthPrompt(onConnect: @escaping () -> Void) -> some View {
-    VStack(spacing: 10) {
-        Text("Link Apple Health to see sleep and activity here.")
-            .font(.system(size: 13, design: .default))
-            .foregroundColor(DesignSystem.textSecondary)
-            .multilineTextAlignment(.center)
-        Button(action: onConnect) {
-            Label("Connect Health", systemImage: "heart.text.square.fill")
-                .font(.system(size: 13, weight: .semibold, design: .default))
-        }
-        .foregroundColor(DesignSystem.accentPrimary)
-    }
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, DesignSystem.spacingSM)
+private func healthStatusEmptyState(
+    status: HealthConnectionStatus?,
+    onPrimaryAction: @escaping () -> Void,
+    onConnectFallback: @escaping () -> Void,
+    onSeeDetails: (() -> Void)? = nil,
+    onLearnMore: (() -> Void)? = nil
+) -> some View {
+    let resolved = status ?? HealthConnectionStatusResolver.resolve(
+        HealthConnectionStatusInput(
+            isHealthEnabled: true,
+            isHealthKitAvailable: true,
+            isSignedIn: true
+        )
+    )
+    return HealthStatusBanner(
+        status: resolved,
+        style: .compact,
+        onPrimaryAction: {
+            if resolved.primaryAction == .connect {
+                onConnectFallback()
+            } else {
+                onPrimaryAction()
+            }
+        },
+        onSeeDetails: onSeeDetails,
+        onLearnMore: onLearnMore
+    )
 }
 
 // MARK: - Section card (V4 recipe)
@@ -773,6 +820,7 @@ struct BriefingNextActionStrip: View {
 
 struct BriefingSnapshotStrip: View {
     let snapshot: BriefingHealthSnapshot
+    var healthNeedsAttention: Bool = false
 
     private let columns = [
         GridItem(.flexible(), spacing: DesignSystem.spacingSM),
@@ -791,15 +839,19 @@ struct BriefingSnapshotStrip: View {
             snapshotMetric(
                 icon: "bolt.fill",
                 title: "Energy",
-                value: snapshot.hasOvernightHealthSignal ? "\(snapshot.energyPercent)%" : "—",
-                band: snapshot.hasOvernightHealthSignal ? energyBand : "No data yet",
-                bandIsPositive: snapshot.hasOvernightHealthSignal && snapshot.energyPercent >= 60
+                value: "\(snapshot.energyPercent)%",
+                band: snapshot.hasOvernightHealthSignal
+                    ? energyBand
+                    : estimatedBand("Estimated · \(energyBand)"),
+                bandIsPositive: snapshot.energyPercent >= 60
             )
             snapshotMetric(
                 icon: "scope",
                 title: "Recovery",
-                value: snapshot.hasOvernightHealthSignal ? snapshot.recoveryLabel : "—",
-                band: snapshot.hasOvernightHealthSignal ? "\(snapshot.recoveryPercent)%" : "No data yet",
+                value: snapshot.recoveryLabel,
+                band: snapshot.hasOvernightHealthSignal
+                    ? "\(snapshot.recoveryPercent)%"
+                    : estimatedBand("Estimated · \(snapshot.recoveryPercent)%"),
                 bandIsPositive: false
             )
             snapshotMetric(
@@ -829,6 +881,11 @@ struct BriefingSnapshotStrip: View {
         let parts = snapshot.focusWindow.components(separatedBy: " – ")
         guard parts.count > 1 else { return "" }
         return parts[1]
+    }
+
+    private func estimatedBand(_ fallback: String) -> String {
+        guard healthNeedsAttention else { return fallback }
+        return "Estimated — connect Health for real data"
     }
 
     private func isPositiveBand(_ band: String?) -> Bool {

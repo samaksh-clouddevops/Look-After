@@ -60,6 +60,8 @@ public enum TaskRecurrenceEngine {
         for template in templates {
             guard template.recurrenceOccurs(on: day, calendar: calendar) else { continue }
             guard !hasStoredOccurrence(for: template, on: day, index: index, calendar: calendar) else { continue }
+            guard !isSeriesFulfilled(on: day, for: template, in: allTasks, calendar: calendar) else { continue }
+            guard !TaskSeriesResolver.shouldSkipMaterialization(for: template, on: day, in: allTasks, calendar: calendar) else { continue }
 
             results.append(makeOccurrence(from: template, template: template, scheduledDate: day, calendar: calendar))
         }
@@ -82,6 +84,7 @@ public enum TaskRecurrenceEngine {
             guard template.recurrenceOccurs(on: day, calendar: calendar) else { continue }
             guard !hasActionableOccurrence(for: template, on: day, index: index, calendar: calendar) else { continue }
             guard !template.isLifeCommitmentTask else { continue }
+            guard !isSeriesFulfilled(on: day, for: template, in: allTasks, calendar: calendar) else { continue }
             results.append(timelineProjectionOccurrence(from: template, on: day, calendar: calendar))
         }
 
@@ -363,6 +366,208 @@ public enum TaskRecurrenceEngine {
         return matchesRecurrenceSchedule(task, on: scheduledDate, in: allTasks, calendar: calendar)
     }
 
+    /// Plan merging duplicate recurrence templates that share a normalized title.
+    public struct RecurrenceTemplateDedupePlan: Sendable, Equatable {
+        public var occurrenceUpdates: [LifeTask]
+        public var templateIDsToDelete: [String]
+
+        public init(occurrenceUpdates: [LifeTask] = [], templateIDsToDelete: [String] = []) {
+            self.occurrenceUpdates = occurrenceUpdates
+            self.templateIDsToDelete = templateIDsToDelete
+        }
+    }
+
+    /// Groups recurrence templates by normalized title and re-parents occurrences onto a single keeper.
+    public static func dedupeDuplicateRecurrenceTemplates(
+        in allTasks: [LifeTask],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> RecurrenceTemplateDedupePlan {
+        let dayStart = calendar.startOfDay(for: referenceDate)
+        let templates = allTasks.filter(isRecurrenceTemplate)
+        var grouped: [String: [LifeTask]] = [:]
+        for template in templates {
+            let key = OnboardingTaskSeeder.normalizedRoutineTitle(template.title)
+            grouped[key, default: []].append(template)
+        }
+
+        var occurrenceUpdates: [LifeTask] = []
+        var templateIDsToDelete: [String] = []
+
+        for (_, group) in grouped where group.count > 1 {
+            guard let keeper = preferredRecurrenceTemplate(in: group, on: dayStart, allTasks: allTasks, calendar: calendar) else {
+                continue
+            }
+            for duplicate in group where duplicate.id != keeper.id {
+                templateIDsToDelete.append(duplicate.id)
+                for var occurrence in allTasks where occurrence.parentTaskId == duplicate.id {
+                    occurrence.parentTaskId = keeper.id
+                    occurrence.updatedAt = Date()
+                    occurrenceUpdates.append(occurrence)
+                }
+            }
+        }
+
+        return RecurrenceTemplateDedupePlan(
+            occurrenceUpdates: occurrenceUpdates,
+            templateIDsToDelete: templateIDsToDelete
+        )
+    }
+
+    /// Recurring rows that duplicate an active life-commitment task with the same title (Gym + Gym, etc.).
+    public static func recurringDuplicateIDsOfLifeCommitments(
+        in allTasks: [LifeTask],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> [String] {
+        let dayStart = calendar.startOfDay(for: referenceDate)
+        var ids = Set<String>()
+
+        let commitments = allTasks.filter { task in
+            guard task.isLifeCommitmentTask else { return false }
+            if task.status.isActive { return true }
+            guard task.status == .completed else { return false }
+            if let completedAt = task.completedAt, calendar.isDate(completedAt, inSameDayAs: dayStart) {
+                return true
+            }
+            if let scheduled = task.scheduledDate, calendar.isDate(scheduled, inSameDayAs: dayStart) {
+                return true
+            }
+            return false
+        }
+        for commitment in commitments {
+            let key = OnboardingTaskSeeder.normalizedRoutineTitle(commitment.title)
+            guard !key.isEmpty else { continue }
+
+            for task in allTasks where task.id != commitment.id && task.status.isActive {
+                guard OnboardingTaskSeeder.normalizedRoutineTitle(task.title) == key else { continue }
+                let isRecurringRow = task.parentTaskId != nil || isRecurrenceTemplate(task) || task.recurrenceRule != .none
+                guard isRecurringRow else { continue }
+
+                if isRecurrenceTemplate(task) {
+                    ids.insert(task.id)
+                    ids.formUnion(allTasks.filter { $0.parentTaskId == task.id }.map(\.id))
+                    continue
+                }
+
+                if let scheduled = task.scheduledDate, calendar.isDate(scheduled, inSameDayAs: dayStart) {
+                    ids.insert(task.id)
+                }
+            }
+        }
+
+        return Array(ids)
+    }
+
+    /// Active stored tasks that duplicate a just-completed instance on the same day.
+    public static func duplicateActiveSeriesIDs(
+        afterCompleting completed: LifeTask,
+        in allTasks: [LifeTask],
+        calendar: Calendar = .current
+    ) -> [String] {
+        guard completed.status == .completed else { return [] }
+        let reference = completed.completedAt ?? completed.scheduledDate ?? Date()
+        let dayStart = calendar.startOfDay(for: reference)
+        let completedKey = TaskScheduleQuery.seriesKey(for: completed)
+        var ids = Set<String>()
+
+        for task in allTasks where task.id != completed.id && task.status.isActive {
+            guard TaskScheduleQuery.seriesKey(for: task) == completedKey else { continue }
+            if let scheduled = task.scheduledDate,
+               !calendar.isDate(scheduled, inSameDayAs: dayStart) {
+                continue
+            }
+            ids.insert(task.id)
+        }
+
+        ids.formUnion(
+            recurringDuplicateIDsOfLifeCommitments(
+                in: allTasks,
+                calendar: calendar,
+                referenceDate: dayStart
+            )
+        )
+        return Array(ids)
+    }
+
+    /// Normalized series keys already satisfied today (completed life commitments, etc.).
+    public static func fulfilledSeriesKeys(
+        on day: Date,
+        in allTasks: [LifeTask],
+        calendar: Calendar = .current
+    ) -> Set<String> {
+        let dayStart = calendar.startOfDay(for: day)
+        var keys = Set<String>()
+        for task in allTasks where task.status == .completed {
+            let onDay = task.completedAt.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
+                || task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
+            guard onDay else { continue }
+            keys.insert(TaskScheduleQuery.seriesKey(for: task))
+            keys.insert("recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(task.title))")
+        }
+        return keys
+    }
+
+    /// Whether a recurrence series is already satisfied on `day` (completed instance, life commitment, etc.).
+    public static func isSeriesFulfilled(
+        on day: Date,
+        for template: LifeTask,
+        in allTasks: [LifeTask],
+        calendar: Calendar
+    ) -> Bool {
+        let fulfilled = fulfilledSeriesKeys(on: day, in: allTasks, calendar: calendar)
+        let seriesKey = TaskScheduleQuery.seriesKey(for: template)
+        if fulfilled.contains(seriesKey) { return true }
+        let titleKey = "recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(template.title))"
+        return fulfilled.contains(titleKey)
+    }
+
+    /// Finds an existing recurrence template with the same normalized title, if any.
+    public static func existingRecurrenceTemplate(
+        matching task: LifeTask,
+        in allTasks: [LifeTask]
+    ) -> LifeTask? {
+        let key = OnboardingTaskSeeder.normalizedRoutineTitle(task.title)
+        return allTasks.first { candidate in
+            isRecurrenceTemplate(candidate)
+                && OnboardingTaskSeeder.normalizedRoutineTitle(candidate.title) == key
+        }
+    }
+
+    private static func preferredRecurrenceTemplate(
+        in group: [LifeTask],
+        on day: Date,
+        allTasks: [LifeTask],
+        calendar: Calendar
+    ) -> LifeTask? {
+        group.max { lhs, rhs in
+            let left = templateKeeperScore(lhs, on: day, allTasks: allTasks, calendar: calendar)
+            let right = templateKeeperScore(rhs, on: day, allTasks: allTasks, calendar: calendar)
+            if left != right { return left < right }
+            return lhs.createdAt > rhs.createdAt
+        }
+    }
+
+    private static func templateKeeperScore(
+        _ template: LifeTask,
+        on day: Date,
+        allTasks: [LifeTask],
+        calendar: Calendar
+    ) -> Int {
+        var score = 0
+        let occurrences = allTasks.filter { $0.parentTaskId == template.id }
+        if occurrences.contains(where: { occ in
+            occ.status.isActive
+                && occ.scheduledDate.map { calendar.isDate($0, inSameDayAs: day) } == true
+        }) {
+            score += 100
+        }
+        if template.tags.contains("daily-routine") { score += 20 }
+        if template.isRecurrenceTemplate == true { score += 10 }
+        score += min(occurrences.count, 50)
+        return score
+    }
+
     /// Occurrence ids whose scheduled day does not match the parent recurrence rule.
     public static func invalidOccurrenceIDs(
         in allTasks: [LifeTask],
@@ -393,12 +598,38 @@ public enum TaskRecurrenceEngine {
                 continue
             }
 
+            if task.parentTaskId == nil,
+               task.status.isActive,
+               hasActionableRecurringOccurrence(matching: task, on: scheduledDate, in: allTasks, calendar: calendar) {
+                ids.insert(task.id)
+                continue
+            }
+
             if !matchesRecurrenceSchedule(task, on: scheduledDate, in: allTasks, calendar: calendar) {
                 ids.insert(task.id)
             }
         }
 
         return Array(ids)
+    }
+
+    /// Standalone row superseded when an actionable recurring occurrence shares the same title on that day.
+    private static func hasActionableRecurringOccurrence(
+        matching task: LifeTask,
+        on day: Date,
+        in allTasks: [LifeTask],
+        calendar: Calendar
+    ) -> Bool {
+        let key = OnboardingTaskSeeder.normalizedRoutineTitle(task.title)
+        let dayStart = calendar.startOfDay(for: day)
+        return allTasks.contains { other in
+            guard other.id != task.id else { return false }
+            guard other.parentTaskId != nil else { return false }
+            guard other.status.isActive || other.status == .completed else { return false }
+            guard OnboardingTaskSeeder.normalizedRoutineTitle(other.title) == key else { return false }
+            guard let scheduledDate = other.scheduledDate else { return false }
+            return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+        }
     }
 
     public static func nextScheduledDate(
@@ -455,7 +686,15 @@ public enum TaskRecurrenceEngine {
             userId: source.userId,
             semanticProfile: template.semanticProfile
         )
-        return TaskEphemeralityDefaults.applyTemplatePolicy(occurrence, from: template)
+        var result = TaskEphemeralityDefaults.applyTemplatePolicy(occurrence, from: template)
+        ScheduleNormalization.normalizeFields(&result, calendar: calendar)
+        if TaskScheduleInterval.hasNoClockTime(result),
+           let anchor = RoutineScheduleAnchorResolver.resolve(for: result, on: day, calendar: calendar) {
+            result.scheduledTime = anchor.start
+            result.scheduledEndTime = anchor.end
+        }
+        result = TaskConstraintAlignment.align(result)
+        return result
     }
 
     public static func makeNextOccurrence(

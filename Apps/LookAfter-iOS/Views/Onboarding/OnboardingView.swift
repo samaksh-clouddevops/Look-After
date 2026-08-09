@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import LookAfterCore
 import LookAfterAI
 import LookAfterData
@@ -13,6 +14,7 @@ struct OnboardingView: View {
     let onComplete: (_ sections: StructuredLifeProfileSections?) -> Void
 
     @State private var step: StartStep = .welcome
+    @State private var onboardingStepSignpost: OSSignpostID?
     @State private var userName = ""
     @State private var selectedGender: UserGender?
     @State private var structuredSections = StructuredLifeProfileSections()
@@ -31,9 +33,13 @@ struct OnboardingView: View {
     @State private var selectedCycleSymptoms: Set<String> = []
     @State private var healthConnectError: String?
     @State private var healthSkipped = false
+    @ObservedObject private var notificationPermission = NotificationPermissionService.shared
     @State private var showHealthConnectSheet = false
     @State private var isOrganizing = false
     @State private var organizeError: String?
+    @State private var isGeneratingTasks = false
+    @State private var taskGenerationError: String?
+    @State private var keptStarterTaskIDs: Set<String> = []
     @State private var lifeProfileMarkdown = ""
 
     private var aiAvailable: Bool { GLMService.shared.hasConfiguredAPIKey }
@@ -44,19 +50,21 @@ struct OnboardingView: View {
         ZStack {
             PremiumBackground()
 
-            VStack(spacing: 0) {
-                if step != .welcome {
+            if step == .welcome {
+                welcomeScreen
+            } else {
+                VStack(spacing: 0) {
                     progressHeader
-                }
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-                        stepHeader
-                        stepContent
-                        footerActions
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
+                            stepHeader
+                            stepContent
+                            footerActions
+                        }
+                        .padding(.horizontal, DesignSystem.spacingLG)
+                        .padding(.vertical, 28)
                     }
-                    .padding(.horizontal, DesignSystem.spacingLG)
-                    .padding(.vertical, 28)
                 }
             }
         }
@@ -64,6 +72,49 @@ struct OnboardingView: View {
         .scrollDismissesKeyboard(.interactively)
         .accessibilityIdentifier("screen-onboarding")
         .onAppear(perform: prefillFromExisting)
+        .onChange(of: step) { _, newStep in
+            if let signpost = onboardingStepSignpost {
+                PerformanceSignposts.endOnboardingStep(signpost)
+                onboardingStepSignpost = nil
+            }
+            if newStep != .welcome {
+                onboardingStepSignpost = PerformanceSignposts.beginOnboardingStep()
+            }
+        }
+    }
+
+    /// Welcome is vertically + horizontally centered — other steps stay form-style.
+    private var welcomeScreen: some View {
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: DesignSystem.spacingLG) {
+                    Spacer(minLength: max(24, geo.size.height * 0.10))
+
+                    VStack(spacing: 8) {
+                        Text(step.title)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(DesignSystem.textPrimary)
+                            .multilineTextAlignment(.center)
+                        Text(step.subtitle)
+                            .font(.system(size: 15))
+                            .foregroundColor(DesignSystem.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: 420)
+
+                    welcomeStep
+                        .frame(maxWidth: 420)
+
+                    Button("Get started") { step = .name }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, DesignSystem.spacingSM)
+
+                    Spacer(minLength: max(24, geo.size.height * 0.10))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, DesignSystem.spacingLG)
+            }
+        }
     }
 
     // MARK: - Progress
@@ -126,6 +177,8 @@ struct OnboardingView: View {
             notificationsStep
         case .ready:
             readyStep
+        case .taskReview:
+            taskReviewStep
         }
     }
 
@@ -141,6 +194,8 @@ struct OnboardingView: View {
             Text("Takes about 3 minutes. Everything can be changed in Settings later.")
                 .font(.system(size: 12))
                 .foregroundColor(DesignSystem.textMuted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
                 .padding(.top, 4)
         }
     }
@@ -452,9 +507,37 @@ struct OnboardingView: View {
                 title: "You're in control",
                 detail: "Turn categories off anytime in Settings. Focus break alerts only run during a session."
             )
-            Text("You can skip this and enable notifications later in Settings.")
-                .font(.system(size: 12))
-                .foregroundColor(DesignSystem.textMuted)
+
+            if notificationPermission.isAuthorized {
+                Label("Notifications on — fine-tune categories in Settings anytime.", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(DesignSystem.success)
+            } else if notificationPermission.isDenied {
+                Text("Notifications are off in System Settings. You can enable them later.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.textMuted)
+            } else {
+                Button {
+                    Task { @MainActor in _ = await notificationPermission.requestAuthorization() }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "bell.badge.fill")
+                            .font(.system(size: 16))
+                        Text("Turn on notifications")
+                            .font(.system(size: 15, weight: .semibold))
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(DesignSystem.textMuted)
+                    }
+                    .foregroundColor(DesignSystem.textPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("onboarding-enable-notifications")
+            }
         }
         .accessibilityIdentifier("onboarding-notifications-step")
     }
@@ -474,12 +557,37 @@ struct OnboardingView: View {
             summaryRow("Health", value: healthSummaryLabel)
             summaryRow("Profile", value: structuredSections.hasContent ? "Saved" : "Minimal")
 
-            Text("Tap Start planning — we’ll create your first tasks and open Today.")
+            Text("Tap Start planning — we'll build your first tasks for you to review.")
                 .font(.system(size: 13))
                 .foregroundColor(DesignSystem.textMuted)
+
+            if isGeneratingTasks {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Building your day from your profile…")
+                        .font(.system(size: 13))
+                        .foregroundColor(DesignSystem.textSecondary)
+                }
+                .padding(.top, 4)
+            }
+
+            if let taskGenerationError {
+                Text(taskGenerationError)
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.error)
+            }
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.backgroundElevated))
+        .accessibilityIdentifier("onboarding-ready-step")
+    }
+
+    private var taskReviewStep: some View {
+        GeneratedTasksReviewView(
+            tasksVM: shell.tasksVM,
+            keptTaskIDs: $keptStarterTaskIDs
+        )
+        .accessibilityIdentifier("onboarding-task-review-step")
     }
 
     // MARK: - Footer
@@ -493,10 +601,7 @@ struct OnboardingView: View {
 
             Spacer()
 
-            if step == .welcome {
-                Button("Get started") { step = .name }
-                    .buttonStyle(.borderedProminent)
-            } else if step == .health {
+            if step == .health {
                 Button("Skip for now") {
                     healthSkipped = true
                     trackCycle = false
@@ -510,17 +615,19 @@ struct OnboardingView: View {
                 Button("Skip for now") { step = .ready }
                     .foregroundColor(DesignSystem.textSecondary)
 
-                Button("Enable notifications") {
-                    Task {
-                        _ = await NotificationPermissionService.shared.requestAuthorization()
-                        step = .ready
-                    }
+                Button("Continue") { step = .ready }
+                    .buttonStyle(.borderedProminent)
+            } else if step == .ready {
+                Button("Start planning") {
+                    Task { @MainActor in await prepareTasksForReview() }
                 }
                 .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("onboarding-enable-notifications")
-            } else if step == .ready {
-                Button("Start planning") { saveAndFinish() }
-                    .buttonStyle(.borderedProminent)
+                .disabled(isGeneratingTasks)
+            } else if step == .taskReview {
+                Button("Looks good") {
+                    Task { @MainActor in await finishOnboarding() }
+                }
+                .buttonStyle(.borderedProminent)
             } else {
                 Button("Continue") { goForward() }
                     .disabled(!canContinue)
@@ -577,8 +684,13 @@ struct OnboardingView: View {
     }
 
     private func goBack() {
-        guard let previous = StartStep(rawValue: step.rawValue - 1) else { return }
-        step = previous
+        switch step {
+        case .taskReview:
+            step = .ready
+        default:
+            guard let previous = StartStep(rawValue: step.rawValue - 1) else { return }
+            step = previous
+        }
     }
 
     // MARK: - Helpers
@@ -636,6 +748,7 @@ struct OnboardingView: View {
         return UserDefaults.standard.string(forKey: "saved_user_uid") ?? ""
     }
 
+    @MainActor
     private func organizeProfileWithAI() async {
         organizeError = nil
         isOrganizing = true
@@ -661,7 +774,35 @@ struct OnboardingView: View {
         }
     }
 
-    private func saveAndFinish() {
+    @MainActor
+    private func prepareTasksForReview() async {
+        isGeneratingTasks = true
+        taskGenerationError = nil
+        defer { isGeneratingTasks = false }
+
+        persistProfileForCompletion()
+
+        let uid = resolvedUserId()
+        guard !uid.isEmpty else {
+            taskGenerationError = "Sign in to create tasks, or tap Back and try again."
+            return
+        }
+
+        await shell.materializeStarterTasks(userId: uid, sections: structuredSections)
+        keptStarterTaskIDs = Set(GeneratedTasksReviewView.reviewableTasks(from: shell.tasksVM.tasks).map(\.id))
+        step = .taskReview
+    }
+
+    @MainActor
+    private func finishOnboarding() async {
+        await GeneratedTasksReviewView.applySelections(
+            keptIDs: keptStarterTaskIDs,
+            tasksVM: shell.tasksVM
+        )
+        onComplete(structuredSections)
+    }
+
+    private func persistProfileForCompletion() {
         persistName()
         UserDefaults.standard.set(targetSleepHours, forKey: "targetSleepHours")
         UserDefaults.standard.set(enableHealth, forKey: "enableHealth")
@@ -705,19 +846,6 @@ struct OnboardingView: View {
         } else {
             CyclePreferencesStore.save(.default)
         }
-
-        let markdown = profile.profileText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let uid = resolvedUserId()
-        if !markdown.isEmpty {
-            Task {
-                _ = await shell.compileAndSaveLifeModel(markdown: markdown)
-                if !uid.isEmpty {
-                    await shell.assembleDayFromLifeModel(userId: uid)
-                }
-            }
-        }
-
-        onComplete(structuredSections)
     }
 
     private var workHoursLabel: String {
@@ -798,6 +926,7 @@ private enum StartStep: Int, CaseIterable {
     case cycle
     case notifications
     case ready
+    case taskReview
 
     static var questionCount: Int { allCases.count - 1 }
 
@@ -819,8 +948,9 @@ private enum StartStep: Int, CaseIterable {
         case .profile: return "Teach your brain your rhythms"
         case .health: return "Connect Apple Health"
         case .cycle: return "Your cycle"
-        case .notifications: return "Stay on track"
+        case .notifications: return "Gentle reminders"
         case .ready: return "You're all set"
+        case .taskReview: return "Review your day"
         }
     }
 
@@ -843,9 +973,11 @@ private enum StartStep: Int, CaseIterable {
         case .cycle:
             return "Optional — helps \(UserFacingCopy.productName) learn your rhythm and give phase-aware coaching."
         case .notifications:
-            return "Optional — up to 2 calm reminders per day for meds, meetings, and tasks. No spam."
+            return "Optional — a couple of calm nudges per day. Skip anytime."
         case .ready:
-            return "Review below, then we'll build your first day."
+            return "Review below, then we'll build your first tasks."
+        case .taskReview:
+            return "We created these from your profile — keep, edit, or remove anything."
         }
     }
 }

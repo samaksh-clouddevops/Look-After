@@ -37,6 +37,15 @@ public enum OnboardingTaskSeeder {
         RoutineSlot(title: "Brush teeth — evening", hour: 21, minute: 30, durationMinutes: 5, lifeArea: .personal),
     ]
 
+    private static let dailyActivityRoutineSlots: [RoutineSlot] = [
+        RoutineSlot(title: "Gym", hour: 18, minute: 0, durationMinutes: 60, lifeArea: .health),
+        RoutineSlot(title: "Workout", hour: 18, minute: 0, durationMinutes: 60, lifeArea: .health),
+    ]
+
+    private static let activityRoutineKeywords = ["gym", "workout", "exercise", "lift", "training"]
+
+    private static let creativeRoutineKeywords = ["vocal", "music", "creative", "art", "studio"]
+
     private static let dailyFlexibleRoutines: [(title: String, minutes: Int, lifeArea: LifeArea)] = [
         ("Morning review", 10, .work),
     ]
@@ -96,6 +105,107 @@ public enum OnboardingTaskSeeder {
         }
 
         return SeedResult(fixedTasks: fixed, flexibleTasks: flexible)
+    }
+
+    /// Lowercased, whitespace-normalized title for series dedupe across templates and occurrences.
+    public static func normalizedRoutineTitle(_ title: String) -> String {
+        normalizedTitle(title)
+    }
+
+    /// True when `title` matches a seeded daily meal/hygiene slot or flexible routine.
+    public static func isKnownDailyRoutineTitle(_ title: String) -> Bool {
+        let key = normalizedTitle(title)
+        if dailyMealAndHygieneSlots.contains(where: { normalizedTitle($0.title) == key }) {
+            return true
+        }
+        if dailyActivityRoutineSlots.contains(where: { normalizedTitle($0.title) == key }) {
+            return true
+        }
+        if activityRoutineKeywords.contains(where: { key.contains($0) }) {
+            return true
+        }
+        return dailyFlexibleRoutines.contains { normalizedTitle($0.title) == key }
+    }
+
+    /// Activity routines (Gym, Workout) — preferred anchor but shiftable on conflict.
+    public static func isActivityRoutineTitle(_ title: String) -> Bool {
+        let key = normalizedTitle(title)
+        if dailyActivityRoutineSlots.contains(where: { normalizedTitle($0.title) == key }) {
+            return true
+        }
+        return activityRoutineKeywords.contains(where: { key.contains($0) })
+    }
+
+    /// Meal routines (Breakfast, Lunch, Dinner, Snacks) — preferred anchor but shiftable on conflict.
+    public static func isMealRoutineTitle(_ title: String) -> Bool {
+        let key = normalizedTitle(title)
+        let mealTitles = ["breakfast", "lunch", "dinner", "snacks", "brunch", "supper"]
+        if mealTitles.contains(key) { return true }
+        return dailyMealAndHygieneSlots.contains { slot in
+            mealTitles.contains(normalizedTitle(slot.title))
+                && normalizedTitle(slot.title) == key
+        }
+    }
+
+    /// Canonical clock anchor for a known daily routine title (meals, hygiene, gym).
+    public static func routineAnchorTime(
+        forTitle title: String,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> (start: Date, durationMinutes: Int)? {
+        let key = normalizedTitle(title)
+        let allSlots = dailyMealAndHygieneSlots + dailyActivityRoutineSlots
+        if let slot = allSlots.first(where: { normalizedTitle($0.title) == key }) {
+            return routineSlotTime(slot, on: day, calendar: calendar)
+        }
+        if activityRoutineKeywords.contains(where: { key.contains($0) }),
+           !creativeRoutineKeywords.contains(where: { key.contains($0) }),
+           let gymSlot = dailyActivityRoutineSlots.first(where: { normalizedTitle($0.title) == "gym" }) {
+            return routineSlotTime(gymSlot, on: day, calendar: calendar)
+        }
+        return nil
+    }
+
+    private static func routineSlotTime(
+        _ slot: RoutineSlot,
+        on day: Date,
+        calendar: Calendar
+    ) -> (start: Date, durationMinutes: Int)? {
+        guard let start = calendar.date(
+            bySettingHour: slot.hour,
+            minute: slot.minute,
+            second: 0,
+            of: calendar.startOfDay(for: day)
+        ) else { return nil }
+        return (start, slot.durationMinutes)
+    }
+
+    /// Parses fixed schedule notes and returns a match for the given task title.
+    public static func fixedTimeAnchor(
+        matchingTitle title: String,
+        fixedNotes: String,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> (start: Date, durationMinutes: Int)? {
+        let target = normalizedTitle(title)
+        let dayStart = calendar.startOfDay(for: day)
+        for note in splitNotes(fixedNotes) {
+            guard let parsed = parseTimedCommitment(note) else { continue }
+            guard normalizedTitle(parsed.title) == target
+                || titlesMatchLoosely(normalizedTitle(parsed.title), target) else { continue }
+            guard let start = calendar.date(
+                bySettingHour: parsed.hour,
+                minute: parsed.minute,
+                second: 0,
+                of: dayStart
+            ) else { continue }
+            return (start, parsed.defaultDurationMinutes)
+        }
+        return nil
+    }
+
+    private static func titlesMatchLoosely(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.contains(rhs) || rhs.contains(lhs)
     }
 
     /// Standard daily routines (meals, hygiene, review) — used for onboarding and backfill.

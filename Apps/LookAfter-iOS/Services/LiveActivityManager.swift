@@ -75,7 +75,7 @@ final class LiveActivityManager {
             do {
                 self.focusActivity = try Activity.request(
                     attributes: attributes,
-                    content: .init(state: state, staleDate: sessionEndDate),
+                    content: .init(state: state, staleDate: nil),
                     pushType: nil
                 )
             } catch {
@@ -120,7 +120,7 @@ final class LiveActivityManager {
                 isPaused: isPaused,
                 progressFraction: progressFraction
             )
-            await focusActivity.update(.init(state: state, staleDate: sessionEndDate))
+            await focusActivity.update(.init(state: state, staleDate: nil))
         }
     }
 
@@ -154,12 +154,11 @@ final class LiveActivityManager {
 
         let state = Self.contentState(from: snapshot)
         let icon = snapshot.category.systemImage
-        let staleDate = snapshot.windowEnd
 
         if let focusActivity, isExecutionDriven {
             enqueueFocusOperation(deferStartup: false) { [weak self] in
                 guard let self, let current = self.focusActivity, current.id == focusActivity.id else { return }
-                await current.update(.init(state: state, staleDate: staleDate))
+                await current.update(.init(state: state, staleDate: nil))
             }
             return
         }
@@ -178,7 +177,7 @@ final class LiveActivityManager {
             do {
                 self.focusActivity = try Activity.request(
                     attributes: attributes,
-                    content: .init(state: state, staleDate: staleDate),
+                    content: .init(state: state, staleDate: nil),
                     pushType: nil
                 )
                 self.isExecutionDriven = true
@@ -360,7 +359,9 @@ final class LiveActivityManager {
             nextUpSummary: snapshot.pinNextUpSummary,
             progressFraction: snapshot.pinProgressFraction,
             sectionLabel: snapshot.pinSectionLabel,
-            categoryIcon: snapshot.pinCategoryIcon
+            categoryIcon: snapshot.pinCategoryIcon,
+            windowStart: snapshot.pinWindowStart,
+            windowEnd: snapshot.pinWindowEnd
         )
     }
 

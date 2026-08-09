@@ -63,7 +63,11 @@ enum PlanningResponseParser {
         if let neg = json["negotiation"] as? [String: Any],
            let question = neg["question"] as? String,
            let options = neg["options"] as? [String], !options.isEmpty {
-            negotiation = PlanningNegotiation(question: question, options: options)
+            negotiation = PlanningNegotiation(
+                question: question,
+                options: options,
+                optionVariantIDs: neg["optionVariantIDs"] as? [String]
+            )
         }
 
         let deltaDicts = json["timelineDeltas"] as? [[String: Any]] ?? []
@@ -78,7 +82,16 @@ enum PlanningResponseParser {
         if let neg = json["multiDayPlanning"] as? [String: Any],
            let question = neg["question"] as? String,
            let options = neg["options"] as? [String], !options.isEmpty {
-            multiDayPlanning = PlanningNegotiation(question: question, options: options)
+            multiDayPlanning = PlanningNegotiation(
+                question: question,
+                options: options,
+                optionVariantIDs: neg["optionVariantIDs"] as? [String]
+            )
+        }
+
+        var planVariants: [PlanVariant]?
+        if let variantDicts = json["planVariants"] as? [[String: Any]], !variantDicts.isEmpty {
+            planVariants = variantDicts.compactMap { parsePlanVariant($0) }
         }
 
         return PlanningTurnResponse(
@@ -86,6 +99,7 @@ enum PlanningResponseParser {
             thinkingSteps: thinking,
             mutations: mutations,
             negotiation: negotiation,
+            planVariants: planVariants,
             multiDayDraft: multiDayDraft,
             multiDayPlanning: multiDayPlanning,
             timelineDeltas: timelineDeltas,
@@ -151,6 +165,32 @@ enum PlanningResponseParser {
             deadline: deadline,
             slices: slices,
             reasoning: reasoning
+        )
+    }
+
+    private static func parsePlanVariant(_ dict: [String: Any]) -> PlanVariant? {
+        guard let label = dict["label"] as? String else { return nil }
+        let changesRaw = dict["scheduleChanges"] as? [[String: Any]] ?? []
+        let changes = changesRaw.compactMap { change -> DayReplanScheduleChange? in
+            guard let taskID = (change["taskID"] as? String) ?? (change["taskId"] as? String) else { return nil }
+            return DayReplanScheduleChange(
+                taskID: taskID,
+                startHour: change["startHour"] as? Int ?? change["start_hour"] as? Int,
+                startMinute: change["startMinute"] as? Int ?? change["start_minute"] as? Int,
+                deferToTomorrow: change["deferToTomorrow"] as? Bool ?? false,
+                reason: change["reason"] as? String ?? ""
+            )
+        }
+        let deltaDicts = dict["timelineDeltas"] as? [[String: Any]] ?? []
+        let deltas = deltaDicts.compactMap { parseTimelineDelta($0) }
+        return PlanVariant(
+            id: dict["id"] as? String ?? UUID().uuidString,
+            label: label,
+            summary: dict["summary"] as? String ?? label,
+            tradeoffs: dict["tradeoffs"] as? [String] ?? [],
+            scheduleChanges: changes,
+            timelineDeltas: deltas,
+            recommended: dict["recommended"] as? Bool ?? false
         )
     }
 

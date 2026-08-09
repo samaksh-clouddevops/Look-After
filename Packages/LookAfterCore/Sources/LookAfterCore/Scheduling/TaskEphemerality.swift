@@ -183,6 +183,9 @@ public enum TaskEphemeralityDefaults {
 
     public static func collisionStrategy(for task: LifeTask) -> SemanticCollisionStrategy {
         if let explicit = task.collisionStrategy { return explicit }
+        if task.semanticProfile?.subtype == "meal" {
+            return .dropOldest
+        }
         switch task.semanticProfile?.semanticType {
         case .physicalActivity, .medication, .selfCare:
             return .dropOldest

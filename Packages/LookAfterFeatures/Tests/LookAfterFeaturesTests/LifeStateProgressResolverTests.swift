@@ -1,5 +1,6 @@
 import XCTest
 @testable import LookAfterFeatures
+import LookAfterCore
 
 final class LifeStateProgressResolverTests: XCTestCase {
 
@@ -26,15 +27,15 @@ final class LifeStateProgressResolverTests: XCTestCase {
         XCTAssertEqual(progress.wellbeing, 0.68, accuracy: 0.001)
     }
 
-    func testWithoutOvernightSignalEnergyAndRecoveryAreZero() {
+    func testWithoutOvernightSignalUsesEstimatedEnergyAndRecovery() {
         let snapshot = BriefingHealthSnapshot(
             readinessLabel: "Steady",
             readinessScore: 61,
             readinessBand: "Moderate",
-            energyPercent: 0,
+            energyPercent: 72,
             energyLevel: EnergyLevel.moderate.rawValue,
-            recoveryLabel: "No data",
-            recoveryPercent: 0,
+            recoveryLabel: "Moderate",
+            recoveryPercent: 55,
             focusWindow: "10:00 AM – 1:00 PM",
             isHealthConnected: true,
             hasOvernightHealthSignal: false
@@ -42,9 +43,9 @@ final class LifeStateProgressResolverTests: XCTestCase {
 
         let progress = LifeStateProgressResolver.resolve(healthSnapshot: snapshot)
 
-        XCTAssertEqual(progress.energy, 0)
+        XCTAssertEqual(progress.energy, 0.72, accuracy: 0.001)
         XCTAssertEqual(progress.focus, 0.61, accuracy: 0.001)
-        XCTAssertEqual(progress.wellbeing, 0)
+        XCTAssertEqual(progress.wellbeing, 0.55, accuracy: 0.001)
     }
 
     func testSleepFallbackForWellbeingWhenRecoveryUnavailable() {

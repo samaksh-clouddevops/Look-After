@@ -1,0 +1,14 @@
+{
+  "containerAppFqdn": {
+    "type": "String",
+    "value": "lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io"
+  },
+  "containerAppName": {
+    "type": "String",
+    "value": "lookafter-auth-d3mssrdbjuy6c"
+  },
+  "containerAppResourceId": {
+    "type": "String",
+    "value": "/subscriptions/3a842172-43f9-4a68-8916-6a3be2e00f82/resourceGroups/lookafter-auth-rg/providers/Microsoft.App/containerApps/lookafter-auth-d3mssrdbjuy6c"
+  }
+}

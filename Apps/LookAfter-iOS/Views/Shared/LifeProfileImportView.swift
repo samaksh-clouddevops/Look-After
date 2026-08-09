@@ -15,6 +15,7 @@ struct LifeProfileImportView: View {
     @State private var showAdvancedEditor = false
     @State private var structuredProfileSections = StructuredLifeProfileSections()
     @State private var organizeError: String?
+    @State private var showTaskReview = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -45,7 +46,7 @@ struct LifeProfileImportView: View {
                 Spacer()
 
                 Button(action: {
-                    Task { await recompile() }
+                    Task { @MainActor in await recompile() }
                 }, label: {
                     HStack {
                         if isCompiling {
@@ -96,12 +97,20 @@ struct LifeProfileImportView: View {
         .onChange(of: structuredProfileSections.adhdFocusPatterns) { _, _ in syncMarkdownFromSections() }
         .onChange(of: structuredProfileSections.dailySchedule) { _, _ in syncMarkdownFromSections() }
         .onChange(of: structuredProfileSections.planningPreferences) { _, _ in syncMarkdownFromSections() }
+        .sheet(isPresented: $showTaskReview) {
+            GeneratedTasksReviewSheet(
+                tasksVM: shell.tasksVM,
+                userId: FirebaseManager.shared.resolvedUserId,
+                onFinished: {}
+            )
+        }
     }
 
     private func syncMarkdownFromSections() {
         markdown = LifeProfileComposer.compile(structuredProfileSections)
     }
 
+    @MainActor
     private func organizeWithAI() async {
         organizeError = nil
         let prompt = LifeProfileComposer.organizeStructuredPrompt(structuredProfileSections)
@@ -128,6 +137,7 @@ struct LifeProfileImportView: View {
         }
     }
 
+    @MainActor
     private func recompile() async {
         isCompiling = true
         compileMessage = nil
@@ -139,6 +149,7 @@ struct LifeProfileImportView: View {
         let userId = FirebaseManager.shared.resolvedUserId
         if !userId.isEmpty {
             await shell.assembleDayFromLifeModel(userId: userId)
+            showTaskReview = true
         }
 
         compileMessage = "Brain updated — \(model.commitments.count) commitments, \(model.timeBlocks.count) time blocks."

@@ -4,7 +4,7 @@ import Foundation
 public enum SpeechVoiceProvider: String, CaseIterable, Identifiable, Sendable {
     case appleEnhanced = "apple_enhanced"
     case appleStandard = "apple_standard"
-    /// OpenAI neural TTS (tts-1-hd) — requires a separate OpenAI API key.
+    /// OpenAI neural TTS (tts-1-hd) — proxied through the licensed auth API.
     case cloud = "cloud"
 
     public var id: String { rawValue }
@@ -21,7 +21,7 @@ public enum SpeechVoiceProvider: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleEnhanced: return "Best on-device neural voices when downloaded."
         case .appleStandard: return "System default English voice."
-        case .cloud: return "Natural neural voice via OpenAI — requires an OpenAI API key."
+        case .cloud: return "Natural neural voice via licensed secure proxy."
         }
     }
 }
@@ -33,9 +33,10 @@ public enum SpeechVoiceSettings {
     public static let rateKey = "lookafter.speech.rate"
     public static let pitchKey = "lookafter.speech.pitch"
     public static let autoSpeakRepliesKey = "lookafter.speech.autoSpeakReplies"
+    public static let autoSpeakProactiveKey = "lookafter.speech.autoSpeakProactive"
     public static let spokenStyleKey = "lookafter.speech.spokenStyle"
-    public static let cloudAPIKeyKey = "lookafter.speech.cloudAPIKey"
     public static let cloudVoiceKey = "lookafter.speech.cloudVoice"
+    public static let licenseActiveKey = "lookafter.license.active"
 
     /// OpenAI TTS voices — warm, conversational options first.
     public static let cloudVoices: [(id: String, label: String)] = [
@@ -46,8 +47,6 @@ public enum SpeechVoiceSettings {
         ("fable", "Fable (expressive)"),
         ("onyx", "Onyx (deep, authoritative)"),
     ]
-
-    public static let cloudAPIKeyEnvVar = "OPENAI_API_KEY"
 
     /// 0.0 … 1.0 relative to default AVSpeech rate band (mapped in synthesizer).
     public static var rate: Double {
@@ -94,27 +93,8 @@ public enum SpeechVoiceSettings {
         set { UserDefaults.standard.set(newValue, forKey: cloudVoiceKey) }
     }
 
-    /// OpenAI API key for cloud TTS — UserDefaults override, then OPENAI_API_KEY env.
-    public static var cloudAPIKey: String? {
-        get {
-            if let stored = UserDefaults.standard.string(forKey: cloudAPIKeyKey),
-               !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return stored.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if let env = ProcessInfo.processInfo.environment[cloudAPIKeyEnvVar],
-               !env.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return env.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return nil
-        }
-        set {
-            let trimmed = newValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            UserDefaults.standard.set(trimmed, forKey: cloudAPIKeyKey)
-        }
-    }
-
     public static var isCloudTTSAvailable: Bool {
-        provider == .cloud && cloudAPIKey != nil
+        provider == .cloud && UserDefaults.standard.bool(forKey: licenseActiveKey)
     }
 
     public static var autoSpeakReplies: Bool {
@@ -124,6 +104,15 @@ public enum SpeechVoiceSettings {
             return defaults.bool(forKey: autoSpeakRepliesKey)
         }
         set { UserDefaults.standard.set(newValue, forKey: autoSpeakRepliesKey) }
+    }
+
+    public static var autoSpeakProactive: Bool {
+        get {
+            let defaults = UserDefaults.standard
+            if defaults.object(forKey: autoSpeakProactiveKey) == nil { return false }
+            return defaults.bool(forKey: autoSpeakProactiveKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: autoSpeakProactiveKey) }
     }
 
     /// When true, LLM coach/planning replies are instructed for spoken delivery.

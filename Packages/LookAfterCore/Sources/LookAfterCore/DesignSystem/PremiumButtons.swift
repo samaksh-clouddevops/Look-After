@@ -24,7 +24,7 @@ private struct PremiumButtonLabel: View {
 
     var body: some View {
         HStack(spacing: DesignSystem.spacingSM) {
-            if let icon {
+            if let icon, !icon.isEmpty {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
             }
@@ -168,7 +168,7 @@ public struct PremiumCompactButton: View {
     public var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if let icon {
+                if let icon, !icon.isEmpty {
                     Image(systemName: icon)
                         .font(.system(size: 14, weight: .semibold))
                 }

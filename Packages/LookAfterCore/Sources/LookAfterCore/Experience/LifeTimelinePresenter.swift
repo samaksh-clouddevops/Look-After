@@ -89,6 +89,9 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
     /// Semantic time lock from the source task when available.
     public let timeConstraint: TimeConstraint?
     public let completedAt: Date?
+    /// Task priority used to order flexible same-day events (higher first).
+    public let sortPriority: Int
+    public let scheduleKind: TimelineScheduleKind
 
     public var resolvedTimeConstraint: TimeConstraint {
         timeConstraint ?? (isFixed ? .anchored : .flexible)
@@ -105,7 +108,9 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
         isCompleted: Bool = false,
         isFixed: Bool = false,
         timeConstraint: TimeConstraint? = nil,
-        completedAt: Date? = nil
+        completedAt: Date? = nil,
+        sortPriority: Int = 0,
+        scheduleKind: TimelineScheduleKind = .fixedWindow
     ) {
         self.id = id
         self.kind = kind
@@ -118,6 +123,8 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
         self.isFixed = isFixed
         self.timeConstraint = timeConstraint
         self.completedAt = completedAt
+        self.sortPriority = sortPriority
+        self.scheduleKind = scheduleKind
     }
 }
 
@@ -155,6 +162,9 @@ public enum LifeTimelinePresenter {
             )
             : []
         var eventTaskIds = Set<String>()
+        var eventSeriesKeys = Set(
+            timelineTasks.map { TaskScheduleQuery.seriesKey(for: $0) }
+        )
 
         let activeTasks = timelineTasks.filter { $0.status.isActive && !isShoppingErrandTask($0) }
         let financeTasks = activeTasks.filter { isFinanceTask($0) }
@@ -165,6 +175,7 @@ public enum LifeTimelinePresenter {
             guard let event = taskEvent(from: task, allTasks: allTasks, now: now, referenceDay: dayAnchor, calendar: calendar) else { continue }
             events.append(event)
             eventTaskIds.insert(task.id)
+            eventSeriesKeys.insert(TaskScheduleQuery.seriesKey(for: task))
         }
 
         if !financeTasks.isEmpty {
@@ -219,9 +230,12 @@ public enum LifeTimelinePresenter {
         }
 
         for task in timelineCompleted {
+            let seriesKey = TaskScheduleQuery.seriesKey(for: task)
             guard !eventTaskIds.contains(task.id) else { continue }
+            guard !eventSeriesKeys.contains(seriesKey) else { continue }
             guard let event = taskEvent(from: task, allTasks: allTasks, now: now, referenceDay: dayAnchor, calendar: calendar, forceCompleted: true) else { continue }
             events.append(event)
+            eventSeriesKeys.insert(seriesKey)
         }
 
         if isToday {
@@ -239,22 +253,9 @@ public enum LifeTimelinePresenter {
             }
         }
 
-        return events
+        let filtered = events
             .filter { calendar.isDate($0.date, inSameDayAs: dayAnchor) || $0.date >= dayAnchor }
-            .sorted(by: timelineSortOrder)
-    }
-
-    private static func timelineSortOrder(_ lhs: LifeTimelineEvent, _ rhs: LifeTimelineEvent) -> Bool {
-        if lhs.id.hasPrefix("sleep-boundary") != rhs.id.hasPrefix("sleep-boundary") {
-            return !lhs.id.hasPrefix("sleep-boundary")
-        }
-        if lhs.isFlexibleToday != rhs.isFlexibleToday {
-            return !lhs.isFlexibleToday
-        }
-        if lhs.isFlexibleToday {
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-        }
-        return lhs.date < rhs.date
+        return TimelineDisplaySort.sorted(filtered, now: now, calendar: calendar)
     }
 
     // MARK: - Task → event
@@ -300,7 +301,9 @@ public enum LifeTimelinePresenter {
         return completedToday.filter { task in
             guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
             guard task.status == .completed else { return false }
-            guard let completedAt = task.completedAt, completedAt >= startOfDay else { return false }
+            let completionAnchor: Date? = task.completedAt
+                ?? (calendar.isDate(task.updatedAt, inSameDayAs: now) ? task.updatedAt : nil)
+            guard let completionAnchor, completionAnchor >= startOfDay else { return false }
 
             if task.scheduledDate != nil || task.scheduledTime != nil {
                 if let scheduledDate = task.scheduledDate {
@@ -370,45 +373,55 @@ public enum LifeTimelinePresenter {
         forceCompleted: Bool
     ) -> LifeTimelineEvent {
         let day = calendar.startOfDay(for: referenceDay)
-        let hasTimedWindow = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) != nil
+        let hasConcreteSlot = TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: day, calendar: calendar)
         let isFlexibleDay = TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: day, calendar: calendar)
-        let isFloatingFlexible = !hasTimedWindow && !isFlexibleDay
+        let isFloatingFlexible = !hasConcreteSlot && !isFlexibleDay
             && (task.schedulingMode == .flexible || task.timeConstraint == .flexible)
 
         let when: Date
-        if let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar) {
+        let isCompletedEvent = forceCompleted || task.status == .completed
+        if isCompletedEvent {
+            if let displayTime = TaskScheduleInterval.timelineDisplayTime(
+                for: task, on: day, calendar: calendar, isCompleted: true
+            ) {
+                when = displayTime
+            } else {
+                when = day
+            }
+        } else if isFlexibleDay || isFloatingFlexible || !hasConcreteSlot {
+            when = day
+        } else if let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),
+                  !TaskScheduleInterval.isDisplayMidnightSentinel(start, on: day, calendar: calendar) {
             when = start
-        } else if isFlexibleDay || isFloatingFlexible {
+        } else if TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task, calendar: calendar)
+                    || TaskScheduleInterval.isMidnightClockTime(task.scheduledTime, calendar: calendar) {
             when = day
         } else {
             when = task.deadline ?? task.createdAt
         }
         let kind = LifeTimelineKindResolver.kind(for: task)
 
-        var duration = task.estimatedMinutes > 0 ? task.estimatedMinutes : nil
-        if let window = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) {
-            duration = window.durationMinutes
-        } else if isFlexibleDay,
-                  let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),
-                  let end = TaskScheduleInterval.resolvedEnd(for: task, on: day, calendar: calendar) {
-            duration = max(Int(end.timeIntervalSince(start) / 60), TaskDurationPolicy.minimumMinutes)
+        var duration = TaskScheduleInterval.displayDurationMinutes(for: task, on: day, calendar: calendar)
+        if duration <= 0 {
+            duration = task.estimatedMinutes > 0 ? task.estimatedMinutes : TaskDurationPolicy.minimumMinutes
         }
 
         let subtitle: String
         if forceCompleted || task.status == .completed {
             subtitle = "Done"
-        } else if isFlexibleDay || isFloatingFlexible {
-            subtitle = "Flexible today"
-        } else if let window = TaskScheduleInterval.window(for: task, on: day, calendar: calendar) {
-            subtitle = ScheduleTimeFormatting.rangeLabel(from: window.start, to: window.end, calendar: calendar)
-        } else if let duration,
-                  let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),
-                  let end = TaskScheduleInterval.resolvedEnd(for: task, on: day, calendar: calendar) {
-            subtitle = ScheduleTimeFormatting.rangeLabel(from: start, to: end, calendar: calendar)
-        } else if let duration {
-            subtitle = "About \(duration) min"
         } else {
-            subtitle = kind.sectionLabel
+            switch TaskScheduleInterval.displaySchedule(for: task, on: day, calendar: calendar) {
+            case .unslottedFlexible:
+                subtitle = "Flexible today"
+            case .window(_, _, let rangeLabel):
+                subtitle = rangeLabel
+            case .noSchedule:
+                if duration > 0 {
+                    subtitle = "About \(duration) min"
+                } else {
+                    subtitle = kind.sectionLabel
+                }
+            }
         }
 
         var displaySubtitle = subtitle
@@ -416,6 +429,23 @@ public enum LifeTimelinePresenter {
            let parentId = task.parentTaskId,
            let parent = allTasks.first(where: { $0.id == parentId }) {
             displaySubtitle = "\(parent.title) · \(subtitle)"
+        }
+
+        let scheduleKind: TimelineScheduleKind
+        if forceCompleted || task.status == .completed {
+            scheduleKind = .completed
+        } else if !hasConcreteSlot
+                    || isFlexibleDay
+                    || isFloatingFlexible
+                    || TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task, calendar: calendar)
+                    || TaskScheduleInterval.isMidnightClockTime(task.scheduledTime, calendar: calendar) {
+            scheduleKind = (!hasConcreteSlot
+                || isFlexibleDay
+                || TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task, calendar: calendar)
+                || TaskScheduleInterval.isMidnightClockTime(task.scheduledTime, calendar: calendar))
+                ? .flexibleDay : .floating
+        } else {
+            scheduleKind = .fixedWindow
         }
 
         return LifeTimelineEvent(
@@ -428,7 +458,9 @@ public enum LifeTimelinePresenter {
             isCompleted: forceCompleted || task.status == .completed,
             isFixed: task.isFixedTimeEvent,
             timeConstraint: task.timeConstraintValue,
-            completedAt: task.completedAt
+            completedAt: task.completedAt,
+            sortPriority: task.priority.rawValue,
+            scheduleKind: scheduleKind
         )
     }
 

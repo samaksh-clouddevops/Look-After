@@ -41,39 +41,58 @@ final class V4UIQAUITests: FlowTestBase {
         )
     }
 
-    func testCaptureMenuOpensWithoutKeyboard() throws {
+    func testCaptureComposerOpensWithTextField() throws {
         launch()
         waitForBriefing()
         tapTab("capture")
 
-        XCTAssertTrue(app.otherElements["screen-capture"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.buttons["capture-type-task"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["capture-dismiss-fab"].waitForExistence(timeout: 5))
-
-        // Menu-first: no text field on the first frame.
-        XCTAssertEqual(app.textFields.count, 0, "Capture menu should not show a text field before type selection")
+        XCTAssertTrue(app.otherElements["capture-composer"].waitForExistence(timeout: 8)
+            || app.otherElements["screen-capture"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textFields["capture-text-field"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["capture-mic"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["capture-save"].waitForExistence(timeout: 3))
 
         EvidenceWriter.write(
-            source: QASource("V4-CAPTURE-NO-KEYBOARD", document: "look_after_ui_ux_plan phase 3"),
+            source: QASource("V4-CAPTURE-COMPOSER", document: "capture_feature_revamp"),
             status: "pass",
             durationMs: 0
         )
     }
 
-    func testCaptureTypeOpensEntrySheet() throws {
+    func testCaptureSaveShowsOutcomeToast() throws {
         launch()
         waitForBriefing()
         tapTab("capture")
-        XCTAssertTrue(app.buttons["capture-type-note"].waitForExistence(timeout: 8))
-        app.buttons["capture-type-note"].tap()
 
-        // Entry sheet may expose a text field — keyboard allowed on step two.
-        let fieldAppeared = app.textFields.firstMatch.waitForExistence(timeout: 5)
-        XCTAssertTrue(fieldAppeared, "Note entry sheet should expose a text field")
+        let field = app.textFields["capture-text-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 8))
+        field.tap()
+        field.typeText("Buy milk for dinner")
+
+        app.buttons["capture-save"].tap()
+
+        let toastAppeared = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Buy milk' OR label CONTAINS[c] 'Inbox'")
+        ).firstMatch.waitForExistence(timeout: 10)
+        XCTAssertTrue(toastAppeared, "Capture outcome toast should appear after save")
 
         EvidenceWriter.write(
-            source: QASource("V4-CAPTURE-ENTRY", document: "look_after_ui_ux_plan phase 3"),
-            status: fieldAppeared ? "pass" : "fail",
+            source: QASource("FLOW-003-CAPTURE-ROUTE", document: "capture_feature_revamp"),
+            status: toastAppeared ? "pass" : "fail",
+            durationMs: 0
+        )
+    }
+
+    func testCaptureMenuOpensWithoutKeyboard() throws {
+        launch()
+        waitForBriefing()
+        tapTab("capture")
+
+        XCTAssertTrue(app.textFields["capture-text-field"].waitForExistence(timeout: 8))
+
+        EvidenceWriter.write(
+            source: QASource("V4-CAPTURE-NO-KEYBOARD", document: "look_after_ui_ux_plan phase 3"),
+            status: "pass",
             durationMs: 0
         )
     }

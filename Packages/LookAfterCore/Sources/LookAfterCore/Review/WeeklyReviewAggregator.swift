@@ -29,7 +29,10 @@ public enum WeeklyReviewAggregator {
         calendar: Calendar = .current
     ) -> WeeklyReviewSummary {
         let bounds = weekBounds(ending: weekEnding, calendar: calendar)
-        let weekLogs = logs.filter { $0.timestamp >= bounds.start && $0.timestamp < bounds.endExclusive }
+        let weekLogs = CascadeHistoryDedup.compact(
+            logs.filter { $0.timestamp >= bounds.start && $0.timestamp < bounds.endExclusive },
+            calendar: calendar
+        )
 
         let sabotageLogs = weekLogs.filter { $0.kind == .sabotageAuction }
         let sabotageCount = sabotageLogs.count

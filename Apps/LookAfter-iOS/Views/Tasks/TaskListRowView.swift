@@ -5,30 +5,31 @@ import LookAfterFeatures
 /// Single task row for `TaskListView` — extracted to keep the list body type-checkable.
 struct TaskListRowView: View {
     let task: LifeTask
-    @ObservedObject var tasksVM: TasksViewModel
-    @ObservedObject var adhdVM: ADHDViewModel
+    let isDecomposing: Bool
+    let timeDisplayLabel: String
+    let isLoadingTimeDisplay: Bool
     @Binding var editingTask: LifeTask?
     let onComplete: (LifeTask) -> Void
     let onDelete: (LifeTask) -> Void
+    let onMarkIncomplete: () -> Void
+    let onStart: () -> Void
+    let onDecompose: () -> Void
+    let onDuplicate: () -> Void
 
     var body: some View {
         TaskCardView(
             task: task,
             onOpen: { editingTask = task },
             onComplete: { onComplete(task) },
-            onMarkIncomplete: { Task { await tasksVM.markIncomplete(task) } },
-            onStart: {
-                adhdVM.startCountdown(for: task) {
-                    adhdVM.startFocusSession(task: task)
-                }
-            },
-            onDecompose: { Task { await tasksVM.decomposeTask(task) } },
+            onMarkIncomplete: onMarkIncomplete,
+            onStart: onStart,
+            onDecompose: onDecompose,
             onEdit: { editingTask = task },
-            onDuplicate: { tasksVM.duplicateTask(task) },
+            onDuplicate: onDuplicate,
             onDelete: { onDelete(task) },
-            isDecomposing: tasksVM.isDecomposing(taskId: task.id),
-            timeDisplayLabel: tasksVM.timeDisplay(for: task).lineLabel,
-            isLoadingTimeDisplay: tasksVM.isLoadingTimeDisplay(taskId: task.id)
+            isDecomposing: isDecomposing,
+            timeDisplayLabel: timeDisplayLabel,
+            isLoadingTimeDisplay: isLoadingTimeDisplay
         )
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
@@ -61,26 +62,22 @@ struct TaskListRowView: View {
         })
 
         if task.isCompleted {
-            Button(action: { Task { await tasksVM.markIncomplete(task) } }, label: {
+            Button(action: onMarkIncomplete, label: {
                 Label("Mark Incomplete", systemImage: "arrow.uturn.backward.circle")
             })
-            Button(action: { tasksVM.duplicateTask(task) }, label: {
+            Button(action: onDuplicate, label: {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             })
         } else {
-            Button(action: {
-                adhdVM.startCountdown(for: task) {
-                    adhdVM.startFocusSession(task: task)
-                }
-            }, label: {
+            Button(action: onStart, label: {
                 Label("Start", systemImage: "play.fill")
             })
             if task.steps.isEmpty {
-                Button(action: { Task { await tasksVM.decomposeTask(task) } }, label: {
+                Button(action: onDecompose, label: {
                     Label("Break Down", systemImage: "square.split.2x2")
                 })
             }
-            Button(action: { tasksVM.duplicateTask(task) }, label: {
+            Button(action: onDuplicate, label: {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             })
         }

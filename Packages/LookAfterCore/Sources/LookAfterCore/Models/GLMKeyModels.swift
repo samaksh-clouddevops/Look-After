@@ -83,6 +83,8 @@ public enum GLMKeyStatus: String, Sendable {
 public enum GLMServiceError: Error, LocalizedError {
     case allKeysExhausted
     case noKeysConfigured
+    case proxyNotConfigured
+    case licenseRequired
     case keyNotFound
     case invalidAPIKey
     case quotaExceeded
@@ -95,7 +97,11 @@ public enum GLMServiceError: Error, LocalizedError {
         case .allKeysExhausted:
             return "All configured GLM API keys have reached their quota or are temporarily unavailable."
         case .noKeysConfigured:
-            return "No GLM API key configured. Add one in Settings → API Keys."
+            return "AI is unavailable. Activate your product key in Settings → License."
+        case .proxyNotConfigured:
+            return "AI proxy is not configured for this build."
+        case .licenseRequired:
+            return "A product key is required for AI. Redeem one in Settings → License."
         case .keyNotFound:
             return "API key not found."
         case .invalidAPIKey:

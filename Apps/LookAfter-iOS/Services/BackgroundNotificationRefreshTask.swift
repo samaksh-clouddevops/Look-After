@@ -67,7 +67,8 @@ enum BackgroundNotificationRefreshTask {
             postWake: postWake,
             heroTaskTitle: heroTask?.title,
             heroTaskId: heroTask?.id,
-            userDisplayName: UserLifeProfileStore.resolvedDisplayName()
+            userDisplayName: UserLifeProfileStore.resolvedDisplayName(),
+            proactiveActions: ProactiveSnapshotStore.load().filter { $0.surface == .notification }
         )
 
         await NotificationCoordinator.shared.refresh(input: input)

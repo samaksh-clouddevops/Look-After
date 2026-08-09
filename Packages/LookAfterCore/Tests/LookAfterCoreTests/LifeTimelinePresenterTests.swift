@@ -224,7 +224,7 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertFalse(event!.subtitle.contains("12:00 AM"))
     }
 
-    func testDateOnlyTaskIsNotPastAt845PM() {
+    func testDateOnlyFlexibleIncludedOnTimeline() {
         let now = makeDate(year: 2026, month: 8, day: 5, hour: 20, minute: 45)
         let day = calendar.startOfDay(for: now)
         let task = LifeTask(
@@ -249,7 +249,46 @@ final class LifeTimelinePresenterTests: XCTestCase {
         let event = events.first(where: { $0.title == "Review notes" })
         XCTAssertNotNil(event)
         XCTAssertEqual(event?.subtitle, "Flexible today")
-        XCTAssertGreaterThan(event!.resolvedEndDate(calendar: calendar), now)
+        XCTAssertEqual(event?.scheduleKind, .flexibleDay)
+    }
+
+    func testDateOnlyAnchoredProjectionUsesRoutineAnchorNotMidnight() {
+        let now = makeDate(year: 2026, month: 8, day: 7, hour: 20, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        var template = LifeTask(
+            title: "Dinner",
+            estimatedMinutes: 45,
+            tags: ["daily-routine"],
+            recurrence: .daily,
+            schedulingMode: .fixedTime,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template.createdAt = makeDate(year: 2026, month: 1, day: 1)
+        template = TaskConstraintAlignment.align(template)
+
+        let projection = TaskRecurrenceEngine.timelineProjectionOccurrence(
+            from: template,
+            on: day,
+            calendar: calendar
+        )
+
+        XCTAssertNotNil(projection.scheduledTime)
+        let events = LifeTimelinePresenter.build(
+            tasks: [projection],
+            completedToday: [],
+            recurrenceTemplates: [template],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let event = events.first(where: { $0.title == "Dinner" })
+        XCTAssertNotNil(event)
+        XCTAssertEqual(calendar.component(.hour, from: event!.date), 19)
+        XCTAssertFalse(event!.subtitle.contains("12:00 AM"))
     }
 
     func testScheduledDateAndTimeCombineOnTimelineDay() {
@@ -282,7 +321,7 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertFalse(event!.resolvedEndDate(calendar: calendar) < now)
     }
 
-    func testMidnightScheduledTimeTreatedAsFlexibleToday() {
+    func testMidnightScheduledTimeIncludedAsUnslottedFlexible() {
         let now = makeDate(year: 2026, month: 8, day: 5, hour: 20, minute: 45)
         let day = calendar.startOfDay(for: now)
         let task = LifeTask(
@@ -308,7 +347,69 @@ final class LifeTimelinePresenterTests: XCTestCase {
         let event = events.first(where: { $0.title == "Review notes" })
         XCTAssertNotNil(event)
         XCTAssertEqual(event?.subtitle, "Flexible today")
-        XCTAssertTrue(event!.isFlexibleToday)
+    }
+
+    func testUserPlacedMidnightShowsFlexibleOnTimeline() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 20, minute: 45)
+        let day = calendar.startOfDay(for: now)
+        var task = LifeTask(
+            title: "Gym",
+            estimatedMinutes: 90,
+            scheduledDate: day,
+            scheduledTime: day,
+            tags: [LifeModel.commitmentTaskTag, "fixed"],
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        TaskConstraintAlignment.markUserPlaced(&task)
+        task = TaskConstraintAlignment.align(task)
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [task],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let event = events.first(where: { $0.title == "Gym" })
+        XCTAssertNotNil(event)
+        XCTAssertEqual(event?.subtitle, "Flexible today")
+        XCTAssertFalse(event!.subtitle.contains("12:00 AM"))
+    }
+
+    func testAnchoredMidnightPlaceholderShowsFlexibleNotPassed() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 20, minute: 45)
+        let day = calendar.startOfDay(for: now)
+        var task = LifeTask(
+            title: "Brush teeth — evening",
+            lifeArea: .health,
+            estimatedMinutes: 5,
+            scheduledDate: day,
+            scheduledTime: day,
+            tags: ["daily-routine", "fixed"],
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        task = TaskConstraintAlignment.align(task)
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [task],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let event = events.first(where: { $0.title.contains("Brush teeth") })
+        XCTAssertNotNil(event)
+        XCTAssertEqual(event?.subtitle, "Flexible today")
+        XCTAssertFalse(event!.subtitle.contains("12:00 AM"))
+        XCTAssertTrue(event!.scheduleKind.isFlexibleToday)
     }
 
     func testTimedTasksSortBeforeFlexibleTasks() {
@@ -340,6 +441,7 @@ final class LifeTimelinePresenterTests: XCTestCase {
         )
 
         let taskEvents = events.filter { !$0.id.hasPrefix("sleep-boundary") }
+        XCTAssertEqual(taskEvents.count, 2)
         XCTAssertEqual(taskEvents.first?.title, "Morning standup")
         XCTAssertEqual(taskEvents.last?.title, "Flexible task")
     }
@@ -443,6 +545,167 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertEqual(brushEvents.first?.id, "task-today-brush")
     }
 
+    func testDuplicateDinnerTemplatesCollapseToOneEvent() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 17, minute: 27)
+        let day = calendar.startOfDay(for: now)
+        let (templates, occurrences) = duplicateTemplatePair(
+            title: "Dinner",
+            day: day,
+            hour: 19,
+            minute: 0,
+            durationMinutes: 45
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: occurrences,
+            completedToday: [],
+            recurrenceTemplates: templates,
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let dinnerEvents = events.filter { $0.title == "Dinner" }
+        XCTAssertEqual(dinnerEvents.count, 1)
+    }
+
+    func testDuplicateBreakfastTemplatesCollapseToOneEvent() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 7, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        let (templates, occurrences) = duplicateTemplatePair(
+            title: "Breakfast",
+            day: day,
+            hour: 8,
+            minute: 0,
+            durationMinutes: 20
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: occurrences,
+            completedToday: [],
+            recurrenceTemplates: templates,
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let breakfastEvents = events.filter { $0.title == "Breakfast" }
+        XCTAssertEqual(breakfastEvents.count, 1)
+    }
+
+    func testDuplicateGymTemplatesCollapseToOneEvent() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 16, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        let (templates, occurrences) = duplicateTemplatePair(
+            title: "Gym",
+            day: day,
+            hour: 17,
+            minute: 27,
+            durationMinutes: 90,
+            lifeArea: .health
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: occurrences,
+            completedToday: [],
+            recurrenceTemplates: templates,
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let gymEvents = events.filter { $0.title == "Gym" }
+        XCTAssertEqual(gymEvents.count, 1)
+    }
+
+    func testLifeCommitmentGymAndRecurringOccurrenceCollapseToOneEvent() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 17, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        let gymStart = makeDate(year: 2026, month: 1, day: 1, hour: 18, minute: 30)
+        let gymEnd = makeDate(year: 2026, month: 1, day: 1, hour: 20, minute: 0)
+
+        var commitment = LifeTask(
+            id: "gym-commitment",
+            title: "Gym",
+            lifeArea: .health,
+            estimatedMinutes: 90,
+            scheduledDate: day,
+            scheduledTime: gymStart,
+            tags: [LifeModel.commitmentTaskTag, "life-commitment:gym"],
+            schedulingMode: .fixedTime,
+            scheduledEndTime: gymEnd,
+            userId: "user-1"
+        )
+        commitment.applyTimeConstraint(.anchored)
+
+        var template = LifeTask(
+            id: "gym-template",
+            title: "Gym",
+            lifeArea: .health,
+            estimatedMinutes: 90,
+            scheduledTime: makeDate(year: 2026, month: 1, day: 1, hour: 17, minute: 27),
+            recurrence: .daily,
+            schedulingMode: .flexible,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template.createdAt = makeDate(year: 2026, month: 1, day: 1)
+        var occurrence = TaskRecurrenceEngine.makeOccurrence(
+            from: template,
+            template: template,
+            scheduledDate: day,
+            calendar: calendar
+        )
+        occurrence.id = "gym-occurrence"
+        occurrence.schedulingMode = .flexible
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [commitment, occurrence],
+            completedToday: [],
+            recurrenceTemplates: [template],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(events.filter { $0.title == "Gym" }.count, 1)
+    }
+
+    func testDuplicateBrushTeethTemplatesCollapseToOneEvent() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 21, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        let (templates, occurrences) = duplicateTemplatePair(
+            title: "Brush teeth — evening",
+            day: day,
+            hour: 21,
+            minute: 30,
+            durationMinutes: 5,
+            lifeArea: .personal
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: occurrences,
+            completedToday: [],
+            recurrenceTemplates: templates,
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let brushEvents = events.filter { $0.title.contains("Brush teeth") }
+        XCTAssertEqual(brushEvents.count, 1)
+    }
+
     func testSleepBoundaryIsLastTimelineEvent() {
         let now = makeDate(year: 2026, month: 8, day: 5, hour: 20, minute: 45)
         let day = calendar.startOfDay(for: now)
@@ -529,6 +792,152 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertEqual(events.filter { $0.title == "Breakfast" }.count, 1)
         XCTAssertEqual(events.filter { $0.id.hasPrefix("sleep-boundary") }.count, 1)
         XCTAssertTrue(events.last?.id.hasPrefix("sleep-boundary") == true)
+    }
+
+    func testTimelineSignatureStableAcrossShuffledTaskInput() {
+        let now = makeDate(year: 2026, month: 8, day: 6, hour: 10, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        let gym = LifeTask(
+            id: "gym",
+            title: "Gym",
+            estimatedMinutes: 60,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 18, minute: 30),
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        let email = LifeTask(
+            id: "email",
+            title: "Email",
+            estimatedMinutes: 30,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 11, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        let review = LifeTask(
+            id: "review",
+            title: "Review notes",
+            estimatedMinutes: 30,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 15, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        func signature(from tasks: [LifeTask]) -> String {
+            LifeTimelinePresenter.build(
+                tasks: tasks,
+                completedToday: [],
+                bills: [],
+                shoppingItems: [],
+                contacts: [],
+                now: now,
+                calendar: calendar
+            )
+            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))" }
+            .joined(separator: ";")
+        }
+
+        let forward = signature(from: [gym, email, review])
+        let reverse = signature(from: [review, email, gym])
+        XCTAssertEqual(forward, reverse)
+    }
+
+    func testSlottedFlexibleTasksSortByPriorityThenTitle() {
+        let now = makeDate(year: 2026, month: 8, day: 6, hour: 10, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        var high = LifeTask(
+            id: "high",
+            title: "Zulu task",
+            priority: .high,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 15, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        high.timeConstraint = .flexible
+        var low = LifeTask(
+            id: "low",
+            title: "Alpha task",
+            priority: .low,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 16, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        low.timeConstraint = .flexible
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [low, high],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+        let slotted = events.filter { $0.title == "Zulu task" || $0.title == "Alpha task" }
+        XCTAssertEqual(slotted.count, 2)
+        XCTAssertEqual(slotted[0].title, "Zulu task")
+        XCTAssertEqual(slotted[1].title, "Alpha task")
+    }
+
+    private func duplicateTemplatePair(
+        title: String,
+        day: Date,
+        hour: Int,
+        minute: Int,
+        durationMinutes: Int,
+        lifeArea: LifeArea = .health
+    ) -> (templates: [LifeTask], occurrences: [LifeTask]) {
+        let anchor = makeDate(year: 2026, month: 1, day: 1, hour: hour, minute: minute)
+        var template1 = LifeTask(
+            id: "\(title)-template-a",
+            title: title,
+            lifeArea: lifeArea,
+            estimatedMinutes: durationMinutes,
+            scheduledTime: anchor,
+            tags: ["daily-routine"],
+            recurrence: .daily,
+            schedulingMode: .fixedTime,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template1.createdAt = makeDate(year: 2026, month: 1, day: 1)
+        var template2 = LifeTask(
+            id: "\(title)-template-b",
+            title: title,
+            lifeArea: lifeArea,
+            estimatedMinutes: durationMinutes,
+            scheduledTime: anchor,
+            tags: ["daily-routine"],
+            recurrence: .daily,
+            schedulingMode: .fixedTime,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template2.createdAt = makeDate(year: 2026, month: 2, day: 1)
+
+        var occurrence1 = TaskRecurrenceEngine.makeOccurrence(
+            from: template1,
+            template: template1,
+            scheduledDate: day,
+            calendar: calendar
+        )
+        occurrence1.id = "\(title)-occ-a"
+        occurrence1.parentTaskId = template1.id
+
+        var occurrence2 = TaskRecurrenceEngine.makeOccurrence(
+            from: template2,
+            template: template2,
+            scheduledDate: day,
+            calendar: calendar
+        )
+        occurrence2.id = "\(title)-occ-b"
+        occurrence2.parentTaskId = template2.id
+
+        return ([template1, template2], [occurrence1, occurrence2])
     }
 
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {

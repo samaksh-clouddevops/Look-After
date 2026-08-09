@@ -128,7 +128,8 @@ public struct DestinationTile: View {
                     Text(subtitle)
                         .font(.dsCaption())
                         .foregroundColor(DesignSystem.textSecondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

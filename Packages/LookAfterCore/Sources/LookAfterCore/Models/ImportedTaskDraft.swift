@@ -82,7 +82,7 @@ public enum TaskImportError: Error, LocalizedError {
         case .unsupportedFormat: return "This file type is not supported. Use .txt, .csv, or .xlsx."
         case .parseError: return "The AI could not parse the file. Check the format and try again."
         case .noTasksFound: return "No tasks were found in this file."
-        case .apiKeyMissing: return "Add your GLM API key in Settings first."
+        case .apiKeyMissing: return "Activate your product key in Settings → License to use AI import."
         }
     }
 }

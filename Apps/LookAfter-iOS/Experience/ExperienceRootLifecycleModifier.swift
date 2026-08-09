@@ -83,9 +83,17 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
                 aiPreview: shell.brain.chatHistory.last?.content
             )
         } else if phase == .active {
+            AppForegroundTracker.recordForeground()
             shell.syncExecutionEnvironment()
+            let userId = firebase.resolvedUserId
+            if !userId.isEmpty {
+                Task {
+                    await LookAfterIntentBridge.shared.processPendingQueue(userId: userId)
+                }
+            }
             let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
             if healthEnabled, !userId.isEmpty, healthSync.isAvailable {
+                healthSync.refreshConnectionStatus(userId: userId, healthSummary: shell.brainVM.healthSummary)
                 Task {
                     await healthSync.ensureSynced(userId: userId, maxAgeSeconds: 15 * 60)
                 }
@@ -130,13 +138,16 @@ private struct ExperienceRootSyncModifier: ViewModifier {
                     )
                 }
             }
-            .onChange(of: firebase.isAuthenticated) { _, authenticated in
+            .onChange(of: firebase.isAuthenticated) { wasAuthenticated, authenticated in
                 guard authenticated else { return }
                 showOnboarding = !UserLifeProfileStore.hasCompletedOnboarding
+                // Launch while already signed in is handled by `.task` → configureOnLaunch.
+                guard !wasAuthenticated else { return }
                 shell.bootstrap(userId: firebase.resolvedUserId, healthSync: healthSync)
             }
             .onChange(of: shell.factoryResetGeneration) { _, _ in
                 showOnboarding = !UserLifeProfileStore.hasCompletedOnboarding
+                AppFeatureTourStore.reset()
             }
             .task { await configureOnLaunch() }
     }
@@ -227,23 +238,44 @@ private struct ExperienceRootDataModifier: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .taskListDidChange)) { _ in
                 guard !shell.isPerformingFactoryReset else { return }
                 let userId = firebase.resolvedUserId
-                // Rebuild gaps before local snapshot refresh — optimistic completions live in memory first.
                 if !userId.isEmpty {
                     shell.tasksVM.syncFromTaskStore()
-                    shell.rebuildTimelineFromTasks()
+                    shell.tasksVM.requestDebouncedScheduleReconcile(userId: userId)
                 }
                 shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
                 if !userId.isEmpty {
-                    shell.briefingVM.refreshTaskProgress(
-                        tasksVM: shell.tasksVM,
-                        cognitiveSnapshot: shell.brainVM.cognitiveSnapshot,
-                        lifeTimelineEvents: shell.timelineService.snapshot.today
-                    )
-                    shell.syncBrainLiveProgress(userId: userId)
+                    Task {
+                        await shell.brainVM.regenerateCognitiveSnapshot(
+                            completedTasksToday: shell.tasksVM.completedToday,
+                            userId: userId
+                        )
+                        let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
+                        shell.briefingVM.refreshTaskProgress(
+                            brainVM: shell.brainVM,
+                            tasksVM: shell.tasksVM,
+                            healthKitAvailable: healthEnabled,
+                            lifeTimelineEvents: shell.timelineService.snapshot.today
+                        )
+                        shell.syncBrainLiveProgress(userId: userId)
+                    }
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .scheduleDidChange)) { _ in
+                guard !shell.isPerformingFactoryReset else { return }
+                let userId = firebase.resolvedUserId
                 shell.refreshWidgetData()
-                shell.syncExecutionEnvironment()
                 shell.scheduleAppleCalendarSync()
+                if !userId.isEmpty {
+                    Task {
+                        let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
+                        shell.briefingVM.refreshTaskProgress(
+                            brainVM: shell.brainVM,
+                            tasksVM: shell.tasksVM,
+                            healthKitAvailable: healthEnabled,
+                            lifeTimelineEvents: shell.timelineService.snapshot.today
+                        )
+                    }
+                }
             }
     }
 }
@@ -259,6 +291,11 @@ private struct ExperienceRootNotificationModifier: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .medicationListDidChange)) { _ in
                 guard !shell.isPerformingFactoryReset else { return }
+                Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .captureDidRoute)) { _ in
+                guard !shell.isPerformingFactoryReset else { return }
+                shell.refreshWidgetData()
                 Task { await NotificationCoordinator.shared.refreshFromShell(shell) }
             }
             .onChange(of: shell.adhdVM.isFocusSessionActive) { _, _ in

@@ -81,6 +81,14 @@ public final class InteractionEngine {
         #endif
     }
 
+    /// Subtle tick when a drag crosses a schedule snap boundary (e.g. 15-minute grid).
+    public func scheduleSnapBoundary() {
+        #if os(iOS)
+        playTransient(intensity: 0.35, sharpness: 0.3)
+        lightImpact.impactOccurred(intensity: 0.45)
+        #endif
+    }
+
     /// Rubber-band edge tick for anchored blocks.
     public func rubberBandEdge() {
         #if os(iOS)

@@ -28,9 +28,12 @@ struct TodayView: View {
     var onViewTimeline: () -> Void
     var onReplanDay: () -> Void
     var onPlanTomorrow: () -> Void
+    var onPostWake: () -> Void = {}
+    var onGoingOut: () -> Void = {}
     var onRefresh: () async -> Void
     var onPlanningSubmit: (_ text: String, _ startedWithVoice: Bool) -> Void
     var onNegotiationSelect: (String) -> Void
+    var onProactiveBannerAppear: (ProactiveAction) -> Void = { _ in }
     var onRedesignWithAI: (String) -> Void = { _ in }
     var onOpenSleepDetail: () -> Void = {}
     var onOpenHealthDetail: () -> Void = {}
@@ -38,8 +41,10 @@ struct TodayView: View {
     var onCompleteTimelineTask: (String) -> Void = { _ in }
     var onUncompleteTimelineTask: (String) -> Void = { _ in }
     var onRescheduleTimelineTask: (String) -> Void = { _ in }
+    var onRemoveFromTimelineTask: (String) -> Void = { _ in }
     var onStartTask: (LifeTask) -> Void = { _ in }
     var onEditTask: (LifeTask) -> Void = { _ in }
+    var onCapture: () -> Void = {}
     var isPlanningTomorrow: Bool = false
 
     @State private var selectedDay: TimelineDaySelection = .today
@@ -57,18 +62,19 @@ struct TodayView: View {
                     speechSynthesizer: speechSynthesizer,
                     onSubmit: onPlanningSubmit,
                     onNegotiationSelect: onNegotiationSelect,
-                    onRedesignWithAI: onRedesignWithAI
+                    onRedesignWithAI: onRedesignWithAI,
+                    onPostWake: onPostWake,
+                    onGoingOut: onGoingOut
                 )
             }
             .onAppear {
             planningVM.bootstrapTimeline(from: lifeTimelineEvents)
             planningVM.bootstrapTomorrowTimeline(from: tomorrowLifeTimelineEvents)
+            refreshPreWindowFitIfNeeded()
+            planningVM.seedProactiveSuggestionsIfNeeded(from: briefingVM.proactiveActions)
         }
-        .onChange(of: lifeTimelineSignature) { _, _ in
-            planningVM.refreshTimeline(from: lifeTimelineEvents)
-        }
-        .onChange(of: tomorrowLifeTimelineSignature) { _, _ in
-            planningVM.refreshTomorrowTimeline(from: tomorrowLifeTimelineEvents)
+        .onChange(of: briefingVM.proactiveActions.count) { _, _ in
+            refreshProactiveIfNeeded()
         }
         .sheet(item: $selectedMetricKind) { kind in
             TodayMetricDetailSheet(
@@ -79,6 +85,30 @@ struct TodayView: View {
             )
         }
         .accessibilityIdentifier("screen-today")
+        .onChange(of: selectedDay) { _, _ in
+            refreshPreWindowFitIfNeeded()
+            refreshProactiveIfNeeded()
+        }
+    }
+
+    private func refreshPreWindowFitIfNeeded() {
+        guard isSelectedToday else {
+            cachedPreWindowFit = nil
+            return
+        }
+        cachedPreWindowFit = PreWindowFitAnalyzer.analyze(tasks: tasksVM.schedulingContext)
+    }
+
+    private func refreshProactiveIfNeeded() {
+        guard isSelectedToday else {
+            cachedProactiveAction = nil
+            return
+        }
+        cachedProactiveAction = briefingVM.proactiveActions.first {
+            $0.surface == .banner || $0.surface == .autoApplyPreview
+        } ?? briefingVM.proactiveActions.first {
+            $0.severity == .high || $0.severity == .medium
+        }
     }
 
     private var metricsInput: TodayMetricsInput {
@@ -104,6 +134,9 @@ struct TodayView: View {
         TodayExecutiveMetricsEngine.select(metricsInput)
     }
 
+    @State private var cachedPreWindowFit: PreWindowFitAnalyzer.Result?
+    @State private var cachedProactiveAction: ProactiveAction?
+
     private static func loadMedications() -> [Medication] {
         guard let data = UserDefaults.standard.data(forKey: "lifeos_medications_list"),
               let medications = try? JSONDecoder().decode([Medication].self, from: data) else {
@@ -127,17 +160,6 @@ struct TodayView: View {
         }
     }
 
-    private var lifeTimelineSignature: String {
-        lifeTimelineEvents
-            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))|\($0.isCompleted)|\($0.subtitle)" }
-            .joined(separator: ";")
-    }
-
-    private var tomorrowLifeTimelineSignature: String {
-        tomorrowLifeTimelineEvents
-            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))|\($0.isCompleted)|\($0.subtitle)" }
-            .joined(separator: ";")
-    }
 
     private var timelineSection: some View {
         ScrollViewReader { proxy in
@@ -154,6 +176,18 @@ struct TodayView: View {
 
                     if isSelectedToday {
                         TodayMultiDayBanner(planningVM: planningVM, tasksVM: tasksVM)
+                        TodayPreWindowFitSection(
+                            tasksVM: tasksVM,
+                            cachedFit: $cachedPreWindowFit,
+                            onReplan: onReplanDay
+                        )
+                        TodayProactiveSuggestionSection(
+                            briefingVM: briefingVM,
+                            tasksVM: tasksVM,
+                            cachedAction: $cachedProactiveAction,
+                            onSelectOption: onNegotiationSelect,
+                            onBannerAppear: onProactiveBannerAppear
+                        )
                         TodayPrioritiesSection(
                             tasksVM: tasksVM,
                             expandedPriorityId: $expandedPriorityId,
@@ -167,13 +201,16 @@ struct TodayView: View {
                             isTomorrow: false,
                             isPlanningTomorrow: isPlanningTomorrow,
                             tasksVM: tasksVM,
+                            timelineScrollDisabled: $timelineBlockScrollDisabled,
                             onViewTimeline: onViewTimeline,
                             onPlanTomorrow: onPlanTomorrow,
                             onCompleteTimelineTask: onCompleteTimelineTask,
                             onUncompleteTimelineTask: onUncompleteTimelineTask,
                             onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onRemoveFromTimelineTask: onRemoveFromTimelineTask,
                             onStartTask: onStartTask,
-                            onEditTask: onEditTask
+                            onEditTask: onEditTask,
+                            onCapture: onCapture
                         )
                         TodayEndOfDayJournalCard(
                             modulesVM: modulesVM,
@@ -188,11 +225,13 @@ struct TodayView: View {
                             isTomorrow: true,
                             isPlanningTomorrow: isPlanningTomorrow,
                             tasksVM: tasksVM,
+                            timelineScrollDisabled: $timelineBlockScrollDisabled,
                             onViewTimeline: onViewTimeline,
                             onPlanTomorrow: onPlanTomorrow,
                             onCompleteTimelineTask: onCompleteTimelineTask,
                             onUncompleteTimelineTask: onUncompleteTimelineTask,
                             onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onRemoveFromTimelineTask: onRemoveFromTimelineTask,
                             onStartTask: onStartTask,
                             onEditTask: onEditTask
                         )
@@ -207,6 +246,7 @@ struct TodayView: View {
                 .padding(.bottom, scrollBottomInset)
             }
             .scrollDisabled(timelineBlockScrollDisabled)
+            .scrollViewScrollLock(timelineBlockScrollDisabled)
             .onPreferenceChange(TimelineBlockScrollDisabledKey.self) { timelineBlockScrollDisabled = $0 }
             .refreshable {
                 await onRefresh()
@@ -227,7 +267,7 @@ struct TodayView: View {
     }
 
     private var todayHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
             TodayHeaderBar(
                 planningVM: planningVM,
                 isSelectedToday: isSelectedToday,
@@ -239,6 +279,9 @@ struct TodayView: View {
                 onPlanTomorrow: onPlanTomorrow,
                 onSettings: onSettings
             )
+            if isSelectedToday {
+                TodayContextQuickActions(onPostWake: onPostWake, onGoingOut: onGoingOut)
+            }
             Text(formattedSelectedDate)
                 .textStyleCaption()
         }
@@ -318,6 +361,36 @@ struct TodayView: View {
     }
 }
 
+private struct TodayContextQuickActions: View {
+    var onPostWake: () -> Void
+    var onGoingOut: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignSystem.spacingSM) {
+                quickChip(title: "I just woke up", icon: "sun.max.fill", action: onPostWake)
+                quickChip(title: "Going out", icon: "figure.walk", action: onGoingOut)
+            }
+        }
+    }
+
+    private func quickChip(title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.dsCaption(weight: .semibold))
+            }
+            .foregroundColor(DesignSystem.textSecondary)
+            .padding(.horizontal, DesignSystem.spacingSM)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(DesignSystem.backgroundElevated))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct TodayHeaderBar: View {
     @ObservedObject var planningVM: ExecutivePlanningViewModel
     let isSelectedToday: Bool
@@ -347,6 +420,8 @@ private struct TodayHeaderBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("nav-all-tasks")
+                .featureTourAnchor(.todayAllTasks, cornerRadius: 18)
+                .id(AppFeatureTourAnchorID.todayAllTasks.rawValue)
             }
 
             if isSelectedToday {
@@ -433,6 +508,65 @@ private struct TodayMultiDayBanner: View {
 
 // MARK: - Scroll performance: isolate @ObservedObject to leaf sections
 
+private struct TodayPreWindowFitSection: View {
+    @ObservedObject var tasksVM: TasksViewModel
+    @Binding var cachedFit: PreWindowFitAnalyzer.Result?
+    let onReplan: () -> Void
+
+    var body: some View {
+        Group {
+            if let fit = cachedFit, fit.isOvercommitted {
+                PreWindowFitBanner(result: fit, onReplan: onReplan)
+            }
+        }
+        .onAppear { refresh() }
+        .onChange(of: tasksVM.tasksContentRevision) { _, _ in refresh() }
+    }
+
+    private func refresh() {
+        cachedFit = PreWindowFitAnalyzer.analyze(tasks: tasksVM.schedulingContext)
+    }
+}
+
+private struct TodayProactiveSuggestionSection: View {
+    @ObservedObject var briefingVM: DailyBriefingViewModel
+    @ObservedObject var tasksVM: TasksViewModel
+    @Binding var cachedAction: ProactiveAction?
+    let onSelectOption: (String) -> Void
+    let onBannerAppear: (ProactiveAction) -> Void
+
+    @State private var lastAnnouncedKey: String?
+
+    var body: some View {
+        Group {
+            if let action = cachedAction {
+                ProactiveActionBanner(action: action, onSelectOption: onSelectOption)
+            }
+        }
+        .onAppear { refresh() }
+        .onChange(of: tasksVM.tasksContentRevision) { _, _ in refresh() }
+        .onChange(of: briefingVM.proactiveActions.count) { _, _ in refresh() }
+        .onChange(of: announcementKey(for: cachedAction)) { _, key in
+            guard let action = cachedAction, let key, key != lastAnnouncedKey else { return }
+            lastAnnouncedKey = key
+            onBannerAppear(action)
+        }
+    }
+
+    private func announcementKey(for action: ProactiveAction?) -> String? {
+        guard let action else { return nil }
+        return "\(action.kind.rawValue)|\(action.message)"
+    }
+
+    private func refresh() {
+        cachedAction = briefingVM.proactiveActions.first {
+            $0.surface == .banner || $0.surface == .autoApplyPreview
+        } ?? briefingVM.proactiveActions.first {
+            $0.severity == .high || $0.severity == .medium
+        }
+    }
+}
+
 private struct TodayPrioritiesSection: View {
     @ObservedObject var tasksVM: TasksViewModel
     @Binding var expandedPriorityId: String?
@@ -442,7 +576,6 @@ private struct TodayPrioritiesSection: View {
     var onCompleteTimelineTask: (String) -> Void
 
     @State private var cachedTopTasks: [LifeTask] = []
-    @State private var tasksRevision: Int = 0
 
     var body: some View {
         LASectionCard(title: "Top Priorities", icon: "star.fill") {
@@ -501,11 +634,7 @@ private struct TodayPrioritiesSection: View {
         }
         .accessibilityIdentifier("top-priorities")
         .onAppear { refreshTopTasks() }
-        .onChange(of: tasksVM.tasks.count) { _, _ in refreshTopTasks() }
-        .onChange(of: tasksRevision) { _, _ in refreshTopTasks() }
-        .onReceive(tasksVM.objectWillChange) { _ in
-            tasksRevision &+= 1
-        }
+        .onChange(of: tasksVM.tasksContentRevision) { _, _ in refreshTopTasks() }
     }
 
     private func refreshTopTasks() {
@@ -530,12 +659,19 @@ private struct TodayPrioritiesSection: View {
 
     private func priorityDetail(for task: LifeTask) -> String {
         var parts: [String] = []
+        let day = Calendar.current.startOfDay(for: Date())
+        switch TaskScheduleInterval.displaySchedule(for: task, on: day) {
+        case .unslottedFlexible:
+            parts.append("Flexible today")
+        case .window(let start, _, _):
+            parts.append("Start \(Self.scheduleFormatter.string(from: start))")
+        case .noSchedule:
+            if let scheduled = task.scheduledDate {
+                parts.append(Self.dayFormatter.string(from: scheduled))
+            }
+        }
         if task.estimatedMinutes > 0 {
             parts.append(task.estimatedMinutes.durationString)
-        }
-        if let scheduled = task.scheduledTime ?? task.scheduledDate {
-            let formatter = task.scheduledTime != nil ? Self.scheduleFormatter : Self.dayFormatter
-            parts.append(formatter.string(from: scheduled))
         }
         parts.append(task.priority.label)
         return parts.joined(separator: " · ")
@@ -559,55 +695,105 @@ private struct TodayScheduleSection: View {
     let isTomorrow: Bool
     let isPlanningTomorrow: Bool
     @ObservedObject var tasksVM: TasksViewModel
+    @Binding var timelineScrollDisabled: Bool
     var onViewTimeline: () -> Void
     var onPlanTomorrow: () -> Void
     var onCompleteTimelineTask: (String) -> Void
     var onUncompleteTimelineTask: (String) -> Void
     var onRescheduleTimelineTask: (String) -> Void
+    var onRemoveFromTimelineTask: (String) -> Void
     var onStartTask: (LifeTask) -> Void
     var onEditTask: (LifeTask) -> Void
+    var onCapture: () -> Void = {}
+
+    @AppStorage(TimelineDragHint.dismissedKey) private var dragHintDismissed = false
 
     var body: some View {
-        LASectionCard(
-            title: "Schedule",
-            subtitle: isTomorrow ? "Preview for tomorrow" : "Tap a task to start or edit",
-            icon: "calendar"
-        ) {
-            if isTomorrow {
-                ExecutiveLiveTimelineView(
-                    rows: planningVM.tomorrowTimelineRows,
-                    thinkingStep: nil,
-                    isProcessing: false,
-                    title: "",
-                    emptyMessage: "Nothing on tomorrow's calendar yet.",
-                    isPreview: true,
-                    showPlanButton: true,
-                    isPlanning: isPlanningTomorrow,
-                    onViewAll: onViewTimeline,
-                    onPlan: onPlanTomorrow
-                )
-            } else {
-                ExecutiveLiveTimelineView(
-                    rows: planningVM.timelineRows,
-                    thinkingStep: planningVM.visibleThinkingStep,
-                    isProcessing: planningVM.isProcessing,
-                    title: "",
-                    emptyMessage: "Your day fills in as you add tasks and commitments.",
-                    onViewAll: onViewTimeline,
-                    onCompleteTask: onCompleteTimelineTask,
-                    onUncompleteTask: onUncompleteTimelineTask,
-                    onStartTask: { taskId in
-                        if let task = task(for: taskId) { onStartTask(task) }
-                    },
-                    onEditTask: { taskId in
-                        if let task = task(for: taskId) { onEditTask(task) }
-                    },
-                    onRescheduleTask: onRescheduleTimelineTask
-                )
+        VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+            LASectionCard(
+                title: "Schedule",
+                subtitle: scheduleSubtitle,
+                icon: "calendar"
+            ) {
+                scheduleContent
+            }
+            .featureTourAnchor(.todayTimeline, cornerRadius: DesignSystem.radiusLG)
+            .id(AppFeatureTourAnchorID.todayTimeline.rawValue)
+
+            if showsDragHint {
+                Text("Press and hold a task, then drag up or down to set its start time.")
+                    .textStyleCaption(color: DesignSystem.textSecondary)
+                    .accessibilityIdentifier("timeline-drag-hint")
             }
         }
-        .featureTourAnchor(.todayTimeline, cornerRadius: DesignSystem.radiusLG)
-        .id(AppFeatureTourAnchorID.todayTimeline.rawValue)
+    }
+
+    private var scheduleSubtitle: String {
+        if isTomorrow { return "Preview for tomorrow" }
+        if planningVM.timelineRows.contains(where: \.isUnslottedFlexible) {
+            return "Hold a task to move it on the timeline"
+        }
+        return "Tap a task to start or edit"
+    }
+
+    private var showsDragHint: Bool {
+        !isTomorrow && !dragHintDismissed && !planningVM.timelineRows.isEmpty
+    }
+
+    @ViewBuilder
+    private var scheduleContent: some View {
+        if isTomorrow {
+            ExecutiveLiveTimelineView(
+                rows: planningVM.tomorrowTimelineRows,
+                thinkingStep: nil,
+                isProcessing: false,
+                title: "",
+                emptyMessage: "Nothing on tomorrow's calendar yet.",
+                isPreview: true,
+                showPlanButton: true,
+                isPlanning: isPlanningTomorrow,
+                onViewAll: onViewTimeline,
+                onPlan: onPlanTomorrow
+            )
+        } else {
+            ExecutiveLiveTimelineView(
+                rows: planningVM.timelineRows,
+                thinkingStep: planningVM.visibleThinkingStep,
+                isProcessing: planningVM.isProcessing,
+                title: "",
+                emptyMessage: "Your day fills in as you add tasks and commitments.",
+                onViewAll: onViewTimeline,
+                onCapture: onCapture,
+                onCompleteTask: onCompleteTimelineTask,
+                onUncompleteTask: onUncompleteTimelineTask,
+                onStartTask: { taskId in
+                    if let task = task(for: taskId) { onStartTask(task) }
+                },
+                onEditTask: { taskId in
+                    if let task = task(for: taskId) { onEditTask(task) }
+                },
+                onRescheduleTask: onRescheduleTimelineTask,
+                onRemoveFromTimelineTask: onRemoveFromTimelineTask,
+                onPersistScheduleChange: { task in
+                    let userId = task.userId.isEmpty
+                        ? (tasksVM.tasks.first?.userId ?? "")
+                        : task.userId
+                    guard !userId.isEmpty else { return }
+                    Task {
+                        await tasksVM.scheduleMutation.persist(
+                            task,
+                            userId: userId,
+                            userPlaced: true
+                        )
+                    }
+                },
+                onScheduleDragCommitted: {
+                    dragHintDismissed = true
+                },
+                taskForID: task(for:),
+                parentScrollDisabled: $timelineScrollDisabled
+            )
+        }
     }
 
     private func task(for id: String) -> LifeTask? {
@@ -949,6 +1135,91 @@ private struct TodayTimelineSection: View {
             }
         }
         .frame(width: 12)
+    }
+}
+
+// MARK: - Pre-window fit
+
+private struct ProactiveActionBanner: View {
+    let action: ProactiveAction
+    let onSelectOption: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            HStack(spacing: DesignSystem.spacingSM) {
+                Image(systemName: bannerIcon)
+                    .foregroundColor(action.severity == .high ? .orange : DesignSystem.focus)
+                Text(bannerTitle)
+                    .font(.dsBody(weight: .semibold))
+                    .foregroundColor(DesignSystem.textPrimary)
+            }
+            Text(action.message)
+                .font(.dsCaption())
+                .foregroundColor(DesignSystem.textSecondary)
+                .dsPrimaryText(lineLimit: 4)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignSystem.spacingSM) {
+                    ForEach(action.options, id: \.self) { option in
+                        Button(option) { onSelectOption(option) }
+                            .font(.dsCaption(weight: .semibold))
+                            .buttonStyle(.bordered)
+                    }
+                }
+            }
+        }
+        .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
+        .accessibilityIdentifier("banner-proactive-suggestion")
+    }
+
+    private var bannerTitle: String {
+        switch action.kind {
+        case .calendarChange: return "Calendar update"
+        case .waitingMode: return "Quick win window"
+        case .transitionShield: return "Transition soon"
+        case .initiationBridge: return "Micro-start"
+        case .hyperfocusBreak, .overwhelmCircuitBreaker: return "Check-in"
+        default: return "Schedule check"
+        }
+    }
+
+    private var bannerIcon: String {
+        switch action.kind {
+        case .calendarChange, .transitionShield, .overwhelmCircuitBreaker:
+            return "exclamationmark.triangle.fill"
+        case .initiationBridge, .waitingMode:
+            return "bolt.fill"
+        default:
+            return "lightbulb.fill"
+        }
+    }
+}
+
+private struct PreWindowFitBanner: View {
+    let result: PreWindowFitAnalyzer.Result
+    let onReplan: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            HStack(spacing: DesignSystem.spacingSM) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Text("Crunch before \(result.anchor.title)")
+                    .font(.dsBody(weight: .semibold))
+                    .foregroundColor(DesignSystem.textPrimary)
+            }
+            Text(result.summaryLine)
+                .font(.dsCaption())
+                .foregroundColor(DesignSystem.textSecondary)
+                .dsPrimaryText(lineLimit: 4)
+            Button(action: onReplan) {
+                Text("Replan with AI")
+                    .font(.dsCaption(weight: .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
+        .accessibilityIdentifier("banner-pre-window-fit")
     }
 }
 

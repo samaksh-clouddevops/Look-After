@@ -75,15 +75,20 @@ struct LookAfterBottomNav: View {
 
     private var captureButton: some View {
         Button(action: {
-            HapticManager.impact(.medium)
+            HapticManager.impact(.light)
             onCapture()
         }, label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.dsIconLarge())
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(DesignSystem.accentOnPrimary, DesignSystem.accentPrimary)
-                .frame(maxWidth: .infinity)
-                .offset(y: -8)
+            VStack(spacing: 4) {
+                Image(systemName: "plus.circle")
+                    .font(.dsIcon(weight: .medium))
+                    .symbolRenderingMode(.monochrome)
+                Text("Capture")
+                    .textStyleTabLabel(color: DesignSystem.textSecondary, active: false)
+                    .lineLimit(1)
+            }
+            .foregroundColor(DesignSystem.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
         })
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-capture")

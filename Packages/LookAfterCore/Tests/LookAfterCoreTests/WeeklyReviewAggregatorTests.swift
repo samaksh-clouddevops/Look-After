@@ -47,11 +47,12 @@ final class WeeklyReviewAggregatorTests: XCTestCase {
     }
 
     func testTimeReclaimedSumsSabotageDurations() {
-        let t = weekEnding.addingTimeInterval(-2 * 86_400)
+        let t1 = weekEnding.addingTimeInterval(-2 * 86_400)
+        let t2 = weekEnding.addingTimeInterval(-3 * 86_400)
         let logs = [
-            CascadeActionRecord(kind: .sabotageAuction, timestamp: t, durationMinutes: 90),
-            CascadeActionRecord(kind: .sabotageAuction, timestamp: t, durationMinutes: 60),
-            CascadeActionRecord(kind: .shiftedLater, timestamp: t, durationMinutes: 45)
+            CascadeActionRecord(kind: .sabotageAuction, timestamp: t1, durationMinutes: 90),
+            CascadeActionRecord(kind: .sabotageAuction, timestamp: t2, durationMinutes: 60),
+            CascadeActionRecord(kind: .shiftedLater, timestamp: t1, durationMinutes: 45)
         ]
         let summary = WeeklyReviewAggregator.aggregate(
             logs: logs,

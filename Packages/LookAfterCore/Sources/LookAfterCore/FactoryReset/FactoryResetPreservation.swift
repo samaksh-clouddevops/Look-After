@@ -6,10 +6,9 @@ public protocol ResettableSubsystem: Sendable {
     func resetLocal(userId: String) async
 }
 
-/// Keys preserved during factory reset (API keys, auth session, developer flags only).
+/// Keys preserved during factory reset (auth session and developer flags only).
 public enum FactoryResetPreservation {
     public static let userDefaultsKeys: Set<String> = [
-        "glmKeyRecords",
         "glmConfiguration",
         "glmUsageRecords",
         FlowDirectorFeature.userDefaultsKey,

@@ -48,12 +48,15 @@ public enum NotificationPolicyEngine {
                 return lhs.fireDate < rhs.fireDate
             }
 
+        let transitionCandidates = proactiveEligible.filter { $0.kind == .transitionShield }
+        let otherProactive = proactiveEligible.filter { $0.kind != .transitionShield }
+
         let remainingSlots = max(0, NotificationPolicy.maxProactivePerDay - budget.deliveredCount)
-        let selectedProactive = Array(proactiveEligible.prefix(remainingSlots))
-        let droppedProactiveCount = max(0, proactiveEligible.count - selectedProactive.count)
+        let selectedOther = Array(otherProactive.prefix(remainingSlots))
+        let droppedProactiveCount = max(0, otherProactive.count - selectedOther.count)
 
         return SelectionResult(
-            selected: selectedProactive + sessionLocal,
+            selected: selectedOther + transitionCandidates + sessionLocal,
             droppedProactiveCount: droppedProactiveCount
         )
     }

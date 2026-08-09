@@ -239,6 +239,8 @@ public struct BriefingSleepData: Sendable, Equatable {
     public var qualityPercent: Int?
     public var sleepDebtHours: Double
     public var isAvailable: Bool
+    /// True when sleep is attributable to last night — false when showing last recorded sleep.
+    public var isLastNightSleep: Bool
 
     public init(
         totalHours: Double? = nil,
@@ -246,7 +248,8 @@ public struct BriefingSleepData: Sendable, Equatable {
         remHours: Double? = nil,
         qualityPercent: Int? = nil,
         sleepDebtHours: Double = 0,
-        isAvailable: Bool = true
+        isAvailable: Bool = true,
+        isLastNightSleep: Bool = true
     ) {
         self.totalHours = totalHours
         self.deepHours = deepHours
@@ -254,6 +257,7 @@ public struct BriefingSleepData: Sendable, Equatable {
         self.qualityPercent = qualityPercent
         self.sleepDebtHours = sleepDebtHours
         self.isAvailable = isAvailable
+        self.isLastNightSleep = isLastNightSleep
     }
 }
 
@@ -284,22 +288,37 @@ public struct BriefingMissionTask: Identifiable, Sendable, Equatable {
     public var title: String
     public var isCompleted: Bool
     public var priority: Priority
+    public var scheduleLabel: String?
 
-    public init(id: String, title: String, isCompleted: Bool, priority: Priority) {
+    public init(
+        id: String,
+        title: String,
+        isCompleted: Bool,
+        priority: Priority,
+        scheduleLabel: String? = nil
+    ) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
         self.priority = priority
+        self.scheduleLabel = scheduleLabel
     }
 }
 
 public struct BriefingMissionData: Sendable, Equatable {
     public var tasks: [BriefingMissionTask]
     public var completionPercent: Int
+    /// Completed tasks not shown in the visible list (after dedupe / row cap).
+    public var hiddenCompletedCount: Int
 
-    public init(tasks: [BriefingMissionTask], completionPercent: Int) {
+    public init(
+        tasks: [BriefingMissionTask],
+        completionPercent: Int,
+        hiddenCompletedCount: Int = 0
+    ) {
         self.tasks = tasks
         self.completionPercent = completionPercent
+        self.hiddenCompletedCount = hiddenCompletedCount
     }
 }
 

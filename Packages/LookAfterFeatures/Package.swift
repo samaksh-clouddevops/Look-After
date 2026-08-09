@@ -14,12 +14,13 @@ let package = Package(
         .package(path: "../LookAfterCore"),
         .package(path: "../LookAfterAI"),
         .package(path: "../LookAfterData"),
-        .package(path: "../ExecutiveBrain")
+        .package(path: "../ExecutiveBrain"),
+        .package(path: "../LookAfterIntegrations")
     ],
     targets: [
         .target(
             name: "LookAfterFeatures",
-            dependencies: ["LookAfterCore", "LookAfterAI", "LookAfterData", "ExecutiveBrain"],
+            dependencies: ["LookAfterCore", "LookAfterAI", "LookAfterData", "ExecutiveBrain", "LookAfterIntegrations"],
             path: "Sources/LookAfterFeatures"
         ),
         .testTarget(

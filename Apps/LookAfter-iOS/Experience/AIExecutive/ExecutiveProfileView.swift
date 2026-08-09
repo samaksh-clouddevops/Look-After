@@ -22,7 +22,7 @@ struct ExecutiveProfileView: View {
     @State private var isResetting = false
     @State private var resetComplete = false
 
-    private let bottomNavClearance: CGFloat = 96
+    private let bottomNavClearance: CGFloat = 120
 
     private var displayName: String {
         UserLifeProfileStore.resolvedDisplayName()
@@ -74,6 +74,15 @@ struct ExecutiveProfileView: View {
             .padding(.trailing, DesignSystem.screenHorizontal - 8)
             .padding(.top, DesignSystem.spacingSM)
         }
+        .refreshable {
+            await refreshYouTabSurface()
+        }
+        .task {
+            await refreshYouTabSurface()
+        }
+        .onChange(of: shell.tasksVM.tasksContentRevision) { _, _ in
+            refreshYouTabProgress()
+        }
         .sheet(isPresented: $showSettings) {
             settingsSheet
         }
@@ -101,7 +110,7 @@ struct ExecutiveProfileView: View {
             }
             Button("Cancel", role: .cancel) {}
         }, message: {
-            Text("Deletes all tasks, timeline, AI memory, health cache, learned behavior, and modules on this device and in the cloud. Your account and API keys are preserved. This cannot be undone.")
+            Text("Deletes all tasks, timeline, AI memory, health cache, learned behavior, and modules on this device and in the cloud. Your account and license are preserved. This cannot be undone.")
         })
         .alert("Factory reset complete", isPresented: $resetComplete, actions: {
             Button("OK", role: .cancel) {}
@@ -178,13 +187,16 @@ struct ExecutiveProfileView: View {
 
     private var lifeStateCaption: String {
         let snapshot = shell.briefingVM.healthSnapshot
+        let energySuffix = snapshot.hasOvernightHealthSignal
+            ? "\(snapshot.energyPercent)% energy"
+            : "Est. \(snapshot.energyPercent)% energy"
         if snapshot.hasOvernightHealthSignal {
-            return "\(snapshot.readinessLabel) · \(snapshot.recoveryLabel) · \(snapshot.energyPercent)% energy"
+            return "\(snapshot.readinessLabel) · \(snapshot.recoveryLabel) · \(energySuffix)"
         }
         if shell.briefingVM.sleep.isAvailable, let hours = shell.briefingVM.sleep.totalHours {
-            return "\(snapshot.readinessLabel) · \(String(format: "%.1fh", hours)) sleep logged"
+            return "\(snapshot.readinessLabel) · \(String(format: "%.1fh", hours)) sleep · \(energySuffix)"
         }
-        return snapshot.readinessLabel
+        return "\(snapshot.readinessLabel) · \(energySuffix)"
     }
 
     // MARK: - Life areas
@@ -226,8 +238,19 @@ struct ExecutiveProfileView: View {
                 .textStyleCaption()
 
             if routineTasks.isEmpty {
-                Text("Daily routines appear here once seeded.")
-                    .textStyleCaption()
+                VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                    Text("No daily routines yet")
+                        .font(.dsBody(weight: .semibold))
+                        .foregroundColor(DesignSystem.textSecondary)
+                    Text("Routines tagged daily-routine show up here with a progress ring as you complete them.")
+                        .textStyleCaption()
+                }
+                .padding(DesignSystem.spacingMD)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                        .fill(DesignSystem.backgroundElevated)
+                )
             } else {
                 ForEach(routineTasks) { task in
                     routineRow(task)
@@ -345,7 +368,7 @@ struct ExecutiveProfileView: View {
     private var developerResetSection: some View {
         Section(content: {
             VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-                Text("Erases all app data and behaves like a fresh install. Preserves your account and API keys only.")
+                Text("Erases all app data and behaves like a fresh install. Preserves your account and license only.")
                     .textStyleCaption(color: DesignSystem.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -419,7 +442,7 @@ struct ExecutiveProfileView: View {
                 SettingsView()
                     .environmentObject(shell)
             }, label: {
-                Label("Settings & API Keys", systemImage: "gearshape.fill")
+                Label("Settings", systemImage: "gearshape.fill")
             })
             .accessibilityIdentifier("nav-open-settings")
             .listRowBackground(DesignSystem.backgroundSecondary)
@@ -441,5 +464,20 @@ struct ExecutiveProfileView: View {
                 .foregroundColor(DesignSystem.textSecondary)
         }
         .listRowBackground(DesignSystem.backgroundSecondary)
+    }
+
+    private func refreshYouTabSurface() async {
+        refreshYouTabProgress()
+        await shell.inboxVM.loadItems(userId: userId)
+    }
+
+    private func refreshYouTabProgress() {
+        let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
+        shell.briefingVM.refreshTaskProgress(
+            brainVM: shell.brainVM,
+            tasksVM: shell.tasksVM,
+            healthKitAvailable: healthEnabled,
+            lifeTimelineEvents: shell.timelineService.snapshot.today
+        )
     }
 }

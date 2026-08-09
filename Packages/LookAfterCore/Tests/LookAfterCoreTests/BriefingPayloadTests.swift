@@ -181,7 +181,7 @@ final class BriefingPayloadTests: XCTestCase {
         )
         XCTAssertTrue(actions.contains { $0.lowercased().contains("sabotage") })
         XCTAssertTrue(actions.contains { $0.contains("Parked 3") })
-        XCTAssertTrue(actions.contains { $0.lowercased().contains("several afternoon") })
+        XCTAssertTrue(actions.contains { $0.lowercased().contains("afternoon block") })
         XCTAssertTrue(actions.contains { $0.lowercased().contains("viable duration") })
         // Must not enumerate seven frantic micro-events
         XCTAssertLessThanOrEqual(actions.count, 5)

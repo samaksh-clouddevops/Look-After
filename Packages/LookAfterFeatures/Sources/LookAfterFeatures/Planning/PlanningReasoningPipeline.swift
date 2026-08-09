@@ -20,6 +20,9 @@ public enum PlanningIntent: String, Codable, Sendable, CaseIterable {
     case energyAdapt
     case travel
     case outcome
+    case postWake
+    case goingOut
+    case reschedule
 
     public var label: String {
         switch self {
@@ -39,6 +42,9 @@ public enum PlanningIntent: String, Codable, Sendable, CaseIterable {
         case .energyAdapt: return "Energy adapt"
         case .travel: return "Travel"
         case .outcome: return "Outcome"
+        case .postWake: return "Post wake"
+        case .goingOut: return "Going out"
+        case .reschedule: return "Reschedule"
         }
     }
 }
@@ -51,6 +57,8 @@ public struct PlanningReasoningResult: Sendable {
     public var existingTaskMatches: [LifeTask]
     public var deferCandidates: [LifeTask]
     public var multiDayDetection: MultiDayDetectionResult?
+    public var proactiveSuggestions: [ScheduleProactiveSuggestion]
+    public var shouldProposeVariants: Bool
 
     public init(
         intent: PlanningIntent,
@@ -59,7 +67,9 @@ public struct PlanningReasoningResult: Sendable {
         isOverloaded: Bool = false,
         existingTaskMatches: [LifeTask] = [],
         deferCandidates: [LifeTask] = [],
-        multiDayDetection: MultiDayDetectionResult? = nil
+        multiDayDetection: MultiDayDetectionResult? = nil,
+        proactiveSuggestions: [ScheduleProactiveSuggestion] = [],
+        shouldProposeVariants: Bool = false
     ) {
         self.intent = intent
         self.thinkingSteps = thinkingSteps
@@ -68,6 +78,8 @@ public struct PlanningReasoningResult: Sendable {
         self.existingTaskMatches = existingTaskMatches
         self.deferCandidates = deferCandidates
         self.multiDayDetection = multiDayDetection
+        self.proactiveSuggestions = proactiveSuggestions
+        self.shouldProposeVariants = shouldProposeVariants
     }
 }
 
@@ -96,7 +108,24 @@ public enum PlanningReasoningPipeline {
         if overloaded {
             steps.append("Day looks tight — preparing trade-offs")
         }
+        let proactive = ScheduleProactiveAnalyzer.analyze(
+            ScheduleProactiveAnalyzer.Input(
+                tasks: context.tasks,
+                profile: context.lifeProfile,
+                now: Date(),
+                energyPercent: context.energyPercent,
+                completedTodayCount: context.completedTodayCount
+            )
+        )
+        if let top = proactive.first {
+            steps.append("Flagging: \(top.message)")
+        }
         steps.append("Choosing lowest executive cost")
+
+        let proposeVariants = (overloaded && !multiDay.isMultiDay)
+            || intent == .replan
+            || intent == .negotiate
+            || intent == .postWake
 
         return PlanningReasoningResult(
             intent: multiDay.isMultiDay ? .project : intent,
@@ -105,7 +134,9 @@ public enum PlanningReasoningPipeline {
             isOverloaded: overloaded && !multiDay.isMultiDay,
             existingTaskMatches: matches,
             deferCandidates: deferCandidates,
-            multiDayDetection: multiDay.isMultiDay ? multiDay : nil
+            multiDayDetection: multiDay.isMultiDay ? multiDay : nil,
+            proactiveSuggestions: proactive,
+            shouldProposeVariants: proposeVariants
         )
     }
 
@@ -114,6 +145,15 @@ public enum PlanningReasoningPipeline {
     public static func classify(_ message: String) -> PlanningIntent {
         let lower = message.lowercased()
 
+        if lower.contains("woke up") || lower.contains("just woke") || lower.contains("overslept") || lower.contains("woke late") {
+            return .postWake
+        }
+        if lower.contains("going out") || lower.contains("leaving at") || lower.contains("heading out") || lower.contains("leave at") {
+            return .goingOut
+        }
+        if isRescheduleMessage(lower) {
+            return .reschedule
+        }
         if lower.contains("medication") || lower.contains("levothyroxine") || lower.contains("thyroid") || lower.contains("took my") && lower.contains("pill") {
             return .medication
         }
@@ -180,10 +220,26 @@ public enum PlanningReasoningPipeline {
         switch intent {
         case .shopping, .medication, .reminder: return 15
         case .replan, .energyAdapt: return 0
+        case .reschedule: return 0
         case .goal, .outcome, .travel: return 0
         default:
             let count = message.components(separatedBy: " and ").count + message.components(separatedBy: ",").count
             return min(120, max(5, count * 10))
         }
+    }
+
+    private static func isRescheduleMessage(_ lower: String) -> Bool {
+        let signals = [
+            "move ", "reschedule", "shift ", "push ", "pull forward",
+            "earlier", "later", " at ", " to ", "change time"
+        ]
+        guard signals.contains(where: { lower.contains($0) }) else { return false }
+        return lower.contains("move")
+            || lower.contains("reschedule")
+            || lower.contains("shift")
+            || lower.contains("push")
+            || lower.contains("earlier")
+            || lower.contains("later")
+            || PlanningTimeParser.parseHourMinute(from: lower) != nil
     }
 }

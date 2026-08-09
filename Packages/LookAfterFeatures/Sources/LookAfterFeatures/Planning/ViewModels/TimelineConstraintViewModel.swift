@@ -11,7 +11,9 @@ public enum TimelineConstraintIntent: Equatable, Sendable {
     case setConstraint(taskID: String, TimeConstraint)
     case beginVerticalDrag(taskID: String)
     case endVerticalDrag
+    case updateVerticalDragPreview(taskID: String, proposedStart: Date?, anchorY: CGFloat?)
     case commitVerticalOffset(taskID: String, offsetMinutes: Int)
+    case commitVerticalDrag(taskID: String, proposedStart: Date)
 }
 
 // MARK: - View model
@@ -21,11 +23,16 @@ public enum TimelineConstraintIntent: Equatable, Sendable {
 public final class TimelineConstraintViewModel: ObservableObject {
     @Published public private(set) var constraintsByTaskID: [String: TimeConstraint] = [:]
     @Published public private(set) var activeDragTaskID: String?
+    @Published public private(set) var proposedDragStart: Date?
+    @Published public private(set) var proposedDragDurationMinutes: Int?
+    @Published public private(set) var dragAnchorY: CGFloat?
     @Published public private(set) var lastMutation: (taskID: String, constraint: TimeConstraint)?
 
     private var tasksByID: [String: LifeTask] = [:]
     private let telemetry: any InteractionTelemetryServing
-    private let onTaskUpdated: ((LifeTask) -> Void)?
+    public var onTaskUpdated: ((LifeTask) -> Void)?
+    /// Fired when a vertical drag successfully commits a new schedule time.
+    public var onScheduleDragCommitted: (() -> Void)?
 
     public init(
         telemetry: any InteractionTelemetryServing = InteractionTelemetryService.shared,
@@ -71,10 +78,23 @@ public final class TimelineConstraintViewModel: ObservableObject {
             mutate(taskID: taskID, source: .accessibility) { _ in value }
         case .beginVerticalDrag(let taskID):
             activeDragTaskID = taskID
+            if let task = tasksByID[taskID] {
+                proposedDragDurationMinutes = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+            } else {
+                proposedDragDurationMinutes = TaskDurationPolicy.minimumMinutes
+            }
         case .endVerticalDrag:
             activeDragTaskID = nil
+            proposedDragStart = nil
+            proposedDragDurationMinutes = nil
+            dragAnchorY = nil
+        case .updateVerticalDragPreview(_, let proposedStart, let anchorY):
+            proposedDragStart = proposedStart
+            dragAnchorY = anchorY
         case .commitVerticalOffset(let taskID, let offsetMinutes):
             commitScheduleOffset(taskID: taskID, minutes: offsetMinutes)
+        case .commitVerticalDrag(let taskID, let proposedStart):
+            commitAbsoluteStart(taskID: taskID, proposedStart: proposedStart)
         }
     }
 
@@ -112,6 +132,29 @@ public final class TimelineConstraintViewModel: ObservableObject {
         )
     }
 
+    private func commitAbsoluteStart(taskID: String, proposedStart: Date) {
+        guard var task = tasksByID[taskID],
+              task.timeConstraintValue != .anchored else {
+            return
+        }
+        guard task.scheduledTime == nil || abs(task.scheduledTime!.timeIntervalSince(proposedStart)) > 30 else {
+            return
+        }
+
+        let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        task.scheduledTime = proposedStart
+        task.scheduledEndTime = proposedStart.addingTimeInterval(TimeInterval(duration * 60))
+        if let day = task.scheduledDate {
+            task.scheduledDate = Calendar.current.startOfDay(for: day)
+        } else {
+            task.scheduledDate = Calendar.current.startOfDay(for: proposedStart)
+        }
+        TaskConstraintAlignment.markUserPlaced(&task)
+        tasksByID[taskID] = task
+        onTaskUpdated?(task)
+        onScheduleDragCommitted?()
+    }
+
     private func commitScheduleOffset(taskID: String, minutes: Int) {
         guard minutes != 0,
               var task = tasksByID[taskID],
@@ -131,5 +174,6 @@ public final class TimelineConstraintViewModel: ObservableObject {
         task.updatedAt = Date()
         tasksByID[taskID] = task
         onTaskUpdated?(task)
+        onScheduleDragCommitted?()
     }
 }

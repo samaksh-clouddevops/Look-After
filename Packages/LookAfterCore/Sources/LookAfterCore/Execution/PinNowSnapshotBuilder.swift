@@ -13,6 +13,9 @@ public struct PinNowDisplayModel: Codable, Sendable, Equatable {
     public var estimatedMinutes: Int
     public var progressFraction: Double
     public var sectionLabel: String
+    /// When set, the Live Activity widget can render live countdown/progress without app updates.
+    public var windowStart: Date?
+    public var windowEnd: Date?
 
     public init(
         headline: String,
@@ -25,7 +28,9 @@ public struct PinNowDisplayModel: Codable, Sendable, Equatable {
         energyLevel: String,
         estimatedMinutes: Int,
         progressFraction: Double,
-        sectionLabel: String
+        sectionLabel: String,
+        windowStart: Date? = nil,
+        windowEnd: Date? = nil
     ) {
         self.headline = headline
         self.contextLine = contextLine
@@ -38,6 +43,8 @@ public struct PinNowDisplayModel: Codable, Sendable, Equatable {
         self.estimatedMinutes = estimatedMinutes
         self.progressFraction = min(1, max(0, progressFraction))
         self.sectionLabel = sectionLabel
+        self.windowStart = windowStart
+        self.windowEnd = windowEnd
     }
 }
 
@@ -244,7 +251,9 @@ public enum PinNowSnapshotBuilder {
             energyLevel: cognitiveSnapshot?.energy.rawValue ?? EnergyLevel.moderate.rawValue,
             estimatedMinutes: max(1, Int(end.timeIntervalSince(now) / 60)),
             progressFraction: progress,
-            sectionLabel: "NOW"
+            sectionLabel: "NOW",
+            windowStart: event.date,
+            windowEnd: end
         )
     }
 
@@ -358,7 +367,9 @@ public enum PinNowSnapshotBuilder {
             energyLevel: cognitiveSnapshot?.energy.rawValue ?? EnergyLevel.moderate.rawValue,
             estimatedMinutes: remainingMinutes,
             progressFraction: execution.progressFraction,
-            sectionLabel: sectionLabelOverride ?? sectionLabel(for: execution)
+            sectionLabel: sectionLabelOverride ?? sectionLabel(for: execution),
+            windowStart: execution.windowStart,
+            windowEnd: execution.windowEnd
         )
     }
 
@@ -382,6 +393,8 @@ public enum PinNowSnapshotBuilder {
 
         let scheduleLabel: String
         let estimatedMinutes: Int
+        var windowStart: Date?
+        var windowEnd: Date?
         if let window = taskWindow {
             let totalMinutes = max(1, Int(window.end.timeIntervalSince(window.start) / 60))
             scheduleLabel = scheduleLabelForWindow(
@@ -391,6 +404,8 @@ public enum PinNowSnapshotBuilder {
                 calendar: calendar
             )
             estimatedMinutes = totalMinutes
+            windowStart = window.start
+            windowEnd = window.end
         } else if let flowWindow, flowWindow.end > flowWindow.start {
             let totalMinutes = max(1, Int(flowWindow.duration / 60))
             scheduleLabel = scheduleLabelForWindow(
@@ -400,6 +415,8 @@ public enum PinNowSnapshotBuilder {
                 calendar: calendar
             )
             estimatedMinutes = totalMinutes
+            windowStart = flowWindow.start
+            windowEnd = flowWindow.end
         } else {
             let minutes = flowSurface?.prediction?.suggestedDurationMinutes ?? task.estimatedMinutes
             estimatedMinutes = max(1, minutes)
@@ -423,7 +440,9 @@ public enum PinNowSnapshotBuilder {
             energyLevel: cognitiveSnapshot?.energy.rawValue ?? EnergyLevel.moderate.rawValue,
             estimatedMinutes: estimatedMinutes,
             progressFraction: 0,
-            sectionLabel: sectionLabel ?? category.displayName
+            sectionLabel: sectionLabel ?? category.displayName,
+            windowStart: windowStart,
+            windowEnd: windowEnd
         )
     }
 
