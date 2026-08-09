@@ -16,10 +16,16 @@ import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
+import com.lookafter.app.travel.TravelStore
 import com.lookafter.app.webrtc.RoomSignalingFactory
 import com.lookafter.app.webrtc.RoomSignalingTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
+import com.lookafter.core.travel.PackingItem
+import com.lookafter.core.travel.TravelEngine
+import com.lookafter.core.travel.TravelIntent
+import com.lookafter.core.travel.TravelState
+import com.lookafter.core.travel.TravelTrip
 import com.lookafter.core.adhd.BodyDoublePeer
 import com.lookafter.core.adhd.BodyDoubleRoomEngine
 import com.lookafter.core.adhd.BodyDoubleRoomIntent
@@ -96,6 +102,7 @@ class LookAfterViewModel(
     private val notificationPrefsStore: NotificationPreferencesStore = app.notificationPrefs
     private val planningStore: PlanningConversationStore = app.planningConversationStore
     private val coachHistoryStore: CoachHistoryStore = app.coachHistoryStore
+    private val travelStore: TravelStore = app.travelStore
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -115,6 +122,45 @@ class LookAfterViewModel(
     private var lastRemoteForOffer: String? = null
     private val sessionReachedConnected = AtomicBoolean(false)
     private val sessionFocusStarted = AtomicBoolean(false)
+
+    private val _travel = MutableStateFlow(app.travelStore.load())
+    val travel: StateFlow<TravelState> = _travel.asStateFlow()
+
+    private fun persistTravel(next: TravelState) {
+        _travel.value = next
+        travelStore.save(next)
+    }
+
+    fun dispatchTravel(intent: TravelIntent) {
+        persistTravel(TravelEngine.reduce(_travel.value, intent))
+    }
+
+    fun addTravelTrip(trip: TravelTrip) {
+        dispatchTravel(TravelIntent.AddTrip(trip))
+    }
+
+    fun deleteTravelTrip(id: String) {
+        dispatchTravel(TravelIntent.DeleteTrip(id))
+    }
+
+    fun selectTravelTrip(id: String?) {
+        dispatchTravel(TravelIntent.SelectTrip(id))
+    }
+
+    fun togglePackingItem(tripId: String, itemId: String) {
+        dispatchTravel(TravelIntent.TogglePackingItem(tripId, itemId))
+    }
+
+    fun addPackingItem(tripId: String, item: PackingItem) {
+        dispatchTravel(TravelIntent.AddPackingItem(tripId, item))
+    }
+
+    /** Open a trip day on the Today board (week-scrubber / packing scaffolding). */
+    fun openTravelDayOnToday(day: LocalDate) {
+        engine.process(LookAfterIntent.SetCurrentDay(day))
+        _lastSyncMessage.value = "Today set to $day · travel packing"
+        TodayWidgetUpdater.requestUpdate(getApplication())
+    }
 
     val roomSignalingName: String
         get() = roomSignal?.name ?: "none"
@@ -1211,6 +1257,8 @@ class LookAfterViewModel(
             _planning.value = PlanningConversationState()
             coachHistoryStore.clear()
             _coachHistory.value = CoachHistoryState.EMPTY
+            travelStore.clear()
+            _travel.value = TravelState.EMPTY
             lastAutoHeroKey = null
             teardownRoomSession(publishLeave = false)
             _bodyDoubleRoom.value = BodyDoubleRoomState()

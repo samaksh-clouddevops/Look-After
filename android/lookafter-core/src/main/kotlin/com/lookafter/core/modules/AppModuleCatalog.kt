@@ -96,7 +96,7 @@ object AppModuleCatalog {
         AppModule("companion", "Body double", "WebRTC focus room", ModuleGroup.FOCUS, ModuleDestination.COMPANION, ModuleStatus.BETA, 210),
         AppModule("simulation", "Simulation", "What-if planning sandbox", ModuleGroup.FOCUS, ModuleDestination.SIMULATION, ModuleStatus.SHIPPED, 220),
 
-        AppModule("travel", "Travel", "Trips & timezone packing", ModuleGroup.GROWTH, ModuleDestination.TRAVEL, ModuleStatus.COMING_SOON, 310),
+        AppModule("travel", "Travel", "Trips, packing & day open", ModuleGroup.GROWTH, ModuleDestination.TRAVEL, ModuleStatus.SHIPPED, 310),
         AppModule("learning", "Learning", "Spaced practice loops", ModuleGroup.GROWTH, ModuleDestination.LEARNING, ModuleStatus.COMING_SOON, 320),
         AppModule("creativity", "Creativity", "Capture boards", ModuleGroup.GROWTH, ModuleDestination.CREATIVITY, ModuleStatus.COMING_SOON, 330),
         AppModule("behavior", "Behavior", "Habit loops", ModuleGroup.GROWTH, ModuleDestination.BEHAVIOR, ModuleStatus.COMING_SOON, 340),

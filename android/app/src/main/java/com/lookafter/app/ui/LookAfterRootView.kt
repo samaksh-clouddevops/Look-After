@@ -40,6 +40,7 @@ import com.lookafter.app.ui.settings.PrivacySettingsScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
 import com.lookafter.app.ui.tasks.TaskEditorSheet
 import com.lookafter.app.ui.timeline.TodayTimelineScreen
+import com.lookafter.app.ui.travel.TravelScreen
 import com.lookafter.app.ui.you.YouScreen
 import com.lookafter.app.widget.LookAfterDeepLink
 import com.lookafter.core.adhd.FocusSessionPhase
@@ -94,6 +95,7 @@ fun LookAfterRootView(
     val roomStatus by viewModel.roomStatusMessage.collectAsStateWithLifecycle()
     val sessionSummary by viewModel.lastSessionSummary.collectAsStateWithLifecycle()
     val notificationPrefs by viewModel.notificationPreferences.collectAsStateWithLifecycle()
+    val travel by viewModel.travel.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
 
@@ -121,6 +123,7 @@ fun LookAfterRootView(
     var notificationSettingsOpen by remember { mutableStateOf(false) }
     var bodyDoubleRoomOpen by remember { mutableStateOf(false) }
     var modulesOpen by remember { mutableStateOf(false) }
+    var travelOpen by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf<String?>(null) }
     var comingSoonSubtitle by remember { mutableStateOf("") }
     var captureOpen by remember { mutableStateOf(false) }
@@ -138,6 +141,7 @@ fun LookAfterRootView(
         notificationSettingsOpen = false
         bodyDoubleRoomOpen = false
         modulesOpen = false
+        travelOpen = false
         comingSoonTitle = null
         simulationOpen = false
     }
@@ -154,6 +158,7 @@ fun LookAfterRootView(
             ModuleDestination.INBOX -> inboxOpen = true
             ModuleDestination.COMPANION -> bodyDoubleRoomOpen = true
             ModuleDestination.REVIEW -> reviewOpen = true
+            ModuleDestination.TRAVEL -> travelOpen = true
             ModuleDestination.SIMULATION -> {
                 if (hypotheticals.isEmpty()) {
                     val open = state.activeTasks.filter { it.status.isActive }.take(3)
@@ -165,7 +170,6 @@ fun LookAfterRootView(
             }
             ModuleDestination.NOTIFICATIONS -> notificationSettingsOpen = true
             ModuleDestination.PRIVACY -> privacyOpen = true
-            ModuleDestination.TRAVEL,
             ModuleDestination.CYCLE,
             ModuleDestination.LEARNING,
             ModuleDestination.CREATIVITY,
@@ -252,7 +256,7 @@ fun LookAfterRootView(
                 current = when {
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
                         insightsOpen || privacyOpen || notificationSettingsOpen ||
-                        bodyDoubleRoomOpen || modulesOpen ||
+                        bodyDoubleRoomOpen || modulesOpen || travelOpen ||
                         comingSoonTitle != null -> AppDestination.YOU
                     else -> current
                 },
@@ -293,6 +297,7 @@ fun LookAfterRootView(
             notificationSettingsOpen -> "notif"
             bodyDoubleRoomOpen -> "bd-room"
             modulesOpen -> "modules"
+            travelOpen -> "travel"
             comingSoonTitle != null -> "soon"
             reviewOpen -> "review"
             else -> current.name
@@ -311,6 +316,24 @@ fun LookAfterRootView(
                 modulesOpen -> ModulesScreen(
                     onOpen = { dest -> openModule(dest) },
                     onBack = { modulesOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                travelOpen -> TravelScreen(
+                    state = travel,
+                    onAddTrip = viewModel::addTravelTrip,
+                    onDeleteTrip = viewModel::deleteTravelTrip,
+                    onSelectTrip = viewModel::selectTravelTrip,
+                    onTogglePacking = viewModel::togglePackingItem,
+                    onAddPacking = viewModel::addPackingItem,
+                    onOpenDayOnToday = { day ->
+                        viewModel.openTravelDayOnToday(day)
+                        closeSecondarySurfaces()
+                        destination = AppDestination.TODAY.name
+                    },
+                    onBack = {
+                        travelOpen = false
+                        modulesOpen = true
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
                 bodyDoubleRoomOpen -> BodyDoubleRoomScreen(
