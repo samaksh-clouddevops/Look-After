@@ -12,7 +12,8 @@ class AppModuleCatalogTest {
         assertTrue(AppModuleCatalog.comingSoon().isNotEmpty())
         assertTrue(AppModuleCatalog.all.any { it.id == "today" && it.isOpenable })
         assertTrue(AppModuleCatalog.all.any { it.id == "travel" && it.isOpenable })
-        assertTrue(AppModuleCatalog.all.any { it.id == "cycle" && !it.isOpenable })
+        assertTrue(AppModuleCatalog.all.any { it.id == "cycle" && it.isOpenable })
+        assertTrue(AppModuleCatalog.all.any { it.id == "learning" && !it.isOpenable })
     }
 
     @Test

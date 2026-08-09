@@ -91,7 +91,7 @@ object AppModuleCatalog {
 
         AppModule("health", "Health", "Readiness & 7-day charts", ModuleGroup.CARE, ModuleDestination.HEALTH, ModuleStatus.SHIPPED, 110),
         AppModule("meds", "Medication", "Doses & adherence", ModuleGroup.CARE, ModuleDestination.MEDICATION, ModuleStatus.SHIPPED, 120),
-        AppModule("cycle", "Cycle", "Capacity-aware cycle support", ModuleGroup.CARE, ModuleDestination.CYCLE, ModuleStatus.COMING_SOON, 130),
+        AppModule("cycle", "Cycle", "Optional phase · capacity-aware", ModuleGroup.CARE, ModuleDestination.CYCLE, ModuleStatus.SHIPPED, 130),
 
         AppModule("companion", "Body double", "WebRTC focus room", ModuleGroup.FOCUS, ModuleDestination.COMPANION, ModuleStatus.BETA, 210),
         AppModule("simulation", "Simulation", "What-if planning sandbox", ModuleGroup.FOCUS, ModuleDestination.SIMULATION, ModuleStatus.SHIPPED, 220),

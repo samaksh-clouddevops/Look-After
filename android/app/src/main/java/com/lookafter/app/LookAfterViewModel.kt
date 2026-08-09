@@ -16,11 +16,17 @@ import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
+import com.lookafter.app.cycle.CycleStore
 import com.lookafter.app.travel.TravelStore
 import com.lookafter.app.webrtc.RoomSignalingFactory
 import com.lookafter.app.webrtc.RoomSignalingTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
+import com.lookafter.core.cycle.CycleEngine
+import com.lookafter.core.cycle.CycleIntent
+import com.lookafter.core.cycle.CycleLogEntry
+import com.lookafter.core.cycle.CycleSnapshot
+import com.lookafter.core.cycle.CycleState
 import com.lookafter.core.travel.PackingItem
 import com.lookafter.core.travel.TravelEngine
 import com.lookafter.core.travel.TravelIntent
@@ -103,6 +109,7 @@ class LookAfterViewModel(
     private val planningStore: PlanningConversationStore = app.planningConversationStore
     private val coachHistoryStore: CoachHistoryStore = app.coachHistoryStore
     private val travelStore: TravelStore = app.travelStore
+    private val cycleStore: CycleStore = app.cycleStore
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -126,13 +133,29 @@ class LookAfterViewModel(
     private val _travel = MutableStateFlow(app.travelStore.load())
     val travel: StateFlow<TravelState> = _travel.asStateFlow()
 
+    private val _cycle = MutableStateFlow(app.cycleStore.load())
+    val cycle: StateFlow<CycleState> = _cycle.asStateFlow()
+
+    val cycleSnapshot: StateFlow<CycleSnapshot> = combine(_cycle, state) { c, life ->
+        CycleEngine.snapshot(c, today = life.currentDay ?: LocalDate.now())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CycleSnapshot())
+
     private fun persistTravel(next: TravelState) {
         _travel.value = next
         travelStore.save(next)
     }
 
+    private fun persistCycle(next: CycleState) {
+        _cycle.value = next
+        cycleStore.save(next)
+    }
+
     fun dispatchTravel(intent: TravelIntent) {
         persistTravel(TravelEngine.reduce(_travel.value, intent))
+    }
+
+    fun dispatchCycle(intent: CycleIntent) {
+        persistCycle(CycleEngine.reduce(_cycle.value, intent))
     }
 
     fun addTravelTrip(trip: TravelTrip) {
@@ -160,6 +183,30 @@ class LookAfterViewModel(
         engine.process(LookAfterIntent.SetCurrentDay(day))
         _lastSyncMessage.value = "Today set to $day · travel packing"
         TodayWidgetUpdater.requestUpdate(getApplication())
+    }
+
+    fun setCycleTracking(enabled: Boolean) {
+        dispatchCycle(CycleIntent.SetTrackingEnabled(enabled))
+    }
+
+    fun setCyclePeriodStart(day: LocalDate?) {
+        dispatchCycle(CycleIntent.SetLastPeriodStart(day))
+    }
+
+    fun setCycleLength(days: Int) {
+        dispatchCycle(CycleIntent.SetCycleLength(days))
+    }
+
+    fun setPeriodLength(days: Int) {
+        dispatchCycle(CycleIntent.SetPeriodLength(days))
+    }
+
+    fun addCycleLog(entry: CycleLogEntry) {
+        dispatchCycle(CycleIntent.AddLog(entry))
+    }
+
+    fun deleteCycleLog(id: String) {
+        dispatchCycle(CycleIntent.DeleteLog(id))
     }
 
     val roomSignalingName: String
@@ -416,9 +463,16 @@ class LookAfterViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrainTick())
 
-    val executiveCapacity: StateFlow<ExecutiveCapacity> = combine(state, health, brainTick) { life, h, tick ->
-        ExecutiveCapacityEngine.compute(life, h, tick.world)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ExecutiveCapacity.EMPTY)
+    val executiveCapacity: StateFlow<ExecutiveCapacity> =
+        combine(state, health, brainTick, cycleSnapshot) { life, h, tick, cycle ->
+            ExecutiveCapacityEngine.compute(
+                state = life,
+                health = h,
+                world = tick.world,
+                cycleModifier = cycle.capacityModifier,
+                cyclePhaseLabel = cycle.phaseLabel.takeIf { cycle.trackingEnabled },
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ExecutiveCapacity.EMPTY)
 
     init {
         viewModelScope.launch { refreshCalendarDay() }
@@ -1259,6 +1313,8 @@ class LookAfterViewModel(
             _coachHistory.value = CoachHistoryState.EMPTY
             travelStore.clear()
             _travel.value = TravelState.EMPTY
+            cycleStore.clear()
+            _cycle.value = CycleState.EMPTY
             lastAutoHeroKey = null
             teardownRoomSession(publishLeave = false)
             _bodyDoubleRoom.value = BodyDoubleRoomState()

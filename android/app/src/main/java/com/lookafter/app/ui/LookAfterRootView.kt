@@ -28,6 +28,7 @@ import com.lookafter.app.ui.health.HealthScreen
 import com.lookafter.app.ui.inbox.InboxScreen
 import com.lookafter.app.ui.insights.InsightsScreen
 import com.lookafter.app.ui.medication.MedicationScreen
+import com.lookafter.app.ui.cycle.CycleScreen
 import com.lookafter.app.ui.modules.ComingSoonScreen
 import com.lookafter.app.ui.modules.ModulesScreen
 import com.lookafter.app.ui.motion.CalmAnimatedContent
@@ -96,6 +97,8 @@ fun LookAfterRootView(
     val sessionSummary by viewModel.lastSessionSummary.collectAsStateWithLifecycle()
     val notificationPrefs by viewModel.notificationPreferences.collectAsStateWithLifecycle()
     val travel by viewModel.travel.collectAsStateWithLifecycle()
+    val cycle by viewModel.cycle.collectAsStateWithLifecycle()
+    val cycleSnapshot by viewModel.cycleSnapshot.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
 
@@ -124,6 +127,7 @@ fun LookAfterRootView(
     var bodyDoubleRoomOpen by remember { mutableStateOf(false) }
     var modulesOpen by remember { mutableStateOf(false) }
     var travelOpen by remember { mutableStateOf(false) }
+    var cycleOpen by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf<String?>(null) }
     var comingSoonSubtitle by remember { mutableStateOf("") }
     var captureOpen by remember { mutableStateOf(false) }
@@ -142,6 +146,7 @@ fun LookAfterRootView(
         bodyDoubleRoomOpen = false
         modulesOpen = false
         travelOpen = false
+        cycleOpen = false
         comingSoonTitle = null
         simulationOpen = false
     }
@@ -159,6 +164,7 @@ fun LookAfterRootView(
             ModuleDestination.COMPANION -> bodyDoubleRoomOpen = true
             ModuleDestination.REVIEW -> reviewOpen = true
             ModuleDestination.TRAVEL -> travelOpen = true
+            ModuleDestination.CYCLE -> cycleOpen = true
             ModuleDestination.SIMULATION -> {
                 if (hypotheticals.isEmpty()) {
                     val open = state.activeTasks.filter { it.status.isActive }.take(3)
@@ -170,7 +176,6 @@ fun LookAfterRootView(
             }
             ModuleDestination.NOTIFICATIONS -> notificationSettingsOpen = true
             ModuleDestination.PRIVACY -> privacyOpen = true
-            ModuleDestination.CYCLE,
             ModuleDestination.LEARNING,
             ModuleDestination.CREATIVITY,
             ModuleDestination.BEHAVIOR,
@@ -256,7 +261,7 @@ fun LookAfterRootView(
                 current = when {
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
                         insightsOpen || privacyOpen || notificationSettingsOpen ||
-                        bodyDoubleRoomOpen || modulesOpen || travelOpen ||
+                        bodyDoubleRoomOpen || modulesOpen || travelOpen || cycleOpen ||
                         comingSoonTitle != null -> AppDestination.YOU
                     else -> current
                 },
@@ -298,6 +303,7 @@ fun LookAfterRootView(
             bodyDoubleRoomOpen -> "bd-room"
             modulesOpen -> "modules"
             travelOpen -> "travel"
+            cycleOpen -> "cycle"
             comingSoonTitle != null -> "soon"
             reviewOpen -> "review"
             else -> current.name
@@ -332,6 +338,21 @@ fun LookAfterRootView(
                     },
                     onBack = {
                         travelOpen = false
+                        modulesOpen = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                cycleOpen -> CycleScreen(
+                    state = cycle,
+                    snapshot = cycleSnapshot,
+                    onTrackingChange = viewModel::setCycleTracking,
+                    onPeriodStartChange = viewModel::setCyclePeriodStart,
+                    onCycleLengthChange = viewModel::setCycleLength,
+                    onPeriodLengthChange = viewModel::setPeriodLength,
+                    onAddLog = viewModel::addCycleLog,
+                    onDeleteLog = viewModel::deleteCycleLog,
+                    onBack = {
+                        cycleOpen = false
                         modulesOpen = true
                     },
                     modifier = Modifier.fillMaxSize(),
@@ -442,6 +463,7 @@ fun LookAfterRootView(
                     health = health,
                     capacity = capacity,
                     brainTick = brainTick,
+                    cycle = cycleSnapshot,
                     onStartFocus = {
                         viewModel.startFocusForHero()
                         focusOpen = true

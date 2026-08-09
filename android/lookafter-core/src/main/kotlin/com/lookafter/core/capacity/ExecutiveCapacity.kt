@@ -66,6 +66,8 @@ object ExecutiveCapacityEngine {
         health: HealthSummary = HealthSummary.EMPTY,
         world: WorldState = WorldState.EMPTY,
         day: LocalDate = state.currentDay ?: LocalDate.now(),
+        cycleModifier: Double = 0.0,
+        cyclePhaseLabel: String? = null,
     ): ExecutiveCapacity {
         val dayTasks = TodayBoard.dayTasks(state, day)
         val open = dayTasks.filter { it.status.isActive }
@@ -80,6 +82,10 @@ object ExecutiveCapacityEngine {
 
         var energy = readiness.coerceIn(0.0, 1.0)
         val reasons = mutableListOf<String>()
+        if (cycleModifier != 0.0) {
+            energy += cycleModifier.coerceIn(-0.15, 0.12)
+            cyclePhaseLabel?.let { reasons += "Cycle phase: $it" }
+        }
 
         when {
             sleepH == null -> Unit

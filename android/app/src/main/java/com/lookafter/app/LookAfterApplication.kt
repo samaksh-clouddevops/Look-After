@@ -19,6 +19,7 @@ import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.sync.SyncTransportFactory
+import com.lookafter.app.cycle.CycleStore
 import com.lookafter.app.travel.TravelStore
 import com.lookafter.core.adhd.IceServerConfig
 import com.lookafter.core.brain.CoachService
@@ -88,6 +89,9 @@ class LookAfterApplication : Application() {
     lateinit var travelStore: TravelStore
         private set
 
+    lateinit var cycleStore: CycleStore
+        private set
+
     lateinit var coachService: CoachService
         private set
 
@@ -130,6 +134,7 @@ class LookAfterApplication : Application() {
         planningConversationStore = PlanningConversationStore(this)
         coachHistoryStore = CoachHistoryStore(this)
         travelStore = TravelStore(this)
+        cycleStore = CycleStore(this)
         authSessionStore = AuthSessionStore(this).also { it.ensureAnonymous() }
         // OpenAI-compatible HTTPS coach when LOOKAFTER_LLM_API_KEY is set; else offline.
         val httpCoach = HttpLlmCoachService(

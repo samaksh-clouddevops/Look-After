@@ -29,26 +29,34 @@ import com.lookafter.core.briefing.BriefingNarrativeBuilder
 import com.lookafter.core.capacity.CapacityBand
 import com.lookafter.core.capacity.ExecutiveCapacity
 import com.lookafter.core.capacity.ExecutiveCapacityEngine
+import com.lookafter.core.cycle.CycleSnapshot
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.health.HealthSummary
 import kotlin.math.roundToInt
 
-/** Morning briefing — narrative from WorldState + capacity + care. */
+/** Morning briefing — narrative from WorldState + capacity + care + cycle. */
 @Composable
 fun BriefingScreen(
     state: LifeState,
     health: HealthSummary = HealthSummary.EMPTY,
     capacity: ExecutiveCapacity? = null,
     brainTick: BrainTick? = null,
+    cycle: CycleSnapshot = CycleSnapshot(),
     onStartFocus: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val tick = brainTick ?: remember(state, health) { ExecutiveBrainEngine.tick(state, health) }
-    val cap = capacity ?: remember(state, health, tick) {
-        ExecutiveCapacityEngine.compute(state, health, tick.world)
+    val cap = capacity ?: remember(state, health, tick, cycle) {
+        ExecutiveCapacityEngine.compute(
+            state = state,
+            health = health,
+            world = tick.world,
+            cycleModifier = cycle.capacityModifier,
+            cyclePhaseLabel = cycle.phaseLabel.takeIf { cycle.trackingEnabled },
+        )
     }
-    val narrative = remember(state, health, tick, cap) {
-        BriefingNarrativeBuilder.build(state, health, tick, cap)
+    val narrative = remember(state, health, tick, cap, cycle) {
+        BriefingNarrativeBuilder.build(state, health, tick, cap, cycle = cycle)
     }
 
     LazyColumn(
@@ -98,6 +106,18 @@ fun BriefingScreen(
                 ElevatedSurfaceCard {
                     Text("Calendar", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.Focus)
                     Text(cal, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = LookAfterDimens.spacingXS))
+                }
+            }
+        }
+        narrative.cycleLine?.let { cycleText ->
+            item {
+                ElevatedSurfaceCard {
+                    Text("Cycle", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.Health)
+                    Text(
+                        cycleText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                    )
                 }
             }
         }

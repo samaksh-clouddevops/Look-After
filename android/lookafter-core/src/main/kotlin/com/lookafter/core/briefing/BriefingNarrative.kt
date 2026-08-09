@@ -6,6 +6,7 @@ import com.lookafter.core.brain.MedicationWorldStatus
 import com.lookafter.core.capacity.CapacityBand
 import com.lookafter.core.capacity.ExecutiveCapacity
 import com.lookafter.core.capacity.ExecutiveCapacityEngine
+import com.lookafter.core.cycle.CycleSnapshot
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.health.HealthSummary
 import com.lookafter.core.models.ConstraintType
@@ -36,6 +37,7 @@ data class BriefingNarrative(
     val capacity: ExecutiveCapacity = ExecutiveCapacity.EMPTY,
     val careLine: String? = null,
     val calendarLine: String? = null,
+    val cycleLine: String? = null,
     val boardLine: String = "",
     val guidance: List<BriefingLine> = emptyList(),
     val focusCtaLabel: String = "Begin focus",
@@ -55,6 +57,7 @@ object BriefingNarrativeBuilder {
         capacity: ExecutiveCapacity = ExecutiveCapacityEngine.compute(state, health, tick.world),
         day: LocalDate = state.currentDay ?: LocalDate.now(),
         nowTime: LocalTime = LocalTime.now(),
+        cycle: CycleSnapshot = CycleSnapshot(),
     ): BriefingNarrative {
         val dayTasks = TodayBoard.dayTasks(state, day)
         val open = dayTasks.count { it.status.isActive }
@@ -66,12 +69,13 @@ object BriefingNarrativeBuilder {
         val orientation = buildOrientation(capacity, open, done, tick)
         val care = careLine(tick.world.medicationStatus, state)
         val calendar = calendarLine(tick)
+        val cycleLine = cycleLine(cycle)
         val board = when {
             open == 0 && done == 0 -> "Board is empty — capture lightly or rest."
             open == 0 -> "All clear for the day view · $done done."
             else -> "$open open · $done done · $anchored anchored"
         }
-        val guidance = buildGuidance(capacity, tick, care != null)
+        val guidance = buildGuidance(capacity, tick, care != null, cycle)
 
         return BriefingNarrative(
             greeting = greeting,
@@ -83,11 +87,18 @@ object BriefingNarrativeBuilder {
             capacity = capacity,
             careLine = care,
             calendarLine = calendar,
+            cycleLine = cycleLine,
             boardLine = board,
             guidance = guidance,
             focusCtaLabel = if (tick.decision.heroTaskId != null) "Begin focus" else "Open Today",
             showFocusCta = tick.decision.heroTaskId != null || open > 0,
         )
+    }
+
+    private fun cycleLine(cycle: CycleSnapshot): String? {
+        if (!cycle.trackingEnabled) return null
+        val dayPart = cycle.dayInCycle?.let { " · day $it" }.orEmpty()
+        return "Cycle: ${cycle.phaseLabel}$dayPart — ${cycle.coachingHint}"
     }
 
     private fun greetingFor(t: LocalTime): String = when (t.hour) {
@@ -145,9 +156,13 @@ object BriefingNarrativeBuilder {
         capacity: ExecutiveCapacity,
         tick: BrainTick,
         hasCare: Boolean,
+        cycle: CycleSnapshot = CycleSnapshot(),
     ): List<BriefingLine> {
         val lines = mutableListOf<BriefingLine>()
         lines += BriefingLine("Capacity", capacity.band.coachingHint)
+        if (cycle.trackingEnabled && cycle.phase != com.lookafter.core.cycle.CyclePhase.UNKNOWN) {
+            lines += BriefingLine("Cycle", cycle.coachingHint)
+        }
         if (hasCare) {
             lines += BriefingLine("Sequence", "Care → hero → optional fluid.")
         } else {
@@ -166,6 +181,6 @@ object BriefingNarrativeBuilder {
         capacity.reasons.take(2).forEach {
             lines += BriefingLine("Signal", it)
         }
-        return lines.take(5)
+        return lines.take(6)
     }
 }
