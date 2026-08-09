@@ -265,8 +265,18 @@ class LookAfterViewModel(
 
     fun webRtcEglContext(): org.webrtc.EglBase.Context? = webRtc?.eglContext
 
-    val insights: StateFlow<InsightsSnapshot> = combine(state, health) { life, h ->
-        InsightsEngine.compute(life, h)
+    val insights: StateFlow<InsightsSnapshot> = combine(
+        state,
+        health,
+        healthHistory,
+        healthRolling,
+    ) { life, h, hist, rolling ->
+        InsightsEngine.compute(
+            state = life,
+            health = h,
+            healthHistory = hist,
+            rollingHealth = rolling,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsSnapshot.EMPTY)
 
     fun setCameraBodyDoubleEnabled(enabled: Boolean) {

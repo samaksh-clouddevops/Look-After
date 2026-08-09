@@ -49,6 +49,36 @@ fun InsightsScreen(
         item {
             ElevatedSurfaceCard {
                 Text(
+                    "Performance",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LookAfterColors.AccentPrimary,
+                )
+                Text(
+                    snapshot.performanceLabel,
+                    style = MaterialTheme.typography.displayLarge,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                )
+                LinearProgressIndicator(
+                    progress = { snapshot.performanceScore.toFloat().coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = LookAfterDimens.spacingSM)
+                        .height(8.dp),
+                    color = LookAfterColors.AccentPrimary,
+                )
+                Text(
+                    "${(snapshot.performanceScore * 100).roundToInt()} · " +
+                        "${"%.1f".format(snapshot.weeklyFocusHours)}h focus · " +
+                        "streak quality ${"%.1f".format(snapshot.streakQuality)}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                )
+            }
+        }
+        item {
+            ElevatedSurfaceCard {
+                Text(
                     "Coach read",
                     style = MaterialTheme.typography.labelMedium,
                     color = LookAfterColors.AccentPrimary,
@@ -65,7 +95,11 @@ fun InsightsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
             ) {
-                MetricCard("Done 7d", "${snapshot.completed7d}", Modifier.weight(1f))
+                MetricCard(
+                    "Done ${snapshot.windowDays}d",
+                    "${snapshot.completed7d}",
+                    Modifier.weight(1f),
+                )
                 MetricCard(
                     "Focus",
                     "${snapshot.focusMinutes7d}m",
@@ -87,7 +121,8 @@ fun InsightsScreen(
                 )
                 Text(
                     "${(snapshot.completionRate7d * 100).roundToInt()}% · " +
-                        "open ${snapshot.openNow} · parked ${snapshot.parkedNow}",
+                        "open ${snapshot.openNow} · parked ${snapshot.parkedNow} · " +
+                        "someday ${snapshot.somedayNow}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
@@ -96,7 +131,53 @@ fun InsightsScreen(
         }
         item {
             ElevatedSurfaceCard {
-                Text("7-day bars", style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "Board mix",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LookAfterColors.AccentPrimary,
+                )
+                Text(
+                    "A ${(snapshot.anchoredShare * 100).roundToInt()}% · " +
+                        "X ${(snapshot.flexibleShare * 100).roundToInt()}% · " +
+                        "F ${(snapshot.fluidShare * 100).roundToInt()}% · " +
+                        "high-pri open ${snapshot.highPriorityOpen}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                )
+            }
+        }
+        item {
+            ElevatedSurfaceCard {
+                Text(
+                    "Recovery",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LookAfterColors.Health,
+                )
+                Text(
+                    buildString {
+                        append("Readiness ")
+                        append(snapshot.readiness?.let { "${(it * 100).roundToInt()}%" } ?: "—")
+                        snapshot.avgReadiness7d?.let {
+                            append(" · 7d avg ${(it * 100).roundToInt()}% (${snapshot.readinessTrend})")
+                        }
+                        snapshot.avgSleepHours7d?.let {
+                            append("\nSleep avg %.1fh (%s)".format(it, snapshot.sleepTrend))
+                        }
+                        if (snapshot.medAdherenceToday > 0) {
+                            append("\nMeds today ${(snapshot.medAdherenceToday * 100).roundToInt()}%")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                )
+            }
+        }
+        item {
+            ElevatedSurfaceCard {
+                Text(
+                    "${snapshot.windowDays}-day bars",
+                    style = MaterialTheme.typography.labelMedium,
+                )
                 Column(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(top = LookAfterDimens.spacingSM),
@@ -110,35 +191,82 @@ fun InsightsScreen(
                             Text(
                                 bar.day.format(dayFmt),
                                 style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.weight(0.2f),
+                                modifier = Modifier.weight(0.18f),
                             )
                             LinearProgressIndicator(
                                 progress = { bar.completed.toFloat() / max.toFloat() },
                                 modifier = Modifier
-                                    .weight(0.6f)
+                                    .weight(0.52f)
                                     .height(8.dp)
                                     .padding(top = 4.dp),
                                 color = LookAfterColors.Focus,
                             )
                             Text(
-                                "${bar.completed}",
+                                "${bar.completed} · ${bar.focusMinutes}m",
                                 style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.weight(0.15f),
+                                modifier = Modifier.weight(0.30f),
                             )
                         }
                     }
                 }
             }
         }
-        if (snapshot.topTags.isNotEmpty()) {
+        if (snapshot.tagHeat.isNotEmpty()) {
             item {
                 ElevatedSurfaceCard {
-                    Text("Top tags", style = MaterialTheme.typography.labelMedium)
                     Text(
-                        snapshot.topTags.joinToString(" · "),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                        "Tag heat",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.AccentPrimary,
                     )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingSM),
+                    ) {
+                        snapshot.tagHeat.forEach { tag ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    "#${tag.tag}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.weight(0.35f),
+                                )
+                                LinearProgressIndicator(
+                                    progress = { tag.heat.toFloat().coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .weight(0.5f)
+                                        .height(8.dp)
+                                        .padding(top = 4.dp),
+                                    color = LookAfterColors.AccentPrimary,
+                                )
+                                Text(
+                                    "${tag.count}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.weight(0.15f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (snapshot.reviewHints.isNotEmpty()) {
+            item {
+                ElevatedSurfaceCard {
+                    Text(
+                        "Weekly review",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.Warning,
+                    )
+                    snapshot.reviewHints.forEach { hint ->
+                        Text(
+                            "· $hint",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                        )
+                    }
                 }
             }
         }

@@ -1,11 +1,14 @@
 package com.lookafter.core.insights
 
 import com.lookafter.core.engine.LifeState
+import com.lookafter.core.health.HealthDayPoint
+import com.lookafter.core.health.HealthHistorySeries
 import com.lookafter.core.health.HealthSummary
+import com.lookafter.core.health.RollingHealthAverages
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.Priority
 import com.lookafter.core.models.TaskStatus
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.Test
@@ -47,6 +50,58 @@ class InsightsEngineTest {
         assertTrue(snap.headline.isNotBlank())
         assertTrue(snap.coachingLine.isNotBlank())
         assertEquals(0.7, snap.readiness)
+        assertTrue(snap.performanceScore in 0.0..1.0)
+        assertTrue(snap.performanceLabel.isNotBlank())
+    }
+
+    @Test
+    fun performanceTagHeatAndRecovery() {
+        val tasks = listOf(
+            LifeTask(
+                id = "1",
+                title = "Deep",
+                status = TaskStatus.COMPLETED,
+                durationMinutes = 60,
+                tags = listOf("work", "deep"),
+                scheduledDate = day,
+                completedAt = day.atTime(12, 0).toInstant(zone),
+            ),
+            LifeTask(
+                id = "2",
+                title = "Noise",
+                status = TaskStatus.PENDING,
+                constraintType = ConstraintType.FLUID,
+                priority = Priority.HIGH,
+                tags = listOf("work"),
+                scheduledDate = day,
+            ),
+        )
+        val hist = HealthHistorySeries(
+            days = listOf(
+                HealthDayPoint(day.minusDays(1), sleepHours = 6.0, readinessScore = 0.5),
+                HealthDayPoint(day, sleepHours = 7.5, readinessScore = 0.75),
+            ),
+            sourceLabel = "test",
+        )
+        val snap = InsightsEngine.compute(
+            state = LifeState(activeTasks = tasks, currentDay = day),
+            health = HealthSummary(readinessScore = 0.75),
+            asOf = day,
+            healthHistory = hist,
+            rollingHealth = RollingHealthAverages(
+                sleepHours = 6.75,
+                readinessScore = 0.62,
+                sleepTrendLabel = "up",
+                readinessTrendLabel = "up",
+            ),
+            zone = zone,
+        )
+        assertTrue(snap.tagHeat.any { it.tag == "work" })
+        assertEquals("up", snap.sleepTrend)
+        assertTrue(snap.reviewHints.isNotEmpty())
+        assertEquals(1, snap.highPriorityOpen)
+        assertTrue(snap.fluidShare > 0)
+        assertEquals(60, snap.focusMinutes7d)
     }
 
     @Test
