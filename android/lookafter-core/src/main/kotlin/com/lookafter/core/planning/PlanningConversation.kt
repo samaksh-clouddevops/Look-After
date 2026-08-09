@@ -30,14 +30,25 @@ data class PendingPlan(
     val accepted: Boolean? = null,
 )
 
+/** Planning horizon picker values (days). */
+object PlanningHorizons {
+    val OPTIONS: List<Int> = listOf(1, 3, 7)
+    const val DEFAULT: Int = 3
+}
+
 @Serializable
 data class PlanningConversationState(
     val messages: List<PlanningMessage> = emptyList(),
     val pending: PendingPlan? = null,
     val appliedCount: Int = 0,
+    /** Multi-day planning window selected in Brain UI. */
+    val horizonDays: Int = PlanningHorizons.DEFAULT,
 ) {
     val transcript: List<Pair<Boolean, String>>
         get() = messages.map { (it.speaker == PlanningSpeaker.USER) to it.text }
+
+    val pendingDiffLines: List<PlanMutationDiff.Line>
+        get() = pending?.let { PlanMutationDiff.lines(it.proposal) }.orEmpty()
 }
 
 sealed class PlanningConversationIntent {
@@ -54,6 +65,9 @@ sealed class PlanningConversationIntent {
     ) : PlanningConversationIntent()
 
     data class CoachReply(val text: String, val now: Instant = Instant.now()) : PlanningConversationIntent()
+
+    data class SetHorizonDays(val days: Int) : PlanningConversationIntent()
+
     data object AcceptPending : PlanningConversationIntent()
     data object RejectPending : PlanningConversationIntent()
     data object Clear : PlanningConversationIntent()
@@ -149,7 +163,17 @@ object PlanningConversationEngine {
             ),
             statusLine = "Plan discarded",
         )
-        PlanningConversationIntent.Clear -> PlanningApplyBundle(PlanningConversationState())
+        is PlanningConversationIntent.SetHorizonDays -> {
+            val days = intent.days.coerceIn(1, 14)
+            PlanningApplyBundle(
+                current.copy(horizonDays = days),
+                statusLine = "Horizon ${days}d",
+            )
+        }
+        PlanningConversationIntent.Clear -> PlanningApplyBundle(
+            // Keep horizon preference across clear.
+            PlanningConversationState(horizonDays = current.horizonDays),
+        )
     }
 
     fun intentsForPending(pending: PendingPlan, life: LifeState): List<LookAfterIntent> =
@@ -159,13 +183,28 @@ object PlanningConversationEngine {
         message: String,
         life: LifeState,
         today: LocalDate = life.currentDay ?: LocalDate.now(),
+        horizonDays: Int = PlanningHorizons.DEFAULT,
     ): Pair<PlanProposal, String> {
-        val multi = MultiDayPlanEngine.interpret(message, life, today)
+        val multi = MultiDayPlanEngine.interpret(
+            message = message,
+            state = life,
+            today = today,
+            horizonDays = horizonDays.coerceIn(1, 14),
+        )
         if (multi.proposal.mutations.isNotEmpty()) {
             return multi.proposal to multi.conversationalReply
         }
         val simple = MultiDayPlanEngine.simpleIntents(message, life)
         // Encode simple intents as empty proposal; caller applies simple intents directly.
         return PlanProposal(summary = simple.reply, mutations = emptyList()) to simple.reply
+    }
+
+    /** Cap transcript size for persistence (tail-only). */
+    fun compactForStorage(
+        state: PlanningConversationState,
+        maxMessages: Int = 80,
+    ): PlanningConversationState {
+        if (state.messages.size <= maxMessages) return state
+        return state.copy(messages = state.messages.takeLast(maxMessages))
     }
 }

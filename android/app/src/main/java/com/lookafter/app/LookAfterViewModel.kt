@@ -13,6 +13,7 @@ import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.notifications.NotificationPreferencesStore
+import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
@@ -48,9 +49,11 @@ import com.lookafter.core.onboarding.OnboardingIntent
 import com.lookafter.core.onboarding.OnboardingState
 import com.lookafter.core.planning.MultiDayPlanEngine
 import com.lookafter.core.planning.PlanMutationApplier
+import com.lookafter.core.planning.PlanMutationDiff
 import com.lookafter.core.planning.PlanningConversationEngine
 import com.lookafter.core.planning.PlanningConversationIntent
 import com.lookafter.core.planning.PlanningConversationState
+import com.lookafter.core.planning.PlanningHorizons
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.Job
@@ -75,6 +78,7 @@ class LookAfterViewModel(
     private val calendar: CalendarEventsProvider = app.calendarProvider
     private val notifier: LookAfterNotifier = app.notifier
     private val notificationPrefsStore: NotificationPreferencesStore = app.notificationPrefs
+    private val planningStore: PlanningConversationStore = app.planningConversationStore
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -100,6 +104,11 @@ class LookAfterViewModel(
 
     fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         notificationPrefsStore.update(transform)
+    }
+
+    private fun persistPlanning(next: PlanningConversationState) {
+        _planning.value = next
+        planningStore.save(next)
     }
 
     private val _cameraBodyDouble = MutableStateFlow(false)
@@ -165,13 +174,24 @@ class LookAfterViewModel(
     private val _focus = MutableStateFlow(FocusSessionState())
     val focus: StateFlow<FocusSessionState> = _focus.asStateFlow()
 
-    private val _planning = MutableStateFlow(PlanningConversationState())
+    private val _planning = MutableStateFlow(app.planningConversationStore.load())
     val planning: StateFlow<PlanningConversationState> = _planning.asStateFlow()
 
     /** Back-compat transcript projection for Brain UI. */
     val coachTranscript: StateFlow<List<Pair<Boolean, String>>> =
         _planning.map { it.transcript }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val planningHorizonDays: Int
+        get() = _planning.value.horizonDays
+
+    fun setPlanningHorizonDays(days: Int) {
+        val bundle = PlanningConversationEngine.reduce(
+            _planning.value,
+            PlanningConversationIntent.SetHorizonDays(days),
+        )
+        persistPlanning(bundle.state)
+    }
 
     private val _bodyDoubleRoom = MutableStateFlow(BodyDoubleRoomState())
     val bodyDoubleRoom: StateFlow<BodyDoubleRoomState> = _bodyDoubleRoom.asStateFlow()
@@ -345,13 +365,16 @@ class LookAfterViewModel(
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         // Append user turn into multi-turn planning conversation.
-        _planning.value = PlanningConversationEngine.reduce(
-            _planning.value,
-            PlanningConversationIntent.UserMessage(trimmed),
-        ).state
+        persistPlanning(
+            PlanningConversationEngine.reduce(
+                _planning.value,
+                PlanningConversationIntent.UserMessage(trimmed),
+            ).state,
+        )
         viewModelScope.launch {
             val life = engine.currentState
             val healthSnap = healthRepo.summary.value
+            val horizon = _planning.value.horizonDays.coerceIn(1, 14)
             val looksLikePlan = trimmed.length > 12 ||
                 trimmed.contains("spread") ||
                 trimmed.contains("plan") ||
@@ -360,35 +383,54 @@ class LookAfterViewModel(
                 trimmed.contains("reschedule") ||
                 trimmed.contains("morning") ||
                 trimmed.contains("overwhelm") ||
-                trimmed.contains("park fluid")
+                trimmed.contains("park fluid") ||
+                trimmed.contains("horizon")
             if (looksLikePlan) {
+                // Prefer offline multi-day engine with selected horizon; LLM plan if richer.
+                val (offlineProposal, offlineReply) = PlanningConversationEngine.offlineTurn(
+                    message = trimmed,
+                    life = life,
+                    horizonDays = horizon,
+                )
                 val planned = planService.plan(trimmed, life, healthSnap)
-                if (planned.proposal.mutations.isNotEmpty()) {
-                    val src = if (planned.source == HttpLlmPlanService.PlanResult.Source.LLM) {
-                        "LLM"
-                    } else {
-                        "offline"
-                    }
-                    // Offer plan for accept/reject — do not auto-apply mutations.
-                    _planning.value = PlanningConversationEngine.reduce(
-                        _planning.value,
-                        PlanningConversationIntent.OfferPlan(
-                            proposal = planned.proposal,
-                            reply = planned.conversationalReply,
-                            sourceLabel = src,
-                        ),
-                    ).state
-                    _lastSyncMessage.value = "Plan ready · review in Brain"
+                val useLlm = planned.proposal.mutations.isNotEmpty() &&
+                    planned.source == HttpLlmPlanService.PlanResult.Source.LLM
+                val proposal = if (useLlm) {
+                    planned.proposal.copy(dayHorizon = planned.proposal.dayHorizon.coerceAtLeast(horizon))
+                } else if (offlineProposal.mutations.isNotEmpty()) {
+                    offlineProposal.copy(dayHorizon = horizon)
+                } else {
+                    planned.proposal
+                }
+                val reply = if (useLlm) planned.conversationalReply else offlineReply.ifBlank {
+                    planned.conversationalReply
+                }
+                val src = if (useLlm) "LLM" else "offline"
+                if (proposal.mutations.isNotEmpty()) {
+                    persistPlanning(
+                        PlanningConversationEngine.reduce(
+                            _planning.value,
+                            PlanningConversationIntent.OfferPlan(
+                                proposal = proposal,
+                                reply = reply,
+                                sourceLabel = "$src · ${horizon}d",
+                            ),
+                        ).state,
+                    )
+                    _lastSyncMessage.value =
+                        "Plan ready · ${proposal.mutations.size} change(s) · review"
                     return@launch
                 }
                 // Deterministic single-day intents still apply immediately (strip/park).
                 val simple = MultiDayPlanEngine.simpleIntents(trimmed, life)
                 if (simple.intents.isNotEmpty()) {
                     simple.intents.forEach { engine.process(it) }
-                    _planning.value = PlanningConversationEngine.reduce(
-                        _planning.value,
-                        PlanningConversationIntent.CoachReply(simple.reply),
-                    ).state
+                    persistPlanning(
+                        PlanningConversationEngine.reduce(
+                            _planning.value,
+                            PlanningConversationIntent.CoachReply(simple.reply),
+                        ).state,
+                    )
                     return@launch
                 }
             }
@@ -416,6 +458,7 @@ class LookAfterViewModel(
             appendCoach("")
             val system = buildString {
                 append("You are Look After, a calm executive coach. Be brief (2-4 sentences). ")
+                append("Planning horizon: ${_planning.value.horizonDays} day(s). ")
                 append("Hero context from offline brain may follow user message.")
             }
             val assembled = StringBuilder()
@@ -439,14 +482,18 @@ class LookAfterViewModel(
                 )
             }
             _streamingCoach.value = false
+            // Final stream snapshot to disk.
+            planningStore.save(_planning.value)
         }
     }
 
     private fun appendCoach(text: String) {
-        _planning.value = PlanningConversationEngine.reduce(
-            _planning.value,
-            PlanningConversationIntent.CoachReply(text),
-        ).state
+        persistPlanning(
+            PlanningConversationEngine.reduce(
+                _planning.value,
+                PlanningConversationIntent.CoachReply(text),
+            ).state,
+        )
     }
 
     private fun replaceLastCoach(text: String) {
@@ -456,6 +503,7 @@ class LookAfterViewModel(
         }
         if (lastCoach >= 0) {
             msgs[lastCoach] = msgs[lastCoach].copy(text = text)
+            // Don't thrash disk on every token — memory only; finalized in streamCoachReply.
             _planning.value = _planning.value.copy(messages = msgs)
         } else {
             appendCoach(text)
@@ -468,21 +516,34 @@ class LookAfterViewModel(
             if (pending.accepted != null) return@launch
             val intents = PlanningConversationEngine.intentsForPending(pending, engine.currentState)
             intents.forEach { engine.process(it) }
-            _planning.value = PlanningConversationEngine.reduce(
-                _planning.value,
-                PlanningConversationIntent.AcceptPending,
-            ).state
+            persistPlanning(
+                PlanningConversationEngine.reduce(
+                    _planning.value,
+                    PlanningConversationIntent.AcceptPending,
+                ).state,
+            )
             _lastSyncMessage.value = "Applied ${intents.size} plan change(s)"
             TodayWidgetUpdater.requestUpdate(getApplication())
         }
     }
 
     fun rejectPendingPlan() {
-        _planning.value = PlanningConversationEngine.reduce(
-            _planning.value,
-            PlanningConversationIntent.RejectPending,
-        ).state
+        persistPlanning(
+            PlanningConversationEngine.reduce(
+                _planning.value,
+                PlanningConversationIntent.RejectPending,
+            ).state,
+        )
         _lastSyncMessage.value = "Plan discarded"
+    }
+
+    fun clearPlanningConversation() {
+        persistPlanning(
+            PlanningConversationEngine.reduce(
+                _planning.value,
+                PlanningConversationIntent.Clear,
+            ).state,
+        )
     }
 
     fun createBodyDoubleRoom(displayName: String) {
@@ -652,6 +713,7 @@ class LookAfterViewModel(
             engine.process(LookAfterIntent.ReplaceState(LifeState.EMPTY))
             _focus.value = FocusSessionState()
             _inbox.value = InboxState()
+            planningStore.clear()
             _planning.value = PlanningConversationState()
             _bodyDoubleRoom.value = BodyDoubleRoomState()
             _calendarEvents.value = emptyList()

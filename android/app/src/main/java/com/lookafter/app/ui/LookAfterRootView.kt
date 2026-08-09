@@ -359,16 +359,23 @@ fun LookAfterRootView(
                     },
                     pendingPlanSummary = planning.pending
                         ?.takeIf { it.accepted == null }
-                        ?.proposal
-                        ?.summary,
+                        ?.let { com.lookafter.core.planning.PlanMutationDiff.headline(it.proposal) },
                     pendingMutationCount = planning.pending
                         ?.takeIf { it.accepted == null }
                         ?.proposal
                         ?.mutations
                         ?.size
                         ?: 0,
+                    pendingDiffLines = planning.pendingDiffLines
+                        .takeIf {
+                            planning.pending?.accepted == null
+                        }
+                        .orEmpty(),
+                    horizonDays = planning.horizonDays,
+                    onHorizonChange = viewModel::setPlanningHorizonDays,
                     onAcceptPlan = viewModel::acceptPendingPlan,
                     onRejectPlan = viewModel::rejectPendingPlan,
+                    onClearConversation = viewModel::clearPlanningConversation,
                     isStreaming = isStreaming,
                     capacity = capacity,
                     modifier = Modifier.fillMaxSize(),

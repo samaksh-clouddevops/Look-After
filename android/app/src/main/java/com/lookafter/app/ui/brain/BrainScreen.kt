@@ -1,5 +1,6 @@
 package com.lookafter.app.ui.brain
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,11 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +32,8 @@ import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.brain.BrainTick
 import com.lookafter.core.brain.CognitiveLoadLevel
 import com.lookafter.core.capacity.ExecutiveCapacity
+import com.lookafter.core.planning.PlanMutationDiff
+import com.lookafter.core.planning.PlanningHorizons
 import kotlin.math.roundToInt
 
 @Composable
@@ -38,8 +45,12 @@ fun BrainScreen(
     onEmergencyFocus: () -> Unit = onStartFocus,
     pendingPlanSummary: String? = null,
     pendingMutationCount: Int = 0,
+    pendingDiffLines: List<PlanMutationDiff.Line> = emptyList(),
+    horizonDays: Int = PlanningHorizons.DEFAULT,
+    onHorizonChange: (Int) -> Unit = {},
     onAcceptPlan: () -> Unit = {},
     onRejectPlan: () -> Unit = {},
+    onClearConversation: () -> Unit = {},
     isStreaming: Boolean = false,
     capacity: ExecutiveCapacity = ExecutiveCapacity.EMPTY,
     modifier: Modifier = Modifier,
@@ -56,7 +67,41 @@ fun BrainScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingMD),
     ) {
-        item { SectionHeader(title = "Brain", subtitle = "One next move. No noise.") }
+        item { SectionHeader(title = "Brain", subtitle = "One next move. Plan the horizon.") }
+        item {
+            ElevatedSurfaceCard {
+                Text(
+                    "Planning horizon",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LookAfterColors.AccentPrimary,
+                )
+                Text(
+                    "How far multi-day plans may spread work",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(top = LookAfterDimens.spacingSM),
+                    horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingXS),
+                ) {
+                    PlanningHorizons.OPTIONS.forEach { d ->
+                        FilterChip(
+                            selected = horizonDays == d,
+                            onClick = { onHorizonChange(d) },
+                            label = { Text("${d}d") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = LookAfterColors.AccentSoft,
+                                selectedLabelColor = LookAfterColors.AccentPrimary,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
         item {
             ElevatedSurfaceCard {
                 Text("Hero", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.AccentPrimary)
@@ -104,18 +149,45 @@ fun BrainScreen(
         if (!pendingPlanSummary.isNullOrBlank() && pendingMutationCount > 0) {
             item {
                 ElevatedSurfaceCard {
-                    Text("Pending plan", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.Warning)
+                    Text(
+                        "Pending plan · review",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.Warning,
+                    )
                     Text(
                         pendingPlanSummary,
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                     )
                     Text(
-                        "$pendingMutationCount mutation(s) ready — accept to apply to LifeState.",
+                        "$pendingMutationCount change(s) · horizon ${horizonDays}d — nothing applied yet",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
                     )
+                    if (pendingDiffLines.isNotEmpty()) {
+                        Text(
+                            "Diff",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LookAfterColors.AccentPrimary,
+                            modifier = Modifier.padding(top = LookAfterDimens.spacingSM),
+                        )
+                        pendingDiffLines.forEach { line ->
+                            Column(modifier = Modifier.padding(top = LookAfterDimens.spacingXS)) {
+                                Text(
+                                    "${line.kind}: ${line.summary}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                if (line.detail.isNotBlank()) {
+                                    Text(
+                                        line.detail,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -171,16 +243,24 @@ fun BrainScreen(
                     value = draft,
                     onValueChange = { draft = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Plan or ask the coach") },
+                    label = { Text("Plan or ask · ${horizonDays}d horizon") },
                     singleLine = true,
                     enabled = !isStreaming,
                 )
-                Row {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
+                ) {
                     Button(
                         onClick = { onSendCoach(draft); draft = "" },
                         enabled = draft.trim().isNotEmpty() && !isStreaming,
+                        modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = LookAfterColors.AccentPrimary),
                     ) { Text(if (isStreaming) "Streaming…" else "Send") }
+                    TextButton(
+                        onClick = onClearConversation,
+                        enabled = !isStreaming && coachTranscript.isNotEmpty(),
+                    ) { Text("Clear") }
                 }
             }
         }
