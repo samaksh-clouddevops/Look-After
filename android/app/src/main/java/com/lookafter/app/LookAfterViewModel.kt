@@ -26,6 +26,7 @@ import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
 import com.lookafter.core.adhd.FocusSessionState
 import com.lookafter.core.adhd.IceServerConfig
+import com.lookafter.core.brain.BrainContextPack
 import com.lookafter.core.brain.BrainTick
 import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.ExecutiveBrainEngine
@@ -456,10 +457,11 @@ class LookAfterViewModel(
             _streamingCoach.value = true
             // Seed empty coach bubble that we grow as tokens arrive.
             appendCoach("")
+            val tick = brainTick.value
+            val horizon = _planning.value.horizonDays
             val system = buildString {
                 append("You are Look After, a calm executive coach. Be brief (2-4 sentences). ")
-                append("Planning horizon: ${_planning.value.horizonDays} day(s). ")
-                append("Hero context from offline brain may follow user message.")
+                append(BrainContextPack.systemSummary(tick, horizon))
             }
             val assembled = StringBuilder()
             var emitted = false

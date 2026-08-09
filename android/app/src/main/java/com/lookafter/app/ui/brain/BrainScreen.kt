@@ -127,22 +127,35 @@ fun BrainScreen(
             ElevatedSurfaceCard {
                 Text("World", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.AccentPrimary)
                 Text(
-                    "Energy " + "%.0f".format(world.currentEnergy * 100) + "% · Load " + world.cognitiveLoad.name.lowercase() + " · Open " + world.openTaskCount,
+                    "Energy " + "%.0f".format(world.currentEnergy * 100) + "% · Load " +
+                        world.cognitiveLoad.name.lowercase() + " · Open " + world.openTaskCount,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
-                if (capacity.band != com.lookafter.core.capacity.CapacityBand.STEADY || capacity.isOverCommitted) {
+                Text(
+                    "Capacity ${world.capacityBand.label} · ~${world.recommendedFocusMinutes}m · " +
+                        "pressure ${(world.openTaskPressure * 100).roundToInt()}% · " +
+                        "cal ${world.calendarDensity.label}" +
+                        if (world.calendarEventCount > 0) " (${world.calendarEventCount})" else "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                )
+                Text(
+                    "Board A${world.anchoredOpenCount}/X${world.flexibleOpenCount}/F${world.fluidOpenCount} · " +
+                        "meds ${world.medicationRisk.label}" +
+                        if (world.isOverCommitted) " · over committed" else "",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                )
+                if (world.cognitiveLoad == CognitiveLoadLevel.OVERLOADED) {
                     Text(
-                        "Capacity ${capacity.band.label} · ${(capacity.energyScore * 100).roundToInt()}% · " +
-                            "~${capacity.recommendedFocusMinutes}m focus" +
-                            if (capacity.isOverCommitted) " · over committed" else "",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        "Overloaded — strip to one block.",
+                        color = LookAfterColors.Warning,
+                        style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
                     )
-                }
-                if (world.cognitiveLoad == CognitiveLoadLevel.OVERLOADED) {
-                    Text("Overloaded — strip to one block.", color = LookAfterColors.Warning, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = LookAfterDimens.spacingXS))
                 }
             }
         }

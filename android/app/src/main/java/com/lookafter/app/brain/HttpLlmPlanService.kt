@@ -1,9 +1,10 @@
 package com.lookafter.app.brain
 
 import android.util.Log
+import com.lookafter.core.brain.BrainContextPack
+import com.lookafter.core.brain.ExecutiveBrainEngine
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.health.HealthSummary
-import com.lookafter.core.models.TaskStatus
 import com.lookafter.core.planning.MultiDayPlanEngine
 import com.lookafter.core.planning.PlanProposal
 import com.lookafter.core.planning.PlanProposalJson
@@ -75,17 +76,12 @@ class HttpLlmPlanService(
     }
 
     private fun buildSystem(state: LifeState, health: HealthSummary, today: LocalDate): String {
-        val open = state.activeTasks.filter { it.status.isActive }.take(20)
-        val lines = open.joinToString("\n") {
-            "- id=${it.id} | ${it.title} | ${it.constraintType} | ${it.priority} | day=${it.scheduledDate} | ${it.durationMinutes}m"
-        }.ifBlank { "- none" }
-        val readiness = health.readinessScore?.let { "%.0f%%".format(it * 100) } ?: "unknown"
+        val tick = ExecutiveBrainEngine.tick(state, health)
+        val brief = BrainContextPack.plannerBrief(state, tick, horizonDays = 3)
         return """
             You are Look After's multi-day executive planner.
             Today is $today. Prefer protecting anchored work. Never invent medication schedules.
-            Open tasks:
-            $lines
-            Readiness: $readiness
+            $brief
             ${PlanProposalJson.SCHEMA_HINT}
         """.trimIndent()
     }

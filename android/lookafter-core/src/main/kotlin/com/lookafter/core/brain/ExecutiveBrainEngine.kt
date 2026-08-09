@@ -1,5 +1,6 @@
 package com.lookafter.core.brain
 
+import com.lookafter.core.capacity.CapacityBand
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.health.HealthSummary
 import com.lookafter.core.models.LifeTask
@@ -90,10 +91,16 @@ object ExecutiveBrainEngine {
     }
 
     private fun buildCoachLine(world: WorldState, title: String, reason: String): String {
-        val loadHint = when (world.cognitiveLoad) {
-            CognitiveLoadLevel.OVERLOADED -> "Load is high — one small step only."
-            CognitiveLoadLevel.HIGH -> "Keep the board narrow."
-            else -> "You have room to move."
+        val loadHint = when {
+            world.isOverCommitted ->
+                "Board exceeds capacity — favor ≤${world.recommendedFocusMinutes}m focus."
+            world.cognitiveLoad == CognitiveLoadLevel.OVERLOADED ->
+                "Load is high — one small step only."
+            world.cognitiveLoad == CognitiveLoadLevel.HIGH ->
+                "Keep the board narrow (${world.capacityBand.label.lowercase()} capacity)."
+            world.calendarDensity == CalendarDensity.PACKED ->
+                "Calendar is packed — protect buffers around meetings."
+            else -> "You have room to move (${world.capacityBand.label.lowercase()} capacity)."
         }
         return when (val med = world.medicationStatus) {
             is MedicationWorldStatus.DueNow ->
@@ -106,25 +113,33 @@ object ExecutiveBrainEngine {
 
     private fun overwhelmReply(world: WorldState): String =
         "Strip the board. One task: leave only the next intentional block. " +
-            "Load=${world.cognitiveLoad.name.lowercase()}, open=${world.openTaskCount}."
+            "Load=${world.cognitiveLoad.name.lowercase()}, open=${world.openTaskCount}, " +
+            "calendar=${world.calendarDensity.label}, capacity=${world.capacityBand.label.lowercase()}, " +
+            "pressure=${"%.0f".format(world.openTaskPressure * 100)}%."
 
     private fun medReply(world: WorldState): String = when (val m = world.medicationStatus) {
-        is MedicationWorldStatus.DueNow -> "Take: ${m.names.joinToString()}."
+        is MedicationWorldStatus.DueNow -> "Take: ${m.names.joinToString()} (risk=${world.medicationRisk.label})."
         is MedicationWorldStatus.Upcoming -> "Upcoming: ${m.names.joinToString()}."
         MedicationWorldStatus.AllTakenToday -> "All meds marked taken. Nice."
         MedicationWorldStatus.NoneConfigured -> "No meds configured. Add them under You → Medication."
-        is MedicationWorldStatus.MissedToday -> "Still open: ${m.names.joinToString()}."
+        is MedicationWorldStatus.MissedToday -> "Still open: ${m.names.joinToString()} (risk=${world.medicationRisk.label})."
         MedicationWorldStatus.Unknown -> "Medication status unknown."
     }
 
     private fun sleepReply(world: WorldState): String {
         val h = world.sleepHoursLastNight
         return if (h == null) {
-            "No sleep data yet. Keep the first block short and protective."
+            "No sleep data yet. Keep the first block short and protective " +
+                "(${world.capacityBand.label.lowercase()} capacity · ~${world.recommendedFocusMinutes}m)."
         } else {
             "Sleep ${"%.1f".format(h)}h (${world.sleepQuality.name.lowercase()}). " +
-                "Readiness ${"%.0f".format(world.healthReadiness * 100)}% — bias toward ${
-                    if (world.healthReadiness < 0.45) "recovery tasks" else "priority work"
+                "Readiness ${"%.0f".format(world.healthReadiness * 100)}% · " +
+                "capacity ${world.capacityBand.label.lowercase()} — bias toward ${
+                    if (world.healthReadiness < 0.45 || world.capacityBand == CapacityBand.RECOVERY) {
+                        "recovery tasks"
+                    } else {
+                        "priority work"
+                    }
                 }."
         }
     }
