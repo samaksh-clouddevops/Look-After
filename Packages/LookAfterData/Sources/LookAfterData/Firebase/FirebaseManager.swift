@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
@@ -58,17 +59,13 @@ public final class FirebaseManager: ObservableObject {
     private func setupAuthListener() {
         authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in
-                if let user = user {
-                    let previous = self?.currentUserId
-                    self?.currentUserId = user.uid
-                    self?.userEmail = user.email ?? self?.userEmail
-                    self?.isAuthenticated = true
-                    UserDefaults.standard.set(user.uid, forKey: "saved_user_uid")
-
-                    if let previous, !previous.isEmpty, previous != user.uid {
-                        HealthSummaryRepository().reassignSummaries(from: previous, to: user.uid)
-                        TaskStore.shared.reassignTasks(from: previous, to: user.uid)
-                    }
+                guard let self else { return }
+                if let user {
+                    self.applyAuthenticatedUser(user)
+                } else if self.usesRealFirebaseAuth {
+                    // Real Auth session ended (sign-out, revoke, expiry).
+                    // Do not clear offline/mock local sessions driven by synthetic UIDs.
+                    self.clearLocalAuthState()
                 }
             }
         }
@@ -85,96 +82,97 @@ public final class FirebaseManager: ObservableObject {
         return UserDefaults.standard.string(forKey: "saved_user_uid") ?? ""
     }
     
+    /// True when Firebase is configured with a non-mock project that can perform real Auth.
+    private var usesRealFirebaseAuth: Bool {
+        guard FirebaseApp.app() != nil,
+              let projectID = FirebaseApp.app()?.options.projectID,
+              !projectID.isEmpty else { return false }
+        return !Self.mockProjectIDs.contains(projectID)
+            && projectID != "flowos-test-app"
+    }
+
     /// Sign in anonymously for quick start (no account required).
     public func signInAnonymously() async throws {
-        let fallbackUid = UserDefaults.standard.string(forKey: "saved_user_uid") ?? "guest_\(UUID().uuidString.prefix(8))"
-        UserDefaults.standard.set(fallbackUid, forKey: "saved_user_uid")
-        self.currentUserId = fallbackUid
-        self.isAuthenticated = true
-        
-        if FirebaseApp.app() != nil {
-            Task.detached {
-                if let result = try? await Auth.auth().signInAnonymously() {
-                    await MainActor.run {
-                        let previous = FirebaseManager.shared.currentUserId
-                        FirebaseManager.shared.currentUserId = result.user.uid
-                        UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
-                        if let previous, !previous.isEmpty, previous != result.user.uid {
-                            HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
-                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
-                        }
-                    }
-                }
+        if usesRealFirebaseAuth {
+            do {
+                let result = try await Auth.auth().signInAnonymously()
+                applyAuthenticatedUser(result.user)
+            } catch {
+                self.error = error.localizedDescription
+                throw error
             }
+            return
         }
+
+        // Offline / mock projects: stable local guest identity (no network).
+        let fallbackUid = UserDefaults.standard.string(forKey: "saved_user_uid")
+            ?? "guest_\(UUID().uuidString.prefix(8))"
+        applyLocalAuthenticatedSession(userId: fallbackUid, email: nil)
     }
-    
+
     /// Sign in with email/password.
     public func signIn(email: String, password: String) async throws {
-        let emailHash = abs(email.hashValue)
-        let fallbackUid = "usr_\(emailHash)"
-        UserDefaults.standard.set(fallbackUid, forKey: "saved_user_uid")
-        UserDefaults.standard.set(email, forKey: "userEmail")
-        
-        self.userEmail = email
-        self.currentUserId = fallbackUid
-        self.isAuthenticated = true
-        
-        if FirebaseApp.app() != nil {
-            Task.detached {
-                if let result = try? await Auth.auth().signIn(withEmail: email, password: password) {
-                    await MainActor.run {
-                        let previous = FirebaseManager.shared.currentUserId
-                        FirebaseManager.shared.currentUserId = result.user.uid
-                        UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
-                        if let previous, !previous.isEmpty, previous != result.user.uid {
-                            HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
-                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
-                        }
-                    }
-                }
-            }
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedEmail.isEmpty else {
+            throw FirebaseManagerError.ssoFailed("Email is required.")
         }
+        guard !password.isEmpty else {
+            throw FirebaseManagerError.ssoFailed("Password is required.")
+        }
+
+        if usesRealFirebaseAuth {
+            do {
+                let result = try await Auth.auth().signIn(withEmail: normalizedEmail, password: password)
+                applyAuthenticatedUser(result.user)
+            } catch {
+                clearLocalAuthState()
+                self.error = error.localizedDescription
+                throw error
+            }
+            return
+        }
+
+        // Offline / mock projects: stable local identity from email (no network).
+        applyLocalAuthenticatedSession(
+            userId: Self.stableLocalUserId(forEmail: normalizedEmail),
+            email: normalizedEmail
+        )
     }
-    
+
     /// Create account with email/password.
     public func createAccount(email: String, password: String) async throws {
-        let emailHash = abs(email.hashValue)
-        let fallbackUid = "usr_\(emailHash)"
-        UserDefaults.standard.set(fallbackUid, forKey: "saved_user_uid")
-        UserDefaults.standard.set(email, forKey: "userEmail")
-        
-        self.userEmail = email
-        self.currentUserId = fallbackUid
-        self.isAuthenticated = true
-        
-        if FirebaseApp.app() != nil {
-            Task.detached {
-                if let result = try? await Auth.auth().createUser(withEmail: email, password: password) {
-                    await MainActor.run {
-                        let previous = FirebaseManager.shared.currentUserId
-                        FirebaseManager.shared.currentUserId = result.user.uid
-                        UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
-                        if let previous, !previous.isEmpty, previous != result.user.uid {
-                            HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
-                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
-                        }
-                    }
-                }
-            }
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedEmail.isEmpty else {
+            throw FirebaseManagerError.ssoFailed("Email is required.")
         }
+        guard !password.isEmpty else {
+            throw FirebaseManagerError.ssoFailed("Password is required.")
+        }
+
+        if usesRealFirebaseAuth {
+            do {
+                let result = try await Auth.auth().createUser(withEmail: normalizedEmail, password: password)
+                applyAuthenticatedUser(result.user)
+            } catch {
+                clearLocalAuthState()
+                self.error = error.localizedDescription
+                throw error
+            }
+            return
+        }
+
+        applyLocalAuthenticatedSession(
+            userId: Self.stableLocalUserId(forEmail: normalizedEmail),
+            email: normalizedEmail
+        )
     }
-    
+
     /// Sign out.
     public func signOut() throws {
         if FirebaseApp.app() != nil {
             try? Auth.auth().signOut()
         }
-        currentUserId = nil
-        isAuthenticated = false
-        userEmail = nil
-        UserDefaults.standard.removeObject(forKey: "saved_user_uid")
-        UserDefaults.standard.removeObject(forKey: "userEmail")
+        clearLocalAuthState()
         LicenseManager.shared.clearLocalLicense()
     }
 
@@ -186,7 +184,7 @@ public final class FirebaseManager: ObservableObject {
 
     /// Sign in with Apple (AuthenticationServices → Firebase).
     public func signInWithApple() async throws {
-        guard FirebaseApp.app() != nil else {
+        guard usesRealFirebaseAuth else {
             throw FirebaseManagerError.ssoFailed("Firebase is not configured")
         }
         let coordinator = AppleSignInCoordinator()
@@ -200,7 +198,7 @@ public final class FirebaseManager: ObservableObject {
 
     /// Sign in with Google via Firebase OAuth provider (browser sheet). Available on iOS.
     public func signInWithGoogle() async throws {
-        guard FirebaseApp.app() != nil else {
+        guard usesRealFirebaseAuth else {
             throw FirebaseManagerError.ssoFailed("Firebase is not configured")
         }
         #if os(iOS)
@@ -218,18 +216,41 @@ public final class FirebaseManager: ObservableObject {
     }
 
     private func applyAuthenticatedUser(_ user: User) {
+        applyLocalAuthenticatedSession(userId: user.uid, email: user.email ?? userEmail)
+    }
+
+    private func applyLocalAuthenticatedSession(userId: String, email: String?) {
         let previous = currentUserId
-        currentUserId = user.uid
-        userEmail = user.email ?? userEmail
+        currentUserId = userId
+        userEmail = email
         isAuthenticated = true
-        UserDefaults.standard.set(user.uid, forKey: "saved_user_uid")
-        if let email = user.email {
+        error = nil
+        UserDefaults.standard.set(userId, forKey: "saved_user_uid")
+        if let email, !email.isEmpty {
             UserDefaults.standard.set(email, forKey: "userEmail")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "userEmail")
         }
-        if let previous, !previous.isEmpty, previous != user.uid {
-            HealthSummaryRepository().reassignSummaries(from: previous, to: user.uid)
-            TaskStore.shared.reassignTasks(from: previous, to: user.uid)
+        if let previous, !previous.isEmpty, previous != userId {
+            HealthSummaryRepository().reassignSummaries(from: previous, to: userId)
+            TaskStore.shared.reassignTasks(from: previous, to: userId)
         }
+    }
+
+    private func clearLocalAuthState() {
+        currentUserId = nil
+        isAuthenticated = false
+        userEmail = nil
+        error = nil
+        UserDefaults.standard.removeObject(forKey: "saved_user_uid")
+        UserDefaults.standard.removeObject(forKey: "userEmail")
+    }
+
+    /// Stable offline identity for mock Auth — not `String.hashValue` (process-unstable).
+    private static func stableLocalUserId(forEmail email: String) -> String {
+        let digest = SHA256.hash(data: Data(email.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "usr_\(hex.prefix(16))"
     }
 
     // MARK: - Firestore Helpers
