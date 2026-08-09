@@ -14,13 +14,14 @@
 |----------|------:|:---------------:|----------:|
 | **Critical (P0)** | 6 | 6 | 0 |
 | **High (P1)** | 11 | 10 | 1 (BUG-007 device lag verify) |
-| **Medium (P2)** | 16 | 12 | 4 |
-| **Low (P3)** | 8 | 0 | 8 |
+| **Medium (P2)** | 16 | 15 | 1 (misc UX polish) |
+| **Low (P3)** | 8 | 5 | 3 (entitlement BG ids, Reduce Motion full audit, iPad) |
 | **Brain / decision** | 3 open | 0 | Ship gate per QA-14 |
 
 **Remediation branch:** `fix/bug-audit-remediation` (one commit per fix cluster).
 
 **Still open for ship quality:** BUG-007 device focus-lag verification; brain issues #12 / #L-003.
+**Do not rename** App Group / BGTask identifiers (`group.com.samaksh.flowos`, BG task ids) without a coordinated entitlement + migration plan — those are OS-registered.
 
 ---
 
@@ -568,7 +569,38 @@ Auth (optimistic UID)
 | BUG-007 | Focus UI lag — needs **physical device** Instruments verification |
 | Brain #12 | Sleep-deprived deep-work recommendation (decision quality) |
 | Brain #L-003 | Learning not shifting deferred gym |
-| P3 tech debt | HK force unwraps, empty catches, brand Keychain service string, weather stub |
+
+---
+
+## Phase 4 findings (tech debt / hardening)
+
+### BUG-027 — Keychain AI service still `com.samaksh.flowos.ai-keys` *(fixed)*
+
+Canonical service is now `com.lookafter.ai-keys` with **migrate-on-read** from the legacy service so existing keys keep working.
+
+### BUG-028 — HealthKit force unwraps *(fixed)*
+
+`HealthManager` / `HealthKitObserverService` use optional / throwing type lookup.
+
+### BUG-029 — Empty `catch {}` *(fixed)*
+
+GLM key migrate/seed and briefing hero AI fallback now log via `os.Logger`.
+
+### BUG-022 — Weather stub undocumented for brain consumers *(fixed)*
+
+`StubWeatherEnvironmentSignalProvider` documents `isAvailable == false` default and that it must not be heavily weighted.
+
+### BUG-040 (remainder) *(fixed)*
+
+Unique-key dictionary helper applied to Data analytics, module repos, and RootCanvas.
+
+### Intentionally not changed
+
+| Item | Reason |
+|------|--------|
+| App Group `group.com.samaksh.flowos` | Entitlement / widget container — rename needs coordinated profile update |
+| BGTaskScheduler ids `com.samaksh.flowos.app.*` | OS-registered identifiers |
+| Logger subsystem brand strings | Low risk cosmetics; mixed with App Group timing |
 
 ---
 
@@ -579,6 +611,7 @@ Auth (optimistic UID)
 | 2026-08-09 | Initial static audit — 6 P0, 9 P1, 12 P2, 8 P3 + brain cross-ref |
 | 2026-08-09 | Phase 1 fixes: BUG-001–006, 008–011, 013, 015–019, 023–025 |
 | 2026-08-09 | Phase 2/3 fixes: BUG-014/036–040 |
+| 2026-08-09 | Phase 4 fixes: BUG-022, 027–029, 040 remainder |
 
 ### Commits on `fix/bug-audit-remediation`
 
@@ -596,6 +629,9 @@ Auth (optimistic UID)
 | fix(planning): stage mutations for confirm and reject unknown task IDs | BUG-014, BUG-036, BUG-037, BUG-039 |
 | fix(notifications): skip past fire dates when scheduling | BUG-038 |
 | fix(core): avoid fatal duplicate-key dictionaries and parse flexible ISO dates | BUG-040, BUG-039 |
+| fix(ai): migrate keychain service id and log empty catches | BUG-027, BUG-029 |
+| fix(health): replace HealthKit force unwraps with safe type lookup | BUG-028 |
+| fix(data): document weather stub and finish unique-key hardening | BUG-022, BUG-040 |
 
 ---
 
