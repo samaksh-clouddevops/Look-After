@@ -16,22 +16,32 @@ import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
+import com.lookafter.app.creativity.CreativityStore
 import com.lookafter.app.cycle.CycleStore
 import com.lookafter.app.travel.TravelStore
 import com.lookafter.app.webrtc.RoomSignalingFactory
 import com.lookafter.app.webrtc.RoomSignalingTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
+import com.lookafter.core.creativity.CreativeBoard
+import com.lookafter.core.creativity.CreativeSpark
+import com.lookafter.core.creativity.CreativityEngine
+import com.lookafter.core.creativity.CreativityIntent
+import com.lookafter.core.creativity.CreativityState
 import com.lookafter.core.cycle.CycleEngine
 import com.lookafter.core.cycle.CycleIntent
 import com.lookafter.core.cycle.CycleLogEntry
 import com.lookafter.core.cycle.CycleSnapshot
 import com.lookafter.core.cycle.CycleState
+import com.lookafter.core.models.ConstraintType
+import com.lookafter.core.models.LifeTask
+import com.lookafter.core.models.TaskStatus
 import com.lookafter.core.travel.PackingItem
 import com.lookafter.core.travel.TravelEngine
 import com.lookafter.core.travel.TravelIntent
 import com.lookafter.core.travel.TravelState
 import com.lookafter.core.travel.TravelTrip
+import java.util.UUID
 import com.lookafter.core.adhd.BodyDoublePeer
 import com.lookafter.core.adhd.BodyDoubleRoomEngine
 import com.lookafter.core.adhd.BodyDoubleRoomIntent
@@ -110,6 +120,7 @@ class LookAfterViewModel(
     private val coachHistoryStore: CoachHistoryStore = app.coachHistoryStore
     private val travelStore: TravelStore = app.travelStore
     private val cycleStore: CycleStore = app.cycleStore
+    private val creativityStore: CreativityStore = app.creativityStore
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -207,6 +218,65 @@ class LookAfterViewModel(
 
     fun deleteCycleLog(id: String) {
         dispatchCycle(CycleIntent.DeleteLog(id))
+    }
+
+    private val _creativity = MutableStateFlow(app.creativityStore.load())
+    val creativity: StateFlow<CreativityState> = _creativity.asStateFlow()
+
+    private fun persistCreativity(next: CreativityState) {
+        _creativity.value = next
+        creativityStore.save(next)
+    }
+
+    fun dispatchCreativity(intent: CreativityIntent) {
+        persistCreativity(CreativityEngine.reduce(_creativity.value, intent))
+    }
+
+    fun addCreativeBoard(board: CreativeBoard) {
+        dispatchCreativity(CreativityIntent.AddBoard(board))
+    }
+
+    fun selectCreativeBoard(id: String?) {
+        dispatchCreativity(CreativityIntent.SelectBoard(id))
+    }
+
+    fun deleteCreativeBoard(id: String) {
+        dispatchCreativity(CreativityIntent.DeleteBoard(id))
+    }
+
+    fun addCreativeSpark(spark: CreativeSpark, boardId: String?) {
+        dispatchCreativity(CreativityIntent.AddSpark(spark, boardId))
+    }
+
+    fun deleteCreativeSpark(id: String) {
+        dispatchCreativity(CreativityIntent.DeleteSpark(id))
+    }
+
+    fun pinCreativeSpark(id: String, pinned: Boolean) {
+        dispatchCreativity(CreativityIntent.PinSpark(id, pinned))
+    }
+
+    /** Promote a spark into Inbox/Today as a fluid capture task. */
+    fun promoteSparkToCapture(sparkId: String) {
+        val spark = _creativity.value.sparks.firstOrNull { it.id == sparkId } ?: return
+        val title = spark.title.ifBlank { spark.body.take(80) }.ifBlank { "Creative spark" }
+        val task = LifeTask(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            notes = buildString {
+                if (spark.body.isNotBlank() && spark.title.isNotBlank()) append(spark.body)
+                append(if (isNotEmpty()) "\n" else "")
+                append("from creativity · ${spark.kind.label}")
+            },
+            constraintType = ConstraintType.FLUID,
+            status = TaskStatus.PENDING,
+            tags = listOf("capture", "creativity") + spark.tags,
+            createdAt = Instant.now(),
+        )
+        engine.process(LookAfterIntent.AddTask(task))
+        dispatchCreativity(CreativityIntent.PromoteSparkToCapture(sparkId))
+        _lastSyncMessage.value = "Spark → Capture · $title"
+        TodayWidgetUpdater.requestUpdate(getApplication())
     }
 
     val roomSignalingName: String
@@ -1315,6 +1385,8 @@ class LookAfterViewModel(
             _travel.value = TravelState.EMPTY
             cycleStore.clear()
             _cycle.value = CycleState.EMPTY
+            creativityStore.clear()
+            _creativity.value = creativityStore.load() // re-seed default boards
             lastAutoHeroKey = null
             teardownRoomSession(publishLeave = false)
             _bodyDoubleRoom.value = BodyDoubleRoomState()

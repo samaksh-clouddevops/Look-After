@@ -28,6 +28,7 @@ import com.lookafter.app.ui.health.HealthScreen
 import com.lookafter.app.ui.inbox.InboxScreen
 import com.lookafter.app.ui.insights.InsightsScreen
 import com.lookafter.app.ui.medication.MedicationScreen
+import com.lookafter.app.ui.creativity.CreativityScreen
 import com.lookafter.app.ui.cycle.CycleScreen
 import com.lookafter.app.ui.modules.ComingSoonScreen
 import com.lookafter.app.ui.modules.ModulesScreen
@@ -99,6 +100,7 @@ fun LookAfterRootView(
     val travel by viewModel.travel.collectAsStateWithLifecycle()
     val cycle by viewModel.cycle.collectAsStateWithLifecycle()
     val cycleSnapshot by viewModel.cycleSnapshot.collectAsStateWithLifecycle()
+    val creativity by viewModel.creativity.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
 
@@ -128,6 +130,7 @@ fun LookAfterRootView(
     var modulesOpen by remember { mutableStateOf(false) }
     var travelOpen by remember { mutableStateOf(false) }
     var cycleOpen by remember { mutableStateOf(false) }
+    var creativityOpen by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf<String?>(null) }
     var comingSoonSubtitle by remember { mutableStateOf("") }
     var captureOpen by remember { mutableStateOf(false) }
@@ -147,6 +150,7 @@ fun LookAfterRootView(
         modulesOpen = false
         travelOpen = false
         cycleOpen = false
+        creativityOpen = false
         comingSoonTitle = null
         simulationOpen = false
     }
@@ -165,6 +169,7 @@ fun LookAfterRootView(
             ModuleDestination.REVIEW -> reviewOpen = true
             ModuleDestination.TRAVEL -> travelOpen = true
             ModuleDestination.CYCLE -> cycleOpen = true
+            ModuleDestination.CREATIVITY -> creativityOpen = true
             ModuleDestination.SIMULATION -> {
                 if (hypotheticals.isEmpty()) {
                     val open = state.activeTasks.filter { it.status.isActive }.take(3)
@@ -177,7 +182,6 @@ fun LookAfterRootView(
             ModuleDestination.NOTIFICATIONS -> notificationSettingsOpen = true
             ModuleDestination.PRIVACY -> privacyOpen = true
             ModuleDestination.LEARNING,
-            ModuleDestination.CREATIVITY,
             ModuleDestination.BEHAVIOR,
             ModuleDestination.LIFE_HUB,
             ModuleDestination.TOUR,
@@ -262,7 +266,7 @@ fun LookAfterRootView(
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
                         insightsOpen || privacyOpen || notificationSettingsOpen ||
                         bodyDoubleRoomOpen || modulesOpen || travelOpen || cycleOpen ||
-                        comingSoonTitle != null -> AppDestination.YOU
+                        creativityOpen || comingSoonTitle != null -> AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
@@ -304,6 +308,7 @@ fun LookAfterRootView(
             modulesOpen -> "modules"
             travelOpen -> "travel"
             cycleOpen -> "cycle"
+            creativityOpen -> "creativity"
             comingSoonTitle != null -> "soon"
             reviewOpen -> "review"
             else -> current.name
@@ -353,6 +358,21 @@ fun LookAfterRootView(
                     onDeleteLog = viewModel::deleteCycleLog,
                     onBack = {
                         cycleOpen = false
+                        modulesOpen = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                creativityOpen -> CreativityScreen(
+                    state = creativity,
+                    onAddBoard = viewModel::addCreativeBoard,
+                    onSelectBoard = viewModel::selectCreativeBoard,
+                    onDeleteBoard = viewModel::deleteCreativeBoard,
+                    onAddSpark = viewModel::addCreativeSpark,
+                    onDeleteSpark = viewModel::deleteCreativeSpark,
+                    onPinSpark = viewModel::pinCreativeSpark,
+                    onPromoteToCapture = viewModel::promoteSparkToCapture,
+                    onBack = {
+                        creativityOpen = false
                         modulesOpen = true
                     },
                     modifier = Modifier.fillMaxSize(),
