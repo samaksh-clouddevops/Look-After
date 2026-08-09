@@ -24,17 +24,26 @@ import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
+import com.lookafter.app.webrtc.WebRtcLocalPreview
+import com.lookafter.app.webrtc.WebRtcRemoteView
 import com.lookafter.core.adhd.BodyDoubleRoomPhase
 import com.lookafter.core.adhd.BodyDoubleRoomState
+import org.webrtc.EglBase
+import org.webrtc.SurfaceViewRenderer
 
 /**
  * Multi-person body-double room UI.
- * Uses CameraX local preview + pure room state; signaling is demo/local unless Firebase is wired.
+ * Native WebRTC video when available; CameraX / presence fallback otherwise.
  */
 @Composable
 fun BodyDoubleRoomScreen(
     room: BodyDoubleRoomState,
     webRtcStateLabel: String = "new",
+    webRtcBackendLabel: String = "simulator",
+    webRtcNative: Boolean = false,
+    eglContext: EglBase.Context? = null,
+    onAttachLocalRenderer: (SurfaceViewRenderer) -> Unit = {},
+    onAttachRemoteRenderer: (SurfaceViewRenderer) -> Unit = {},
     onCreate: (displayName: String) -> Unit,
     onJoin: (roomId: String, displayName: String) -> Unit,
     onDemoConnect: () -> Unit,
@@ -55,7 +64,11 @@ fun BodyDoubleRoomScreen(
     ) {
         SectionHeader(
             title = "Body double room",
-            subtitle = "Shared focus presence · WebRTC-ready",
+            subtitle = if (webRtcNative) {
+                "Native WebRTC · STUN/TURN"
+            } else {
+                "Shared focus presence · simulator or native"
+            },
         )
 
         if (room.isActive && room.phase != BodyDoubleRoomPhase.FAILED) {
@@ -73,7 +86,7 @@ fun BodyDoubleRoomScreen(
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
                 )
                 Text(
-                    "WebRTC: $webRtcStateLabel · ICE STUN/TURN ready",
+                    "WebRTC: $webRtcStateLabel · backend $webRtcBackendLabel",
                     style = MaterialTheme.typography.labelMedium,
                     color = LookAfterColors.AccentPrimary,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
@@ -85,17 +98,30 @@ fun BodyDoubleRoomScreen(
                     )
                 }
             }
-            CameraBodyDouble(
-                emergency = false,
-                elapsedActiveSeconds = 0,
-                enabled = room.useCamera,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            BodyDoublePresencePanel(
-                emergency = false,
-                elapsedActiveSeconds = 30,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (webRtcNative && eglContext != null) {
+                WebRtcLocalPreview(
+                    eglContext = eglContext,
+                    onReady = onAttachLocalRenderer,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                WebRtcRemoteView(
+                    eglContext = eglContext,
+                    onReady = onAttachRemoteRenderer,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                CameraBodyDouble(
+                    emergency = false,
+                    elapsedActiveSeconds = 0,
+                    enabled = room.useCamera,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                BodyDoublePresencePanel(
+                    emergency = false,
+                    elapsedActiveSeconds = 30,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             if (room.phase == BodyDoubleRoomPhase.WAITING || room.phase == BodyDoubleRoomPhase.CONNECTING) {
                 Button(
                     onClick = onDemoConnect,

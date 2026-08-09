@@ -34,8 +34,9 @@ LOOKAFTER_LLM_MODEL=gpt-4o-mini
 Brain chat streams assistant tokens via SSE when the key is set.
 Plan-like messages still request JSON `PlanProposal` mutations (accept/reject in UI).
 
-## WebRTC TURN (optional)
+## WebRTC (native body double)
 
+App depends on `io.getstream:stream-webrtc-android` for real peer media.
 Defaults use public Google STUN. For symmetric NATs:
 
 ```
@@ -45,8 +46,9 @@ LOOKAFTER_TURN_PASS=secret
 LOOKAFTER_TURN_FORCE_RELAY=false
 ```
 
-Without a native WebRTC AAR, the peer controller runs a loopback signal simulator
-that still exercises offer/answer + ICE wiring.
+Room flow: You → Body double room → Create / Join → Demo connect (or real peer signals).
+UI shows backend `native` vs `simulator`. If native init fails, simulator fallback remains.
+CAMERA permission required for local video track.
 
 ## Play release signing
 

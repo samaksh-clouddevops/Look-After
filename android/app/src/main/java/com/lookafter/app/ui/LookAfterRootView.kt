@@ -80,6 +80,7 @@ fun LookAfterRootView(
     val planDraftPreview by viewModel.planDraftPreview.collectAsStateWithLifecycle()
     val coachHistory by viewModel.coachHistory.collectAsStateWithLifecycle()
     val webRtcState by viewModel.webRtcConnectionState.collectAsStateWithLifecycle()
+    val webRtcBackend by viewModel.webRtcBackend.collectAsStateWithLifecycle()
     val notificationPrefs by viewModel.notificationPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
@@ -231,6 +232,11 @@ fun LookAfterRootView(
                 bodyDoubleRoomOpen -> BodyDoubleRoomScreen(
                     room = bodyDoubleRoom,
                     webRtcStateLabel = webRtcState.name.lowercase(),
+                    webRtcBackendLabel = webRtcBackend.name.lowercase(),
+                    webRtcNative = webRtcBackend == com.lookafter.app.webrtc.WebRtcPeerController.Backend.NATIVE,
+                    eglContext = viewModel.webRtcEglContext(),
+                    onAttachLocalRenderer = viewModel::attachWebRtcLocalRenderer,
+                    onAttachRemoteRenderer = viewModel::attachWebRtcRemoteRenderer,
                     onCreate = viewModel::createBodyDoubleRoom,
                     onJoin = viewModel::joinBodyDoubleRoom,
                     onDemoConnect = viewModel::demoConnectBodyDoubleRoom,

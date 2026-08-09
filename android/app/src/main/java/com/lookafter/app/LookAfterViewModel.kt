@@ -175,12 +175,29 @@ class LookAfterViewModel(
     val webRtcConnectionState: StateFlow<WebRtcPeerController.ConnectionState> =
         _webRtcState.asStateFlow()
 
+    private val _webRtcBackend =
+        MutableStateFlow(WebRtcPeerController.Backend.SIMULATOR)
+    val webRtcBackend: StateFlow<WebRtcPeerController.Backend> =
+        _webRtcBackend.asStateFlow()
+
     private var planStreamJob: Job? = null
 
     val auth = authStore.state
     val firebaseAuthAvailable: Boolean get() = FirebaseAuthBridge.isAvailable()
     val llmPlanConfigured: Boolean get() = planService.isConfigured
     val streamingLlmConfigured: Boolean get() = streamingLlm.isConfigured
+    val webRtcNativeAvailable: Boolean
+        get() = com.lookafter.app.webrtc.NativeWebRtcSession.isAvailable()
+
+    fun attachWebRtcLocalRenderer(renderer: org.webrtc.SurfaceViewRenderer) {
+        webRtc?.attachLocalRenderer(renderer)
+    }
+
+    fun attachWebRtcRemoteRenderer(renderer: org.webrtc.SurfaceViewRenderer) {
+        webRtc?.attachRemoteRenderer(renderer)
+    }
+
+    fun webRtcEglContext(): org.webrtc.EglBase.Context? = webRtc?.eglContext
 
     val insights: StateFlow<InsightsSnapshot> = combine(state, health) { life, h ->
         InsightsEngine.compute(life, h)
@@ -781,6 +798,7 @@ class LookAfterViewModel(
         webRtc?.close()
         webRtc = null
         _webRtcState.value = WebRtcPeerController.ConnectionState.CLOSED
+        _webRtcBackend.value = WebRtcPeerController.Backend.SIMULATOR
         _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Leave,
@@ -793,6 +811,8 @@ class LookAfterViewModel(
             context = getApplication(),
             ice = iceConfig,
             localPeerId = localPeerId,
+            enableVideo = true,
+            enableAudio = false,
         )
         controller.addOutboundListener { signal ->
             _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
@@ -803,6 +823,9 @@ class LookAfterViewModel(
         webRtc = controller
         viewModelScope.launch {
             controller.connectionState.collect { _webRtcState.value = it }
+        }
+        viewModelScope.launch {
+            controller.backend.collect { _webRtcBackend.value = it }
         }
     }
 

@@ -151,6 +151,10 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraX")
     implementation("androidx.camera:camera-view:$cameraX")
 
+    // Native WebRTC (Stream build of Google WebRTC) for body-double peer media.
+    // Demo/simulator path remains if init fails on a device.
+    implementation("io.getstream:stream-webrtc-android:1.1.3")
+
     // Firebase BOM + SDKs only when google-services.json is present.
     // Bridges use reflection so the app still compiles/runs without Firebase.
     if (hasGoogleServices) {
