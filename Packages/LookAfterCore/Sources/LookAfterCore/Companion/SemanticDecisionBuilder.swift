@@ -138,7 +138,7 @@ public enum SemanticDecisionBuilder {
         case .continueTask, .resumeSession, .openContinueSession: return .continue
         case .openShopping: return .shop
         case .viewPlan: return .plan
-        case .openCoach, .openBrain, .openHealthDetail: return .start
+        case .openCoach, .openBrain, .openHealthDetail, .startRecovery: return .start
         }
     }
 

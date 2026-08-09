@@ -44,8 +44,9 @@ final class TaskSemanticProfileTests: XCTestCase {
     }
 
     func testDeepWorkBlockedAfterShortSleep() {
-        let task = LifeTask(title: "Write quarterly report", difficulty: .hard, estimatedMinutes: 90)
+        let task = LifeTask(title: "Implement OAuth sign-in flow", difficulty: .hard, estimatedMinutes: 90)
         let profile = TaskSemanticProfileBuilder.build(from: task)
+        XCTAssertTrue(TaskSemanticScheduler.isDeepWorkCandidate(profile: profile))
         let context = TaskSemanticScheduler.Context(
             energyScore: 0.7,
             sleepHours: 4.9,

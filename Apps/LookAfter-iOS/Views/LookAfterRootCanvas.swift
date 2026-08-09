@@ -63,6 +63,9 @@ public struct LookAfterRootCanvas: View {
     public init() {}
 
     private var heroTask: LifeTask? {
+        if shell.contextOrchestrator.briefing?.hero.action.kind == .startRecovery {
+            return nil
+        }
         if let id = shell.contextOrchestrator.briefing?.hero.action.taskID,
            let task = shell.tasksVM.tasks.first(where: { $0.id == id }) {
             return task
@@ -960,6 +963,10 @@ public struct LookAfterRootCanvas: View {
     }
 
     private func startBrainHeroTask(_ task: LifeTask?, instant: Bool = false, durationMinutes: Int? = nil) {
+        if task == nil, shell.contextOrchestrator.briefing?.hero.action.kind == .startRecovery {
+            showResetMode = true
+            return
+        }
         if let task {
             tabBeforeFocus = selectedTab
             if instant {
@@ -1026,6 +1033,10 @@ public struct LookAfterRootCanvas: View {
     }
 
     private func resumeBrainSession(taskID: String?) {
+        if shell.contextOrchestrator.briefing?.hero.action.kind == .startRecovery {
+            showResetMode = true
+            return
+        }
         let resolved = taskID.flatMap { id in
             shell.tasksVM.tasks.first { $0.id == id && $0.status.isActive }
         } ?? heroTask

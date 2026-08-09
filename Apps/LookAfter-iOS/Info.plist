@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>AuthProxyBaseURL</key>
+	<string>https://lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.samaksh.flowos.app.notification-refresh</string>
@@ -20,7 +22,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0-alpha</string>
+	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
@@ -35,8 +37,6 @@
 	<string>Look After transcribes your spoken thoughts into tasks, journal entries, and notes.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
-	<key>AuthProxyBaseURL</key>
-	<string>https://lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

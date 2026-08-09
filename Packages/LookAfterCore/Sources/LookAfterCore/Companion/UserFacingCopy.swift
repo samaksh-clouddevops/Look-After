@@ -108,6 +108,7 @@ public enum UserFacingCopy {
         case .resumeSession: return "Resume your session"
         case .openContinueSession: return "Pick up where you left off"
         case .beginWork: return "Begin focused work"
+        case .startRecovery: return "Start recovery"
         case .openShopping: return "Review your shopping list"
         case .openCoach: return "Ask your coach"
         case .openBrain: return "Check your plan"

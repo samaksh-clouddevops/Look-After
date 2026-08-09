@@ -290,7 +290,6 @@ private struct ExperienceRootDataModifier: ViewModifier {
             }
     }
 }
-}
 
 private struct ExperienceRootNotificationModifier: ViewModifier {
     @ObservedObject var shell: AppShellState

@@ -115,6 +115,15 @@ public final class TaskStore: ObservableObject, TaskStoring {
         republishAfterMutation(userId: task.userId)
     }
 
+    public func updateMany(_ tasks: [LifeTask]) async throws {
+        try await taskRepo.updateMany(tasks)
+        if let userId = tasks.first?.userId, !userId.isEmpty {
+            republishAfterMutation(userId: userId)
+        } else {
+            republishAfterMutation(userId: lastUserId)
+        }
+    }
+
     public func delete(_ id: String) async throws {
         try await taskRepo.delete(id)
         republishAfterMutation(userId: lastUserId)

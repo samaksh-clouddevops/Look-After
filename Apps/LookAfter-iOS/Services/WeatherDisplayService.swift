@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import LookAfterCore
 
 /// Fetches local weather for Today status chips via Open-Meteo (no WeatherKit entitlement required).
 @MainActor

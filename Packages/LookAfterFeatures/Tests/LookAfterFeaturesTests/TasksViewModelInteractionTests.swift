@@ -284,6 +284,12 @@ final class InMemoryTaskStore: TaskStoring {
         }
     }
 
+    func updateMany(_ tasks updates: [LifeTask]) async throws {
+        for task in updates {
+            try await update(task)
+        }
+    }
+
     func delete(_ id: String) async throws {
         tasks.removeAll { $0.id == id }
     }

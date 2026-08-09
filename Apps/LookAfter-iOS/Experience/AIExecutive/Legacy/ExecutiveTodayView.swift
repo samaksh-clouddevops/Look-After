@@ -209,6 +209,7 @@ struct ExecutiveTodayView: View {
         case .viewPlan: onViewPlan()
         case .openHealthDetail: onOpenHealth()
         case .openShopping: break
+        case .startRecovery: break
         case .openCoach, .openBrain: onCapture()
         }
     }

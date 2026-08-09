@@ -34,18 +34,27 @@ public final class TaskSQLiteStore: @unchecked Sendable {
         self.init(databaseURL: documents.appendingPathComponent("tasks.sqlite"), documentsDirectory: documents)
     }
 
-    /// Isolated store for tests (`:memory:` skips JSON migration).
+    /// Isolated store for tests — true GRDB in-memory DB (no `:memory:` file on disk).
     public convenience init(inMemory: Bool) {
         if inMemory {
             let documents = FileManager.default.temporaryDirectory
-            self.init(
-                databaseURL: URL(fileURLWithPath: ":memory:"),
-                documentsDirectory: documents,
-                migrateFromJSON: false
-            )
+            let queue: DatabaseQueue
+            do {
+                queue = try Self.makeInMemoryQueue(migrateFromJSON: false)
+            } catch {
+                Self.logger.error("In-memory task store init failed: \(error.localizedDescription, privacy: .public)")
+                // swiftlint:disable:next force_try
+                queue = try! DatabaseQueue()
+            }
+            self.init(dbQueue: queue, documentsDirectory: documents)
         } else {
             self.init()
         }
+    }
+
+    private init(dbQueue: DatabaseQueue, documentsDirectory: URL) {
+        self.documentsDirectory = documentsDirectory
+        self.dbQueue = dbQueue
     }
 
     public init(databaseURL: URL, documentsDirectory: URL, migrateFromJSON: Bool = true) {
@@ -68,8 +77,6 @@ public final class TaskSQLiteStore: @unchecked Sendable {
             try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
 
-        let isMemory = databaseURL.path == ":memory:"
-
         func makeQueue(at url: URL, migrate: Bool) throws -> DatabaseQueue {
             let queue = try DatabaseQueue(path: url.path, configuration: configuration)
             try queue.write { db in
@@ -81,32 +88,55 @@ public final class TaskSQLiteStore: @unchecked Sendable {
             return queue
         }
 
+        func makeMemoryQueue(migrate: Bool) throws -> DatabaseQueue {
+            try makeInMemoryQueue(
+                configuration: configuration,
+                documentsDirectory: documentsDirectory,
+                migrateFromJSON: migrate
+            )
+        }
+
         do {
             return try makeQueue(at: databaseURL, migrate: migrateFromJSON)
         } catch {
-            logger.error("Primary task DB open failed: \(error.localizedDescription, privacy: .public)")
-            if !isMemory {
-                quarantineCorruptDatabase(at: databaseURL)
-                if let recovered = try? makeQueue(at: databaseURL, migrate: false) {
-                    return recovered
-                }
-                logger.error("Fresh on-disk task DB open failed; falling back to memory")
+            Self.logger.error("Primary task DB open failed: \(error.localizedDescription, privacy: .public)")
+            quarantineCorruptDatabase(at: databaseURL)
+            if let recovered = try? makeQueue(at: databaseURL, migrate: false) {
+                return recovered
             }
-            // Always-available empty store so cold launch never crashes on I/O failure.
-            if let memory = try? makeQueue(at: URL(fileURLWithPath: ":memory:"), migrate: false) {
+            Self.logger.error("Fresh on-disk task DB open failed; falling back to memory")
+            if let memory = try? makeMemoryQueue(migrate: false) {
                 return memory
             }
-            // Bare memory queue — schema is recreated on first successful write path if needed.
             do {
-                let bare = try DatabaseQueue(path: ":memory:", configuration: configuration)
-                try? bare.write { db in try createSchema(db) }
-                return bare
+                return try DatabaseQueue()
             } catch {
-                // Absolute last resort: GRDB default in-memory database.
+                Self.logger.fault("In-memory task DB fallback failed: \(error.localizedDescription, privacy: .public)")
                 // swiftlint:disable:next force_try
                 return try! DatabaseQueue()
             }
         }
+    }
+
+    private static func makeInMemoryQueue(
+        configuration: Configuration = {
+            var configuration = Configuration()
+            configuration.prepareDatabase { db in
+                try db.execute(sql: "PRAGMA foreign_keys = ON")
+            }
+            return configuration
+        }(),
+        documentsDirectory: URL = FileManager.default.temporaryDirectory,
+        migrateFromJSON: Bool = false
+    ) throws -> DatabaseQueue {
+        let queue = try DatabaseQueue(path: ":memory:", configuration: configuration)
+        try queue.write { db in
+            try createSchema(db)
+            if migrateFromJSON {
+                try migrateFromJSONIfNeeded(db, documentsDirectory: documentsDirectory)
+            }
+        }
+        return queue
     }
 
     private static func quarantineCorruptDatabase(at url: URL) {
@@ -118,10 +148,10 @@ public final class TaskSQLiteStore: @unchecked Sendable {
         try? fm.removeItem(at: quarantine)
         do {
             try fm.moveItem(at: url, to: quarantine)
-            logger.fault("Quarantined corrupt task database to \(quarantine.lastPathComponent, privacy: .public)")
+            Self.logger.fault("Quarantined corrupt task database to \(quarantine.lastPathComponent, privacy: .public)")
         } catch {
             try? fm.removeItem(at: url)
-            logger.fault("Removed unreadable task database after quarantine failed")
+            Self.logger.fault("Removed unreadable task database after quarantine failed")
         }
         // Sidecars
         for suffix in ["-wal", "-shm"] {
@@ -144,7 +174,7 @@ public final class TaskSQLiteStore: @unchecked Sendable {
                 try TaskRecord.fetchAll(db).map { try $0.lifeTask() }
             }
         } catch {
-            logger.error("loadAllAsync failed: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("loadAllAsync failed: \(error.localizedDescription, privacy: .public)")
             return []
         }
     }
@@ -158,7 +188,7 @@ public final class TaskSQLiteStore: @unchecked Sendable {
                 try TaskRecord(task: task).save(db)
             }
         } catch {
-            logger.error("upsert failed: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("upsert failed: \(error.localizedDescription, privacy: .public)")
             throw StoreError.writeFailed(error.localizedDescription)
         }
     }
@@ -173,7 +203,7 @@ public final class TaskSQLiteStore: @unchecked Sendable {
                 }
             }
         } catch {
-            logger.error("upsertMany failed: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("upsertMany failed: \(error.localizedDescription, privacy: .public)")
             throw StoreError.writeFailed(error.localizedDescription)
         }
     }
@@ -189,7 +219,7 @@ public final class TaskSQLiteStore: @unchecked Sendable {
                 }
             }
         } catch {
-            logger.error("deleteIds failed: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("deleteIds failed: \(error.localizedDescription, privacy: .public)")
             throw StoreError.writeFailed(error.localizedDescription)
         }
     }
@@ -219,7 +249,7 @@ public final class TaskSQLiteStore: @unchecked Sendable {
                 try Self.replaceAll(tasks, in: db)
             }
         } catch {
-            logger.error("replaceAllAwait failed: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("replaceAllAwait failed: \(error.localizedDescription, privacy: .public)")
             throw StoreError.writeFailed(error.localizedDescription)
         }
     }

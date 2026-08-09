@@ -1,4 +1,5 @@
 import Foundation
+import LookAfterCore
 
 public enum AuthProxyError: Error, LocalizedError, Sendable {
     case notConfigured

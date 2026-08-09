@@ -242,7 +242,7 @@ public enum ExecutiveRecommendationEngine {
                 "A short reset raises the odds the next focus block succeeds."
             ],
             taskID: nil,
-            actionKind: .startFocus,
+            actionKind: .startRecovery,
             impactLabel: "Protect capacity",
             clarityLabel: "Recovery"
         )
