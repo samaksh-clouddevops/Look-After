@@ -862,33 +862,37 @@ public final class TasksViewModel: ObservableObject {
 
     /// Create a new task — instant UI update, persistence runs in background.
     public func createTask(_ task: LifeTask) {
+        Task { try? await createTaskAndAwait(task) }
+    }
+
+    /// Durable create used by planning apply — throws if SQLite/repo write fails.
+    public func createTaskAndAwait(_ task: LifeTask) async throws {
         if task.recurrenceRule != .none {
             createRecurringTask(task)
             return
         }
         if MultiDayTaskTags.isMultiDay(task) {
-            insertTaskWithoutDecompose(task)
+            try await insertTaskWithoutDecomposeAndAwait(task)
             return
         }
 
         tasks.insert(task, at: 0)
-        
-        Task {
-            do {
-                var enriched = ScheduleNormalization.normalized(task)
-                enriched.semanticProfile = await resolveSemanticProfile(for: enriched)
-                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                    tasks[index] = enriched
-                }
-                try await taskRepo.create(enriched)
-                
-                if enriched.steps.isEmpty {
-                    await decomposeTask(enriched)
-                }
-            } catch {
-                tasks.removeAll { $0.id == task.id }
-                self.error = error.localizedDescription
+        do {
+            var enriched = ScheduleNormalization.normalized(task)
+            enriched.semanticProfile = await resolveSemanticProfile(for: enriched)
+            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[index] = enriched
             }
+            try await taskRepo.create(enriched)
+
+            if enriched.steps.isEmpty {
+                await decomposeTask(enriched)
+            }
+            notifyTaskListDidChange()
+        } catch {
+            tasks.removeAll { $0.id == task.id }
+            self.error = error.localizedDescription
+            throw error
         }
     }
 
@@ -937,19 +941,22 @@ public final class TasksViewModel: ObservableObject {
     }
 
     private func insertTaskWithoutDecompose(_ task: LifeTask) {
+        Task { try? await insertTaskWithoutDecomposeAndAwait(task) }
+    }
+
+    private func insertTaskWithoutDecomposeAndAwait(_ task: LifeTask) async throws {
         tasks.insert(task, at: 0)
-        Task {
-            do {
-                var enriched = task
-                enriched.semanticProfile = await resolveSemanticProfile(for: task)
-                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                    tasks[index] = enriched
-                }
-                try await taskRepo.create(enriched)
-            } catch {
-                tasks.removeAll { $0.id == task.id }
-                self.error = error.localizedDescription
+        do {
+            var enriched = task
+            enriched.semanticProfile = await resolveSemanticProfile(for: task)
+            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[index] = enriched
             }
+            try await taskRepo.create(enriched)
+        } catch {
+            tasks.removeAll { $0.id == task.id }
+            self.error = error.localizedDescription
+            throw error
         }
     }
 

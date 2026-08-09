@@ -78,6 +78,18 @@ extension String {
     }
 }
 
+// MARK: - Dictionary uniqueness helpers
+
+extension Dictionary {
+    /// Builds a dictionary from key-value pairs without trapping on duplicate keys
+    /// (`Dictionary(uniqueKeysWithValues:)` fatals when IDs collide after merges).
+    public static func uniquingFirstValue<S: Sequence>(
+        _ pairs: S
+    ) -> [Key: Value] where S.Element == (Key, Value) {
+        Dictionary(pairs, uniquingKeysWith: { first, _ in first })
+    }
+}
+
 // MARK: - Double Extensions
 
 extension Double {

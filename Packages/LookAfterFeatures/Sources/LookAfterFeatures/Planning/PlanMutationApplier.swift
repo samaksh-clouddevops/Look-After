@@ -49,23 +49,35 @@ public struct PlanMutationApplier {
     ) async -> ApplyResult {
         var result = ApplyResult()
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: lifeProfile)
-        let allTasks = tasksVM.schedulingContext
-        let taskByID = Dictionary(uniqueKeysWithValues: allTasks.map { ($0.id, $0) })
-        let taskByTitle = Dictionary(
-            allTasks.map { ($0.title.lowercased(), $0) },
-            uniquingKeysWith: { first, _ in first }
+        // Prefer full active list + scheduling context so title/id resolution sees all movable tasks.
+        let allTasks = dedupeTasks(tasksVM.tasks + tasksVM.schedulingContext)
+        let taskByID = Dictionary.uniquingFirstValue(allTasks.map { ($0.id, $0) })
+        let taskByTitle = Dictionary.uniquingFirstValue(
+            allTasks.map { ($0.title.lowercased(), $0) }
         )
+        let allowedTaskIDs = Set(taskByID.keys)
         var pendingCreates: [PendingCreate] = []
-        var schedulingPool = tasksScheduledToday(from: tasksVM.schedulingContext)
+        var schedulingPool = tasksScheduledToday(from: allTasks)
 
         for mutation in mutations {
+            // Reject hallucinated task IDs up front (BUG-014 / BUG-036).
+            if let claimedID = mutation.taskID?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !claimedID.isEmpty,
+               !allowedTaskIDs.contains(claimedID),
+               Self.requiresExistingTaskID(mutation.kind) {
+                result.skippedReasons.append("Unknown task id \"\(claimedID)\" — skipped \(mutation.kind.rawValue)")
+                continue
+            }
+
             switch mutation.kind {
             case .reuseTask:
                 if let title = mutation.title,
                    let existing = resolvedExistingTask(mutation: mutation, taskByID: taskByID, taskByTitle: taskByTitle) {
                     result.reusedTasks.append(.init(requestedTitle: title, existingTitle: existing.title))
+                    result.appliedCount += 1
+                } else {
+                    result.skippedReasons.append("Could not reuse task — no match")
                 }
-                result.appliedCount += 1
 
             case .createTask:
                 guard let title = mutation.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
@@ -197,16 +209,15 @@ public struct PlanMutationApplier {
                 task.scheduledDate = tomorrow
                 task.scheduledTime = nil
                 task.scheduledEndTime = nil
-                tasksVM.updateTask(task)
+                await tasksVM.updateTaskAndPersist(task)
+                schedulingPool.removeAll { $0.id == task.id }
                 result.appliedCount += 1
-                Task {
-                    if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
-                        NotificationCenter.default.post(
-                            name: .deferralRecoveryScriptReady,
-                            object: nil,
-                            userInfo: ["script": script]
-                        )
-                    }
+                if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
+                    NotificationCenter.default.post(
+                        name: .deferralRecoveryScriptReady,
+                        object: nil,
+                        userInfo: ["script": script]
+                    )
                 }
 
             case .completeTask:
@@ -259,7 +270,7 @@ public struct PlanMutationApplier {
                 }
                 var deadline: Date?
                 if let iso = mutation.deadlineISO {
-                    deadline = ISO8601DateFormatter().date(from: iso)
+                    deadline = Self.parseFlexibleISODate(iso)
                 }
                 let draft = MultiDayPlanDraft(
                     title: title,
@@ -296,7 +307,7 @@ public struct PlanMutationApplier {
                 existingTasks: schedulingPool,
                 workHours: workHours
             )
-            let allocationByID = Dictionary(uniqueKeysWithValues: allocations.map { ($0.id, $0.scheduledTime) })
+            let allocationByID = Dictionary.uniquingFirstValue(allocations.map { ($0.id, $0.scheduledTime) })
 
             for pending in pendingCreates {
                 var task = pending.task
@@ -305,10 +316,15 @@ public struct PlanMutationApplier {
                     let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
                     task.scheduledEndTime = scheduledTime.addingTimeInterval(TimeInterval(duration * 60))
                 }
-                tasksVM.createTask(task)
-                schedulingPool.append(task)
-                result.appliedCount += 1
-                result.createdTaskIDs.append(task.id)
+                // Await persistence so apply result reflects durable creates (BUG-037).
+                do {
+                    try await tasksVM.createTaskAndAwait(task)
+                    schedulingPool.append(task)
+                    result.appliedCount += 1
+                    result.createdTaskIDs.append(task.id)
+                } catch {
+                    result.skippedReasons.append("Could not create \"\(task.title)\": \(error.localizedDescription)")
+                }
             }
         }
 
@@ -318,6 +334,42 @@ public struct PlanMutationApplier {
         }
 
         return result
+    }
+
+    private static func requiresExistingTaskID(_ kind: PlanMutationKind) -> Bool {
+        switch kind {
+        case .rescheduleTask, .deferTask, .completeTask, .removeFromToday, .reuseTask:
+            return true
+        case .createTask, .createMultiDayTask, .addShoppingItem, .captureNote, .markMedicationTaken:
+            return false
+        }
+    }
+
+    private func dedupeTasks(_ tasks: [LifeTask]) -> [LifeTask] {
+        var seen = Set<String>()
+        var result: [LifeTask] = []
+        result.reserveCapacity(tasks.count)
+        for task in tasks where seen.insert(task.id).inserted {
+            result.append(task)
+        }
+        return result
+    }
+
+    /// Accepts full ISO8601 timestamps and date-only (`yyyy-MM-dd`) LLM deadlines (BUG-039).
+    private static func parseFlexibleISODate(_ raw: String) -> Date? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: trimmed) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: trimmed) { return date }
+        let dayOnly = DateFormatter()
+        dayOnly.calendar = Calendar(identifier: .gregorian)
+        dayOnly.locale = Locale(identifier: "en_US_POSIX")
+        dayOnly.timeZone = TimeZone.current
+        dayOnly.dateFormat = "yyyy-MM-dd"
+        return dayOnly.date(from: String(trimmed.prefix(10)))
     }
 
     private struct PendingCreate {

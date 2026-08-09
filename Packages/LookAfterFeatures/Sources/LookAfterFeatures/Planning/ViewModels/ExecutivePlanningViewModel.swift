@@ -21,6 +21,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     @Published public private(set) var timelineRows: [ExecutivePlanningTimelineRow] = []
     @Published public private(set) var tomorrowTimelineRows: [ExecutivePlanningTimelineRow] = []
     @Published public private(set) var recentDeltas: [PlanningTimelineDelta] = []
+    /// Mutations parsed from the last turn awaiting explicit user confirm (BUG-014 / BUG-036).
+    @Published public private(set) var pendingMutations: [PlanMutation] = []
     @Published public var draftText = ""
     @Published public var errorMessage: String?
 
@@ -42,6 +44,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     private weak var timelineService: TimelineService?
     private var cancellables = Set<AnyCancellable>()
     private var hasSeededProactiveSuggestions = false
+    /// When false (default), LLM mutations stage for confirmation instead of auto-applying.
+    public var autoApplyMutations: Bool = false
 
     public init(engine: LLMPlanningEngine = LLMPlanningEngine()) {
         self.engine = engine
@@ -76,6 +80,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         timelineRows = []
         tomorrowTimelineRows = []
         recentDeltas = []
+        pendingMutations = []
         draftText = ""
         errorMessage = nil
         replanSummary = nil
@@ -346,7 +351,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         refreshContext: () async -> Void
     ) async {
         let calendar = Calendar.current
-        let taskByID = Dictionary(uniqueKeysWithValues: tasksVM.tasks.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(tasksVM.tasks.map { ($0.id, $0) })
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
         let freedSlot = pendingContextualReplan?.freedSlotWindow
 
@@ -445,6 +450,14 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         let notices = parts.joined(separator: " ")
         if reply.isEmpty { return notices }
         return reply + "\n\n" + notices
+    }
+
+    private func appendPendingMutationNotice(to reply: String, count: Int) -> String {
+        let notice = count == 1
+            ? "I drafted 1 schedule change — confirm Apply changes when you're ready."
+            : "I drafted \(count) schedule changes — confirm Apply changes when you're ready."
+        if reply.isEmpty { return notice }
+        return reply + "\n\n" + notice
     }
 
     public func submit(
@@ -597,31 +610,20 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
             if !response.mutations.isEmpty {
                 let mutations = response.mutations
-                if isVoiceTurn {
-                    Task { @MainActor in
-                        var applyResult = PlanMutationApplier.ApplyResult()
-                        var meds = self.medications
-                        applyResult = await self.applier.apply(
-                            mutations: mutations,
-                            tasksVM: tasksVM,
-                            modulesVM: modulesVM,
-                            userId: userId,
-                            medications: &meds,
-                            userMessage: message,
-                            lifeProfile: context.lifeProfile,
-                            deferReconcile: true
+                // Stage for confirm unless auto-apply is intentionally enabled (voice can still stage).
+                let shouldAutoApply = autoApplyMutations && !isVoiceTurn
+                if !shouldAutoApply {
+                    pendingMutations = mutations
+                    if negotiation == nil {
+                        negotiation = PlanningNegotiation(
+                            question: "Apply \(mutations.count) plan change\(mutations.count == 1 ? "" : "s")?",
+                            options: ["Apply changes", "Review later", "Discard"]
                         )
-                        self.medications = meds
-                        await refreshContext()
-                        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
-                        if hasMultiDayCommit {
-                            self.multiDaySession = MultiDayPlanningSession(phase: .committed, draft: self.multiDayDraft)
-                            self.multiDayDraft = nil
-                            self.multiDayPlanning = nil
-                        }
-                        if applyResult.appliedCount == 0 {
-                            print("[ExecutivePlanning] mutations skipped: \(applyResult.skippedReasons)")
-                        }
+                        negotiationPhase = .awaitingConfirmation
+                    }
+                    displayReply = appendPendingMutationNotice(to: displayReply, count: mutations.count)
+                    if let lastIndex = turns.indices.last {
+                        turns[lastIndex].text = displayReply
                     }
                 } else {
                     var applyResult = PlanMutationApplier.ApplyResult()
@@ -636,6 +638,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                         lifeProfile: context.lifeProfile
                     )
                     medications = meds
+                    pendingMutations = []
                     displayReply = appendApplyNotices(to: displayReply, applyResult: applyResult)
                     if let lastIndex = turns.indices.last {
                         turns[lastIndex].text = displayReply
@@ -698,6 +701,31 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             }
         }
 
+        // Staged mutation confirm / discard (BUG-014).
+        if negotiationPhase == .awaitingConfirmation || !pendingMutations.isEmpty {
+            let lower = option.lowercased()
+            if lower.contains("apply") {
+                await confirmPendingMutations(
+                    context: context,
+                    tasksVM: tasksVM,
+                    modulesVM: modulesVM,
+                    userId: userId,
+                    refreshContext: refreshContext
+                )
+                return
+            }
+            if lower.contains("discard") || lower.contains("later") || lower.contains("cancel") {
+                discardPendingMutations()
+                turns.append(PlanningConversationTurn(
+                    role: .assistant,
+                    text: lower.contains("later")
+                        ? "Okay — I'll keep the draft and won't change your schedule yet."
+                        : "Discarded those plan changes."
+                ))
+                return
+            }
+        }
+
         if let variantID = negotiation?.variantID(forOption: option),
            let variant = planVariants?.first(where: { $0.id == variantID })
             ?? contextualReplanResult?.planVariants?.first(where: { $0.id == variantID }) {
@@ -724,6 +752,47 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             userId: userId,
             refreshContext: refreshContext
         )
+    }
+
+    /// Applies staged mutations after explicit user confirmation.
+    public func confirmPendingMutations(
+        context: PlanningConversationContext,
+        tasksVM: TasksViewModel,
+        modulesVM: LifeModulesViewModel,
+        userId: String,
+        refreshContext: @escaping () async -> Void
+    ) async {
+        let mutations = pendingMutations
+        guard !mutations.isEmpty else {
+            discardPendingMutations()
+            return
+        }
+        var meds = medications
+        let applyResult = await applier.apply(
+            mutations: mutations,
+            tasksVM: tasksVM,
+            modulesVM: modulesVM,
+            userId: userId,
+            medications: &meds,
+            lifeProfile: context.lifeProfile
+        )
+        medications = meds
+        pendingMutations = []
+        negotiation = nil
+        negotiationPhase = .idle
+        var notice = "Applied \(applyResult.appliedCount) change\(applyResult.appliedCount == 1 ? "" : "s")."
+        notice = appendApplyNotices(to: notice, applyResult: applyResult)
+        turns.append(PlanningConversationTurn(role: .assistant, text: notice))
+        await refreshContext()
+        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+    }
+
+    public func discardPendingMutations() {
+        pendingMutations = []
+        if negotiationPhase == .awaitingConfirmation {
+            negotiation = nil
+            negotiationPhase = .idle
+        }
     }
 
     public func applySelectedVariant(
