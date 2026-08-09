@@ -111,13 +111,13 @@ public final class GLMUsageLogger: @unchecked Sendable {
     private func loadLocked() -> [GLMUsageRecord] {
         guard
             let data = UserDefaults.standard.data(forKey: storageKey),
-            let decoded = try? JSONDecoder().decode([GLMUsageRecord].self, from: data)
+            let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([GLMUsageRecord].self, from: data)
         else { return [] }
         return decoded
     }
 
     private func persistLocked(_ records: [GLMUsageRecord]) {
-        if let data = try? JSONEncoder().encode(records) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(records) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
     }
