@@ -4,6 +4,7 @@ import { initFirebase } from "./auth/firebase";
 import { createLicenseStore } from "./store/licenseStore";
 import { requireAdmin, createRequireFirebaseAuth, type AuthedRequest } from "./middleware/auth";
 import {
+  createIpRateLimitMiddleware,
   createRateLimitMiddleware,
   requireActiveLicense,
 } from "./middleware/rateLimit";
@@ -26,19 +27,35 @@ async function main(): Promise<void> {
 
   const app = express();
   app.disable("x-powered-by");
+  app.set("trust proxy", 1);
   app.use(express.json({ limit: "1mb" }));
+
+  const adminIpLimit = createIpRateLimitMiddleware(config, "admin");
+  const licenseIpLimit = createIpRateLimitMiddleware(config, "license");
+  const aiIpLimit = createIpRateLimitMiddleware(config, "ai");
+  const rateLimit = createRateLimitMiddleware(config, store);
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "lookafter-auth-proxy" });
   });
 
-  app.use("/v1/admin", requireAdmin(config.adminApiKey), adminRouter(store));
+  app.use(
+    "/v1/admin",
+    adminIpLimit,
+    requireAdmin(config.adminApiKey),
+    adminRouter(store)
+  );
 
-  app.use("/v1/license", requireFirebaseAuth, licenseRouter(store));
+  app.use(
+    "/v1/license",
+    licenseIpLimit,
+    requireFirebaseAuth,
+    licenseRouter(store)
+  );
 
-  const rateLimit = createRateLimitMiddleware(config, store);
   app.use(
     "/v1/ai",
+    aiIpLimit,
     requireFirebaseAuth,
     (req, res, next) => {
       void requireActiveLicense(store, req as AuthedRequest, res, next);

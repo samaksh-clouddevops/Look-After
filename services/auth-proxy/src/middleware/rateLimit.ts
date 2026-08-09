@@ -1,4 +1,4 @@
-import type { Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import type { AuthedRequest } from "./auth";
 import type { LicenseStore } from "../store/licenseStore";
 import type { AppConfig } from "../config";
@@ -6,6 +6,39 @@ import type { AppConfig } from "../config";
 type WindowState = { count: number; resetAt: number };
 
 const windows = new Map<string, WindowState>();
+const ipWindows = new Map<string, WindowState>();
+
+function clientIp(req: Request): string {
+  return req.ip || req.socket.remoteAddress || "unknown";
+}
+
+function checkWindow(
+  store: Map<string, WindowState>,
+  key: string,
+  limit: number,
+  windowMs = 60_000
+): boolean {
+  const now = Date.now();
+  const state = store.get(key);
+  if (!state || now >= state.resetAt) {
+    store.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  state.count += 1;
+  return state.count <= limit;
+}
+
+/** Rate limit by client IP — apply before auth to slow brute-force attempts. */
+export function createIpRateLimitMiddleware(config: AppConfig, scope: string) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const key = `${scope}:${clientIp(req)}`;
+    if (!checkWindow(ipWindows, key, config.authRateLimitPerMinute)) {
+      res.status(429).json({ error: "Rate limit exceeded" });
+      return;
+    }
+    next();
+  };
+}
 
 export function createRateLimitMiddleware(config: AppConfig, store: LicenseStore) {
   return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -15,17 +48,10 @@ export function createRateLimitMiddleware(config: AppConfig, store: LicenseStore
       return;
     }
 
-    const now = Date.now();
-    const windowMs = 60_000;
-    const state = windows.get(uid);
-    if (!state || now >= state.resetAt) {
-      windows.set(uid, { count: 1, resetAt: now + windowMs });
-    } else {
-      state.count += 1;
-      if (state.count > config.rateLimitPerMinute) {
-        res.status(429).json({ error: "Rate limit exceeded" });
-        return;
-      }
+    const key = `uid:${uid}`;
+    if (!checkWindow(windows, key, config.rateLimitPerMinute)) {
+      res.status(429).json({ error: "Rate limit exceeded" });
+      return;
     }
 
     const usage = await store.usageForUid(uid);

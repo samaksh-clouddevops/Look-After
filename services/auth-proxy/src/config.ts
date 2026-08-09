@@ -12,6 +12,8 @@ export type AppConfig = {
   azureStorageConnectionString?: string;
   azureTableName: string;
   rateLimitPerMinute: number;
+  /** Per-IP cap on auth-sensitive routes (/v1/admin, /v1/license, /v1/ai) before credentials are checked. */
+  authRateLimitPerMinute: number;
   dailyTokenBudget: number;
   /** Local-only: accept Bearer tokens of form `dev:<uid>`. Never enable in production. */
   allowInsecureDevAuth: boolean;
@@ -44,6 +46,7 @@ export function loadConfig(): AppConfig {
     azureStorageConnectionString: process.env.AZURE_STORAGE_CONNECTION_STRING?.trim() || undefined,
     azureTableName: process.env.AZURE_TABLE_NAME?.trim() || "lookafterlicenses",
     rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE || 30),
+    authRateLimitPerMinute: Number(process.env.AUTH_RATE_LIMIT_PER_MINUTE || 60),
     dailyTokenBudget: Number(process.env.DAILY_TOKEN_BUDGET || 200_000),
     allowInsecureDevAuth: process.env.AUTH_DEV_ALLOW_INSECURE === "true",
     productKeysJson: process.env.PRODUCT_KEYS_JSON?.trim() || undefined,
