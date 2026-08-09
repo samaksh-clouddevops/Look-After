@@ -119,8 +119,8 @@ public final class LLMPlanningEngine {
                 analytics: context.analyticsContext,
                 includeCalibration: true
             )
-        let taskLimit = voiceOptimized ? 10 : 25
-        let timelineLimit = voiceOptimized ? 8 : 20
+        let taskLimit = voiceOptimized ? 10 : PlanningPromptContextBuilder.defaultTaskListingLimit
+        let timelineLimit = voiceOptimized ? 8 : 16
         let cycleBlock = voiceOptimized
             ? ""
             : PlanningPromptContextBuilder.cycleBlock(

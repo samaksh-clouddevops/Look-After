@@ -355,19 +355,23 @@ public enum PlanningPromptContextBuilder {
         """
     }
 
-    public static func tasksBlock(_ tasks: [LifeTask], style: TaskListingStyle, limit: Int = 25) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+    /// Hard cap — large dumps burn tokens and main-thread string build (PERF-021).
+    public static let defaultTaskListingLimit = 20
+    public static let absoluteMaxTaskListingLimit = 40
+
+    public static func tasksBlock(_ tasks: [LifeTask], style: TaskListingStyle, limit: Int = defaultTaskListingLimit) -> String {
+        let capped = min(max(limit, 1), absoluteMaxTaskListingLimit)
+        let formatter = promptTimeFormatter
         let filtered: [LifeTask]
         switch style {
         case .planning:
-            filtered = Array(tasks.prefix(limit))
+            filtered = Array(tasks.prefix(capped))
         case .replanRemaining:
-            filtered = tasks.filter(\.status.isActive).prefix(limit).map { $0 }
+            filtered = tasks.filter(\.status.isActive).prefix(capped).map { $0 }
         case .schedulingFixed:
-            filtered = tasks.filter(\.isFixedTimeEvent).prefix(limit).map { $0 }
+            filtered = tasks.filter(\.isFixedTimeEvent).prefix(capped).map { $0 }
         case .schedulingFlexible:
-            filtered = tasks.filter { !$0.isFixedTimeEvent }.prefix(limit).map { $0 }
+            filtered = tasks.filter { !$0.isFixedTimeEvent }.prefix(capped).map { $0 }
         }
 
         let lines = filtered.map { task in
@@ -522,11 +526,11 @@ public enum PlanningPromptContextBuilder {
         """
     }
 
-    public static func missedTasksBlock(_ tasks: [LifeTask]) -> String {
+    public static func missedTasksBlock(_ tasks: [LifeTask], limit: Int = defaultTaskListingLimit) -> String {
         guard !tasks.isEmpty else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let lines = tasks.map { task -> String in
+        let formatter = promptTimeFormatter
+        let capped = Array(tasks.prefix(min(max(limit, 1), absoluteMaxTaskListingLimit)))
+        let lines = capped.map { task -> String in
             let time = task.scheduledTime.map { formatter.string(from: $0) } ?? "unscheduled"
             return "- MISSED id:\(task.id) | \(task.title) | was:\(time) | \(task.estimatedMinutes)m | fixed:\(task.isFixedTimeEvent)"
         }
@@ -537,6 +541,13 @@ public enum PlanningPromptContextBuilder {
         Use removeFromToday mutation only for low-value ephemeral items.
         """
     }
+
+    private static let promptTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
 
     public static func postWakeReplanBlock(wakeTime: Date, minutesLate: Int?) -> String {
         let wakeLabel = wakeTime.formatted(date: .omitted, time: .shortened)
