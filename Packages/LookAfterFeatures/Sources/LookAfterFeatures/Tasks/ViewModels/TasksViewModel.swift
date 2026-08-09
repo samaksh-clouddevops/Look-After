@@ -637,7 +637,9 @@ public final class TasksViewModel: ObservableObject {
                 stale.status = .pending
                 stale.updatedAt = Date()
                 reactivated.append(stale)
+                #if DEBUG
                 print("[Tasks] reactivated superseded occurrence id=\(stale.id.prefix(8)) template=\(template.id.prefix(8))")
+                #endif
             }
         }
         if !reactivated.isEmpty {
@@ -710,7 +712,9 @@ public final class TasksViewModel: ObservableObject {
             batch.append(task)
             tasks.removeAll { $0.id == id }
             completedToday.removeAll { $0.id == id }
+            #if DEBUG
             print("[Tasks] superseded invalid scheduled task id=\(id.prefix(8))")
+            #endif
         }
         if !batch.isEmpty {
             try await taskRepo.updateMany(batch)
@@ -758,7 +762,9 @@ public final class TasksViewModel: ObservableObject {
         do {
             try await syncRecurringOccurrences(userId: userId)
         } catch {
+            #if DEBUG
             print("[Tasks] onboarding recurrence sync failed: \(error.localizedDescription)")
+            #endif
         }
 
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "onboarding-seed")
@@ -1663,7 +1669,9 @@ public final class TasksViewModel: ObservableObject {
                 reactivated.status = .pending
                 reactivated.updatedAt = Date()
                 try await taskRepo.update(reactivated)
+                #if DEBUG
                 print("[Tasks] reactivated materialized projection id=\(reactivated.id.prefix(8))")
+                #endif
                 return reactivated
             }
             return stored
@@ -1679,7 +1687,9 @@ public final class TasksViewModel: ObservableObject {
             stale.status = .pending
             stale.updatedAt = Date()
             try await taskRepo.update(stale)
+            #if DEBUG
             print("[Tasks] reactivated superseded for timeline complete id=\(stale.id.prefix(8))")
+            #endif
             return stale
         }
 
@@ -1687,7 +1697,9 @@ public final class TasksViewModel: ObservableObject {
         occurrence.userId = userId
         occurrence.status = .pending
         try await taskRepo.create(occurrence)
+        #if DEBUG
         print("[Tasks] materialized timeline projection id=\(occurrence.id.prefix(8)) title=\"\(occurrence.title)\"")
+        #endif
         return occurrence
     }
 
@@ -2213,7 +2225,9 @@ public final class TasksViewModel: ObservableObject {
         }
 #if DEBUG
         if !changedIDs.isEmpty {
+            #if DEBUG
             print("[Tasks] overlap repair changed ids=\(changedIDs.map { $0.prefix(8) }.joined(separator: ","))")
+            #endif
         }
 #endif
         return changedIDs
@@ -2818,7 +2832,9 @@ public final class TasksViewModel: ObservableObject {
                     try await taskRepo.create(seedTask)
                     tasks.insert(seedTask, at: 0)
                 } catch {
+                    #if DEBUG
                     print("[Tasks] daily routine seed failed: \(error.localizedDescription)")
+                    #endif
                 }
             }
         }
@@ -2827,7 +2843,9 @@ public final class TasksViewModel: ObservableObject {
             try await syncRecurringOccurrences(userId: userId)
             applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "daily-routine-seed")
         } catch {
+            #if DEBUG
             print("[Tasks] daily routine recurrence sync failed: \(error.localizedDescription)")
+            #endif
         }
     }
 
