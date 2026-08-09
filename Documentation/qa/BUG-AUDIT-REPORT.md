@@ -1,33 +1,26 @@
 # Application Bug Audit Report
 
-**Document ID:** QA-BUG-AUDIT  
-**Date:** 2026-08-09  
-**Scope:** Static analysis of iOS/macOS Swift codebase (Apps + Packages)  
-**Method:** Architecture review, concurrency/memory scan, known-risk cross-check against QA docs  
-**Status:** Open findings — code not modified in this pass  
+**Document ID:** QA-BUG-AUDIT
+**Date:** 2026-08-09
+**Scope:** Static analysis of iOS/macOS Swift codebase (Apps + Packages)
+**Method:** Architecture review, concurrency/memory scan, known-risk cross-check against QA docs
+**Status:** Remediation on branch `fix/bug-audit-remediation` — P0 + key P1 fixed in code
 
 ---
 
 ## Executive summary
 
-| Severity | Count | Ship blocker? |
-|----------|------:|:-------------:|
-| **Critical (P0)** | 6 | Yes |
-| **High (P1)** | 9 | Yes for release quality |
-| **Medium (P2)** | 12 | Sprint |
-| **Low (P3)** | 8 | Backlog |
-| **Brain / decision** | 3 open (existing log) | Ship gate per QA-14 |
+| Severity | Count | Fixed on branch | Remaining |
+|----------|------:|:---------------:|----------:|
+| **Critical (P0)** | 6 | 6 | 0 |
+| **High (P1)** | 9 | 7 | 2 (device lag verify; planning choke-point audit) |
+| **Medium (P2)** | 12 | 6 | 6 |
+| **Low (P3)** | 8 | 0 | 8 |
+| **Brain / decision** | 3 open (existing log) | 0 | Ship gate per QA-14 |
 
-**Top themes**
+**Remediation branch:** `fix/bug-audit-remediation` (one commit per fix cluster).
 
-1. **Auth identity races** — optimistic local UIDs + silent Firebase failure.
-2. **Orchestration races** — FlowDirector / hero staleness under concurrent work.
-3. **Persistence durability** — fire-and-forget SQLite writes; crash on DB open failure.
-4. **Focus session correctness & lag** — pomodoro counter reset; UI lag not device-verified.
-5. **Incomplete wipe / token hygiene** — factory reset & Gmail disconnect gaps.
-6. **Brain decision quality** — known executive-cost / learning failures still open.
-
-**Recommended release gate:** Fix all P0; verify P1 on device; zero open Critical brain bugs ([brain-bugs.md](brain-bugs.md)).
+**Still open for ship quality:** BUG-007 device focus-lag verification, BUG-014 full planning-apply choke-point audit, brain issues #12 / #L-003.
 
 ---
 
@@ -531,6 +524,21 @@ Auth (optimistic UID)
 | Date | Change |
 |------|--------|
 | 2026-08-09 | Initial static audit — 6 P0, 9 P1, 12 P2, 8 P3 + brain cross-ref |
+| 2026-08-09 | Branch `fix/bug-audit-remediation`: code fixes for BUG-001–006, 008–011, 013, 015–019, 023–025 |
+
+### Commits on `fix/bug-audit-remediation`
+
+| Commit message | Bugs |
+|----------------|------|
+| docs(qa): add application bug audit report | — |
+| fix(auth): await Firebase auth and handle session end | BUG-001, BUG-002 (+ stable offline UID / BUG-020) |
+| fix(flow): serialize FlowDirector orchestration | BUG-003 |
+| fix(data): durable task SQLite writes and crash-free DB open | BUG-004, BUG-005 |
+| fix(capture): keep failed offline routes and cap queue | BUG-006, BUG-016 |
+| fix(focus): preserve pomodoro counter and fix countdown timer | BUG-008, BUG-009, BUG-023, BUG-024, BUG-025 |
+| fix(privacy): delete Gmail keychain token and wipe App Group | BUG-010, BUG-011 |
+| fix(ios): cleanup observers, speech throttle, orphan Live Activities | BUG-015, BUG-017, BUG-018, BUG-019 |
+| fix(capacity): block Peak Focus without fresh sleep evidence | BUG-013 |
 
 ---
 
