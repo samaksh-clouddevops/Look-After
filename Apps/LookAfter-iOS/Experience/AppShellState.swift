@@ -22,6 +22,10 @@ final class AppShellState: ObservableObject {
     let inboxVM: InboxViewModel
     let contextOrchestrator: ContextOrchestrator
     let continueSession: ContinueSessionController
+    /// Identity façade (Phase 1). Always available; SessionContainer is optional until flag on.
+    let identityService: IdentityService
+    /// Set when `ArchitectureFeatureFlags.useSessionContainer` and identity is stable.
+    private(set) var session: SessionContainer?
 
     /// Incremented after factory reset so child views can wipe local @StateObject state.
     @Published private(set) var factoryResetGeneration = 0
@@ -47,10 +51,12 @@ final class AppShellState: ObservableObject {
         let timelineService = TimelineService.shared
         let healthStore = HealthStore.shared
         let accountIdentity = AccountIdentity.shared
+        let identityService = IdentityService.shared
         self.taskStore = taskStore
         self.timelineService = timelineService
         self.healthStore = healthStore
         self.accountIdentity = accountIdentity
+        self.identityService = identityService
         brain = executiveBrain
         brainVM = BrainViewModel(brain: executiveBrain, taskStore: taskStore, healthStore: healthStore)
         tasksVM = TasksViewModel(taskStore: taskStore, decomposer: TaskDecomposer(glmService: glm))
@@ -60,6 +66,8 @@ final class AppShellState: ObservableObject {
         inboxVM = InboxViewModel(glmService: glm)
         contextOrchestrator = ContextOrchestrator(glmService: glm)
         continueSession = ContinueSessionController()
+        identityService.refreshFromFirebase()
+        session = SessionContainer.makeIfReady(identity: identityService, taskStore: taskStore)
 
         adhdVM.onFocusSessionDidStart = { [weak self] in
             guard let self else { return }
@@ -137,39 +145,99 @@ final class AppShellState: ObservableObject {
     func bootstrap(userId: String, healthSync: HealthSyncService) {
         guard !userId.isEmpty else { return }
 
+        identityService.refreshFromFirebase()
+        // Prefer stable identity uid when session path is enabled.
+        let resolvedId = {
+            if ArchitectureFeatureFlags.useSessionContainer,
+               identityService.state.isStableForBootstrap,
+               let id = identityService.state.userId,
+               !id.isEmpty {
+                return id
+            }
+            return userId
+        }()
+        guard !resolvedId.isEmpty else { return }
+
+        attachSessionIfNeeded()
+
         if FactoryResetManager.shared.isPendingFreshStart {
-            Task { await bootstrapFreshStart(userId: userId, healthSync: healthSync) }
+            Task { await bootstrapFreshStart(userId: resolvedId, healthSync: healthSync) }
             return
         }
 
-        if bootstrappedUserId != userId {
+        if bootstrappedUserId != resolvedId {
             bootstrapTask?.cancel()
             bootstrapTask = nil
             hasCompletedBootstrap = false
-            bootstrappedUserId = userId
+            bootstrappedUserId = resolvedId
         }
 
-        if hasCompletedBootstrap, bootstrappedUserId == userId {
+        if hasCompletedBootstrap, bootstrappedUserId == resolvedId {
             return
         }
-        if let bootstrapTask, bootstrappedUserId == userId, !bootstrapTask.isCancelled {
+        if let bootstrapTask, bootstrappedUserId == resolvedId, !bootstrapTask.isCancelled {
             return
         }
 
+        let identityGeneration = identityService.generation
         launchSignpostID = PerformanceSignposts.beginLaunchToBriefing()
         bootstrapTask = Task { [weak self] in
             guard let self else { return }
-            await self.runBootstrapWork(userId: userId, healthSync: healthSync)
+            await self.runBootstrapWork(
+                userId: resolvedId,
+                healthSync: healthSync,
+                identityGeneration: identityGeneration
+            )
             if let launchSignpostID = self.launchSignpostID {
                 PerformanceSignposts.endLaunchToBriefing(launchSignpostID)
                 self.launchSignpostID = nil
             }
-            self.hasCompletedBootstrap = true
+            // Only mark complete if identity did not change mid-flight (Phase 1 WP 1.3).
+            if self.identityService.generation == identityGeneration {
+                self.hasCompletedBootstrap = true
+            } else {
+                self.hasCompletedBootstrap = false
+                self.bootstrappedUserId = nil
+            }
             self.bootstrapTask = nil
         }
     }
 
-    private func runBootstrapWork(userId: String, healthSync: HealthSyncService) async {
+    private func attachSessionIfNeeded() {
+        guard ArchitectureFeatureFlags.useSessionContainer else {
+            session?.tearDown()
+            session = nil
+            return
+        }
+        if let session, !session.isTornDown, !session.isIdentityStale {
+            return
+        }
+        session?.tearDown()
+        session = SessionContainer.makeIfReady(
+            identity: identityService,
+            taskStore: taskStore,
+            requireFlag: true
+        )
+    }
+
+    private func shouldAbortBootstrap(identityGeneration: UInt64) -> Bool {
+        guard ArchitectureFeatureFlags.useSessionContainer else { return false }
+        if Task.isCancelled { return true }
+        if identityService.generation != identityGeneration { return true }
+        if let session, session.isIdentityStale { return true }
+        return false
+    }
+
+    private func runBootstrapWork(
+        userId: String,
+        healthSync: HealthSyncService,
+        identityGeneration: UInt64
+    ) async {
+        if ArchitectureFeatureFlags.useSessionContainer {
+            guard identityService.state.isStableForBootstrap else { return }
+            guard identityService.generation == identityGeneration else { return }
+        }
+
         BackgroundAnalyticsScheduler.shared.start(userId: userId)
 
         if let aiContext = BackgroundAnalyticsService.shared.cachedAIContext(userId: userId) {
@@ -197,11 +265,16 @@ final class AppShellState: ObservableObject {
             await healthSync.ensureSynced(userId: userId)
         }
 
+        guard !shouldAbortBootstrap(identityGeneration: identityGeneration) else { return }
+
         async let brainLoad: Void = orchestrateBrain(userId: userId)
         async let taskLoad: Void = tasksVM.loadTasks(userId: userId)
         async let moduleLoad: Void = modulesVM.loadAllData(userId: userId)
         async let inboxLoad: Void = inboxVM.loadItems(userId: userId)
         _ = await (brainLoad, taskLoad, moduleLoad, inboxLoad)
+
+        guard !shouldAbortBootstrap(identityGeneration: identityGeneration) else { return }
+
         await LookAfterIntentBridge.shared.processPendingQueue(userId: userId)
         await compileLifeModelIfNeeded()
         if let lifeModel = LifeModelStore.load(), lifeModel.hasContent {
@@ -994,6 +1067,9 @@ final class AppShellState: ObservableObject {
         bootstrappedUserId = nil
         hasCompletedBootstrap = false
         launchSignpostID = nil
+        session?.tearDown()
+        session = nil
+        identityService.refreshFromFirebase()
         timelineRebuildTask?.cancel()
         timelineRebuildTask = nil
         syncWidgetsAfterDebouncedRebuild = false

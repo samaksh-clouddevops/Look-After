@@ -2,13 +2,19 @@
 
 Deferred improvements — not blocking the repository restructure.
 
+## Master architecture & infrastructure plan
+
+**Active implementation:** branch `feature/arch-infra-implementation`
+**Ordered plan:** [architecture/MASTER-IMPLEMENTATION-PLAN.md](architecture/MASTER-IMPLEMENTATION-PLAN.md)
+**Phase status:** [architecture/PHASE-STATUS.md](architecture/PHASE-STATUS.md)
+
 ## Package extraction
 
 - **LifeOSDesignSystem** as a separate SPM package only if Widget + macOS + iOS need independent release cycles
 
 ## Persistence consolidation
 
-See **[architecture/mobile-infrastructure-roadmap.md](architecture/mobile-infrastructure-roadmap.md)** for the full phased plan (sync outbox, inbox/health/modules SQLite, cache cleanup).
+See **[architecture/mobile-infrastructure-roadmap.md](architecture/mobile-infrastructure-roadmap.md)** and the master plan Phase 2 for sync outbox + SQLite migrations.
 
 Move stores into LookAfterData over time:
 
