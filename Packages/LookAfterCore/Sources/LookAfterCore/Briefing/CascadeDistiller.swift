@@ -321,7 +321,7 @@ public final class CascadeActionLog: @unchecked Sendable {
 
     private func persistHistory(_ records: [CascadeActionRecord]) {
         guard let historyURL else { return }
-        guard let data = try? JSONEncoder().encode(records) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(records) else { return }
         try? data.write(to: historyURL, options: [.atomic])
     }
 
@@ -338,7 +338,7 @@ public final class CascadeActionLog: @unchecked Sendable {
     private func loadHistory() {
         guard let historyURL,
               let data = try? Data(contentsOf: historyURL),
-              let decoded = try? JSONDecoder().decode([CascadeActionRecord].self, from: data) else { return }
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([CascadeActionRecord].self, from: data) else { return }
         history = CascadeHistoryDedup.compact(decoded)
     }
 }

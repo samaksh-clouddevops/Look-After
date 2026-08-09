@@ -103,14 +103,14 @@ public final class DecisionHistoryStore: @unchecked Sendable {
         let snapshot = records
         lock.unlock()
 
-        if let data = try? JSONEncoder().encode(snapshot) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(snapshot) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
     }
 
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([DecisionRecord].self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([DecisionRecord].self, from: data) else {
             return
         }
         lock.lock()

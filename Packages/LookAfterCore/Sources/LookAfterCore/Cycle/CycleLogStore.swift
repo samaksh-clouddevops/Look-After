@@ -5,14 +5,14 @@ public enum CycleLogStore {
 
     public static func load() -> [CycleDayLog] {
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let logs = try? JSONDecoder().decode([CycleDayLog].self, from: data) else {
+              let logs = try? SharedFormatters.jsonDecoderSeconds.decode([CycleDayLog].self, from: data) else {
             return []
         }
         return logs.sorted { $0.day > $1.day }
     }
 
     public static func save(_ logs: [CycleDayLog]) {
-        if let data = try? JSONEncoder().encode(logs) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(logs) {
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         }
     }

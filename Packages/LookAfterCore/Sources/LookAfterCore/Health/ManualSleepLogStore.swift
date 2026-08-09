@@ -151,14 +151,14 @@ public enum ManualSleepLogStore {
 
     private static func loadEntries() -> [ManualSleepLogEntry] {
         guard let data = UserDefaults.standard.data(forKey: entriesKey),
-              let decoded = try? JSONDecoder().decode([ManualSleepLogEntry].self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([ManualSleepLogEntry].self, from: data) else {
             return []
         }
         return decoded
     }
 
     private static func persist(_ entries: [ManualSleepLogEntry]) {
-        guard let data = try? JSONEncoder().encode(entries) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(entries) else { return }
         UserDefaults.standard.set(data, forKey: entriesKey)
     }
 }

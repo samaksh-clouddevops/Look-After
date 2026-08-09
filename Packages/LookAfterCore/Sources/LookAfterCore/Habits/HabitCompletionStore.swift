@@ -7,10 +7,10 @@ public enum HabitCompletionStore {
 
     public static func load() -> [String: [String]] {
         guard let data = UserDefaults.standard.data(forKey: key) else { return [:] }
-        if let decoded = try? JSONDecoder().decode([String: [String]].self, from: data) {
+        if let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([String: [String]].self, from: data) {
             return decoded
         }
-        if let legacy = try? JSONDecoder().decode([String: String].self, from: data) {
+        if let legacy = try? SharedFormatters.jsonDecoderSeconds.decode([String: String].self, from: data) {
             let migrated = legacy.mapValues { [$0] }
             save(migrated)
             return migrated
@@ -25,7 +25,7 @@ public enum HabitCompletionStore {
     }
 
     public static func save(_ completions: [String: [String]]) {
-        if let data = try? JSONEncoder().encode(completions) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(completions) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }

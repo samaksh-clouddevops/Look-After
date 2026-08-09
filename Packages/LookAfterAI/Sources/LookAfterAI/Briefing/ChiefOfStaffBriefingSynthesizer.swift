@@ -27,7 +27,7 @@ public final class BriefingNarrativeCache: @unchecked Sendable {
             fileURL = nil
         }
         if let fileURL, let data = try? Data(contentsOf: fileURL),
-           let loaded = try? JSONDecoder().decode(BriefingNarrativeCacheEntry.self, from: data) {
+           let loaded = try? SharedFormatters.jsonDecoderSeconds.decode(BriefingNarrativeCacheEntry.self, from: data) {
             entry = loaded
         }
     }
@@ -53,7 +53,7 @@ public final class BriefingNarrativeCache: @unchecked Sendable {
         lock.lock()
         entry = e
         lock.unlock()
-        if let fileURL, let data = try? JSONEncoder().encode(e) {
+        if let fileURL, let data = try? SharedFormatters.jsonEncoderSeconds.encode(e) {
             try? data.write(to: fileURL, options: [.atomic])
         }
     }

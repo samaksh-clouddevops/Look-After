@@ -9,7 +9,7 @@ public enum MedicationStore {
     public static func load() -> [Medication] {
         if let cachedMedications { return cachedMedications }
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let medications = try? JSONDecoder().decode([Medication].self, from: data) else {
+              let medications = try? SharedFormatters.jsonDecoderSeconds.decode([Medication].self, from: data) else {
             cachedMedications = []
             return []
         }
@@ -18,7 +18,7 @@ public enum MedicationStore {
     }
 
     public static func save(_ medications: [Medication]) {
-        if let data = try? JSONEncoder().encode(medications) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(medications) {
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         }
         cachedMedications = medications

@@ -243,7 +243,7 @@ public final class GLMKeyManager: @unchecked Sendable {
     private func loadRecords() {
         guard
             let data = UserDefaults.standard.data(forKey: metadataKey),
-            let decoded = try? JSONDecoder().decode([GLMKeyRecord].self, from: data)
+            let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([GLMKeyRecord].self, from: data)
         else {
             records = []
             return
@@ -252,7 +252,7 @@ public final class GLMKeyManager: @unchecked Sendable {
     }
 
     private func persistLocked() {
-        if let data = try? JSONEncoder().encode(records) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(records) {
             UserDefaults.standard.set(data, forKey: metadataKey)
         }
     }
@@ -270,7 +270,7 @@ public final class GLMKeyManager: @unchecked Sendable {
         guard records.isEmpty else { return }
 
         if let legacyData = UserDefaults.standard.data(forKey: legacyRecordsKey),
-           let legacyRecords = try? JSONDecoder().decode([LegacyKeyRecord].self, from: legacyData) {
+           let legacyRecords = try? SharedFormatters.jsonDecoderSeconds.decode([LegacyKeyRecord].self, from: legacyData) {
             for legacy in legacyRecords {
                 guard let secret = try? secretStore.load(account: legacy.id) else { continue }
                 let record = GLMKeyRecord(
