@@ -113,6 +113,56 @@ public enum FlexibleISO8601Date {
     }
 }
 
+// MARK: - Shared formatters (PERF-018)
+
+/// Thread-safe-enough for MainActor UI + short-lived off-main encoding.
+/// Prefer these over constructing `DateFormatter()` / `JSONEncoder()` in row bodies.
+public enum SharedFormatters {
+    public static let iso8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    public static let iso8601NoFraction: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    /// Short time like `3:45 PM` — MainActor UI use.
+    @MainActor
+    public static let shortTime: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.autoupdatingCurrent
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
+
+    /// Medium date like `Aug 9, 2026`.
+    @MainActor
+    public static let mediumDate: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.autoupdatingCurrent
+        f.timeStyle = .none
+        f.dateStyle = .medium
+        return f
+    }()
+
+    public static let jsonEncoderSeconds: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .secondsSince1970
+        return e
+    }()
+
+    public static let jsonDecoderSeconds: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .secondsSince1970
+        return d
+    }()
+}
+
 // MARK: - Double Extensions
 
 extension Double {
