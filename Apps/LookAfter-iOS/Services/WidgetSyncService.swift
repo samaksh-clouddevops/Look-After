@@ -109,13 +109,25 @@ final class WidgetSyncService {
             let minutes = max(0, Int(end.timeIntervalSince(Date()) / 60))
             return String(minutes)
         }()
+        // Avoid O(n) string join of all task IDs — count + hash of first/last is enough (PERF-009).
+        let taskSig: String = {
+            let ids = snapshot.tasks.map(\.id)
+            guard !ids.isEmpty else { return "0" }
+            var hasher = Hasher()
+            hasher.combine(ids.count)
+            hasher.combine(ids.first)
+            hasher.combine(ids.last)
+            // Sample mid id when lists are long.
+            if ids.count > 2 { hasher.combine(ids[ids.count / 2]) }
+            return "\(ids.count):\(hasher.finalize())"
+        }()
         return [
             snapshot.topTaskTitle ?? "",
             String(snapshot.activeTaskCount),
             String(snapshot.completedTodayCount),
             String(snapshot.energyScore),
             snapshot.heroTaskId ?? "",
-            snapshot.tasks.map(\.id).joined(separator: ","),
+            taskSig,
             snapshot.recommendation,
             snapshot.pinScheduleLabel,
             snapshot.pinConstraintLabel,
