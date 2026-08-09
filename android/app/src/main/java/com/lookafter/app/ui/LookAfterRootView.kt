@@ -32,6 +32,8 @@ import com.lookafter.app.ui.motion.CalmAnimatedContent
 import com.lookafter.app.ui.navigation.AppDestination
 import com.lookafter.app.ui.onboarding.OnboardingScreen
 import com.lookafter.app.ui.review.WeeklyReviewScreen
+import com.lookafter.app.ui.haptics.rememberLookAfterHaptics
+import com.lookafter.app.ui.settings.NotificationSettingsScreen
 import com.lookafter.app.ui.settings.PrivacySettingsScreen
 import com.lookafter.app.ui.simulation.SimulationScreen
 import com.lookafter.app.ui.tasks.TaskEditorSheet
@@ -75,7 +77,9 @@ fun LookAfterRootView(
     val bodyDoubleRoom by viewModel.bodyDoubleRoom.collectAsStateWithLifecycle()
     val isStreaming by viewModel.streamingCoach.collectAsStateWithLifecycle()
     val webRtcState by viewModel.webRtcConnectionState.collectAsStateWithLifecycle()
+    val notificationPrefs by viewModel.notificationPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
 
     val importBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -98,6 +102,7 @@ fun LookAfterRootView(
     var inboxOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
     var privacyOpen by remember { mutableStateOf(false) }
+    var notificationSettingsOpen by remember { mutableStateOf(false) }
     var bodyDoubleRoomOpen by remember { mutableStateOf(false) }
     var captureOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
@@ -168,7 +173,8 @@ fun LookAfterRootView(
             LookAfterBottomNav(
                 current = when {
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
-                        insightsOpen || privacyOpen || bodyDoubleRoomOpen -> AppDestination.YOU
+                        insightsOpen || privacyOpen || notificationSettingsOpen ||
+                        bodyDoubleRoomOpen -> AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
@@ -178,6 +184,7 @@ fun LookAfterRootView(
                     inboxOpen = false
                     insightsOpen = false
                     privacyOpen = false
+                    notificationSettingsOpen = false
                     bodyDoubleRoomOpen = false
                     destination = dest.name
                 },
@@ -211,6 +218,7 @@ fun LookAfterRootView(
             inboxOpen -> "inbox"
             insightsOpen -> "insights"
             privacyOpen -> "privacy"
+            notificationSettingsOpen -> "notif"
             bodyDoubleRoomOpen -> "bd-room"
             reviewOpen -> "review"
             else -> current.name
@@ -292,6 +300,12 @@ fun LookAfterRootView(
                     onBack = { privacyOpen = false },
                     modifier = Modifier.fillMaxSize(),
                 )
+                notificationSettingsOpen -> NotificationSettingsScreen(
+                    prefs = notificationPrefs,
+                    onChange = viewModel::updateNotificationPreferences,
+                    onBack = { notificationSettingsOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
                 reviewOpen -> WeeklyReviewScreen(state = state, modifier = Modifier.fillMaxSize())
                 current == AppDestination.BRIEFING -> BriefingScreen(
                     state = state,
@@ -306,12 +320,21 @@ fun LookAfterRootView(
                 )
                 current == AppDestination.TODAY -> TodayTimelineScreen(
                     state = state,
-                    onIntent = viewModel::dispatch,
+                    onIntent = { intent ->
+                        when (intent) {
+                            is LookAfterIntent.CompleteTask,
+                            is LookAfterIntent.ParkTask,
+                            -> haptics.tick()
+                            else -> Unit
+                        }
+                        viewModel.dispatch(intent)
+                    },
                     restoredFromDisk = restoredFromDisk,
                     hydrationComplete = hydrationComplete,
                     heroTitle = brainTick.decision.heroTitle,
                     heroReason = brainTick.decision.reason,
                     onStartFocus = {
+                        haptics.soft()
                         viewModel.startFocusForHero()
                         focusOpen = true
                     },
@@ -390,11 +413,18 @@ fun LookAfterRootView(
                     onOpenPrivacySettings = {
                         reviewOpen = false; medicationOpen = false; healthOpen = false
                         inboxOpen = false; insightsOpen = false
+                        notificationSettingsOpen = false
                         bodyDoubleRoomOpen = false; privacyOpen = true
+                    },
+                    onOpenNotificationSettings = {
+                        reviewOpen = false; medicationOpen = false; healthOpen = false
+                        inboxOpen = false; insightsOpen = false; privacyOpen = false
+                        bodyDoubleRoomOpen = false; notificationSettingsOpen = true
                     },
                     onOpenBodyDoubleRoom = {
                         reviewOpen = false; medicationOpen = false; healthOpen = false
                         inboxOpen = false; insightsOpen = false; privacyOpen = false
+                        notificationSettingsOpen = false
                         bodyDoubleRoomOpen = true
                     },
                     onConnectCalendar = { viewModel.ensureCalendarPermission() },

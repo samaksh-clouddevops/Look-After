@@ -14,6 +14,7 @@ import com.lookafter.app.brain.HttpLlmPlanService
 import com.lookafter.app.brain.StreamingLlmClient
 import com.lookafter.app.diagnostics.CrashReporting
 import com.lookafter.app.notifications.LookAfterNotifier
+import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.sync.SyncTransportFactory
 import com.lookafter.core.adhd.IceServerConfig
@@ -72,6 +73,9 @@ class LookAfterApplication : Application() {
     lateinit var notifier: LookAfterNotifier
         private set
 
+    lateinit var notificationPrefs: NotificationPreferencesStore
+        private set
+
     lateinit var coachService: CoachService
         private set
 
@@ -110,6 +114,7 @@ class LookAfterApplication : Application() {
             fallback = StubCalendarEventsProvider(demoCalendar()),
         )
         notifier = LookAfterNotifier(this).also { it.ensureChannels() }
+        notificationPrefs = NotificationPreferencesStore(this)
         authSessionStore = AuthSessionStore(this).also { it.ensureAnonymous() }
         // OpenAI-compatible HTTPS coach when LOOKAFTER_LLM_API_KEY is set; else offline.
         val httpCoach = HttpLlmCoachService(

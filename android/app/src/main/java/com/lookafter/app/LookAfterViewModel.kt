@@ -12,6 +12,7 @@ import com.lookafter.app.diagnostics.CrashReporting
 import com.lookafter.app.execution.SystemFocusController
 import com.lookafter.app.health.HealthConnectRepository
 import com.lookafter.app.notifications.LookAfterNotifier
+import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
@@ -40,6 +41,7 @@ import com.lookafter.core.inbox.InboxIntent
 import com.lookafter.core.inbox.InboxState
 import com.lookafter.core.insights.InsightsEngine
 import com.lookafter.core.insights.InsightsSnapshot
+import com.lookafter.core.notifications.NotificationPreferences
 import com.lookafter.core.notifications.NotificationPolicy
 import com.lookafter.core.onboarding.OnboardingEngine
 import com.lookafter.core.onboarding.OnboardingIntent
@@ -72,6 +74,7 @@ class LookAfterViewModel(
     private val healthRepo: HealthConnectRepository = app.healthRepository
     private val calendar: CalendarEventsProvider = app.calendarProvider
     private val notifier: LookAfterNotifier = app.notifier
+    private val notificationPrefsStore: NotificationPreferencesStore = app.notificationPrefs
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -83,8 +86,21 @@ class LookAfterViewModel(
     private var streamJob: Job? = null
     private var webRtc: WebRtcPeerController? = null
 
+    val notificationPreferences: StateFlow<NotificationPreferences> = notificationPrefsStore.state
+
     private val _ambientEnabled = MutableStateFlow(true)
     val ambientEnabled: StateFlow<Boolean> = _ambientEnabled.asStateFlow()
+
+    val hapticsEnabled: Boolean
+        get() = notificationPreferences.value.hapticsEnabled
+
+    fun updateNotificationPreferences(prefs: NotificationPreferences) {
+        notificationPrefsStore.set(prefs)
+    }
+
+    fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
+        notificationPrefsStore.update(transform)
+    }
 
     private val _cameraBodyDouble = MutableStateFlow(false)
     val cameraBodyDoubleEnabled: StateFlow<Boolean> = _cameraBodyDouble.asStateFlow()
@@ -193,14 +209,17 @@ class LookAfterViewModel(
 
     init {
         viewModelScope.launch { refreshCalendarDay() }
-        // Re-plan notifications whenever brain tick updates.
+        // Re-plan notifications whenever brain tick or prefs update.
         viewModelScope.launch {
-            brainTick.collect { tick ->
-                val inFocus = focus.value.phase == FocusSessionPhase.RUNNING
+            combine(brainTick, notificationPreferences, focus) { tick, prefs, f ->
+                Triple(tick, prefs, f)
+            }.collect { (tick, prefs, f) ->
+                val inFocus = f.phase == FocusSessionPhase.RUNNING
                 val plans = NotificationPolicy.plan(
                     life = engine.currentState,
                     world = tick.world,
                     inFocusSession = inFocus,
+                    config = prefs.toPolicyConfig(),
                 )
                 notifier.scheduleAll(plans)
             }
@@ -268,16 +287,26 @@ class LookAfterViewModel(
         val next = FocusSessionEngine.reduce(_focus.value, intent)
         _focus.value = next
         syncSystemFocus(previousPhase = previous, session = next)
-        if (next.phase == FocusSessionPhase.COMPLETED) {
-            notifier.postNow(
-                com.lookafter.core.notifications.PlannedNotification(
-                    id = "focus-complete",
-                    kind = com.lookafter.core.notifications.NotificationKind.FOCUS_COMPLETE,
-                    title = if (next.emergencyMode) "Emergency block complete" else "Focus complete",
-                    body = next.taskTitle.ifBlank { "Session finished" },
-                    fireAt = java.time.Instant.now(),
-                ),
-            )
+        if (next.phase == FocusSessionPhase.COMPLETED &&
+            notificationPreferences.value.focusCompleteEnabled
+        ) {
+            val prefs = notificationPreferences.value
+            val fireAt = java.time.Instant.now()
+            if (!prefs.isInQuietHours(fireAt)) {
+                notifier.postNow(
+                    com.lookafter.core.notifications.PlannedNotification(
+                        id = "focus-complete",
+                        kind = com.lookafter.core.notifications.NotificationKind.FOCUS_COMPLETE,
+                        title = if (next.emergencyMode) {
+                            "Emergency block complete"
+                        } else {
+                            "Focus complete"
+                        },
+                        body = next.taskTitle.ifBlank { "Session finished" },
+                        fireAt = fireAt,
+                    ),
+                )
+            }
         }
     }
 

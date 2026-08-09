@@ -4,9 +4,9 @@ import com.lookafter.core.brain.MedicationWorldStatus
 import com.lookafter.core.brain.WorldState
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.models.ConstraintType
-import com.lookafter.core.models.TaskStatus
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 
 enum class NotificationKind { MEDICATION_DUE, ANCHORED_SOON, DAILY_BRIEFING, FOCUS_COMPLETE }
 
@@ -20,15 +20,19 @@ data class PlannedNotification(
 
 data class NotificationPolicyConfig(
     val medicationsEnabled: Boolean = true,
+    val anchoredEnabled: Boolean = true,
+    val briefingEnabled: Boolean = true,
+    val focusCompleteEnabled: Boolean = true,
     val anchoredLeadMinutes: Int = 15,
-    val quietHoursStart: Int = 22, // 22:00 local hours as wall int — pure policy uses Instant windows
-    val quietHoursEnd: Int = 7,
+    val quietHoursEnabled: Boolean = true,
+    val quietHoursStartHour: Int = 22,
+    val quietHoursEndHour: Int = 7,
     val suppressDuringFocus: Boolean = true,
 )
 
 /**
  * Pure notification planner — no Android NotificationManager.
- * App layer schedules the returned [PlannedNotification]s.
+ * Respects preference toggles + quiet hours. App layer schedules results.
  */
 object NotificationPolicy {
 
@@ -38,8 +42,21 @@ object NotificationPolicy {
         now: Instant = Instant.now(),
         inFocusSession: Boolean = false,
         config: NotificationPolicyConfig = NotificationPolicyConfig(),
+        zone: ZoneId = ZoneId.systemDefault(),
     ): List<PlannedNotification> {
         if (config.suppressDuringFocus && inFocusSession) return emptyList()
+
+        val prefs = NotificationPreferences(
+            medicationsEnabled = config.medicationsEnabled,
+            anchoredEnabled = config.anchoredEnabled,
+            briefingEnabled = config.briefingEnabled,
+            focusCompleteEnabled = config.focusCompleteEnabled,
+            anchoredLeadMinutes = config.anchoredLeadMinutes,
+            quietHoursEnabled = config.quietHoursEnabled,
+            quietHoursStartHour = config.quietHoursStartHour,
+            quietHoursEndHour = config.quietHoursEndHour,
+            suppressDuringFocus = config.suppressDuringFocus,
+        )
 
         val out = mutableListOf<PlannedNotification>()
 
@@ -58,24 +75,25 @@ object NotificationPolicy {
             }
         }
 
-        life.activeTasks
-            .filter { it.status.isActive && it.constraintType == ConstraintType.ANCHORED }
-            .forEach { task ->
-                val start = task.scheduledStart ?: return@forEach
-                val lead = start.minus(Duration.ofMinutes(config.anchoredLeadMinutes.toLong()))
-                if (!lead.isBefore(now) && Duration.between(now, lead).toMinutes() <= 24 * 60) {
-                    out += PlannedNotification(
-                        id = "anchored-${task.id}",
-                        kind = NotificationKind.ANCHORED_SOON,
-                        title = "Upcoming: ${task.title}",
-                        body = "Starts in ${config.anchoredLeadMinutes} minutes",
-                        fireAt = lead,
-                    )
+        if (config.anchoredEnabled) {
+            life.activeTasks
+                .filter { it.status.isActive && it.constraintType == ConstraintType.ANCHORED }
+                .forEach { task ->
+                    val start = task.scheduledStart ?: return@forEach
+                    val lead = start.minus(Duration.ofMinutes(config.anchoredLeadMinutes.toLong()))
+                    if (!lead.isBefore(now) && Duration.between(now, lead).toMinutes() <= 24 * 60) {
+                        out += PlannedNotification(
+                            id = "anchored-${task.id}",
+                            kind = NotificationKind.ANCHORED_SOON,
+                            title = "Upcoming: ${task.title}",
+                            body = "Starts in ${config.anchoredLeadMinutes} minutes",
+                            fireAt = lead,
+                        )
+                    }
                 }
-            }
+        }
 
-        // Soft morning briefing nudge once after 07:30 if many open tasks.
-        if (world.openTaskCount >= 3 && world.completedTodayCount == 0) {
+        if (config.briefingEnabled && world.openTaskCount >= 3 && world.completedTodayCount == 0) {
             out += PlannedNotification(
                 id = "briefing-morning",
                 kind = NotificationKind.DAILY_BRIEFING,
@@ -85,6 +103,8 @@ object NotificationPolicy {
             )
         }
 
-        return out.distinctBy { it.id }
+        return out
+            .filterNot { prefs.isInQuietHours(it.fireAt, zone) }
+            .distinctBy { it.id }
     }
 }

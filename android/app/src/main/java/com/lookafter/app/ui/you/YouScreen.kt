@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Settings
@@ -62,6 +63,7 @@ fun YouScreen(
     onOpenInbox: () -> Unit = {},
     onOpenInsights: () -> Unit = {},
     onOpenPrivacySettings: () -> Unit = {},
+    onOpenNotificationSettings: () -> Unit = {},
     onOpenBodyDoubleRoom: () -> Unit = {},
     onConnectCalendar: () -> Unit = {},
     calendarEventCount: Int = 0,
@@ -317,6 +319,14 @@ fun YouScreen(
                 title = "What-If Simulation",
                 subtitle = "Dry-run a meeting before committing",
                 onClick = onOpenSimulation,
+            )
+        }
+        item {
+            YouRow(
+                icon = Icons.Outlined.Notifications,
+                title = "Notifications",
+                subtitle = "Meds, anchored, briefing, quiet hours",
+                onClick = onOpenNotificationSettings,
             )
         }
         item {
