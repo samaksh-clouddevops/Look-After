@@ -12,20 +12,34 @@
 
 | Area | Health | Top issue |
 |------|--------|-----------|
-| Focus session publish | Fair | 1 Hz `@Published` elapsed while any view observes `ADHDViewModel` |
-| Task list SwiftUI | **Poor** | Animation re-maps full ID array; time-display dict is `@Published` |
-| Task persistence | **Poor** | Every write = `DELETE ALL` + re-`INSERT` all rows |
+| Focus session publish | **Improved** | Overlay 1 Hz; shell should use `focusDisplayElapsed` (5s) — **PERF-014 fixed** |
+| Task list SwiftUI | **Improved** | Animation on revision; batched time-display — **PERF-012/013/017 fixed** |
+| Task persistence | **Improved** | Upsert/delete-by-id on mutation paths — **PERF-011 fixed** |
 | Schedule reconcile | Fair | Many loops still O(n) with linear lookups; partially batched |
 | Context / brain loop | Good | Mitigated (90s + alternate light refresh) |
 | Live Activity fan-out | Good | Coalesced |
-| Codecs / formatters | Fair | Many per-call `JSONEncoder()` / `DateFormatter()` |
-| Large lists | Mixed | Inbox uses LazyVStack; TaskList uses List (OK) but thrashy invalidation |
+| Codecs / formatters | **Improved** | `SharedFormatters` — **PERF-018** (migrate remaining call sites over time) |
+| Large lists | Mixed | Inbox uses LazyVStack; TaskList thrash reduced |
+
+---
+
+## Implementation status (code landed)
+
+| ID | Status | Commit theme |
+|----|--------|--------------|
+| PERF-011 | **Fixed** | `upsert` / `upsertMany` / `deleteIds`; repo create/update/delete use them |
+| PERF-012 | **Fixed** | TaskList animates `tasksContentRevision` |
+| PERF-013 | **Fixed** | Stage local displays → one publish; AI refine concurrent×3 |
+| PERF-014 | **Fixed** | `focusDisplayElapsed` 5s buckets; overlay keeps 1 Hz elapsed |
+| PERF-017 | **Fixed** | Cap 40 tasks + concurrent refine group |
+| PERF-018 | **Partial** | `SharedFormatters` + Firestore encode; migrate more call sites later |
+| PERF-015/016/019+ | Open | Next wave |
 
 ---
 
 ## Critical (ship-risk under load)
 
-### PERF-011 — SQLite `replaceAll` is O(all tasks) per mutation
+### PERF-011 — SQLite `replaceAll` is O(all tasks) per mutation **(FIXED)**
 
 **Where:** `TaskSQLiteStore.replaceAll`  
 ```text
