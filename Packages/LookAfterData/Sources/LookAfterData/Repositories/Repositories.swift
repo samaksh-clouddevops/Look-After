@@ -226,7 +226,15 @@ public final class TaskRepository: ObservableObject {
     }
 
     /// Push task to Firestore without blocking the caller.
+    /// When `useSyncOutbox` is on, enqueue durable retry instead of fire-and-forget (Phase 2).
     private func syncTaskToFirestore(_ task: LifeTask, merge: Bool = false) {
+        let uid = task.userId.isEmpty ? firebase.resolvedUserId : task.userId
+        if ArchitectureFeatureFlags.useSyncOutbox {
+            SyncOutboxWorker.shared.enqueueTaskUpsert(userId: uid, task: task)
+            SyncOutboxWorker.shared.scheduleDrain(userId: uid)
+            return
+        }
+
         Task {
             guard let ref = firebase.userCollection(collection) else { return }
 
@@ -246,6 +254,13 @@ public final class TaskRepository: ObservableObject {
     }
 
     private func deleteTaskFromFirestore(_ id: String) {
+        let uid = firebase.resolvedUserId
+        if ArchitectureFeatureFlags.useSyncOutbox {
+            SyncOutboxWorker.shared.enqueueTaskDelete(userId: uid, taskId: id)
+            SyncOutboxWorker.shared.scheduleDrain(userId: uid)
+            return
+        }
+
         Task {
             guard let ref = firebase.userCollection(collection) else { return }
             try? await ref.document(id).delete()

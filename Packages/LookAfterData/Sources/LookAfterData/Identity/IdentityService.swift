@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import LookAfterCore
 
 /// High-level identity for session lifecycle (Phase 1 WP 1.1).
@@ -48,12 +49,12 @@ public final class IdentityService: ObservableObject, IdentityProviding {
     @Published public private(set) var generation: UInt64 = 0
 
     private let firebase: FirebaseManager
-    private var pollTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
     public init(firebase: FirebaseManager = .shared) {
         self.firebase = firebase
         refreshFromFirebase()
-        startPolling()
+        bindFirebase()
     }
 
     public var resolvedUserId: String {
@@ -61,8 +62,7 @@ public final class IdentityService: ObservableObject, IdentityProviding {
     }
 
     public func stop() {
-        pollTask?.cancel()
-        pollTask = nil
+        cancellables.removeAll()
     }
 
     /// Call after auth APIs or when app becomes active.
@@ -109,15 +109,26 @@ public final class IdentityService: ObservableObject, IdentityProviding {
         generation &+= 1
     }
 
-    /// Lightweight poll — FirebaseManager is ObservableObject; full Combine bridge can replace this later.
-    private func startPolling() {
-        pollTask?.cancel()
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
-                guard let self, !Task.isCancelled else { return }
-                self.refreshFromFirebase()
+    /// React to FirebaseManager @Published fields (no polling).
+    private func bindFirebase() {
+        cancellables.removeAll()
+        firebase.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                // objectWillChange fires before property mutation; defer to next runloop turn.
+                DispatchQueue.main.async {
+                    self?.refreshFromFirebase()
+                }
             }
-        }
+            .store(in: &cancellables)
+
+        // Also observe concrete properties when available via publisher projections.
+        firebase.$isAuthenticated
+            .combineLatest(firebase.$currentUserId, firebase.$userEmail)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _, _, _ in
+                self?.refreshFromFirebase()
+            }
+            .store(in: &cancellables)
     }
 }

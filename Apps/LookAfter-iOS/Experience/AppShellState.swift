@@ -238,6 +238,12 @@ final class AppShellState: ObservableObject {
             guard identityService.generation == identityGeneration else { return }
         }
 
+        // Phase 2: attach Firestore transport and drain outbox when enabled.
+        if ArchitectureFeatureFlags.useSyncOutbox {
+            SyncOutboxWorker.shared.setTransport(FirestoreSyncOutboxTransport())
+            SyncOutboxWorker.shared.scheduleDrain(userId: userId)
+        }
+
         BackgroundAnalyticsScheduler.shared.start(userId: userId)
 
         if let aiContext = BackgroundAnalyticsService.shared.cachedAIContext(userId: userId) {

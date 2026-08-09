@@ -1,14 +1,14 @@
 # Architecture / infra phase status
 
-**Branch:** `feature/arch-infra-implementation`  
-**Plan:** [MASTER-IMPLEMENTATION-PLAN.md](./MASTER-IMPLEMENTATION-PLAN.md)  
+**Branch:** `feature/arch-infra-implementation`
+**Plan:** [MASTER-IMPLEMENTATION-PLAN.md](./MASTER-IMPLEMENTATION-PLAN.md)
 **Updated:** 2026-08-09
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| **0 Foundations** | **In progress / mostly done** | Flags, ADRs 005–008, env matrix, singleton inventory, CI notes, unit tests |
-| **1 Identity + Session** | **Started** | `IdentityService`, `SessionContainer`, bootstrap generation gate (flag off by default) |
-| 2 Sync outbox | Not started | |
+| **0 Foundations** | **Done** | Flags, ADRs 005–008, env matrix, inventory, CI, tests |
+| **1 Identity + Session** | **Mostly done** | IdentityService (Combine), SessionContainer, bootstrap gate; flag off by default |
+| **2 Sync outbox** | **WP 2.1 landed** | Store + worker + task repo enqueue; Firestore transport; flag off by default |
 | 3 Brain façade / proxy-only | Not started | Flag + ADR only |
 | 4 Split shell / Features | Not started | |
 | 5 Event bus | Not started | |
@@ -20,33 +20,34 @@
 
 | Artifact | Path |
 |----------|------|
-| Feature flags | `Packages/LookAfterCore/.../Config/ArchitectureFeatureFlags.swift` |
-| Flag tests | `Packages/LookAfterCore/Tests/.../ArchitectureFeatureFlagsTests.swift` |
-| Identity | `Packages/LookAfterData/.../Identity/IdentityService.swift` |
-| Session | `Packages/LookAfterData/.../Session/SessionContainer.swift` |
-| Identity tests | `Packages/LookAfterData/Tests/.../IdentityServiceTests.swift` |
-| Bootstrap gate | `Apps/.../AppShellState.swift` |
-| ADRs | `adr/ADR-005` … `ADR-008` |
-| Env matrix | `environment-matrix.md` |
-| Singleton inventory | `singleton-inventory.md` |
+| Feature flags | `ArchitectureFeatureFlags.swift` |
+| Identity + Combine | `IdentityService.swift` |
+| Session | `SessionContainer.swift` |
+| Outbox store/worker | `Sync/SyncOutbox*.swift` |
+| Task cloud path | `Repositories.swift` → outbox when flag on |
+| Bootstrap drain | `AppShellState.runBootstrapWork` |
+| Tests | `ArchitectureFeatureFlagsTests`, `IdentityServiceTests`, `SyncOutboxStoreTests` |
+| ADRs / env / inventory | `Documentation/architecture/` |
 
-## How to enable Session path (dev)
+## How to enable (dev)
 
 ```swift
 ArchitectureFeatureFlags.useSessionContainer = true
+ArchitectureFeatureFlags.useSyncOutbox = true
 ```
 
-Default remains **false** (legacy bootstrap) until soak.
+Defaults remain **false** until soak.
 
-## Next PR targets
+## Next work packages
 
-1. Finish Phase 0: link plan from `Documentation/future-work.md` / architecture README if present  
-2. Phase 1 soak: optional Combine bridge Identity ← FirebaseManager (replace 500ms poll)  
-3. Phase 2 WP 2.1: `sync_outbox` table + OutboxWorker  
+1. Phase 2 WP 2.2 — Inbox SQLite local-first
+2. Phase 3 — BrainFacade scaffold
+3. BG task hook to call `SyncOutboxWorker.drainOnce`
 
 ## Test commands
 
 ```bash
 swift test --package-path Packages/LookAfterCore --filter ArchitectureFeatureFlagsTests
 swift test --package-path Packages/LookAfterData --filter IdentityServiceTests
+swift test --package-path Packages/LookAfterData --filter SyncOutboxStoreTests
 ```
