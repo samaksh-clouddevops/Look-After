@@ -20,14 +20,17 @@ import com.lookafter.app.webrtc.RoomSignalingFactory
 import com.lookafter.app.webrtc.RoomSignalingTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
+import com.lookafter.core.adhd.BodyDoublePeer
 import com.lookafter.core.adhd.BodyDoubleRoomEngine
 import com.lookafter.core.adhd.BodyDoubleRoomIntent
+import com.lookafter.core.adhd.BodyDoubleRoomPhase
 import com.lookafter.core.adhd.BodyDoubleRoomState
+import com.lookafter.core.adhd.BodyDoubleSessionSummary
 import com.lookafter.core.adhd.BodyDoubleSignal
 import com.lookafter.core.adhd.BodyDoubleSignalType
-import com.lookafter.core.adhd.BodyDoublePeer
 import com.lookafter.core.adhd.RoomPresence
 import com.lookafter.core.adhd.RoomSignalEnvelope
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import com.lookafter.core.adhd.FocusSessionEngine
 import com.lookafter.core.adhd.FocusSessionIntent
@@ -107,9 +110,59 @@ class LookAfterViewModel(
     private var lastAutoHeroKey: String? = null
     private val lastSignalCount = AtomicInteger(0)
     private val knownRemotePeers = mutableSetOf<String>()
+    private var sessionStartedAt: Instant? = null
+    private var sessionOfferer: Boolean = false
+    private var lastRemoteForOffer: String? = null
+    private val sessionReachedConnected = AtomicBoolean(false)
+    private val sessionFocusStarted = AtomicBoolean(false)
 
     val roomSignalingName: String
         get() = roomSignal?.name ?: "none"
+
+    private val _videoEnabled = MutableStateFlow(true)
+    val roomVideoEnabled: StateFlow<Boolean> = _videoEnabled.asStateFlow()
+
+    private val _audioEnabled = MutableStateFlow(false)
+    val roomAudioEnabled: StateFlow<Boolean> = _audioEnabled.asStateFlow()
+
+    private val _autoFocusOnConnect = MutableStateFlow(true)
+    val autoFocusOnConnect: StateFlow<Boolean> = _autoFocusOnConnect.asStateFlow()
+
+    private val _lastSessionSummary = MutableStateFlow<BodyDoubleSessionSummary?>(null)
+    val lastSessionSummary: StateFlow<BodyDoubleSessionSummary?> = _lastSessionSummary.asStateFlow()
+
+    private val _roomStatusMessage = MutableStateFlow<String?>(null)
+    val roomStatusMessage: StateFlow<String?> = _roomStatusMessage.asStateFlow()
+
+    fun setRoomVideoEnabled(enabled: Boolean) {
+        _videoEnabled.value = enabled
+        webRtc?.setLocalVideoEnabled(enabled)
+    }
+
+    fun setRoomAudioEnabled(enabled: Boolean) {
+        _audioEnabled.value = enabled
+        webRtc?.setLocalAudioEnabled(enabled)
+    }
+
+    fun setAutoFocusOnConnect(enabled: Boolean) {
+        _autoFocusOnConnect.value = enabled
+    }
+
+    fun clearSessionSummary() {
+        _lastSessionSummary.value = null
+    }
+
+    fun reconnectBodyDoubleRoom() {
+        val remote = lastRemoteForOffer
+            ?: _bodyDoubleRoom.value.remotePeers.firstOrNull()?.id
+        if (remote.isNullOrBlank()) {
+            _roomStatusMessage.value = "No partner to reconnect — wait or use Demo join"
+            return
+        }
+        _roomStatusMessage.value = "Reconnecting…"
+        _webRtcState.value = WebRtcPeerController.ConnectionState.SIGNALING
+        webRtc?.reconnectAsOfferer(remote)
+    }
 
     val notificationPreferences: StateFlow<NotificationPreferences> = notificationPrefsStore.state
 
@@ -754,6 +807,8 @@ class LookAfterViewModel(
 
     fun createBodyDoubleRoom(displayName: String) {
         teardownRoomSession(publishLeave = false)
+        _lastSessionSummary.value = null
+        _roomStatusMessage.value = null
         val next = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Create(
@@ -768,19 +823,34 @@ class LookAfterViewModel(
             displayName = displayName,
             isOfferer = true,
         )
-        _lastSyncMessage.value = "Room ${next.roomId} · signal ${roomSignal?.name}"
+        val msg = "Room ${next.roomId} · signal ${roomSignal?.name}"
+        _lastSyncMessage.value = msg
+        _roomStatusMessage.value = "Share code ${next.roomId} — waiting for partner"
     }
 
     fun joinBodyDoubleRoom(roomId: String, displayName: String) {
+        val trimmed = roomId.trim()
+        if (trimmed.isEmpty()) {
+            _roomStatusMessage.value = "Enter a room code to join"
+            _bodyDoubleRoom.value = _bodyDoubleRoom.value.copy(lastError = "Room code required")
+            return
+        }
         teardownRoomSession(publishLeave = false)
+        _lastSessionSummary.value = null
+        _roomStatusMessage.value = null
         val next = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Join(
-                roomId = roomId,
+                roomId = trimmed,
                 displayName = displayName,
                 useCamera = _cameraBodyDouble.value,
             ),
         )
+        if (next.phase == BodyDoubleRoomPhase.FAILED || next.roomId.isNullOrBlank()) {
+            _roomStatusMessage.value = next.lastError ?: "Could not join room"
+            _bodyDoubleRoom.value = next
+            return
+        }
         _bodyDoubleRoom.value = next
         startRoomSession(
             roomId = next.roomId.orEmpty(),
@@ -788,7 +858,9 @@ class LookAfterViewModel(
             displayName = displayName,
             isOfferer = false,
         )
-        _lastSyncMessage.value = "Joined ${next.roomId} · signal ${roomSignal?.name}"
+        val msg = "Joined ${next.roomId} · signal ${roomSignal?.name}"
+        _lastSyncMessage.value = msg
+        _roomStatusMessage.value = "Connecting to host…"
     }
 
     fun demoConnectBodyDoubleRoom() {
@@ -797,6 +869,7 @@ class LookAfterViewModel(
         val remote = next.remotePeers.firstOrNull()
         val rtc = webRtc
         if (rtc != null && remote != null) {
+            lastRemoteForOffer = remote.id
             rtc.startAsOfferer(remote.id)
             next.signals
                 .filter { it.fromPeerId != next.localPeerId }
@@ -810,18 +883,29 @@ class LookAfterViewModel(
                         BodyDoubleRoomIntent.MarkConnected(remote.id),
                     )
                 }
+            // Simulator often jumps straight to CONNECTED.
+            if (rtc.connectionState.value == WebRtcPeerController.ConnectionState.CONNECTED ||
+                next.phase == BodyDoubleRoomPhase.CONNECTED
+            ) {
+                sessionReachedConnected.set(true)
+                _webRtcState.value = WebRtcPeerController.ConnectionState.CONNECTED
+                maybeStartFocusFromRoom()
+            }
         }
         _bodyDoubleRoom.value = next
         _lastSyncMessage.value = "Demo partner joined (local loopback)"
+        _roomStatusMessage.value = "Demo partner connected"
     }
 
     fun leaveBodyDoubleRoom() {
+        finalizeSessionSummary(leftReason = "leave")
         teardownRoomSession(publishLeave = true)
         _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Leave,
         )
         _lastSyncMessage.value = "Left body-double room"
+        _roomStatusMessage.value = null
     }
 
     private fun startRoomSession(
@@ -833,6 +917,13 @@ class LookAfterViewModel(
         if (roomId.isBlank()) return
         knownRemotePeers.clear()
         lastSignalCount.set(0)
+        sessionStartedAt = Instant.now()
+        sessionOfferer = isOfferer
+        lastRemoteForOffer = null
+        sessionReachedConnected.set(false)
+        sessionFocusStarted.set(false)
+        _videoEnabled.value = true
+        _audioEnabled.value = false
         bindWebRtc(localPeerId)
         val signaling = RoomSignalingFactory.create(getApplication(), preferFirestore = true)
         roomSignal = signaling
@@ -856,6 +947,25 @@ class LookAfterViewModel(
         )
     }
 
+    private fun finalizeSessionSummary(leftReason: String) {
+        val started = sessionStartedAt ?: return
+        val room = _bodyDoubleRoom.value
+        val summary = BodyDoubleSessionSummary.fromSession(
+            roomId = room.roomId.orEmpty(),
+            startedAt = started,
+            endedAt = Instant.now(),
+            peers = room.peers,
+            webRtcBackend = _webRtcBackend.value.name.lowercase(),
+            signaling = roomSignal?.name ?: "none",
+            reachedConnected = sessionReachedConnected.get() ||
+                _webRtcState.value == WebRtcPeerController.ConnectionState.CONNECTED,
+            focusStarted = sessionFocusStarted.get(),
+            leftReason = leftReason,
+        )
+        _lastSessionSummary.value = summary
+        sessionStartedAt = null
+    }
+
     private fun onRoomEnvelope(
         envelope: RoomSignalEnvelope,
         localPeerId: String,
@@ -866,6 +976,7 @@ class LookAfterViewModel(
             .filter { !it.left && it.peerId != localPeerId }
             .forEach { p ->
                 if (knownRemotePeers.add(p.peerId)) {
+                    lastRemoteForOffer = p.peerId
                     _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
                         _bodyDoubleRoom.value,
                         BodyDoubleRoomIntent.PeerJoined(
@@ -876,6 +987,7 @@ class LookAfterViewModel(
                             ),
                         ),
                     )
+                    _roomStatusMessage.value = "${p.displayName} joined — negotiating…"
                     // First remote: creator offers
                     if (isOfferer) {
                         webRtc?.startAsOfferer(p.peerId)
@@ -903,13 +1015,9 @@ class LookAfterViewModel(
                         BodyDoubleRoomIntent.SignalReceived(signal),
                     )
                     webRtc?.handleRemoteSignal(signal)
-                    if (signal.type == BodyDoubleSignalType.ANSWER ||
-                        signal.type == BodyDoubleSignalType.OFFER
-                    ) {
-                        // Ensure offerer path if we joined late
-                        if (!isOfferer && signal.type == BodyDoubleSignalType.OFFER) {
-                            // answer created inside WebRtcPeerController
-                        }
+                    if (signal.type == BodyDoubleSignalType.HANGUP) {
+                        _roomStatusMessage.value = "Partner left"
+                        // Don't auto-finalize; user can leave to see summary.
                     }
                 }
         }
@@ -948,12 +1056,55 @@ class LookAfterViewModel(
             roomSignal?.publish(signal)
         }
         webRtc = controller
+        // Apply current mute prefs
+        controller.setLocalVideoEnabled(_videoEnabled.value)
+        controller.setLocalAudioEnabled(_audioEnabled.value)
         viewModelScope.launch {
-            controller.connectionState.collect { _webRtcState.value = it }
+            controller.connectionState.collect { state ->
+                _webRtcState.value = state
+                when (state) {
+                    WebRtcPeerController.ConnectionState.CONNECTED -> {
+                        sessionReachedConnected.set(true)
+                        _roomStatusMessage.value = "Connected"
+                        _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+                            _bodyDoubleRoom.value,
+                            lastRemoteForOffer?.let { BodyDoubleRoomIntent.MarkConnected(it) }
+                                ?: BodyDoubleRoomIntent.SignalReceived(
+                                    BodyDoubleSignal(
+                                        type = BodyDoubleSignalType.PRESENCE,
+                                        fromPeerId = localPeerId,
+                                        at = Instant.now(),
+                                    ),
+                                ),
+                        )
+                        maybeStartFocusFromRoom()
+                    }
+                    WebRtcPeerController.ConnectionState.FAILED -> {
+                        _roomStatusMessage.value = "Connection failed — try Reconnect"
+                        _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+                            _bodyDoubleRoom.value,
+                            BodyDoubleRoomIntent.Fail("WebRTC failed"),
+                        )
+                    }
+                    WebRtcPeerController.ConnectionState.CONNECTING,
+                    WebRtcPeerController.ConnectionState.SIGNALING,
+                    -> _roomStatusMessage.value = "Negotiating media…"
+                    else -> Unit
+                }
+            }
         }
         viewModelScope.launch {
             controller.backend.collect { _webRtcBackend.value = it }
         }
+    }
+
+    private fun maybeStartFocusFromRoom() {
+        if (!_autoFocusOnConnect.value) return
+        if (sessionFocusStarted.getAndSet(true)) return
+        if (focus.value.phase == FocusSessionPhase.RUNNING) return
+        startFocusForHero(emergency = false)
+        _roomStatusMessage.value = "Connected · focus started"
+        _lastSyncMessage.value = "Body double connected · focus running"
     }
 
     fun signInLocal(displayName: String, email: String = "") {
@@ -1049,7 +1200,10 @@ class LookAfterViewModel(
             coachHistoryStore.clear()
             _coachHistory.value = CoachHistoryState.EMPTY
             lastAutoHeroKey = null
+            teardownRoomSession(publishLeave = false)
             _bodyDoubleRoom.value = BodyDoubleRoomState()
+            _lastSessionSummary.value = null
+            _roomStatusMessage.value = null
             _calendarEvents.value = emptyList()
             _ambientEnabled.value = true
             _cameraBodyDouble.value = false

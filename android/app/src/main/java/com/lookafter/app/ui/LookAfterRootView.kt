@@ -81,6 +81,11 @@ fun LookAfterRootView(
     val coachHistory by viewModel.coachHistory.collectAsStateWithLifecycle()
     val webRtcState by viewModel.webRtcConnectionState.collectAsStateWithLifecycle()
     val webRtcBackend by viewModel.webRtcBackend.collectAsStateWithLifecycle()
+    val roomVideoEnabled by viewModel.roomVideoEnabled.collectAsStateWithLifecycle()
+    val roomAudioEnabled by viewModel.roomAudioEnabled.collectAsStateWithLifecycle()
+    val autoFocusOnConnect by viewModel.autoFocusOnConnect.collectAsStateWithLifecycle()
+    val roomStatus by viewModel.roomStatusMessage.collectAsStateWithLifecycle()
+    val sessionSummary by viewModel.lastSessionSummary.collectAsStateWithLifecycle()
     val notificationPrefs by viewModel.notificationPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
@@ -112,6 +117,13 @@ fun LookAfterRootView(
     var focusOpen by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LifeTask?>(null) }
     var hypotheticals by remember { mutableStateOf<List<LifeTask>>(emptyList()) }
+
+    // Body-double auto-focus → open focus overlay.
+    LaunchedEffect(focus.phase, bodyDoubleRoomOpen) {
+        if (bodyDoubleRoomOpen && focus.phase == FocusSessionPhase.RUNNING) {
+            focusOpen = true
+        }
+    }
 
     LaunchedEffect(deepLink) {
         val target = deepLink ?: return@LaunchedEffect
@@ -236,8 +248,18 @@ fun LookAfterRootView(
                     signalingLabel = viewModel.roomSignalingName,
                     webRtcNative = webRtcBackend == com.lookafter.app.webrtc.WebRtcPeerController.Backend.NATIVE,
                     eglContext = viewModel.webRtcEglContext(),
+                    videoEnabled = roomVideoEnabled,
+                    audioEnabled = roomAudioEnabled,
+                    autoFocusOnConnect = autoFocusOnConnect,
+                    statusMessage = roomStatus,
+                    lastSummary = sessionSummary,
                     onAttachLocalRenderer = viewModel::attachWebRtcLocalRenderer,
                     onAttachRemoteRenderer = viewModel::attachWebRtcRemoteRenderer,
+                    onVideoEnabledChange = viewModel::setRoomVideoEnabled,
+                    onAudioEnabledChange = viewModel::setRoomAudioEnabled,
+                    onAutoFocusChange = viewModel::setAutoFocusOnConnect,
+                    onReconnect = viewModel::reconnectBodyDoubleRoom,
+                    onClearSummary = viewModel::clearSessionSummary,
                     onCreate = viewModel::createBodyDoubleRoom,
                     onJoin = viewModel::joinBodyDoubleRoom,
                     onDemoConnect = viewModel::demoConnectBodyDoubleRoom,

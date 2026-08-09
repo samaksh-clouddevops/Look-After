@@ -80,6 +80,31 @@ class NativeWebRtcSession(
         }
     }
 
+    /** Soft mute — disables track without tearing down PeerConnection. */
+    fun setLocalVideoEnabled(enabled: Boolean) {
+        localVideoTrack?.setEnabled(enabled)
+        if (!enabled) {
+            runCatching { videoCapturer?.stopCapture() }
+        } else {
+            runCatching { videoCapturer?.startCapture(640, 480, 24) }
+        }
+    }
+
+    fun setLocalAudioEnabled(enabled: Boolean) {
+        localAudioTrack?.setEnabled(enabled)
+        // Lazy-create mic if user enables after start.
+        if (enabled && localAudioTrack == null && peerConnection != null) {
+            localAudioSource = factory.createAudioSource(MediaConstraints())
+            localAudioTrack = factory.createAudioTrack("AUDIO", localAudioSource)
+            localAudioTrack?.setEnabled(true)
+            peerConnection?.addTrack(localAudioTrack, listOf("ARDAMS"))
+        }
+    }
+
+    fun restartIce() {
+        peerConnection?.restartIce()
+    }
+
     fun startAsOfferer() {
         ensurePeer()
         val constraints = MediaConstraints().apply {

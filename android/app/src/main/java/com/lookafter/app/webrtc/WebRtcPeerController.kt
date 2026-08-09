@@ -63,6 +63,35 @@ class WebRtcPeerController(
         nativeSession?.attachRenderers(pendingLocalRenderer, pendingRemoteRenderer)
     }
 
+    fun setLocalVideoEnabled(enabled: Boolean) {
+        nativeSession?.setLocalVideoEnabled(enabled)
+    }
+
+    fun setLocalAudioEnabled(enabled: Boolean) {
+        nativeSession?.setLocalAudioEnabled(enabled)
+    }
+
+    /** Re-offer after ICE/PC failure (native restartIce + new offer). */
+    fun reconnectAsOfferer(remoteId: String = remotePeerId.orEmpty()) {
+        if (remoteId.isBlank()) {
+            _state.value = ConnectionState.FAILED
+            return
+        }
+        remotePeerId = remoteId
+        _state.value = ConnectionState.SIGNALING
+        if (nativeSession != null) {
+            runCatching {
+                nativeSession!!.restartIce()
+                nativeSession!!.startAsOfferer()
+            }.onFailure {
+                Log.w(TAG, "reconnect failed: ${it.message}")
+                fallbackSimulateOffer(remoteId)
+            }
+        } else {
+            startAsOfferer(remoteId)
+        }
+    }
+
     fun startAsOfferer(remoteId: String) {
         remotePeerId = remoteId
         _state.value = ConnectionState.SIGNALING
@@ -82,7 +111,9 @@ class WebRtcPeerController(
             BodyDoubleSignalType.OFFER -> handleRemoteOffer(signal)
             BodyDoubleSignalType.ANSWER -> handleRemoteAnswer(signal)
             BodyDoubleSignalType.ICE -> handleRemoteIce(signal)
-            BodyDoubleSignalType.HANGUP -> close()
+            BodyDoubleSignalType.HANGUP -> {
+                _state.value = ConnectionState.CLOSED
+            }
             BodyDoubleSignalType.PRESENCE -> Unit
         }
     }
