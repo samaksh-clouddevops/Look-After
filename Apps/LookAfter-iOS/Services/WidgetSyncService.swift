@@ -16,6 +16,8 @@ final class WidgetSyncService {
 
     private var timelineReloadTask: Task<Void, Never>?
     private var lastWidgetSnapshotFingerprint: String?
+    /// Pin-only signature — hero/progress without full task list (PERF-022).
+    private var lastPinOnlyFingerprint: String?
 
     private(set) var lastPinResult: PinNowResult?
 
@@ -184,6 +186,11 @@ final class WidgetSyncService {
     private var pinRefreshTask: Task<Void, Never>?
 
     private func schedulePinRefresh(snapshot: WidgetSnapshot) {
+        // Skip Live Activity push when only non-pin fields changed (PERF-022).
+        let pinFP = pinOnlyFingerprint(snapshot)
+        guard pinFP != lastPinOnlyFingerprint else { return }
+        lastPinOnlyFingerprint = pinFP
+
         pinRefreshTask?.cancel()
         pinRefreshTask = Task { @MainActor in
             await Task.yield()
@@ -197,6 +204,24 @@ final class WidgetSyncService {
                 PinNowLogger.info("sync refreshed pin for \"\(title)\" — \(result.message)")
             }
         }
+    }
+
+    private func pinOnlyFingerprint(_ snapshot: WidgetSnapshot) -> String {
+        let progressBucket = Int((snapshot.pinProgressFraction * 100).rounded(.down) / 5)
+        let remainingBucket: String = {
+            guard let end = snapshot.pinWindowEnd else { return "na" }
+            return String(max(0, Int(end.timeIntervalSince(Date()) / 60)))
+        }()
+        return [
+            snapshot.heroTaskId ?? "",
+            snapshot.resolvedTopTaskTitle ?? snapshot.topTaskTitle ?? "",
+            snapshot.pinScheduleLabel,
+            snapshot.pinConstraintLabel,
+            String(progressBucket),
+            remainingBucket,
+            snapshot.pinNextUpSummary,
+            snapshot.recommendation,
+        ].joined(separator: "|")
     }
 
     func syncFocusActivity(adhdVM: ADHDViewModel) {
