@@ -40,6 +40,7 @@ fun BodyDoubleRoomScreen(
     room: BodyDoubleRoomState,
     webRtcStateLabel: String = "new",
     webRtcBackendLabel: String = "simulator",
+    signalingLabel: String = "local-file",
     webRtcNative: Boolean = false,
     eglContext: EglBase.Context? = null,
     onAttachLocalRenderer: (SurfaceViewRenderer) -> Unit = {},
@@ -86,9 +87,15 @@ fun BodyDoubleRoomScreen(
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
                 )
                 Text(
-                    "WebRTC: $webRtcStateLabel · backend $webRtcBackendLabel",
+                    "WebRTC: $webRtcStateLabel · $webRtcBackendLabel · signal $signalingLabel",
                     style = MaterialTheme.typography.labelMedium,
                     color = LookAfterColors.AccentPrimary,
+                    modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                )
+                Text(
+                    "Share room code with a second device. Demo join still works offline.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
                 room.remotePeers.forEach { peer ->

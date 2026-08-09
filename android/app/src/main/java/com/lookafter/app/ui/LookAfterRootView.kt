@@ -233,6 +233,7 @@ fun LookAfterRootView(
                     room = bodyDoubleRoom,
                     webRtcStateLabel = webRtcState.name.lowercase(),
                     webRtcBackendLabel = webRtcBackend.name.lowercase(),
+                    signalingLabel = viewModel.roomSignalingName,
                     webRtcNative = webRtcBackend == com.lookafter.app.webrtc.WebRtcPeerController.Backend.NATIVE,
                     eglContext = viewModel.webRtcEglContext(),
                     onAttachLocalRenderer = viewModel::attachWebRtcLocalRenderer,

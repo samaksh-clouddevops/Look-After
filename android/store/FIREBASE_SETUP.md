@@ -46,9 +46,22 @@ LOOKAFTER_TURN_PASS=secret
 LOOKAFTER_TURN_FORCE_RELAY=false
 ```
 
-Room flow: You → Body double room → Create / Join → Demo connect (or real peer signals).
-UI shows backend `native` vs `simulator`. If native init fails, simulator fallback remains.
+Room flow: You → Body double room → Create / Join → share code → second device Join.
+UI shows backend `native` vs `simulator` and signaling `firestore` vs `local-file`.
+
+### Signaling (C2)
+- **Firestore** (when `google-services.json` present): collection `lookafter_rooms/{roomId}` field `envelope` (JSON).
+- **Local file** (default offline): `filesDir/webrtc-rooms/{roomId}.json` polled ~400ms.
+- Demo partner button still does local loopback without a second device.
+
 CAMERA permission required for local video track.
+Rules sketch for Firestore rooms:
+
+```
+match /lookafter_rooms/{roomId} {
+  allow read, write: if request.auth != null;
+}
+```
 
 ## Play release signing
 

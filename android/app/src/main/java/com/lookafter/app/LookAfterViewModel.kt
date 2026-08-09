@@ -16,12 +16,19 @@ import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
+import com.lookafter.app.webrtc.RoomSignalingFactory
+import com.lookafter.app.webrtc.RoomSignalingTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
 import com.lookafter.core.adhd.BodyDoubleRoomEngine
 import com.lookafter.core.adhd.BodyDoubleRoomIntent
 import com.lookafter.core.adhd.BodyDoubleRoomState
+import com.lookafter.core.adhd.BodyDoubleSignal
 import com.lookafter.core.adhd.BodyDoubleSignalType
+import com.lookafter.core.adhd.BodyDoublePeer
+import com.lookafter.core.adhd.RoomPresence
+import com.lookafter.core.adhd.RoomSignalEnvelope
+import java.util.concurrent.atomic.AtomicInteger
 import com.lookafter.core.adhd.FocusSessionEngine
 import com.lookafter.core.adhd.FocusSessionIntent
 import com.lookafter.core.adhd.FocusSessionPhase
@@ -96,7 +103,13 @@ class LookAfterViewModel(
     private val authStore: AuthSessionStore = app.authSessionStore
     private var streamJob: Job? = null
     private var webRtc: WebRtcPeerController? = null
+    private var roomSignal: RoomSignalingTransport? = null
     private var lastAutoHeroKey: String? = null
+    private val lastSignalCount = AtomicInteger(0)
+    private val knownRemotePeers = mutableSetOf<String>()
+
+    val roomSignalingName: String
+        get() = roomSignal?.name ?: "none"
 
     val notificationPreferences: StateFlow<NotificationPreferences> = notificationPrefsStore.state
 
@@ -449,7 +462,7 @@ class LookAfterViewModel(
     override fun onCleared() {
         streamJob?.cancel()
         planStreamJob?.cancel()
-        webRtc?.close()
+        teardownRoomSession(publishLeave = true)
         ambientAudio.release()
         super.onCleared()
     }
@@ -740,6 +753,7 @@ class LookAfterViewModel(
     }
 
     fun createBodyDoubleRoom(displayName: String) {
+        teardownRoomSession(publishLeave = false)
         val next = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Create(
@@ -748,10 +762,17 @@ class LookAfterViewModel(
             ),
         )
         _bodyDoubleRoom.value = next
-        bindWebRtc(next.localPeerId)
+        startRoomSession(
+            roomId = next.roomId.orEmpty(),
+            localPeerId = next.localPeerId,
+            displayName = displayName,
+            isOfferer = true,
+        )
+        _lastSyncMessage.value = "Room ${next.roomId} · signal ${roomSignal?.name}"
     }
 
     fun joinBodyDoubleRoom(roomId: String, displayName: String) {
+        teardownRoomSession(publishLeave = false)
         val next = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Join(
@@ -761,48 +782,152 @@ class LookAfterViewModel(
             ),
         )
         _bodyDoubleRoom.value = next
-        bindWebRtc(next.localPeerId)
+        startRoomSession(
+            roomId = next.roomId.orEmpty(),
+            localPeerId = next.localPeerId,
+            displayName = displayName,
+            isOfferer = false,
+        )
+        _lastSyncMessage.value = "Joined ${next.roomId} · signal ${roomSignal?.name}"
     }
 
     fun demoConnectBodyDoubleRoom() {
         val before = _bodyDoubleRoom.value
         var next = BodyDoubleRoomEngine.demoConnect(before)
-        // Drive WebRTC offer/answer over the room signal bus (simulator or native).
         val remote = next.remotePeers.firstOrNull()
         val rtc = webRtc
         if (rtc != null && remote != null) {
             rtc.startAsOfferer(remote.id)
-            // Feed simulated remote answer path: controller also emits local signals into room.
             next.signals
                 .filter { it.fromPeerId != next.localPeerId }
                 .forEach { rtc.handleRemoteSignal(it) }
-            // Local loopback: treat our offer as remote for the answer path
             next.signals
                 .filter { it.type == BodyDoubleSignalType.OFFER && it.fromPeerId == next.localPeerId }
                 .lastOrNull()
-                ?.let { offer ->
-                    // Peer B simulation already done in demoConnect; mark connected.
+                ?.let {
                     next = BodyDoubleRoomEngine.reduce(
                         next,
                         BodyDoubleRoomIntent.MarkConnected(remote.id),
                     )
                 }
-            viewModelScope.launch {
-                rtc.connectionState.collect { _webRtcState.value = it }
-            }
         }
         _bodyDoubleRoom.value = next
+        _lastSyncMessage.value = "Demo partner joined (local loopback)"
     }
 
     fun leaveBodyDoubleRoom() {
-        webRtc?.close()
-        webRtc = null
-        _webRtcState.value = WebRtcPeerController.ConnectionState.CLOSED
-        _webRtcBackend.value = WebRtcPeerController.Backend.SIMULATOR
+        teardownRoomSession(publishLeave = true)
         _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
             _bodyDoubleRoom.value,
             BodyDoubleRoomIntent.Leave,
         )
+        _lastSyncMessage.value = "Left body-double room"
+    }
+
+    private fun startRoomSession(
+        roomId: String,
+        localPeerId: String,
+        displayName: String,
+        isOfferer: Boolean,
+    ) {
+        if (roomId.isBlank()) return
+        knownRemotePeers.clear()
+        lastSignalCount.set(0)
+        bindWebRtc(localPeerId)
+        val signaling = RoomSignalingFactory.create(getApplication(), preferFirestore = true)
+        roomSignal = signaling
+        signaling.addListener { envelope -> onRoomEnvelope(envelope, localPeerId, isOfferer) }
+        signaling.join(
+            roomId = roomId,
+            presence = RoomPresence(
+                peerId = localPeerId,
+                displayName = displayName,
+                joinedAt = Instant.now(),
+            ),
+        )
+        // Presence beacon so peers see us.
+        signaling.publish(
+            BodyDoubleSignal(
+                type = BodyDoubleSignalType.PRESENCE,
+                fromPeerId = localPeerId,
+                payload = displayName,
+                at = Instant.now(),
+            ),
+        )
+    }
+
+    private fun onRoomEnvelope(
+        envelope: RoomSignalEnvelope,
+        localPeerId: String,
+        isOfferer: Boolean,
+    ) {
+        // Presence → peer list
+        envelope.presence
+            .filter { !it.left && it.peerId != localPeerId }
+            .forEach { p ->
+                if (knownRemotePeers.add(p.peerId)) {
+                    _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+                        _bodyDoubleRoom.value,
+                        BodyDoubleRoomIntent.PeerJoined(
+                            BodyDoublePeer(
+                                id = p.peerId,
+                                displayName = p.displayName,
+                                isLocal = false,
+                            ),
+                        ),
+                    )
+                    // First remote: creator offers
+                    if (isOfferer) {
+                        webRtc?.startAsOfferer(p.peerId)
+                    }
+                }
+            }
+        envelope.presence.filter { it.left && it.peerId != localPeerId }.forEach { p ->
+            if (knownRemotePeers.remove(p.peerId)) {
+                _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+                    _bodyDoubleRoom.value,
+                    BodyDoubleRoomIntent.PeerLeft(p.peerId),
+                )
+            }
+        }
+        // Only process new signals from others
+        val all = envelope.signals
+        val start = lastSignalCount.get().coerceAtMost(all.size)
+        if (start < all.size) {
+            lastSignalCount.set(all.size)
+            all.subList(start, all.size)
+                .filter { it.fromPeerId != localPeerId }
+                .forEach { signal ->
+                    _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
+                        _bodyDoubleRoom.value,
+                        BodyDoubleRoomIntent.SignalReceived(signal),
+                    )
+                    webRtc?.handleRemoteSignal(signal)
+                    if (signal.type == BodyDoubleSignalType.ANSWER ||
+                        signal.type == BodyDoubleSignalType.OFFER
+                    ) {
+                        // Ensure offerer path if we joined late
+                        if (!isOfferer && signal.type == BodyDoubleSignalType.OFFER) {
+                            // answer created inside WebRtcPeerController
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun teardownRoomSession(publishLeave: Boolean) {
+        val peerId = _bodyDoubleRoom.value.localPeerId
+        if (publishLeave && peerId.isNotBlank()) {
+            runCatching { roomSignal?.leave(peerId) }
+        }
+        runCatching { roomSignal?.close() }
+        roomSignal = null
+        webRtc?.close()
+        webRtc = null
+        knownRemotePeers.clear()
+        lastSignalCount.set(0)
+        _webRtcState.value = WebRtcPeerController.ConnectionState.CLOSED
+        _webRtcBackend.value = WebRtcPeerController.Backend.SIMULATOR
     }
 
     private fun bindWebRtc(localPeerId: String) {
@@ -814,11 +939,13 @@ class LookAfterViewModel(
             enableVideo = true,
             enableAudio = false,
         )
-        controller.addOutboundListener { signal ->
+        controller.addOutboundListener { signal: BodyDoubleSignal ->
             _bodyDoubleRoom.value = BodyDoubleRoomEngine.reduce(
                 _bodyDoubleRoom.value,
                 BodyDoubleRoomIntent.SignalReceived(signal),
             )
+            // Fan-out to multi-device bus (skip pure local hangup noise after leave).
+            roomSignal?.publish(signal)
         }
         webRtc = controller
         viewModelScope.launch {
