@@ -90,6 +90,29 @@ extension Dictionary {
     }
 }
 
+// MARK: - Flexible ISO-8601 dates (LLM / API)
+
+public enum FlexibleISO8601Date {
+    /// Parses full ISO-8601 timestamps and date-only (`yyyy-MM-dd`) values.
+    public static func date(from raw: String) -> Date? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: trimmed) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: trimmed) { return date }
+
+        let dayOnly = DateFormatter()
+        dayOnly.calendar = Calendar(identifier: .gregorian)
+        dayOnly.locale = Locale(identifier: "en_US_POSIX")
+        dayOnly.timeZone = TimeZone.current
+        dayOnly.dateFormat = "yyyy-MM-dd"
+        return dayOnly.date(from: String(trimmed.prefix(10)))
+    }
+}
+
 // MARK: - Double Extensions
 
 extension Double {

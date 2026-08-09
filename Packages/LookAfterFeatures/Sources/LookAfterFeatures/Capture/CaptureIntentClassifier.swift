@@ -70,7 +70,7 @@ public enum CaptureIntentClassifier {
         let confidence = json["confidence"] as? Double ?? 0.7
         var scheduledAt: Date?
         if let iso = json["scheduledAtISO"] as? String {
-            scheduledAt = ISO8601DateFormatter().date(from: iso)
+            scheduledAt = FlexibleISO8601Date.date(from: iso)
         }
 
         var lifeArea: LifeArea?

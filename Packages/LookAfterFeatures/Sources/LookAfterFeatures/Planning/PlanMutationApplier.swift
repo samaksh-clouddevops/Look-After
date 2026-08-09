@@ -270,7 +270,7 @@ public struct PlanMutationApplier {
                 }
                 var deadline: Date?
                 if let iso = mutation.deadlineISO {
-                    deadline = Self.parseFlexibleISODate(iso)
+                    deadline = FlexibleISO8601Date.date(from: iso)
                 }
                 let draft = MultiDayPlanDraft(
                     title: title,
@@ -353,23 +353,6 @@ public struct PlanMutationApplier {
             result.append(task)
         }
         return result
-    }
-
-    /// Accepts full ISO8601 timestamps and date-only (`yyyy-MM-dd`) LLM deadlines (BUG-039).
-    private static func parseFlexibleISODate(_ raw: String) -> Date? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso.date(from: trimmed) { return date }
-        iso.formatOptions = [.withInternetDateTime]
-        if let date = iso.date(from: trimmed) { return date }
-        let dayOnly = DateFormatter()
-        dayOnly.calendar = Calendar(identifier: .gregorian)
-        dayOnly.locale = Locale(identifier: "en_US_POSIX")
-        dayOnly.timeZone = TimeZone.current
-        dayOnly.dateFormat = "yyyy-MM-dd"
-        return dayOnly.date(from: String(trimmed.prefix(10)))
     }
 
     private struct PendingCreate {
