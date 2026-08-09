@@ -121,10 +121,18 @@ class LookAfterViewModel(
     private val _streamingCoach = MutableStateFlow(false)
     val streamingCoach: StateFlow<Boolean> = _streamingCoach.asStateFlow()
 
+    private val _streamingPlan = MutableStateFlow(false)
+    val streamingPlan: StateFlow<Boolean> = _streamingPlan.asStateFlow()
+
+    private val _planDraftPreview = MutableStateFlow<String?>(null)
+    val planDraftPreview: StateFlow<String?> = _planDraftPreview.asStateFlow()
+
     private val _webRtcState =
         MutableStateFlow(WebRtcPeerController.ConnectionState.NEW)
     val webRtcConnectionState: StateFlow<WebRtcPeerController.ConnectionState> =
         _webRtcState.asStateFlow()
+
+    private var planStreamJob: Job? = null
 
     val auth = authStore.state
     val firebaseAuthAvailable: Boolean get() = FirebaseAuthBridge.isAvailable()
@@ -357,6 +365,7 @@ class LookAfterViewModel(
 
     override fun onCleared() {
         streamJob?.cancel()
+        planStreamJob?.cancel()
         webRtc?.close()
         ambientAudio.release()
         super.onCleared()
@@ -387,41 +396,6 @@ class LookAfterViewModel(
                 trimmed.contains("park fluid") ||
                 trimmed.contains("horizon")
             if (looksLikePlan) {
-                // Prefer offline multi-day engine with selected horizon; LLM plan if richer.
-                val (offlineProposal, offlineReply) = PlanningConversationEngine.offlineTurn(
-                    message = trimmed,
-                    life = life,
-                    horizonDays = horizon,
-                )
-                val planned = planService.plan(trimmed, life, healthSnap)
-                val useLlm = planned.proposal.mutations.isNotEmpty() &&
-                    planned.source == HttpLlmPlanService.PlanResult.Source.LLM
-                val proposal = if (useLlm) {
-                    planned.proposal.copy(dayHorizon = planned.proposal.dayHorizon.coerceAtLeast(horizon))
-                } else if (offlineProposal.mutations.isNotEmpty()) {
-                    offlineProposal.copy(dayHorizon = horizon)
-                } else {
-                    planned.proposal
-                }
-                val reply = if (useLlm) planned.conversationalReply else offlineReply.ifBlank {
-                    planned.conversationalReply
-                }
-                val src = if (useLlm) "LLM" else "offline"
-                if (proposal.mutations.isNotEmpty()) {
-                    persistPlanning(
-                        PlanningConversationEngine.reduce(
-                            _planning.value,
-                            PlanningConversationIntent.OfferPlan(
-                                proposal = proposal,
-                                reply = reply,
-                                sourceLabel = "$src · ${horizon}d",
-                            ),
-                        ).state,
-                    )
-                    _lastSyncMessage.value =
-                        "Plan ready · ${proposal.mutations.size} change(s) · review"
-                    return@launch
-                }
                 // Deterministic single-day intents still apply immediately (strip/park).
                 val simple = MultiDayPlanEngine.simpleIntents(trimmed, life)
                 if (simple.intents.isNotEmpty()) {
@@ -434,9 +408,106 @@ class LookAfterViewModel(
                     )
                     return@launch
                 }
+                // Stream JSON plan (LLM) → parse → pending review; fail-soft offline.
+                streamPlanProposal(trimmed, life, healthSnap, horizon)
+                return@launch
             }
             // Streaming coach tokens when LLM is configured; else offline block reply.
             streamCoachReply(trimmed, life, healthSnap)
+        }
+    }
+
+    private fun streamPlanProposal(
+        message: String,
+        life: LifeState,
+        healthSnap: HealthSummary,
+        horizon: Int,
+    ) {
+        planStreamJob?.cancel()
+        planStreamJob = viewModelScope.launch {
+            _streamingPlan.value = true
+            _planDraftPreview.value = "Planning…"
+            _lastSyncMessage.value = "Planning… streaming"
+            var offered = false
+            runCatching {
+                planService.streamPlan(
+                    message = message,
+                    state = life,
+                    health = healthSnap,
+                    horizonDays = horizon,
+                ).collect { event ->
+                    when (event) {
+                        is HttpLlmPlanService.PlanStreamEvent.Draft -> {
+                            _planDraftPreview.value = event.preview.ifBlank {
+                                "Planning… ${event.chars} chars"
+                            }
+                        }
+                        is HttpLlmPlanService.PlanStreamEvent.Complete -> {
+                            val planned = event.result
+                            val proposal = planned.proposal.copy(
+                                dayHorizon = planned.proposal.dayHorizon.coerceAtLeast(horizon),
+                            )
+                            val src = when (planned.source) {
+                                HttpLlmPlanService.PlanResult.Source.LLM_STREAM -> "LLM stream"
+                                HttpLlmPlanService.PlanResult.Source.LLM -> "LLM"
+                                HttpLlmPlanService.PlanResult.Source.OFFLINE -> "offline"
+                            }
+                            if (proposal.mutations.isNotEmpty()) {
+                                persistPlanning(
+                                    PlanningConversationEngine.reduce(
+                                        _planning.value,
+                                        PlanningConversationIntent.OfferPlan(
+                                            proposal = proposal,
+                                            reply = planned.conversationalReply,
+                                            sourceLabel = "$src · ${horizon}d",
+                                        ),
+                                    ).state,
+                                )
+                                _lastSyncMessage.value =
+                                    "Plan ready · ${proposal.mutations.size} change(s) · review"
+                                offered = true
+                            } else {
+                                persistPlanning(
+                                    PlanningConversationEngine.reduce(
+                                        _planning.value,
+                                        PlanningConversationIntent.CoachReply(
+                                            planned.conversationalReply.ifBlank {
+                                                "No board changes proposed — try a clearer plan ask."
+                                            },
+                                        ),
+                                    ).state,
+                                )
+                            }
+                        }
+                    }
+                }
+            }.onFailure {
+                CrashReporting.recordNonFatal(it, "stream plan")
+                // Offline fail-soft
+                val (offlineProposal, offlineReply) = PlanningConversationEngine.offlineTurn(
+                    message = message,
+                    life = life,
+                    horizonDays = horizon,
+                )
+                if (offlineProposal.mutations.isNotEmpty() && !offered) {
+                    persistPlanning(
+                        PlanningConversationEngine.reduce(
+                            _planning.value,
+                            PlanningConversationIntent.OfferPlan(
+                                proposal = offlineProposal.copy(dayHorizon = horizon),
+                                reply = offlineReply,
+                                sourceLabel = "offline · ${horizon}d",
+                            ),
+                        ).state,
+                    )
+                    _lastSyncMessage.value =
+                        "Plan ready · ${offlineProposal.mutations.size} change(s) · offline"
+                } else if (!offered) {
+                    appendCoach(offlineReply.ifBlank { "Plan stream failed — try again or use offline strip/park commands." })
+                }
+            }
+            _streamingPlan.value = false
+            _planDraftPreview.value = null
         }
     }
 
@@ -712,6 +783,11 @@ class LookAfterViewModel(
      */
     fun factoryReset() {
         viewModelScope.launch {
+            planStreamJob?.cancel()
+            streamJob?.cancel()
+            _streamingPlan.value = false
+            _streamingCoach.value = false
+            _planDraftPreview.value = null
             engine.process(LookAfterIntent.ReplaceState(LifeState.EMPTY))
             _focus.value = FocusSessionState()
             _inbox.value = InboxState()

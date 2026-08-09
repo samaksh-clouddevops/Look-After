@@ -52,6 +52,8 @@ fun BrainScreen(
     onRejectPlan: () -> Unit = {},
     onClearConversation: () -> Unit = {},
     isStreaming: Boolean = false,
+    isPlanning: Boolean = false,
+    planDraftPreview: String? = null,
     capacity: ExecutiveCapacity = ExecutiveCapacity.EMPTY,
     modifier: Modifier = Modifier,
 ) {
@@ -159,6 +161,30 @@ fun BrainScreen(
                 }
             }
         }
+        if (isPlanning) {
+            item {
+                ElevatedSurfaceCard {
+                    Text(
+                        "Planning…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.AccentPrimary,
+                    )
+                    Text(
+                        "Streaming plan JSON · horizon ${horizonDays}d",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
+                    )
+                    Text(
+                        planDraftPreview?.ifBlank { "Waiting for tokens…" }
+                            ?: "Waiting for tokens…",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                        maxLines = 6,
+                    )
+                }
+            }
+        }
         if (!pendingPlanSummary.isNullOrBlank() && pendingMutationCount > 0) {
             item {
                 ElevatedSurfaceCard {
@@ -226,8 +252,13 @@ fun BrainScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Coach", style = MaterialTheme.typography.titleMedium)
-                if (isStreaming) {
-                    Text(
+                when {
+                    isPlanning -> Text(
+                        "planning…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LookAfterColors.AccentPrimary,
+                    )
+                    isStreaming -> Text(
                         "streaming…",
                         style = MaterialTheme.typography.labelMedium,
                         color = LookAfterColors.AccentPrimary,
@@ -251,6 +282,7 @@ fun BrainScreen(
             }
         }
         item {
+            val busy = isStreaming || isPlanning
             Column(verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM)) {
                 OutlinedTextField(
                     value = draft,
@@ -258,7 +290,7 @@ fun BrainScreen(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Plan or ask · ${horizonDays}d horizon") },
                     singleLine = true,
-                    enabled = !isStreaming,
+                    enabled = !busy,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -266,13 +298,21 @@ fun BrainScreen(
                 ) {
                     Button(
                         onClick = { onSendCoach(draft); draft = "" },
-                        enabled = draft.trim().isNotEmpty() && !isStreaming,
+                        enabled = draft.trim().isNotEmpty() && !busy,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = LookAfterColors.AccentPrimary),
-                    ) { Text(if (isStreaming) "Streaming…" else "Send") }
+                    ) {
+                        Text(
+                            when {
+                                isPlanning -> "Planning…"
+                                isStreaming -> "Streaming…"
+                                else -> "Send"
+                            },
+                        )
+                    }
                     TextButton(
                         onClick = onClearConversation,
-                        enabled = !isStreaming && coachTranscript.isNotEmpty(),
+                        enabled = !busy && coachTranscript.isNotEmpty(),
                     ) { Text("Clear") }
                 }
             }

@@ -76,6 +76,8 @@ fun LookAfterRootView(
     val planning by viewModel.planning.collectAsStateWithLifecycle()
     val bodyDoubleRoom by viewModel.bodyDoubleRoom.collectAsStateWithLifecycle()
     val isStreaming by viewModel.streamingCoach.collectAsStateWithLifecycle()
+    val isPlanning by viewModel.streamingPlan.collectAsStateWithLifecycle()
+    val planDraftPreview by viewModel.planDraftPreview.collectAsStateWithLifecycle()
     val webRtcState by viewModel.webRtcConnectionState.collectAsStateWithLifecycle()
     val notificationPrefs by viewModel.notificationPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -377,6 +379,8 @@ fun LookAfterRootView(
                     onRejectPlan = viewModel::rejectPendingPlan,
                     onClearConversation = viewModel::clearPlanningConversation,
                     isStreaming = isStreaming,
+                    isPlanning = isPlanning,
+                    planDraftPreview = planDraftPreview,
                     capacity = capacity,
                     modifier = Modifier.fillMaxSize(),
                 )
