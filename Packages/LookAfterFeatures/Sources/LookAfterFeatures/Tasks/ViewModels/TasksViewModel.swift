@@ -553,6 +553,7 @@ public final class TasksViewModel: ObservableObject {
         let calendar = Calendar.current
         let templates = allTasks.filter(TaskRecurrenceEngine.isRecurrenceTemplate)
         guard !templates.isEmpty else { return }
+        var reactivated: [LifeTask] = []
 
         for day in days {
             let dayStart = calendar.startOfDay(for: day)
@@ -579,9 +580,12 @@ public final class TasksViewModel: ObservableObject {
 
                 stale.status = .pending
                 stale.updatedAt = Date()
-                try await taskRepo.update(stale)
+                reactivated.append(stale)
                 print("[Tasks] reactivated superseded occurrence id=\(stale.id.prefix(8)) template=\(template.id.prefix(8))")
             }
+        }
+        if !reactivated.isEmpty {
+            try await taskRepo.updateMany(reactivated)
         }
     }
 
@@ -593,6 +597,7 @@ public final class TasksViewModel: ObservableObject {
     ) async throws {
         let calendar = Calendar.current
         var all = reloadLocalTasks(for: userId)
+        var batch: [LifeTask] = []
 
         for day in days {
             let dayStart = calendar.startOfDay(for: day)
@@ -621,12 +626,15 @@ public final class TasksViewModel: ObservableObject {
                     || task.scheduledEndTime != all[index].scheduledEndTime else { continue }
 
                 task.updatedAt = Date()
-                try await taskRepo.update(task)
                 all[index] = task
+                batch.append(task)
 #if DEBUG
                 print("[Tasks] assigned routine anchor id=\(task.id.prefix(8)) title=\"\(task.title)\"")
 #endif
             }
+        }
+        if !batch.isEmpty {
+            try await taskRepo.updateMany(batch)
         }
     }
 
@@ -636,16 +644,20 @@ public final class TasksViewModel: ObservableObject {
         in allTasks: [LifeTask],
         includingLifeCommitments: Bool = false
     ) async throws {
+        var batch: [LifeTask] = []
         for id in ids {
             guard var task = allTasks.first(where: { $0.id == id }) else { continue }
             guard task.status.isActive else { continue }
             if task.isLifeCommitmentTask && !includingLifeCommitments { continue }
             task.status = .superseded
             task.updatedAt = Date()
-            try await taskRepo.update(task)
+            batch.append(task)
             tasks.removeAll { $0.id == id }
             completedToday.removeAll { $0.id == id }
             print("[Tasks] superseded invalid scheduled task id=\(id.prefix(8))")
+        }
+        if !batch.isEmpty {
+            try await taskRepo.updateMany(batch)
         }
     }
 
