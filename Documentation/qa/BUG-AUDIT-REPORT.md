@@ -623,8 +623,28 @@ Unique-key dictionary helper applied to Data analytics, module repos, and RootCa
 |------|-----|
 | BUG-007 | Physical device Instruments verification only |
 | Staging DQS/HRS re-run | Confirm Brain #12 / #L-003 with LO-COST-001 / LO-LEARN-001 |
-| Reduce Motion full audit / iPad | UX P3 |
+| iPad safe-area full pass | UX P3 |
 | App Group / BGTask brand IDs | Entitlement migration project |
+
+---
+
+## Bug hunt (post phase 5) — additional defects found & fixed
+
+| ID | Severity | Finding | Fix commit |
+|----|----------|---------|------------|
+| BUG-028′ | P3 | Leftover `sleepAnalysis)!` force unwrap in `fetchSleepData` | fix(health): remove remaining sleepAnalysis… |
+| BUG-039′ | P2 | Capture + proactive notification fire dates still used rigid ISO parser | Shared `FlexibleISO8601Date` |
+| **BUG-041** | **P1** | `currentSessionNumber % sessionsBeforeLongBreak` **crashes if setting is 0** | Safe divisor + clamp on load |
+| BUG-032′ | P2 | Appear offset animation + sleep gradient pulse ignored Reduce Motion | PremiumComponents + LifeContextFrame |
+
+### Still residual after this hunt
+
+| Item | Notes |
+|------|--------|
+| BUG-007 | Device-only lag verification |
+| V4 continuous animations | Some `LookAfterV4Components` ripples may still animate under Reduce Motion — secondary pass |
+| Brain staging re-score | LO-COST-001 / LO-LEARN-001 |
+| Entitlement brand IDs | App Group / BGTask |
 
 ---
 
@@ -637,6 +657,7 @@ Unique-key dictionary helper applied to Data analytics, module repos, and RootCa
 | 2026-08-09 | Phase 2/3 fixes: BUG-014/036–040 |
 | 2026-08-09 | Phase 4 fixes: BUG-022, 027–029, 040 remainder |
 | 2026-08-09 | Phase 5 brain: #12 sleep deep-work block, #L-003 deferral learning |
+| 2026-08-09 | Bug hunt: BUG-041 div/0, ISO unify, sleep HK unwrap, Reduce Motion appear/pulse |
 
 ### Commits on `fix/bug-audit-remediation`
 
@@ -660,6 +681,10 @@ Unique-key dictionary helper applied to Data analytics, module repos, and RootCa
 | fix(brain): block deep work after short sleep and prefer recovery hero | Brain #12 |
 | fix(brain): chronic deferral learning suggests weekday shift | Brain #L-003 |
 | docs(qa): mark brain issues #12 and #L-003 fixed in code | — |
+| fix(health): remove remaining sleepAnalysis force unwrap | BUG-028 |
+| fix(core): shared FlexibleISO8601Date for capture and notifications | BUG-039 |
+| fix(focus): prevent division-by-zero on sessionsBeforeLongBreak | BUG-041 |
+| fix(a11y): honor Reduce Motion on appear/pulse animations | BUG-032 |
 
 ---
 
