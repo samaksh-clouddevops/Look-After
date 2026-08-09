@@ -343,7 +343,7 @@ public final class DayReplanEngine {
         }
 
         if let data = slice.data(using: .utf8),
-           let decoded = try? JSONDecoder().decode(RawReplan.self, from: data) {
+           let decoded = try? SharedFormatters.jsonDecoderSeconds.decode(RawReplan.self, from: data) {
             let changes = (decoded.scheduleChanges ?? []).map {
                 DayReplanScheduleChange(
                     taskID: $0.taskID,

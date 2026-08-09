@@ -37,7 +37,7 @@ public enum UserCalibrationStore {
 
     public static func load() -> [UserCalibrationEntry] {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let entries = try? JSONDecoder().decode([UserCalibrationEntry].self, from: data) else {
+              let entries = try? SharedFormatters.jsonDecoderSeconds.decode([UserCalibrationEntry].self, from: data) else {
             return []
         }
         let sorted = entries.sorted { $0.createdAt > $1.createdAt }
@@ -112,7 +112,7 @@ public enum UserCalibrationStore {
     }
 
     private static func save(_ entries: [UserCalibrationEntry]) {
-        if let data = try? JSONEncoder().encode(entries) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(entries) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
     }

@@ -139,7 +139,7 @@ struct TodayView: View {
 
     private static func loadMedications() -> [Medication] {
         guard let data = UserDefaults.standard.data(forKey: "lifeos_medications_list"),
-              let medications = try? JSONDecoder().decode([Medication].self, from: data) else {
+              let medications = try? SharedFormatters.jsonDecoderSeconds.decode([Medication].self, from: data) else {
             return []
         }
         return medications

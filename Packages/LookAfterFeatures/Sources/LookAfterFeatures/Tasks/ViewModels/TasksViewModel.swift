@@ -952,9 +952,7 @@ public final class TasksViewModel: ObservableObject {
         do {
             var enriched = ScheduleNormalization.normalized(task)
             enriched.semanticProfile = await resolveSemanticProfile(for: enriched)
-            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                tasks[index] = enriched
-            }
+            _ = applyInMemoryTaskUpdate(enriched)
             try await taskRepo.create(enriched)
 
             if enriched.steps.isEmpty {
@@ -1021,9 +1019,7 @@ public final class TasksViewModel: ObservableObject {
         do {
             var enriched = task
             enriched.semanticProfile = await resolveSemanticProfile(for: task)
-            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                tasks[index] = enriched
-            }
+            _ = applyInMemoryTaskUpdate(enriched)
             try await taskRepo.create(enriched)
         } catch {
             tasks.removeAll { $0.id == task.id }
@@ -1036,12 +1032,12 @@ public final class TasksViewModel: ObservableObject {
         let key = "lifeos_creative_projects"
         var projects: [CreativeProject] = []
         if let data = UserDefaults.standard.data(forKey: key),
-           let saved = try? JSONDecoder().decode([CreativeProject].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([CreativeProject].self, from: data) {
             projects = saved
         }
         projects.removeAll { $0.parentTaskId == project.parentTaskId }
         projects.append(project)
-        if let data = try? JSONEncoder().encode(projects) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(projects) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
@@ -1457,9 +1453,7 @@ public final class TasksViewModel: ObservableObject {
         for task in missing {
             var enriched = task
             enriched.semanticProfile = await resolveSemanticProfile(for: task)
-            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                tasks[index] = enriched
-            }
+            _ = applyInMemoryTaskUpdate(enriched)
             try? await taskRepo.update(enriched)
         }
     }
@@ -1482,9 +1476,7 @@ public final class TasksViewModel: ObservableObject {
             }
             try await taskRepo.update(updatedTask)
             
-            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                tasks[index] = updatedTask
-            }
+            _ = applyInMemoryTaskUpdate(updatedTask)
             selectedTask = updatedTask
         } catch {
             self.error = error.localizedDescription
@@ -1757,7 +1749,7 @@ public final class TasksViewModel: ObservableObject {
     /// Mark a task as completed and schedule the next recurring occurrence when applicable.
     @discardableResult
     public func completeTask(_ task: LifeTask) async -> TaskUndoAction? {
-        let activeIndex = tasks.firstIndex(where: { $0.id == task.id })
+        let activeIndex = taskIndex(id: task.id)
         let restoredSnapshot = task
 
         var updated = task
@@ -1824,7 +1816,7 @@ public final class TasksViewModel: ObservableObject {
     
     /// Toggle a step's completion status.
     public func toggleStep(taskId: String, stepId: String) async {
-        guard let taskIndex = tasks.firstIndex(where: { $0.id == taskId }),
+        guard let taskIndex = self.taskIndex(id: taskId),
               let stepIndex = tasks[taskIndex].steps.firstIndex(where: { $0.id == stepId }) else {
             return
         }
@@ -1851,9 +1843,7 @@ public final class TasksViewModel: ObservableObject {
         
         do {
             try await taskRepo.update(updated)
-            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                tasks[index] = updated
-            }
+            _ = applyInMemoryTaskUpdate(updated)
         } catch {
             self.error = error.localizedDescription
         }
@@ -1863,7 +1853,7 @@ public final class TasksViewModel: ObservableObject {
     @discardableResult
     public func deleteTask(_ task: LifeTask) async -> TaskUndoAction? {
         let idsToDelete = deletionTargets(for: task)
-        let activeIndex = tasks.firstIndex(where: { $0.id == task.id })
+        let activeIndex = taskIndex(id: task.id)
         let completedIndex = completedToday.firstIndex(where: { $0.id == task.id })
         let wasInActive = activeIndex != nil
         let wasInCompleted = completedIndex != nil

@@ -16,7 +16,7 @@ public actor BehavioralVaultStore {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         fileURL = dir.appendingPathComponent(fileName)
         if let data = try? Data(contentsOf: fileURL),
-           let loaded = try? JSONDecoder().decode(BehavioralVaultEnvelope.self, from: data) {
+           let loaded = try? SharedFormatters.jsonDecoderSeconds.decode(BehavioralVaultEnvelope.self, from: data) {
             envelope = loaded
         } else {
             envelope = .empty()
@@ -111,7 +111,7 @@ public actor BehavioralVaultStore {
 
     private func persist() {
         guard fileURL.path != "/dev/null",
-              let data = try? JSONEncoder().encode(envelope) else { return }
+              let data = try? SharedFormatters.jsonEncoderSeconds.encode(envelope) else { return }
         try? data.write(to: fileURL, options: [.atomic])
     }
 }

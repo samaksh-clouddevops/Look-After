@@ -156,7 +156,7 @@ public final class InteractionTelemetryLogger: ConstraintTelemetryLogging, @unch
         guard let directory else { return nil }
         let url = directory.appendingPathComponent(TelemetryLogRotation.fileName(dayKey: dayKey))
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(TelemetryLogEnvelope.self, from: data)
+        return try? SharedFormatters.jsonDecoderSeconds.decode(TelemetryLogEnvelope.self, from: data)
     }
 
     private func persistAsync(dayKey: String, snapshot: TelemetryLogEnvelope) {
@@ -171,7 +171,7 @@ public final class InteractionTelemetryLogger: ConstraintTelemetryLogging, @unch
 
     private static func write(directory: URL, dayKey: String, snapshot: TelemetryLogEnvelope) {
         let url = directory.appendingPathComponent(TelemetryLogRotation.fileName(dayKey: dayKey))
-        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(snapshot) else { return }
         try? data.write(to: url, options: [.atomic])
     }
 }

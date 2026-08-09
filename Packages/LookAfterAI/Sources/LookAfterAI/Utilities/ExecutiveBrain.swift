@@ -174,14 +174,14 @@ public final class ExecutiveBrain: ObservableObject {
     // MARK: - Session History Persistence
     
     private func saveChatHistory() {
-        if let data = try? JSONEncoder().encode(chatHistory) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(chatHistory) {
             UserDefaults.standard.set(data, forKey: "saved_coach_chat_history")
         }
     }
     
     public func loadChatHistory() {
         if let data = UserDefaults.standard.data(forKey: "saved_coach_chat_history"),
-           let history = try? JSONDecoder().decode([ChatMessage].self, from: data) {
+           let history = try? SharedFormatters.jsonDecoderSeconds.decode([ChatMessage].self, from: data) {
             self.chatHistory = history
         }
     }

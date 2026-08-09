@@ -90,9 +90,7 @@ public enum PlanningPromptContextBuilder {
             return calendar.isDate(targetDay, inSameDayAs: tomorrowStart)
         }()
 
-        let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "EEEE, MMM d, yyyy"
-        let dayLabel = dayFormatter.string(from: targetDay)
+        let dayLabel = promptDayFormatter.string(from: targetDay)
 
         let windows = SchedulingWindows.from(profile: profile)
         var lines = [
@@ -546,6 +544,13 @@ public enum PlanningPromptContextBuilder {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
+    private static let promptDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEEE, MMM d, yyyy"
         return formatter
     }()
 

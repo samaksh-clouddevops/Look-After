@@ -125,7 +125,7 @@ public final class SabotagePolicyStore: @unchecked Sendable {
             fileURL = nil
         }
         if let fileURL, let data = try? Data(contentsOf: fileURL),
-           let loaded = try? JSONDecoder().decode(SabotagePolicyState.self, from: data) {
+           let loaded = try? SharedFormatters.jsonDecoderSeconds.decode(SabotagePolicyState.self, from: data) {
             state = loaded
         } else {
             state = .empty
@@ -173,7 +173,7 @@ public final class SabotagePolicyStore: @unchecked Sendable {
 
     private func persist(_ snap: SabotagePolicyState) {
         guard !memoryOnly, let fileURL else { return }
-        guard let data = try? JSONEncoder().encode(snap) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(snap) else { return }
         try? data.write(to: fileURL, options: [.atomic])
     }
 }

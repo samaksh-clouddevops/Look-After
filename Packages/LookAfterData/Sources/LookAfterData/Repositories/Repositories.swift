@@ -443,9 +443,7 @@ public final class InboxRepository: ObservableObject {
         var mutableItem = item
         mutableItem.userId = firebase.currentUserId ?? ""
         
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutableItem)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(mutableItem)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw FirebaseManagerError.encodingError
         }
@@ -458,9 +456,7 @@ public final class InboxRepository: ObservableObject {
             throw FirebaseManagerError.notAuthenticated
         }
         
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(item)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(item)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw FirebaseManagerError.encodingError
         }
@@ -708,9 +704,7 @@ public final class HealthSummaryRepository: ObservableObject {
             guard let ref = firebase.userCollection(collection) else { return }
             
             do {
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .secondsSince1970
-                let data = try encoder.encode(summary)
+                let data = try SharedFormatters.jsonEncoderSeconds.encode(summary)
                 guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
                 
                 try await AsyncTimeout.withTimeout(seconds: Self.cloudWriteTimeoutSeconds) {
@@ -742,9 +736,7 @@ public final class EnergyReportRepository: ObservableObject {
         var mutableReport = report
         mutableReport.userId = firebase.currentUserId ?? ""
         
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutableReport)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(mutableReport)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw FirebaseManagerError.encodingError
         }

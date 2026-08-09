@@ -24,17 +24,9 @@ public final class TaskSQLiteStore: @unchecked Sendable {
         }
     }
 
-    private static let jsonEncoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        return encoder
-    }()
+    private static var jsonEncoder: JSONEncoder { SharedFormatters.jsonEncoderSeconds }
 
-    private static let jsonDecoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        return decoder
-    }()
+    private static var jsonDecoder: JSONDecoder { SharedFormatters.jsonDecoderSeconds }
 
     /// Production store at `Documents/tasks.sqlite`.
     public convenience init() {

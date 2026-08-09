@@ -30,7 +30,7 @@ public enum ProactiveBundleMetadataKeys {
 
 public enum ProactiveActionBundleCodec {
     public static func encode(_ bundle: ProactiveActionBundle, into metadata: inout [String: String]) {
-        if let data = try? JSONEncoder().encode(bundle),
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(bundle),
            let json = String(data: data, encoding: .utf8) {
             metadata[ProactiveBundleMetadataKeys.payload] = json
         }
@@ -42,7 +42,7 @@ public enum ProactiveActionBundleCodec {
     public static func decode(from action: ProactiveAction) -> ProactiveActionBundle? {
         guard let json = action.metadata[ProactiveBundleMetadataKeys.payload],
               let data = json.data(using: .utf8),
-              let bundle = try? JSONDecoder().decode(ProactiveActionBundle.self, from: data) else {
+              let bundle = try? SharedFormatters.jsonDecoderSeconds.decode(ProactiveActionBundle.self, from: data) else {
             return nil
         }
         return bundle

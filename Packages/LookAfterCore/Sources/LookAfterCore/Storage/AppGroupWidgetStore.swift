@@ -23,7 +23,7 @@ public enum AppGroupWidgetStore {
     public static func save(_ snapshot: WidgetSnapshot) {
         guard let url = snapshotURL else { return }
         do {
-            let data = try JSONEncoder().encode(snapshot)
+            let data = try SharedFormatters.jsonEncoderSeconds.encode(snapshot)
             try data.write(to: url, options: [.atomic])
         } catch {
             // Container unavailable or disk full — widget will show stale/empty data.
@@ -35,7 +35,7 @@ public enum AppGroupWidgetStore {
 
         if let url = snapshotURL,
            let data = try? Data(contentsOf: url),
-           let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data) {
+           let snapshot = try? SharedFormatters.jsonDecoderSeconds.decode(WidgetSnapshot.self, from: data) {
             return snapshot
         }
 
@@ -59,7 +59,7 @@ public enum AppGroupWidgetStore {
         guard
             let defaults = cachedLegacyDefaults,
             let data = defaults.data(forKey: WidgetAppGroup.snapshotKey),
-            let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
+            let snapshot = try? SharedFormatters.jsonDecoderSeconds.decode(WidgetSnapshot.self, from: data)
         else {
             return nil
         }

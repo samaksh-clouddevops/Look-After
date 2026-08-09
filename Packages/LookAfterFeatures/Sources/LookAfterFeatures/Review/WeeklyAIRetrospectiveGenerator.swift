@@ -117,12 +117,12 @@ public final class WeeklyAIRetrospectiveGenerator {
 
     private func loadCached(key: String) -> WeeklyAIRetrospective? {
         guard let data = UserDefaults.standard.data(forKey: key),
-              let retro = try? JSONDecoder().decode(WeeklyAIRetrospective.self, from: data) else { return nil }
+              let retro = try? SharedFormatters.jsonDecoderSeconds.decode(WeeklyAIRetrospective.self, from: data) else { return nil }
         return retro
     }
 
     private func saveCached(_ retro: WeeklyAIRetrospective, key: String) {
-        if let data = try? JSONEncoder().encode(retro) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(retro) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }

@@ -91,14 +91,14 @@ public final class CalendarViewModel: ObservableObject {
     }
     
     private func saveToDisk() {
-        if let data = try? JSONEncoder().encode(events) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(events) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
         }
     }
     
     private func loadFromDisk() {
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let saved = try? JSONDecoder().decode([CalendarEventItem].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([CalendarEventItem].self, from: data) {
             events = saved
         }
     }

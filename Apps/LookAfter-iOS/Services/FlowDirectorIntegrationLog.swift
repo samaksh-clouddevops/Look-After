@@ -48,14 +48,14 @@ enum FlowDirectorIntegrationLog {
 
     static func lastEntry() -> Entry? {
         guard let data = UserDefaults.standard.data(forKey: lastEntryKey),
-              let entry = try? JSONDecoder().decode(Entry.self, from: data) else {
+              let entry = try? SharedFormatters.jsonDecoderSeconds.decode(Entry.self, from: data) else {
             return nil
         }
         return entry
     }
 
     private static func persist(_ entry: Entry) {
-        if let data = try? JSONEncoder().encode(entry) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(entry) {
             UserDefaults.standard.set(data, forKey: lastEntryKey)
         }
     }

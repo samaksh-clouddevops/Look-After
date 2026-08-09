@@ -47,14 +47,14 @@ public final class CreativityViewModel: ObservableObject {
     }
     
     private func saveToDisk() {
-        if let data = try? JSONEncoder().encode(projects) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(projects) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
         }
     }
     
     private func loadFromDisk() {
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let saved = try? JSONDecoder().decode([CreativeProject].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([CreativeProject].self, from: data) {
             projects = saved
         }
     }

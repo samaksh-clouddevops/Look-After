@@ -249,14 +249,14 @@ enum ProactivePreviewTimeoutStore {
             expiresAt: expiresAt,
             bundleJSON: ProactiveActionBundleCodec.decode(from: action).flatMap { _ in action.metadata[ProactiveBundleMetadataKeys.payload] }
         )
-        if let data = try? JSONEncoder().encode(payload) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(payload) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
 
     static func load() -> PendingPreview? {
         guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode(PendingPreview.self, from: data) else { return nil }
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode(PendingPreview.self, from: data) else { return nil }
         return decoded
     }
 

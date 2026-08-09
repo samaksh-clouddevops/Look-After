@@ -55,21 +55,21 @@ public final class TravelViewModel: ObservableObject {
     }
     
     private func saveToDisk() {
-        if let data = try? JSONEncoder().encode(trips) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(trips) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
         }
-        if let data = try? JSONEncoder().encode(packingList) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(packingList) {
             UserDefaults.standard.set(data, forKey: packingKey)
         }
     }
     
     private func loadFromDisk() {
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let saved = try? JSONDecoder().decode([TravelTrip].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([TravelTrip].self, from: data) {
             trips = saved
         }
         if let data = UserDefaults.standard.data(forKey: packingKey),
-           let saved = try? JSONDecoder().decode([PackingItem].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([PackingItem].self, from: data) {
             packingList = saved
         }
     }

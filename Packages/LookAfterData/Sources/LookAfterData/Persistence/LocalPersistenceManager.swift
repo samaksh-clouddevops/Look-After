@@ -24,9 +24,7 @@ public final class LocalPersistenceManager {
         let url = documentsDirectory.appendingPathComponent("\(filename).json")
         ioQueue.async {
             do {
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .secondsSince1970
-                let data = try encoder.encode(items)
+                let data = try SharedFormatters.jsonEncoderSeconds.encode(items)
                 try data.write(to: url, options: .atomic)
             } catch {
                 print("[LocalPersistenceManager] Error saving \(filename): \(error)")
@@ -40,9 +38,7 @@ public final class LocalPersistenceManager {
             let url = documentsDirectory.appendingPathComponent("\(filename).json")
             ioQueue.async {
                 do {
-                    let encoder = JSONEncoder()
-                    encoder.dateEncodingStrategy = .secondsSince1970
-                    let data = try encoder.encode(items)
+                    let data = try SharedFormatters.jsonEncoderSeconds.encode(items)
                     try data.write(to: url, options: .atomic)
                 } catch {
                     print("[LocalPersistenceManager] Error saving \(filename): \(error)")
@@ -61,9 +57,7 @@ public final class LocalPersistenceManager {
             guard self.fileManager.fileExists(atPath: url.path) else { return [] }
             do {
                 let data = try Data(contentsOf: url)
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .secondsSince1970
-                return try decoder.decode(type, from: data)
+                return try SharedFormatters.jsonDecoderSeconds.decode(type, from: data)
             } catch {
                 print("[LocalPersistenceManager] Error loading \(filename): \(error)")
                 return []
@@ -82,9 +76,7 @@ public final class LocalPersistenceManager {
                 }
                 do {
                     let data = try Data(contentsOf: url)
-                    let decoder = JSONDecoder()
-                    decoder.dateDecodingStrategy = .secondsSince1970
-                    let result = try decoder.decode(type, from: data)
+                    let result = try SharedFormatters.jsonDecoderSeconds.decode(type, from: data)
                     continuation.resume(returning: result)
                 } catch {
                     print("[LocalPersistenceManager] Error loading \(filename): \(error)")

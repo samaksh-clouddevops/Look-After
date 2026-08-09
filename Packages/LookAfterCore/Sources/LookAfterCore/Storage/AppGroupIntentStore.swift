@@ -88,7 +88,7 @@ public enum AppGroupIntentStore {
         }
         guard let url = fileURL,
               let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode([PendingShortcutRequest].self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([PendingShortcutRequest].self, from: data) else {
             return []
         }
         return decoded
@@ -100,7 +100,7 @@ public enum AppGroupIntentStore {
             return
         }
         guard let url = fileURL else { return }
-        guard let data = try? JSONEncoder().encode(queue) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(queue) else { return }
         try? data.write(to: url, options: [.atomic])
     }
 }

@@ -119,7 +119,7 @@ public final class AuthProxyClient: @unchecked Sendable {
             let model: String
         }
         var request = try await authorizedRequest(path: "/v1/ai/speech", method: "POST")
-        request.httpBody = try JSONEncoder().encode(
+        request.httpBody = try SharedFormatters.jsonEncoderSeconds.encode(
             Body(input: input, voice: voice, speed: speed, model: model)
         )
         let (data, response) = try await session.data(for: request)
@@ -163,7 +163,7 @@ public final class AuthProxyClient: @unchecked Sendable {
 
     private func postJSON<Body: Encodable, T: Decodable>(path: String, body: Body) async throws -> T {
         var request = try await authorizedRequest(path: path, method: "POST")
-        request.httpBody = try JSONEncoder().encode(body)
+        request.httpBody = try SharedFormatters.jsonEncoderSeconds.encode(body)
         return try await decode(request)
     }
 
@@ -180,7 +180,7 @@ public final class AuthProxyClient: @unchecked Sendable {
             throw AuthProxyError.httpStatus(http.statusCode, String(message.prefix(200)))
         }
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            return try SharedFormatters.jsonDecoderSeconds.decode(T.self, from: data)
         } catch {
             throw AuthProxyError.decodeFailed
         }

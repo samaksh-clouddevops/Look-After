@@ -6,7 +6,7 @@ public enum NotificationDailyBudgetStore {
     public static func load(now: Date = Date(), calendar: Calendar = .current) -> ProactiveDailyBudget {
         let todayKey = ProactiveDailyBudget.dayKey(for: now, calendar: calendar)
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              var budget = try? JSONDecoder().decode(ProactiveDailyBudget.self, from: data) else {
+              var budget = try? SharedFormatters.jsonDecoderSeconds.decode(ProactiveDailyBudget.self, from: data) else {
             return ProactiveDailyBudget(dayKey: todayKey)
         }
         if budget.dayKey != todayKey {
@@ -17,7 +17,7 @@ public enum NotificationDailyBudgetStore {
     }
 
     public static func save(_ budget: ProactiveDailyBudget) {
-        if let data = try? JSONEncoder().encode(budget) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(budget) {
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         }
     }

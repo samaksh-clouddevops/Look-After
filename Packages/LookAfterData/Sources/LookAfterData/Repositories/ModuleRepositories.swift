@@ -33,8 +33,7 @@ public final class BillRepository: ObservableObject {
         
         guard let ref = firebase.userCollection(collection) else { return }
         var mutable = item; mutable.userId = firebase.currentUserId ?? ""
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutable)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(mutable)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         try? await ref.document(item.id).setData(dict)
     }
@@ -51,8 +50,7 @@ public final class BillRepository: ObservableObject {
         var updated = item
         updated.isPaid.toggle()
         updated.paidAt = updated.isPaid ? Date() : nil
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(updated)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(updated)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         try? await ref.document(item.id).setData(dict, merge: true)
     }
@@ -118,9 +116,7 @@ public final class ShoppingRepository: ObservableObject {
             guard let ref = firebase.userCollection(collection) else { return }
             var mutable = item
             mutable.userId = firebase.currentUserId ?? ""
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .secondsSince1970
-            guard let data = try? encoder.encode(mutable),
+            guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(mutable),
                   let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
             try? await ref.document(item.id).setData(dict)
         }
@@ -138,8 +134,7 @@ public final class ShoppingRepository: ObservableObject {
         var updated = item
         updated.isPurchased.toggle()
         updated.purchasedAt = updated.isPurchased ? Date() : nil
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(updated)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(updated)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         try? await ref.document(item.id).setData(dict, merge: true)
     }
@@ -185,8 +180,7 @@ public final class RelationshipRepository: ObservableObject {
         
         guard let ref = firebase.userCollection(collection) else { return }
         var mutable = item; mutable.userId = firebase.currentUserId ?? ""
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutable)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(mutable)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         try? await ref.document(item.id).setData(dict)
     }
@@ -201,8 +195,7 @@ public final class RelationshipRepository: ObservableObject {
         guard let ref = firebase.userCollection(collection) else { return }
         var updated = contact
         updated.lastContactedAt = Date()
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(updated)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(updated)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         try? await ref.document(contact.id).setData(dict, merge: true)
     }
@@ -248,8 +241,7 @@ public final class JournalRepository: ObservableObject {
         
         guard let ref = firebase.userCollection(collection) else { return }
         var mutable = item; mutable.userId = firebase.currentUserId ?? ""
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutable)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(mutable)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         try? await ref.document(item.id).setData(dict)
     }

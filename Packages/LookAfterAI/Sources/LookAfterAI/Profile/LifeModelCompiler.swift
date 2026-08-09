@@ -45,7 +45,7 @@ public final class LifeModelCompiler {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard let data = clean.data(using: .utf8),
-              let model = try? JSONDecoder().decode(LifeModel.self, from: data) else {
+              let model = try? SharedFormatters.jsonDecoderSeconds.decode(LifeModel.self, from: data) else {
             return nil
         }
         return model

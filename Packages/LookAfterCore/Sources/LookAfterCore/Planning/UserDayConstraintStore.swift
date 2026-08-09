@@ -41,7 +41,7 @@ public enum UserDayConstraintStore {
 
     private static func loadAll() -> [UserDayConstraint] {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([UserDayConstraint].self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([UserDayConstraint].self, from: data) else {
             return []
         }
         let calendar = Calendar.current
@@ -50,7 +50,7 @@ public enum UserDayConstraintStore {
     }
 
     private static func saveAll(_ constraints: [UserDayConstraint]) {
-        guard let data = try? JSONEncoder().encode(constraints) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(constraints) else { return }
         UserDefaults.standard.set(data, forKey: storageKey)
     }
 }

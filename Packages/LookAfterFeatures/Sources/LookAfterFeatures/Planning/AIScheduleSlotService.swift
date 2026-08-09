@@ -216,7 +216,7 @@ public enum AIScheduleSlotService {
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let decoded = try JSONDecoder().decode([RawScheduleSuggestion].self, from: Data(clean.utf8))
+        let decoded = try SharedFormatters.jsonDecoderSeconds.decode([RawScheduleSuggestion].self, from: Data(clean.utf8))
         return decoded.map {
             DayScheduleSuggestion(
                 id: $0.id,

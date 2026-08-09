@@ -263,7 +263,7 @@ public final class FirebaseManager: ObservableObject {
     
     /// Encode a Codable object to Firestore-compatible dictionary.
     public func encode<T: Encodable>(_ item: T) throws -> [String: Any] {
-        let data = try JSONEncoder().encode(item)
+        let data = try SharedFormatters.jsonEncoderSeconds.encode(item)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw FirebaseManagerError.encodingError
         }
@@ -277,8 +277,7 @@ public final class FirebaseManager: ObservableObject {
         }
         let jsonData = try JSONSerialization.data(withJSONObject: data)
         
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
+        let decoder = SharedFormatters.jsonDecoderSeconds
         return try decoder.decode(type, from: jsonData)
     }
 }

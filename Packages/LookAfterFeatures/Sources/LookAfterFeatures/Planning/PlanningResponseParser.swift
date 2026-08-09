@@ -47,7 +47,7 @@ enum PlanningResponseParser {
 
     private static func decodeStrict(_ clean: String) -> PlanningTurnResponse? {
         guard let data = clean.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(PlanningTurnResponse.self, from: data)
+        return try? SharedFormatters.jsonDecoderSeconds.decode(PlanningTurnResponse.self, from: data)
     }
 
     // MARK: - Lenient dictionary decode

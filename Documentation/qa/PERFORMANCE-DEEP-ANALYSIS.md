@@ -34,13 +34,14 @@
 | PERF-015 | **Fixed** | Cached `schedulingContext` / `activeTasks` until revision |
 | PERF-016 | **Fixed** | `taskIndex` + `applyInMemoryTaskUpdate` on hot mutate paths |
 | PERF-017 | **Fixed** | Cap 40 tasks + concurrent refine group |
-| PERF-018 | **Improved** | SharedFormatters across cycle/habits/meds/GLM/decision/cascade/briefing |
+| PERF-018 | **Fixed** | Near-complete SharedFormatters migration (stores, persistence, AI, widgets, planning parsers) |
 | PERF-019 | **Fixed** | `ADHDOverlayHost` isolates focus/emergency from root canvas |
 | PERF-020 | **Fixed** | DaySchedulePlanner id maps + O(slotted) existingTasks |
 | PERF-021 | **Fixed** | Prompt task limit 20 (max 40); shared time formatter; missed capped |
 | PERF-022 | **Fixed** | Pin-only fingerprint skips redundant Live Activity refresh |
 | PERF-023 | **Fixed** | Health `ensureSynced` single-flight coalescing |
 | PERF-024 | **Fixed** | TasksViewModel cascade `print` gated `#if DEBUG` |
+| PERF-016′ | **Fixed** | Remaining VM firstIndex assigns use `applyInMemoryTaskUpdate` / `taskIndex` |
 
 ---
 
