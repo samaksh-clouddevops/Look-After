@@ -12,14 +12,18 @@ public final class ADHDViewModel: ObservableObject {
     @Published public var emergencyTasks: [LifeTask] = []
     
     // MARK: - Focus Session
-    
+
     @Published public var isFocusSessionActive: Bool = false
+    /// High-frequency clock for the focus overlay only.
     @Published public var focusSessionElapsed: TimeInterval = 0
+    /// 5-second coarse elapsed for shell / non-overlay observers (PERF-014).
+    @Published public private(set) var focusDisplayElapsed: TimeInterval = 0
     @Published public var focusSessionTarget: TimeInterval = 25 * 60
     /// Bumps when Live Activity should refresh progress (bucket boundaries).
     @Published public private(set) var focusProgressBucket: Int = -1
 
     private static let liveActivityProgressBuckets: Set<Int> = [0, 25, 50, 65, 75, 90, 95]
+    private var lastDisplayElapsedBucket: Int = -1
     @Published public var focusBreakReminder: Bool = false
     @Published public var currentFocusTask: LifeTask?
     @Published public var isPaused: Bool = false
@@ -165,7 +169,7 @@ public final class ADHDViewModel: ObservableObject {
             let duration = durationMinutes ?? Self.focusDuration(for: task, defaultMinutes: focusDurationMinutes)
             cancelCountdownIfNeeded()
             stopFocusTick()
-            focusSessionElapsed = 0
+            resetElapsedCounters()
             focusSessionTarget = TimeInterval(duration * 60)
             focusProgressBucket = -1
             focusBreakReminder = false
@@ -212,6 +216,13 @@ public final class ADHDViewModel: ObservableObject {
         focusProgressBucket = bucket
     }
 
+    private func publishFocusDisplayElapsedIfNeeded() {
+        let bucket = Int(focusSessionElapsed) / 5
+        guard bucket != lastDisplayElapsedBucket else { return }
+        lastDisplayElapsedBucket = bucket
+        focusDisplayElapsed = focusSessionElapsed
+    }
+
     private func startFocusTimer() {
         stopFocusTick()
         focusTickTask = Task { @MainActor in
@@ -221,6 +232,7 @@ public final class ADHDViewModel: ObservableObject {
                 guard !isPaused else { continue }
 
                 focusSessionElapsed += 1
+                publishFocusDisplayElapsedIfNeeded()
                 publishFocusProgressBucketIfNeeded()
 
                 if focusSessionElapsed >= focusSessionTarget {
@@ -247,7 +259,7 @@ public final class ADHDViewModel: ObservableObject {
     /// Start a break period.
     private func startBreak() {
         isOnBreak = true
-        focusSessionElapsed = 0
+        resetElapsedCounters()
         focusProgressBucket = -1
 
         // Long break every N sessions (guard divisor — UserDefaults can be 0).
@@ -313,7 +325,7 @@ public final class ADHDViewModel: ObservableObject {
     /// Reset current session timer to full configured duration (or task window when set).
     public func resetTimer() {
         stopFocusTick()
-        focusSessionElapsed = 0
+        resetElapsedCounters()
         focusProgressBucket = -1
         if isOnBreak {
             focusSessionTarget = TimeInterval((isLongBreakSession ? longBreakMinutes : breakDurationMinutes) * 60)
@@ -325,6 +337,12 @@ public final class ADHDViewModel: ObservableObject {
         }
         isPaused = false
         startFocusTimer()
+    }
+
+    private func resetElapsedCounters() {
+        focusSessionElapsed = 0
+        focusDisplayElapsed = 0
+        lastDisplayElapsedBucket = -1
     }
 
     /// Optional hook fired synchronously when a focus session begins (Live Activity, execution layer).
@@ -340,7 +358,7 @@ public final class ADHDViewModel: ObservableObject {
         stopFocusTick()
         cancelCountdownIfNeeded()
         isFocusSessionActive = false
-        focusSessionElapsed = 0
+        resetElapsedCounters()
         focusProgressBucket = -1
         focusBreakReminder = false
         currentFocusTask = nil
