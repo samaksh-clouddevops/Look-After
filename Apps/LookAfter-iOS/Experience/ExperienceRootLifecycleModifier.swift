@@ -158,6 +158,9 @@ private struct ExperienceRootFocusModifier: ViewModifier {
     @ObservedObject var shell: AppShellState
     @ObservedObject var adhdVM: ADHDViewModel
 
+    /// Coalesces rapid focus-state @Published flips into one Live Activity update (PERF-001).
+    @State private var focusSyncTask: Task<Void, Never>?
+
     func body(content: Content) -> some View {
         content
             .onChange(of: adhdVM.showContextRecovery) { _, show in
@@ -174,6 +177,7 @@ private struct ExperienceRootFocusModifier: ViewModifier {
                 }
             }
             .onChange(of: adhdVM.isFocusSessionActive) { _, active in
+                focusSyncTask?.cancel()
                 Task { @MainActor in
                     await Task.yield()
                     ExecutionEnvironmentCoordinator.shared.setManualFocusActive(active)
@@ -185,30 +189,23 @@ private struct ExperienceRootFocusModifier: ViewModifier {
                     }
                 }
             }
-            .onChange(of: adhdVM.isPaused) { _, _ in
-                Task { @MainActor in
-                    await Task.yield()
-                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
-                }
-            }
-            .onChange(of: adhdVM.isOnBreak) { _, _ in
-                Task { @MainActor in
-                    await Task.yield()
-                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
-                }
-            }
-            .onChange(of: adhdVM.focusSessionTarget) { _, _ in
-                Task { @MainActor in
-                    await Task.yield()
-                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
-                }
-            }
-            .onChange(of: adhdVM.focusProgressBucket) { _, _ in
-                Task { @MainActor in
-                    await Task.yield()
-                    WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
-                }
-            }
+            // Batch pause/break/target/progress into a single deferred sync.
+            .onChange(of: adhdVM.isPaused) { _, _ in scheduleCoalescedFocusSync() }
+            .onChange(of: adhdVM.isOnBreak) { _, _ in scheduleCoalescedFocusSync() }
+            .onChange(of: adhdVM.focusSessionTarget) { _, _ in scheduleCoalescedFocusSync() }
+            .onChange(of: adhdVM.focusProgressBucket) { _, _ in scheduleCoalescedFocusSync() }
+            .onDisappear { focusSyncTask?.cancel() }
+    }
+
+    private func scheduleCoalescedFocusSync() {
+        guard adhdVM.isFocusSessionActive else { return }
+        focusSyncTask?.cancel()
+        focusSyncTask = Task { @MainActor in
+            // ~3 frames — collapses pause+break+target churn on session start.
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled, adhdVM.isFocusSessionActive else { return }
+            WidgetSyncService.shared.syncFocusActivity(adhdVM: adhdVM)
+        }
     }
 }
 
@@ -216,6 +213,9 @@ private struct ExperienceRootDataModifier: ViewModifier {
     @ObservedObject var firebase: FirebaseManager
     @ObservedObject var shell: AppShellState
     @ObservedObject var analytics: BackgroundAnalyticsService
+    /// Debounce fan-out from `.taskListDidChange` — can fire many times during reconcile (PERF-002).
+    @State private var taskListFanoutTask: Task<Void, Never>?
+    @State private var scheduleFanoutTask: Task<Void, Never>?
 
     func body(content: Content) -> some View {
         content
@@ -239,45 +239,57 @@ private struct ExperienceRootDataModifier: ViewModifier {
                 guard !shell.isPerformingFactoryReset else { return }
                 let userId = firebase.resolvedUserId
                 if !userId.isEmpty {
+                    // Cheap path — keep VM in sync immediately.
                     shell.tasksVM.syncFromTaskStore()
                     shell.tasksVM.requestDebouncedScheduleReconcile(userId: userId)
                 }
-                shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: userId)
-                if !userId.isEmpty {
-                    Task {
-                        await shell.brainVM.regenerateCognitiveSnapshot(
-                            completedTasksToday: shell.tasksVM.completedToday,
-                            userId: userId
-                        )
-                        let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
-                        shell.briefingVM.refreshTaskProgress(
-                            brainVM: shell.brainVM,
-                            tasksVM: shell.tasksVM,
-                            healthKitAvailable: healthEnabled,
-                            lifeTimelineEvents: shell.timelineService.snapshot.today
-                        )
-                        shell.syncBrainLiveProgress(userId: userId)
-                    }
+                // Heavy briefing/brain work coalesced.
+                taskListFanoutTask?.cancel()
+                taskListFanoutTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 120_000_000)
+                    guard !Task.isCancelled, !shell.isPerformingFactoryReset else { return }
+                    let uid = firebase.resolvedUserId
+                    shell.briefingVM.refreshLifeGaps(tasksVM: shell.tasksVM, userId: uid)
+                    guard !uid.isEmpty else { return }
+                    await shell.brainVM.regenerateCognitiveSnapshot(
+                        completedTasksToday: shell.tasksVM.completedToday,
+                        userId: uid
+                    )
+                    let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
+                    shell.briefingVM.refreshTaskProgress(
+                        brainVM: shell.brainVM,
+                        tasksVM: shell.tasksVM,
+                        healthKitAvailable: healthEnabled,
+                        lifeTimelineEvents: shell.timelineService.snapshot.today
+                    )
+                    shell.syncBrainLiveProgress(userId: uid)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .scheduleDidChange)) { _ in
                 guard !shell.isPerformingFactoryReset else { return }
-                let userId = firebase.resolvedUserId
-                shell.refreshWidgetData()
                 shell.scheduleAppleCalendarSync()
-                if !userId.isEmpty {
-                    Task {
-                        let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
-                        shell.briefingVM.refreshTaskProgress(
-                            brainVM: shell.brainVM,
-                            tasksVM: shell.tasksVM,
-                            healthKitAvailable: healthEnabled,
-                            lifeTimelineEvents: shell.timelineService.snapshot.today
-                        )
-                    }
+                scheduleFanoutTask?.cancel()
+                scheduleFanoutTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    guard !Task.isCancelled, !shell.isPerformingFactoryReset else { return }
+                    let userId = firebase.resolvedUserId
+                    shell.refreshWidgetData()
+                    guard !userId.isEmpty else { return }
+                    let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
+                    shell.briefingVM.refreshTaskProgress(
+                        brainVM: shell.brainVM,
+                        tasksVM: shell.tasksVM,
+                        healthKitAvailable: healthEnabled,
+                        lifeTimelineEvents: shell.timelineService.snapshot.today
+                    )
                 }
             }
+            .onDisappear {
+                taskListFanoutTask?.cancel()
+                scheduleFanoutTask?.cancel()
+            }
     }
+}
 }
 
 private struct ExperienceRootNotificationModifier: ViewModifier {
