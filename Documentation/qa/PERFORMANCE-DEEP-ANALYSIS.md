@@ -35,7 +35,9 @@
 | PERF-016 | **Fixed** | `taskIndex` + `applyInMemoryTaskUpdate` on hot mutate paths |
 | PERF-017 | **Fixed** | Cap 40 tasks + concurrent refine group |
 | PERF-018 | **Partial** | SharedFormatters + CaptureGraph / GLM usage / Firestore |
-| PERF-019+ | Open | Wide shell observation / planner bitmap / prompt caps |
+| PERF-019 | **Fixed** | `ADHDOverlayHost` isolates focus/emergency from root canvas |
+| PERF-020 | **Fixed** | DaySchedulePlanner id maps + O(slotted) existingTasks |
+| PERF-021 | **Fixed** | Prompt task limit 20 (max 40); shared time formatter; missed capped |
 
 ---
 
