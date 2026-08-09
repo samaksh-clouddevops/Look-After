@@ -104,9 +104,14 @@ public final class ADHDViewModel: ObservableObject {
         countdownValue = 3
         currentFocusTask = task
 
-        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+        // Create + add once for `.common` (scroll-safe). Do not also use `scheduledTimer`
+        // which would register on `.default` and double-fire (BUG-009).
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] timer in
             Task { @MainActor in
-                guard let self = self else { timer.invalidate(); return }
+                guard let self else {
+                    timer.invalidate()
+                    return
+                }
 
                 if self.countdownValue > 1 {
                     self.countdownValue -= 1
@@ -129,12 +134,33 @@ public final class ADHDViewModel: ObservableObject {
         isCountdownActive = false
         countdownValue = 3
     }
-    
+
     // MARK: - Focus Session
     
     /// Start a focus/pomodoro session — uses the scheduled window when set, else task estimate.
     /// Performance: flips `isFocusSessionActive` immediately so UI can paint; timer starts next run-loop.
     public func startFocusSession(task: LifeTask, durationMinutes: Int? = nil) {
+        beginFocusInterval(
+            task: task,
+            durationMinutes: durationMinutes,
+            resetSessionCounter: true
+        )
+    }
+
+    /// Continues the next pomodoro work interval without resetting the session counter (BUG-008).
+    private func continueFocusInterval(task: LifeTask) {
+        beginFocusInterval(
+            task: task,
+            durationMinutes: nil,
+            resetSessionCounter: false
+        )
+    }
+
+    private func beginFocusInterval(
+        task: LifeTask,
+        durationMinutes: Int?,
+        resetSessionCounter: Bool
+    ) {
         PerformanceMonitor.signpostInterval("FocusTimerOpen", warnAfterMs: 16) {
             let duration = durationMinutes ?? Self.focusDuration(for: task, defaultMinutes: focusDurationMinutes)
             cancelCountdownIfNeeded()
@@ -147,7 +173,9 @@ public final class ADHDViewModel: ObservableObject {
             isPaused = false
             isOnBreak = false
             showContextRecovery = false
-            currentSessionNumber = 1
+            if resetSessionCounter {
+                currentSessionNumber = 1
+            }
             // UI flag last so observers see a complete initial state in one publish cycle.
             isFocusSessionActive = true
             onFocusSessionDidStart?()
@@ -172,7 +200,7 @@ public final class ADHDViewModel: ObservableObject {
         }
         return defaultMinutes
     }
-    
+
     private func stopFocusTick() {
         focusTickTask?.cancel()
         focusTickTask = nil
@@ -201,7 +229,7 @@ public final class ADHDViewModel: ObservableObject {
                         isOnBreak = false
                         currentSessionNumber += 1
                         if let task = currentFocusTask {
-                            startFocusSession(task: task)
+                            continueFocusInterval(task: task)
                         }
                     } else {
                         startBreak()
@@ -259,24 +287,24 @@ public final class ADHDViewModel: ObservableObject {
         isOnBreak = false
         currentSessionNumber += 1
         if let task = currentFocusTask {
-            startFocusSession(task: task)
+            continueFocusInterval(task: task)
         }
     }
-    
+
     /// Add time to current session.
     public func addTime(minutes: Int) {
         focusSessionTarget += TimeInterval(minutes * 60)
         publishFocusProgressBucketIfNeeded()
     }
-    
+
     /// Reduce time from current session.
     public func reduceTime(minutes: Int) {
         let reduction = TimeInterval(minutes * 60)
         focusSessionTarget = max(focusSessionElapsed + 60, focusSessionTarget - reduction) // Keep at least 1 min remaining
         publishFocusProgressBucketIfNeeded()
     }
-    
-    /// Reset current session timer to full configured duration.
+
+    /// Reset current session timer to full configured duration (or task window when set).
     public func resetTimer() {
         stopFocusTick()
         focusSessionElapsed = 0
@@ -284,13 +312,16 @@ public final class ADHDViewModel: ObservableObject {
         if isOnBreak {
             let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
             focusSessionTarget = TimeInterval((isLongBreak ? longBreakMinutes : breakDurationMinutes) * 60)
+        } else if let task = currentFocusTask {
+            let minutes = Self.focusDuration(for: task, defaultMinutes: focusDurationMinutes)
+            focusSessionTarget = TimeInterval(minutes * 60)
         } else {
             focusSessionTarget = TimeInterval(focusDurationMinutes * 60)
         }
         isPaused = false
         startFocusTimer()
     }
-    
+
     /// Optional hook fired synchronously when a focus session begins (Live Activity, execution layer).
     public var onFocusSessionDidStart: (() -> Void)?
 
@@ -318,37 +349,48 @@ public final class ADHDViewModel: ObservableObject {
         }
     }
     
-    /// Resume from interruption with context recovery.
+    /// Resume from interruption with context recovery (restores paused elapsed when possible).
     public func resumeFromInterruption() {
         showContextRecovery = false
+        if isFocusSessionActive, isPaused {
+            resumeFocusSession()
+            return
+        }
         if let task = lastInterruptedTask {
+            // Fresh interval if the focus session was fully torn down.
             startFocusSession(task: task)
         }
     }
-    
+
     // MARK: - Body Doubling
-    
+
     /// Start body doubling mode — virtual co-working presence.
     public func startBodyDoubling() {
         isBodyDoubling = true
         bodyDoublingElapsed = 0
-        
+
         bodyDoublingTimer?.invalidate()
-        bodyDoublingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] timer in
             Task { @MainActor in
-                guard let self = self else { timer.invalidate(); return }
+                guard let self else {
+                    timer.invalidate()
+                    return
+                }
                 self.bodyDoublingElapsed += 1
             }
         }
+        bodyDoublingTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
-    
+
     /// End body doubling mode.
     public func endBodyDoubling() {
         bodyDoublingTimer?.invalidate()
+        bodyDoublingTimer = nil
         isBodyDoubling = false
         bodyDoublingElapsed = 0
     }
-    
+
     // MARK: - Save Settings
     
     public func saveTimerSettings() {
