@@ -522,24 +522,39 @@ final class AppShellState: ObservableObject {
 
     /// Keeps brain/timeline fresh while the app is open. Capacity stays deterministic — no LLM polling.
     /// Performance: skips ticks while a refresh is already running or a focus session is active.
+    /// Interval is 90s (was 60s) and alternate ticks use briefing-only refresh (PERF-003).
     func startContextLoop(userId: String) {
         contextLoopTask?.cancel()
         contextLoopTask = Task { [weak self] in
+            var tick = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                try? await Task.sleep(nanoseconds: 90_000_000_000)
                 guard let self, !Task.isCancelled, !self.isPerformingFactoryReset else { return }
                 // Skip while focus UI is up — avoids jank on the timer screen.
                 guard !self.adhdVM.isFocusSessionActive else { continue }
                 // Skip if a previous refresh is still running.
                 guard !self.isContextRefreshInFlight else { continue }
 
+                tick &+= 1
                 let userName = UserLifeProfileStore.resolvedDisplayName()
-                await self.refreshContext(
-                    userId: userId,
-                    userName: userName,
-                    peakStartHour: UserLifeProfileStore.load().peakStartHour,
-                    capacityLLMPolicy: .deterministicOnly
-                )
+                let peak = UserLifeProfileStore.load().peakStartHour
+                // Full reconcile every other tick; light surface refresh in between.
+                if tick.isMultiple(of: 2) {
+                    await self.refreshContext(
+                        userId: userId,
+                        userName: userName,
+                        peakStartHour: peak,
+                        capacityLLMPolicy: .deterministicOnly
+                    )
+                } else {
+                    await self.refreshBriefingSurface(
+                        userId: userId,
+                        userName: userName,
+                        peakStartHour: peak,
+                        capacityLLMPolicy: .deterministicOnly,
+                        refreshHealth: false
+                    )
+                }
             }
         }
     }
