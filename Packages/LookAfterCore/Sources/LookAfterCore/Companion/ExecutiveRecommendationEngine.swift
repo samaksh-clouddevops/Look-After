@@ -102,6 +102,27 @@ public enum ExecutiveRecommendationEngine {
                 return nil
             }
 
+            // Never hero deep work after short sleep / very low energy (Brain #12).
+            let profile = task.resolvedSemanticProfile
+            if !TaskSemanticScheduler.schedulability(profile: profile, context: schedContext).isAllowed,
+               TaskSemanticScheduler.isDeepWorkCandidate(profile: profile) {
+                if let alternate = nextSchedulableTask(excluding: task.id, from: input, context: schedContext) {
+                    return recommend(from: Input(
+                        task: alternate,
+                        snapshot: input.snapshot,
+                        resume: input.resume,
+                        healthSummary: input.healthSummary,
+                        tasks: input.tasks,
+                        now: input.now,
+                        calendar: input.calendar,
+                        isContinue: false
+                    ))
+                }
+                if let recovery = recoveryRecommendation(from: input) {
+                    return recovery
+                }
+            }
+
             if isMedicationOutOfWindow(task: task, context: schedContext) {
                 if let alternate = nextSchedulableTask(excluding: task.id, from: input, context: schedContext) {
                     return recommend(from: Input(
@@ -184,11 +205,47 @@ public enum ExecutiveRecommendationEngine {
             if !schedulable { score -= 500 }
             if task.isOverdue { score += 50 }
             if task.id == input.snapshot.currentMission?.id { score += 30 }
+            // Prefer lighter semantic types when sleep/energy is poor.
+            if isLowCapacityContext(context),
+               profile.cognitiveRequirement == .deepFocus || profile.semanticType == .deepWork {
+                score -= 60
+            }
+            if isLowCapacityContext(context),
+               profile.semanticType == .selfCare || profile.semanticType == .physicalActivity {
+                score += 35
+            }
             return (task, score)
         }
         return scored
             .filter { $0.1 > -400 }
             .min(by: { $0.1 > $1.1 })?.0
+    }
+
+    private static func isLowCapacityContext(_ context: TaskSemanticScheduler.Context) -> Bool {
+        if context.energyScore < 0.4 { return true }
+        if let sleep = context.sleepHours, sleep < 6 { return true }
+        return false
+    }
+
+    /// Explicit recovery hero when deep work is blocked after poor sleep.
+    private static func recoveryRecommendation(from input: Input) -> Output? {
+        let wait = HumanLanguage.poorSleepImpact(waitUntil: nil)
+        return Output(
+            headline: "Take a 15–20 min recovery break",
+            supportingLine: wait.isEmpty
+                ? "Sleep was short — protect capacity before deep work."
+                : wait,
+            buttonLabel: "Start recovery",
+            durationMinutes: 20,
+            whyNowReasons: [
+                "Deep work after short sleep usually fails and costs more executive energy.",
+                "A short reset raises the odds the next focus block succeeds."
+            ],
+            taskID: nil,
+            actionKind: .startFocus,
+            impactLabel: "Protect capacity",
+            clarityLabel: "Recovery"
+        )
     }
 
     // MARK: - Medication

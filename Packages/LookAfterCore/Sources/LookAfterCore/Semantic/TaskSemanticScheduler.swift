@@ -56,9 +56,19 @@ public enum TaskSemanticScheduler {
             }
         }
 
+        // Deep focus / deep work after short sleep is an executive-cost failure (Brain #12).
+        // Apply even when the profile omitted an explicit avoidAfterPoorSleep tag.
+        if isDeepWorkCandidate(profile: profile),
+           let sleep = context.sleepHours, sleep < 6 {
+            return TaskSchedulabilityResult(
+                isAllowed: false,
+                reason: "Deep focus blocked after short sleep (\(String(format: "%.1f", sleep))h)"
+            )
+        }
+
         if profile.schedulingConstraints.contains(.avoidAfterPoorSleep),
-           let sleep = context.sleepHours, sleep < 6,
-           profile.cognitiveRequirement == .deepFocus {
+           let sleep = context.sleepHours, sleep < 6.5,
+           profile.cognitiveRequirement == .deepFocus || profile.semanticType == .deepWork {
             return TaskSchedulabilityResult(
                 isAllowed: false,
                 reason: "Deep focus blocked after poor sleep"
@@ -71,6 +81,17 @@ public enum TaskSemanticScheduler {
             return TaskSchedulabilityResult(
                 isAllowed: false,
                 reason: "Needs \(min(profile.estimatedDuration, 45))+ uninterrupted minutes"
+            )
+        }
+
+        // Low energy + deep work: block unless deadline consequence is medical / high.
+        if isDeepWorkCandidate(profile: profile),
+           context.energyScore < 0.4,
+           profile.consequenceOfDelay != .medicalRisk,
+           profile.consequenceOfDelay != .high {
+            return TaskSchedulabilityResult(
+                isAllowed: false,
+                reason: "Deep work deferred — energy too low for sustained focus"
             )
         }
 
@@ -89,7 +110,8 @@ public enum TaskSemanticScheduler {
     /// Score adjustment for ranking — positive favors scheduling now.
     public static func schedulingScoreAdjustment(
         profile: TaskSemanticProfile,
-        context: Context
+        context: Context,
+        deferralCount: Int = 0
     ) -> Int {
         var score = 0
         let window = currentTimeWindow(at: context.now, calendar: context.calendar)
@@ -112,6 +134,19 @@ public enum TaskSemanticScheduler {
         }
 
         if profile.semanticType == .medication { score += 100 }
+
+        // Chronic deferral → prefer micro / alternate slots over hero push (Brain #L-003).
+        if deferralCount >= 3 {
+            score -= 40 + min(deferralCount - 3, 5) * 10
+        }
+
+        if isDeepWorkCandidate(profile: profile),
+           let sleep = context.sleepHours, sleep < 6.5 {
+            score -= 80
+        }
+        if isDeepWorkCandidate(profile: profile), context.energyScore < 0.45 {
+            score -= 50
+        }
 
         if !schedulability(profile: profile, context: context).isAllowed {
             score -= 200

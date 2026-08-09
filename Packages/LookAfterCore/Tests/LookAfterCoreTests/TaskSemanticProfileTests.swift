@@ -43,6 +43,28 @@ final class TaskSemanticProfileTests: XCTestCase {
         XCTAssertTrue(TaskSemanticScheduler.isDeepWorkCandidate(profile: profile))
     }
 
+    func testDeepWorkBlockedAfterShortSleep() {
+        let task = LifeTask(title: "Write quarterly report", difficulty: .hard, estimatedMinutes: 90)
+        let profile = TaskSemanticProfileBuilder.build(from: task)
+        let context = TaskSemanticScheduler.Context(
+            energyScore: 0.7,
+            sleepHours: 4.9,
+            freeBlockMinutes: 120
+        )
+        let result = TaskSemanticScheduler.schedulability(profile: profile, context: context)
+        XCTAssertFalse(result.isAllowed, "Deep work must not schedule after <6h sleep")
+    }
+
+    func testChronicDeferralSuggestsWeekdayShift() {
+        XCTAssertNil(ChronicDeferralLearning.suggestedWeekdayOffset(deferralCount: 2))
+        XCTAssertEqual(ChronicDeferralLearning.suggestedWeekdayOffset(deferralCount: 3), 1)
+        XCTAssertEqual(ChronicDeferralLearning.suggestedWeekdayOffset(deferralCount: 6), 2)
+        var task = LifeTask(title: "Tuesday gym", estimatedMinutes: 45)
+        task.recurrence = .weekly
+        let shifted = ChronicDeferralLearning.shiftedScheduleDate(for: task, deferralCount: 3)
+        XCTAssertNotNil(shifted)
+    }
+
     func testShoppingProfileIsFlexibleErrand() {
         let task = LifeTask(title: "Grocery shopping", estimatedMinutes: 45)
         let profile = TaskSemanticProfileBuilder.build(from: task)
