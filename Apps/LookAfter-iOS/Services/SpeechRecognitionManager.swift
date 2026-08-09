@@ -209,13 +209,18 @@ public final class SpeechRecognitionManager: ObservableObject {
     }
     
     private func updateAudioLevels(level: CGFloat) {
-        audioLevels.removeFirst()
-        audioLevels.append(max(0.08, level))
+        let next = max(0.08, level)
+        // Avoid publishing identical-looking bars (PERF-004).
+        var levels = audioLevels
+        levels.removeFirst()
+        levels.append(next)
+        audioLevels = levels
     }
-    
+
     private func startLevelAnimation() {
         levelTimer?.invalidate()
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        // 10 Hz is enough for visualizers; 20 Hz was thrashing @Published (PERF-004).
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.isListening else { return }
                 // Subtle idle animation when levels are low
@@ -224,6 +229,8 @@ public final class SpeechRecognitionManager: ObservableObject {
                 }
             }
         }
+        levelTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func noteTranscriptActivity() {
