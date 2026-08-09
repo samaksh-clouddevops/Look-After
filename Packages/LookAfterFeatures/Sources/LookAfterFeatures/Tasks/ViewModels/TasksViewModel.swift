@@ -2467,14 +2467,18 @@ public final class TasksViewModel: ObservableObject {
             if !suggestions.isEmpty {
                 var working = tasks
                 let changed = AIScheduleSlotService.applySuggestions(suggestions, to: &working, on: day, calendar: calendar)
+                var aiBatch: [LifeTask] = []
                 for taskID in changed {
                     guard let updated = working.first(where: { $0.id == taskID }) else { continue }
                     if let index = tasks.firstIndex(where: { $0.id == taskID }) {
                         tasks[index] = updated
                     }
                     occupied.append(updated)
+                    aiBatch.append(updated)
+                }
+                if !aiBatch.isEmpty {
                     do {
-                        try await taskRepo.update(updated)
+                        try await taskRepo.updateMany(aiBatch)
                     } catch {
                         self.error = error.localizedDescription
                     }
@@ -2520,6 +2524,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         let allocationByID = Dictionary.uniquingFirstValue(allocations.map { ($0.id, $0.scheduledTime) })
+        var slotBatch: [LifeTask] = []
         for task in remainingToAllocate {
             guard let slot = allocationByID[task.id] else { continue }
             var updated = task
@@ -2531,8 +2536,11 @@ public final class TasksViewModel: ObservableObject {
             if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
                 tasks[index] = updated
             }
+            slotBatch.append(updated)
+        }
+        if !slotBatch.isEmpty {
             do {
-                try await taskRepo.update(updated)
+                try await taskRepo.updateMany(slotBatch)
             } catch {
                 self.error = error.localizedDescription
             }
@@ -2566,6 +2574,8 @@ public final class TasksViewModel: ObservableObject {
             calendar: calendar,
             parkedQueue: ParkedTaskQueueStore.shared
         )
+        var batch: [LifeTask] = []
+        batch.reserveCapacity(result.changedTaskIDs.count)
         for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
             if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
                 if updated.status.isActive {
@@ -2581,8 +2591,11 @@ public final class TasksViewModel: ObservableObject {
                     completedToday.remove(at: index)
                 }
             }
+            batch.append(updated)
+        }
+        if !batch.isEmpty {
             do {
-                try await taskRepo.update(updated)
+                try await taskRepo.updateMany(batch)
             } catch {
                 self.error = error.localizedDescription
                 return

@@ -181,6 +181,31 @@ public final class TaskRepository: ObservableObject {
         syncTaskToFirestore(mutableTask, merge: true)
     }
 
+    /// Batch local update — one SQLite replace for N tasks (PERF-005 cascade/reconcile).
+    public func updateMany(_ tasks: [LifeTask]) async throws {
+        guard !tasks.isEmpty else { return }
+        var working = allLocalTasks()
+        let deleted = TaskDeletionRegistry.load()
+        var touched: [LifeTask] = []
+        for var task in tasks {
+            guard !deleted.contains(task.id) else { continue }
+            ScheduleNormalization.normalizeFields(&task)
+            task.updatedAt = Date()
+            if let index = working.firstIndex(where: { $0.id == task.id }) {
+                working[index] = task
+            } else {
+                working.insert(task, at: 0)
+            }
+            touched.append(task)
+        }
+        guard !touched.isEmpty else { return }
+        try await persistAllLocallyAwait(working)
+        for task in touched {
+            TaskPersistenceLog.update(task)
+            syncTaskToFirestore(task, merge: true)
+        }
+    }
+
     public func delete(_ id: String) async throws {
         TaskDeletionRegistry.markDeleted(id)
         var tasks = allLocalTasks()
