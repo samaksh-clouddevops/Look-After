@@ -96,7 +96,7 @@ public enum DayScheduleReconciler {
 
         var changed: Set<String> = []
         var decisions: [ConflictCascadeDecision] = []
-        var byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        var byID = Dictionary.uniquingFirstValue(tasks.map { ($0.id, $0) })
 
         let yesterdayIncomplete = tasks.filter { task in
             guard task.status.isActive, let d = task.scheduledDate else { return false }

@@ -160,7 +160,7 @@ public enum DaySchedulePlanner {
         on day: Date,
         calendar: Calendar = .current
     ) -> (tasks: [LifeTask], changedIDs: Set<String>) {
-        var byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        var byID = Dictionary.uniquingFirstValue(tasks.map { ($0.id, $0) })
         var changed = Set<String>()
         let dayStart = calendar.startOfDay(for: day)
 
@@ -246,7 +246,7 @@ public enum DaySchedulePlanner {
         calendar: Calendar
     ) -> Set<String> {
         var changed = Set<String>()
-        let slotByID = Dictionary(uniqueKeysWithValues: slots.map { ($0.taskID, $0) })
+        let slotByID = Dictionary.uniquingFirstValue(slots.map { ($0.taskID, $0) })
         for task in tasks {
             guard let slot = slotByID[task.id] else { continue }
             guard let current = task.scheduledTime else {

@@ -308,7 +308,7 @@ public final class TasksViewModel: ObservableObject {
 
     /// Keeps in-memory edits when a stale snapshot refresh races with an optimistic update.
     private static func mergeTasksPreservingNewerEdits(existing: [LifeTask], incoming: [LifeTask]) -> [LifeTask] {
-        var byID = Dictionary(uniqueKeysWithValues: incoming.map { ($0.id, $0) })
+        var byID = Dictionary.uniquingFirstValue(incoming.map { ($0.id, $0) })
         for task in existing {
             if let snapshotTask = byID[task.id] {
                 if hasMidnightSentinel(task), !hasMidnightSentinel(snapshotTask) {
@@ -511,7 +511,7 @@ public final class TasksViewModel: ObservableObject {
 
     /// Store rows plus optimistic in-memory edits — prevents duplicate recurrence materialization.
     private func mergedLocalTasks(for userId: String) -> [LifeTask] {
-        var byID = Dictionary(uniqueKeysWithValues: reloadLocalTasks(for: userId).map { ($0.id, $0) })
+        var byID = Dictionary.uniquingFirstValue(reloadLocalTasks(for: userId).map { ($0.id, $0) })
         for task in tasks + completedToday + recurrenceTemplates {
             guard task.userId == userId || userId.isEmpty else { continue }
             byID[task.id] = task
@@ -2443,7 +2443,7 @@ public final class TasksViewModel: ObservableObject {
                 )
             )
         }
-        let taskByID = Dictionary(uniqueKeysWithValues: toAllocate.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(toAllocate.map { ($0.id, $0) })
         var occupied = tasks.filter { task in
             guard task.status.isActive, let scheduledDate = task.scheduledDate, task.scheduledTime != nil else {
                 return false
@@ -2519,7 +2519,7 @@ public final class TasksViewModel: ObservableObject {
             occupied.append(placeholder)
         }
 
-        let allocationByID = Dictionary(uniqueKeysWithValues: allocations.map { ($0.id, $0.scheduledTime) })
+        let allocationByID = Dictionary.uniquingFirstValue(allocations.map { ($0.id, $0.scheduledTime) })
         for task in remainingToAllocate {
             guard let slot = allocationByID[task.id] else { continue }
             var updated = task

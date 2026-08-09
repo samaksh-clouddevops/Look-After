@@ -66,7 +66,7 @@ public enum AIScheduleSlotService {
     ) -> Set<String> {
         let dayStart = calendar.startOfDay(for: day)
         var changed = Set<String>()
-        let byID = Dictionary(uniqueKeysWithValues: suggestions.map { ($0.id, $0) })
+        let byID = Dictionary.uniquingFirstValue(suggestions.map { ($0.id, $0) })
 
         for index in tasks.indices {
             guard let suggestion = byID[tasks[index].id] else { continue }
@@ -165,7 +165,7 @@ public enum AIScheduleSlotService {
     ) -> [DayScheduleSuggestion] {
         let profile = UserLifeProfileStore.load()
         let dayStart = calendar.startOfDay(for: context.day)
-        let taskByID = Dictionary(uniqueKeysWithValues: context.allTasks.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(context.allTasks.map { ($0.id, $0) })
         let windows = SchedulingWindows.from(profile: profile, lifeModel: context.model)
 
         let requests = ids.compactMap { id -> DaySlotAllocator.Request? in

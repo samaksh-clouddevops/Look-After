@@ -154,7 +154,7 @@ enum PlanningResponseParser {
         let reasoning = dict["reasoning"] as? String ?? ""
         var deadline: Date?
         if let iso = dict["deadlineISO"] as? String ?? dict["deadline_iso"] as? String {
-            deadline = ISO8601DateFormatter().date(from: iso)
+            deadline = parseFlexibleISODate(iso)
         }
         let slices = parseSliceDrafts(from: dict) ?? []
         return MultiDayPlanDraft(
@@ -270,6 +270,22 @@ enum PlanningResponseParser {
             return "Here's a preview of your multi-day plan — let me know if it works."
         }
         return "I'm looking at your day and will adjust the plan based on what you shared."
+    }
+
+    private static func parseFlexibleISODate(_ raw: String) -> Date? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: trimmed) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: trimmed) { return date }
+        let dayOnly = DateFormatter()
+        dayOnly.calendar = Calendar(identifier: .gregorian)
+        dayOnly.locale = Locale(identifier: "en_US_POSIX")
+        dayOnly.timeZone = TimeZone.current
+        dayOnly.dateFormat = "yyyy-MM-dd"
+        return dayOnly.date(from: String(trimmed.prefix(10)))
     }
 }
 

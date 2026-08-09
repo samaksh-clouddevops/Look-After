@@ -126,7 +126,7 @@ public enum ConflictResolutionCascade {
         var decisions: [ConflictCascadeDecision] = []
         var changed: Set<String> = []
         var parkedIDs: [String] = []
-        var byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        var byID = Dictionary.uniquingFirstValue(tasks.map { ($0.id, $0) })
         var shiftCount = 0 // domino dampener counter for this root resolution
 
         // Destination-day actives for collision (exclude self).

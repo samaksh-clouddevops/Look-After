@@ -41,7 +41,7 @@ public final class ScheduleMutationService {
         planningDay: Date,
         calendar: Calendar = .current
     ) async throws {
-        let taskByID = Dictionary(uniqueKeysWithValues: viewModel.tasks.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(viewModel.tasks.map { ($0.id, $0) })
 
         for change in changes {
             guard var task = taskByID[change.id] else { continue }
