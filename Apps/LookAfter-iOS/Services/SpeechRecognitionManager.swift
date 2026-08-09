@@ -20,7 +20,8 @@ public final class SpeechRecognitionManager: ObservableObject {
     /// Called once per utterance with the final transcript (auto-commit or manual stop).
     public var onUtteranceComplete: ((String) -> Void)?
     
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private let speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
+        ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -29,7 +30,10 @@ public final class SpeechRecognitionManager: ObservableObject {
     private var lastTranscriptChange = Date()
     private var hasReceivedSpeech = false
     private var utteranceCommitted = false
-    
+    /// Throttle MainActor hops from the audio tap (BUG-019).
+    private var lastLevelPublish = Date.distantPast
+    private let levelPublishInterval: TimeInterval = 0.05
+
     public init() {}
     
     /// Request microphone and speech recognition permissions.
@@ -127,11 +131,17 @@ public final class SpeechRecognitionManager: ObservableObject {
                     sum += abs(channelData[i])
                 }
                 let avg = sum / Float(frameLength)
-                Task { @MainActor in
-                    self?.updateAudioLevels(level: CGFloat(min(avg * 8, 1.0)))
+                let level = CGFloat(min(avg * 8, 1.0))
+                // Coalesce level UI updates onto the main actor at ~20 Hz.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let now = Date()
+                    guard now.timeIntervalSince(self.lastLevelPublish) >= self.levelPublishInterval else { return }
+                    self.lastLevelPublish = now
+                    self.updateAudioLevels(level: level)
                 }
             }
-            
+
             recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
                 Task { @MainActor in
                     guard let self else { return }

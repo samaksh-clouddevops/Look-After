@@ -94,6 +94,17 @@ final class AppShellState: ObservableObject {
         }
     }
 
+    deinit {
+        if let deferralRecoveryObserver {
+            NotificationCenter.default.removeObserver(deferralRecoveryObserver)
+        }
+        if let taskCompletedObserver {
+            NotificationCenter.default.removeObserver(taskCompletedObserver)
+        }
+        calendarSyncDebounceTask?.cancel()
+        bootstrapTask?.cancel()
+    }
+
     func removeProactiveAction(_ action: ProactiveAction) {
         proactiveActions.removeAll { $0.id == action.id }
         briefingVM.setProactiveActions(proactiveActions)
@@ -217,6 +228,10 @@ final class AppShellState: ObservableObject {
         )
         rebuildTimelineFromTasks(immediate: true)
         syncWidgetDataOnly()
+        LiveActivityManager.shared.endOrphanedFocusActivitiesOnLaunch(
+            manualFocusActive: adhdVM.isFocusSessionActive,
+            executionProjects: false
+        )
         if WidgetSyncService.shared.isNowPinned {
             LiveActivityManager.shared.reattachNowPinIfNeeded()
         }
