@@ -97,7 +97,7 @@ object AppModuleCatalog {
         AppModule("simulation", "Simulation", "What-if planning sandbox", ModuleGroup.FOCUS, ModuleDestination.SIMULATION, ModuleStatus.SHIPPED, 220),
 
         AppModule("travel", "Travel", "Trips, packing & day open", ModuleGroup.GROWTH, ModuleDestination.TRAVEL, ModuleStatus.SHIPPED, 310),
-        AppModule("learning", "Learning", "Spaced practice loops", ModuleGroup.GROWTH, ModuleDestination.LEARNING, ModuleStatus.COMING_SOON, 320),
+        AppModule("learning", "Learning", "Spaced practice · due queue", ModuleGroup.GROWTH, ModuleDestination.LEARNING, ModuleStatus.SHIPPED, 320),
         AppModule("creativity", "Creativity", "Boards & sparks → Capture", ModuleGroup.GROWTH, ModuleDestination.CREATIVITY, ModuleStatus.SHIPPED, 330),
         AppModule("behavior", "Behavior", "Habit loops", ModuleGroup.GROWTH, ModuleDestination.BEHAVIOR, ModuleStatus.COMING_SOON, 340),
         AppModule("life", "Life hub", "Goals & areas", ModuleGroup.GROWTH, ModuleDestination.LIFE_HUB, ModuleStatus.COMING_SOON, 350),

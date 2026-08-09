@@ -30,6 +30,7 @@ import com.lookafter.app.ui.insights.InsightsScreen
 import com.lookafter.app.ui.medication.MedicationScreen
 import com.lookafter.app.ui.creativity.CreativityScreen
 import com.lookafter.app.ui.cycle.CycleScreen
+import com.lookafter.app.ui.learning.LearningScreen
 import com.lookafter.app.ui.modules.ComingSoonScreen
 import com.lookafter.app.ui.modules.ModulesScreen
 import com.lookafter.app.ui.motion.CalmAnimatedContent
@@ -101,6 +102,7 @@ fun LookAfterRootView(
     val cycle by viewModel.cycle.collectAsStateWithLifecycle()
     val cycleSnapshot by viewModel.cycleSnapshot.collectAsStateWithLifecycle()
     val creativity by viewModel.creativity.collectAsStateWithLifecycle()
+    val learning by viewModel.learning.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
 
@@ -131,6 +133,7 @@ fun LookAfterRootView(
     var travelOpen by remember { mutableStateOf(false) }
     var cycleOpen by remember { mutableStateOf(false) }
     var creativityOpen by remember { mutableStateOf(false) }
+    var learningOpen by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf<String?>(null) }
     var comingSoonSubtitle by remember { mutableStateOf("") }
     var captureOpen by remember { mutableStateOf(false) }
@@ -151,6 +154,7 @@ fun LookAfterRootView(
         travelOpen = false
         cycleOpen = false
         creativityOpen = false
+        learningOpen = false
         comingSoonTitle = null
         simulationOpen = false
     }
@@ -170,6 +174,7 @@ fun LookAfterRootView(
             ModuleDestination.TRAVEL -> travelOpen = true
             ModuleDestination.CYCLE -> cycleOpen = true
             ModuleDestination.CREATIVITY -> creativityOpen = true
+            ModuleDestination.LEARNING -> learningOpen = true
             ModuleDestination.SIMULATION -> {
                 if (hypotheticals.isEmpty()) {
                     val open = state.activeTasks.filter { it.status.isActive }.take(3)
@@ -181,7 +186,6 @@ fun LookAfterRootView(
             }
             ModuleDestination.NOTIFICATIONS -> notificationSettingsOpen = true
             ModuleDestination.PRIVACY -> privacyOpen = true
-            ModuleDestination.LEARNING,
             ModuleDestination.BEHAVIOR,
             ModuleDestination.LIFE_HUB,
             ModuleDestination.TOUR,
@@ -266,7 +270,8 @@ fun LookAfterRootView(
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
                         insightsOpen || privacyOpen || notificationSettingsOpen ||
                         bodyDoubleRoomOpen || modulesOpen || travelOpen || cycleOpen ||
-                        creativityOpen || comingSoonTitle != null -> AppDestination.YOU
+                        creativityOpen || learningOpen ||
+                        comingSoonTitle != null -> AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
@@ -309,6 +314,7 @@ fun LookAfterRootView(
             travelOpen -> "travel"
             cycleOpen -> "cycle"
             creativityOpen -> "creativity"
+            learningOpen -> "learning"
             comingSoonTitle != null -> "soon"
             reviewOpen -> "review"
             else -> current.name
@@ -373,6 +379,21 @@ fun LookAfterRootView(
                     onPromoteToCapture = viewModel::promoteSparkToCapture,
                     onBack = {
                         creativityOpen = false
+                        modulesOpen = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                learningOpen -> LearningScreen(
+                    state = learning,
+                    today = state.currentDay ?: LocalDate.now(),
+                    onAddTrack = viewModel::addLearningTrack,
+                    onSelectTrack = viewModel::selectLearningTrack,
+                    onDeleteTrack = viewModel::deleteLearningTrack,
+                    onAddCard = viewModel::addLearningCard,
+                    onDeleteCard = viewModel::deleteLearningCard,
+                    onReview = viewModel::reviewLearningCard,
+                    onBack = {
+                        learningOpen = false
                         modulesOpen = true
                     },
                     modifier = Modifier.fillMaxSize(),

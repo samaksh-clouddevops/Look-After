@@ -18,6 +18,7 @@ import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
 import com.lookafter.app.creativity.CreativityStore
 import com.lookafter.app.cycle.CycleStore
+import com.lookafter.app.learning.LearningStore
 import com.lookafter.app.travel.TravelStore
 import com.lookafter.app.webrtc.RoomSignalingFactory
 import com.lookafter.app.webrtc.RoomSignalingTransport
@@ -33,6 +34,12 @@ import com.lookafter.core.cycle.CycleIntent
 import com.lookafter.core.cycle.CycleLogEntry
 import com.lookafter.core.cycle.CycleSnapshot
 import com.lookafter.core.cycle.CycleState
+import com.lookafter.core.learning.LearningCard
+import com.lookafter.core.learning.LearningEngine
+import com.lookafter.core.learning.LearningIntent
+import com.lookafter.core.learning.LearningState
+import com.lookafter.core.learning.LearningTrack
+import com.lookafter.core.learning.ReviewGrade
 import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.TaskStatus
@@ -121,6 +128,7 @@ class LookAfterViewModel(
     private val travelStore: TravelStore = app.travelStore
     private val cycleStore: CycleStore = app.cycleStore
     private val creativityStore: CreativityStore = app.creativityStore
+    private val learningStore: LearningStore = app.learningStore
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -277,6 +285,53 @@ class LookAfterViewModel(
         dispatchCreativity(CreativityIntent.PromoteSparkToCapture(sparkId))
         _lastSyncMessage.value = "Spark → Capture · $title"
         TodayWidgetUpdater.requestUpdate(getApplication())
+    }
+
+    private val _learning = MutableStateFlow(app.learningStore.load())
+    val learning: StateFlow<LearningState> = _learning.asStateFlow()
+
+    val learningDueCount: Int
+        get() = _learning.value.dueCards(
+            today = engine.currentState.currentDay ?: LocalDate.now(),
+        ).size
+
+    private fun persistLearning(next: LearningState) {
+        _learning.value = next
+        learningStore.save(next)
+    }
+
+    fun dispatchLearning(intent: LearningIntent) {
+        persistLearning(LearningEngine.reduce(_learning.value, intent))
+    }
+
+    fun addLearningTrack(track: LearningTrack) {
+        dispatchLearning(LearningIntent.AddTrack(track))
+    }
+
+    fun selectLearningTrack(id: String?) {
+        dispatchLearning(LearningIntent.SelectTrack(id))
+    }
+
+    fun deleteLearningTrack(id: String) {
+        dispatchLearning(LearningIntent.DeleteTrack(id))
+    }
+
+    fun addLearningCard(card: LearningCard, trackId: String?) {
+        dispatchLearning(LearningIntent.AddCard(card, trackId))
+    }
+
+    fun deleteLearningCard(id: String) {
+        dispatchLearning(LearningIntent.DeleteCard(id))
+    }
+
+    fun reviewLearningCard(cardId: String, grade: ReviewGrade) {
+        dispatchLearning(
+            LearningIntent.ReviewCard(
+                cardId = cardId,
+                grade = grade,
+                today = engine.currentState.currentDay ?: LocalDate.now(),
+            ),
+        )
     }
 
     val roomSignalingName: String
@@ -1387,6 +1442,8 @@ class LookAfterViewModel(
             _cycle.value = CycleState.EMPTY
             creativityStore.clear()
             _creativity.value = creativityStore.load() // re-seed default boards
+            learningStore.clear()
+            _learning.value = learningStore.load() // re-seed default track
             lastAutoHeroKey = null
             teardownRoomSession(publishLeave = false)
             _bodyDoubleRoom.value = BodyDoubleRoomState()
