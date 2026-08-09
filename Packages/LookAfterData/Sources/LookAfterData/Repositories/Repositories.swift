@@ -167,29 +167,29 @@ public final class TaskRepository: ObservableObject {
         } else {
             mutableTask.userId = firebase.resolvedUserId
         }
-        saveLocally(mutableTask)
+        try await saveLocallyAwait(mutableTask)
         TaskPersistenceLog.create(mutableTask)
         syncTaskToFirestore(mutableTask)
     }
-    
+
     public func update(_ task: LifeTask) async throws {
         var mutableTask = task
         ScheduleNormalization.normalizeFields(&mutableTask)
         mutableTask.updatedAt = Date()
-        saveLocally(mutableTask)
+        try await saveLocallyAwait(mutableTask)
         TaskPersistenceLog.update(mutableTask)
         syncTaskToFirestore(mutableTask, merge: true)
     }
-    
+
     public func delete(_ id: String) async throws {
         TaskDeletionRegistry.markDeleted(id)
         var tasks = allLocalTasks()
         tasks.removeAll { $0.id == id }
-        persistAllLocally(tasks)
+        try await persistAllLocallyAwait(tasks)
         TaskPersistenceLog.delete(id)
         deleteTaskFromFirestore(id)
     }
-    
+
     /// Push task to Firestore without blocking the caller.
     private func syncTaskToFirestore(_ task: LifeTask, merge: Bool = false) {
         Task {
@@ -230,6 +230,17 @@ public final class TaskRepository: ObservableObject {
         persistAllLocally(tasks)
     }
 
+    private func saveLocallyAwait(_ task: LifeTask) async throws {
+        guard !TaskDeletionRegistry.load().contains(task.id) else { return }
+        var tasks = allLocalTasks()
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index] = task
+        } else {
+            tasks.insert(task, at: 0)
+        }
+        try await persistAllLocallyAwait(tasks)
+    }
+
     private static let perfLog = OSLog(subsystem: "com.samaksh.flowos.app", category: "TaskRepository")
 
     private func allLocalTasks() -> [LifeTask] {
@@ -244,8 +255,17 @@ public final class TaskRepository: ObservableObject {
         return []
     }
 
+    /// Best-effort cache + async disk write (reassign / merge paths).
     private func persistAllLocally(_ tasks: [LifeTask]) {
+        Self.cachedAll = tasks
+        TaskPersistenceLog.localSave(count: tasks.count)
         taskStore.replaceAllAsync(tasks)
+    }
+
+    /// Durable disk write before returning — mutation API paths.
+    private func persistAllLocallyAwait(_ tasks: [LifeTask]) async throws {
+        // Keep in-memory cache optimistic only after disk accepts the write.
+        try await taskStore.replaceAllAwait(tasks)
         Self.cachedAll = tasks
         TaskPersistenceLog.localSave(count: tasks.count)
     }
@@ -314,10 +334,15 @@ public final class TaskRepository: ObservableObject {
             TaskRecurrenceCompactor.compact(all, retentionDays: retentionDays)
         }.value
         guard removed > 0 else { return 0 }
-        await taskStore.replaceAllAwait(pruned)
-        Self.cachedAll = pruned
-        print("[Tasks] compacted \(removed) recurrence rows (\(before) → \(pruned.count))")
-        return removed
+        do {
+            try await taskStore.replaceAllAwait(pruned)
+            Self.cachedAll = pruned
+            print("[Tasks] compacted \(removed) recurrence rows (\(before) → \(pruned.count))")
+            return removed
+        } catch {
+            print("[Tasks] compaction save failed: \(error.localizedDescription)")
+            return 0
+        }
     }
 
     /// Backward-compatible alias.
