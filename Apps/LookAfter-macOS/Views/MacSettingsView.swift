@@ -3,7 +3,7 @@ import LookAfterCore
 import LookAfterAI
 import LookAfterData
 
-/// macOS settings — account, AI keys, and profile without iOS shell dependencies.
+/// macOS settings — account, license, and profile.
 struct MacSettingsView: View {
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
@@ -14,7 +14,6 @@ struct MacSettingsView: View {
     @AppStorage("focusDurationMinutes") private var focusDurationMinutes: Int = 25
 
     @State private var lifeProfile = UserLifeProfileStore.load()
-    @StateObject private var apiKeysVM = APIKeysSettingsViewModel()
 
     private let focusChallenges = ADHDFocusChallenge.allCases
 
@@ -81,8 +80,13 @@ struct MacSettingsView: View {
                         }
                     }
 
-                    TextField("Current goals & focus areas", text: $userKeyGoals, axis: .vertical)
-                        .lineLimit(2...4)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Current Goals & Focus Areas")
+                            .font(.system(size: 14, weight: .semibold, design: .default))
+                        TextField("Goals", text: $userKeyGoals)
+                            .font(.system(size: 14, design: .default))
+                            .foregroundColor(DesignSystem.textSecondary)
+                    }
                 }, header: {
                     Text("Personal Profile")
                 })
@@ -102,21 +106,17 @@ struct MacSettingsView: View {
                     }
                     .listRowBackground(Color.white.opacity(0.05))
 
-                    if let active = apiKeysVM.activeKey {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Active API Key")
-                                    .font(.system(size: 14, weight: .semibold, design: .default))
-                                Text("\(active.name) · \(active.maskedDisplay)")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(DesignSystem.textSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: active.status.iconName)
-                                .foregroundColor(active.status == .active ? DesignSystem.success : DesignSystem.warning)
+                    NavigationLink(destination: {
+                        LicenseSettingsView()
+                    }, label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("License", systemImage: "checkmark.seal.fill")
+                            Text(LicenseManager.shared.isLicensed ? "Licensed AI via secure proxy" : "Enter product key to unlock AI")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textSecondary)
                         }
-                        .listRowBackground(Color.white.opacity(0.05))
-                    }
+                    })
+                    .listRowBackground(Color.white.opacity(0.05))
 
                     NavigationLink(destination: {
                         GLMConfigurationSettingsView()
@@ -124,15 +124,10 @@ struct MacSettingsView: View {
                         Label("GLM Configuration", systemImage: "cpu")
                     })
                     .listRowBackground(Color.white.opacity(0.05))
-
-                    NavigationLink(destination: {
-                        APIKeysSettingsView()
-                    }, label: {
-                        Label("Manage API Keys", systemImage: "key.fill")
-                    })
-                    .listRowBackground(Color.white.opacity(0.05))
                 }, header: {
                     Text("AI Engine")
+                }, footer: {
+                    Text("All AI runs through the secure proxy after you redeem a product key.")
                 })
 
                 Section(content: {
@@ -160,24 +155,8 @@ struct MacSettingsView: View {
                 }, header: {
                     Text("Preferences")
                 })
-
-                Section(content: {
-                    Picker("Gender", selection: Binding(
-                        get: { lifeProfile.gender ?? .preferNotToSay },
-                        set: { newGender in
-                            lifeProfile.gender = newGender
-                            UserLifeProfileStore.save(lifeProfile)
-                        }
-                    )) {
-                        ForEach(UserGender.allCases) { gender in
-                            Text(gender.label).tag(gender)
-                        }
-                    }
-                    .listRowBackground(Color.white.opacity(0.05))
-                }, header: {
-                    Text("Profile")
-                })
             }
+            .scrollContentBackground(.hidden)
         }
         .navigationTitle("Settings")
     }

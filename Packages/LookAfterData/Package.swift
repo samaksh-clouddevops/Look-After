@@ -13,15 +13,18 @@ let package = Package(
     dependencies: [
         .package(path: "../LookAfterCore"),
         .package(path: "../LookAfterAI"),
-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "11.0.0")
+        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "11.0.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0")
     ],
     targets: [
         .target(
             name: "LookAfterData",
             dependencies: [
                 "LookAfterCore",
+                "LookAfterAI",
                 .product(name: "FirebaseAuth", package: "firebase-ios-sdk"),
-                .product(name: "FirebaseFirestore", package: "firebase-ios-sdk")
+                .product(name: "FirebaseFirestore", package: "firebase-ios-sdk"),
+                .product(name: "GRDB", package: "GRDB.swift")
             ],
             path: "Sources/LookAfterData"
         ),

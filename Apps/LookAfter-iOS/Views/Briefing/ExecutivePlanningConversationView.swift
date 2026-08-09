@@ -17,6 +17,8 @@ struct ExecutivePlanningConversationView: View {
     var onExpand: () -> Void = {}
     var onStartVoice: () -> Void = {}
     var onStartTyping: () -> Void = {}
+    var onPostWake: () -> Void = {}
+    var onGoingOut: () -> Void = {}
 
     @State private var showTextFallback = false
     @FocusState private var textFieldFocused: Bool
@@ -36,6 +38,7 @@ struct ExecutivePlanningConversationView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
             panelHeader
+            contextualQuickActions
             scrollableMiddleSection
             inputArea
         }
@@ -46,6 +49,31 @@ struct ExecutivePlanningConversationView: View {
     }
 
     // MARK: - Header
+
+    private var contextualQuickActions: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignSystem.spacingSM) {
+                quickActionChip("I just woke up", icon: "sun.max.fill", action: onPostWake)
+                quickActionChip("Going out", icon: "figure.walk", action: onGoingOut)
+            }
+        }
+    }
+
+    private func quickActionChip(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.dsCaption(weight: .semibold))
+            }
+            .foregroundColor(DesignSystem.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(DesignSystem.backgroundPrimary.opacity(0.7)))
+        }
+        .buttonStyle(.plain)
+    }
 
     private var panelHeader: some View {
         HStack(alignment: .center) {

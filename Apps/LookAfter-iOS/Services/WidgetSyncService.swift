@@ -11,6 +11,11 @@ final class WidgetSyncService {
     static let shared = WidgetSyncService()
 
     private let pinNowKey = "pinNowToLockScreen"
+    private static let widgetKinds = ["NowWidget", "EnergyWidget", "TasksWidget"]
+    private static let timelineReloadDebounceNs: UInt64 = 400_000_000
+
+    private var timelineReloadTask: Task<Void, Never>?
+    private var lastWidgetSnapshotFingerprint: String?
 
     private(set) var lastPinResult: PinNowResult?
 
@@ -25,7 +30,7 @@ final class WidgetSyncService {
         if pinned {
             let snapshot: WidgetSnapshot
             if let shell {
-                shell.rebuildTimelineFromTasks()
+                shell.rebuildTimelineFromTasks(immediate: true)
                 snapshot = makeSnapshot(
                     brainVM: shell.brainVM,
                     taskStore: shell.taskStore,
@@ -34,7 +39,7 @@ final class WidgetSyncService {
                     timelineEvents: shell.timelineService.snapshot.today
                 )
                 WidgetDataStore.save(snapshot)
-                WidgetCenter.shared.reloadAllTimelines()
+                scheduleWidgetTimelineReload(immediate: true)
                 PinNowLogger.info(
                     "sync before pin — timelineNow=\(TimelineNowResolver.currentNowEvent(in: shell.timelineService.snapshot.today)?.title ?? "nil"), topTask=\(snapshot.topTaskTitle ?? "nil"), active=\(snapshot.activeTaskCount), appGroup=\(WidgetDataStore.isAvailable)"
                 )
@@ -86,11 +91,57 @@ final class WidgetSyncService {
             scheduleTasks: scheduleTasks,
             timelineEvents: timelineEvents
         )
+        let fingerprint = snapshotFingerprint(snapshot)
+        guard fingerprint != lastWidgetSnapshotFingerprint else { return }
+        lastWidgetSnapshotFingerprint = fingerprint
         WidgetDataStore.save(snapshot)
-        WidgetCenter.shared.reloadAllTimelines()
+        scheduleWidgetTimelineReload(immediate: false)
 
         if isNowPinned {
             schedulePinRefresh(snapshot: snapshot)
+        }
+    }
+
+    private func snapshotFingerprint(_ snapshot: WidgetSnapshot) -> String {
+        let progressBucket = Int((snapshot.pinProgressFraction * 100).rounded(.down) / 5)
+        let remainingBucket: String = {
+            guard let end = snapshot.pinWindowEnd else { return "na" }
+            let minutes = max(0, Int(end.timeIntervalSince(Date()) / 60))
+            return String(minutes)
+        }()
+        return [
+            snapshot.topTaskTitle ?? "",
+            String(snapshot.activeTaskCount),
+            String(snapshot.completedTodayCount),
+            String(snapshot.energyScore),
+            snapshot.heroTaskId ?? "",
+            snapshot.tasks.map(\.id).joined(separator: ","),
+            snapshot.recommendation,
+            snapshot.pinScheduleLabel,
+            snapshot.pinConstraintLabel,
+            String(progressBucket),
+            remainingBucket,
+            snapshot.pinNextUpSummary,
+        ].joined(separator: "|")
+    }
+
+    private func scheduleWidgetTimelineReload(immediate: Bool) {
+        timelineReloadTask?.cancel()
+        if immediate {
+            reloadWidgetTimelines()
+            return
+        }
+        timelineReloadTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: Self.timelineReloadDebounceNs)
+            guard !Task.isCancelled else { return }
+            reloadWidgetTimelines()
+            timelineReloadTask = nil
+        }
+    }
+
+    private func reloadWidgetTimelines() {
+        for kind in Self.widgetKinds {
+            WidgetCenter.shared.reloadTimelines(ofKind: kind)
         }
     }
 
@@ -253,6 +304,7 @@ final class WidgetSyncService {
             stepCount: health?.stepCount,
             hrvMs: health?.hrvAverage.map { Int($0) },
             tasks: mergedTasks,
+            heroTaskId: surface?.heroTask?.id ?? mergedTasks.first?.id,
             updatedAt: Date(),
             pinContextLine: pinModel?.contextLine ?? "",
             pinScheduleLabel: pinModel?.scheduleLabel ?? "",
@@ -260,7 +312,9 @@ final class WidgetSyncService {
             pinCategoryIcon: pinModel?.categoryIcon ?? "sparkles",
             pinNextUpSummary: pinModel?.nextUpSummary ?? "",
             pinProgressFraction: pinModel?.progressFraction ?? 0,
-            pinSectionLabel: pinModel?.sectionLabel ?? "NOW"
+            pinSectionLabel: pinModel?.sectionLabel ?? "NOW",
+            pinWindowStart: pinModel?.windowStart,
+            pinWindowEnd: pinModel?.windowEnd
         )
     }
 }

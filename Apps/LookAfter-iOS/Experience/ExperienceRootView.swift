@@ -47,9 +47,9 @@ struct ExperienceRootView: View {
             ) { sections in
                 showOnboarding = false
                 let userId = firebase.resolvedUserId
-                Task {
+                Task { @MainActor in
                     UserLifeProfileStore.syncUserNameFromProfileIfNeeded()
-                    await shell.refreshTasksFromProfile(userId: userId, sections: sections)
+                    // Starter tasks were materialized and reviewed during onboarding.
                     let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
                     if healthEnabled,
                        healthSync.syncPhase != .complete,

@@ -93,6 +93,7 @@ final class HealthSyncService: ObservableObject {
     @Published var lastSyncError: String?
     @Published private(set) var importedMetricCount: Int = 0
     @Published private(set) var verificationReport: HealthSyncVerificationReport?
+    @Published private(set) var connectionStatus: HealthConnectionStatus?
     
     private let healthManager = HealthManager()
     private let healthRepo = HealthSummaryRepository()
@@ -102,6 +103,38 @@ final class HealthSyncService: ObservableObject {
     
     private init() {
         lastSyncDate = UserDefaults.standard.object(forKey: "healthLastSyncDate") as? Date
+        refreshConnectionStatus(userId: "", healthSummary: HealthStore.shared.latest)
+    }
+
+    /// Recomputes user-facing connection status from current sync state and cached summary.
+    func refreshConnectionStatus(userId: String, healthSummary: HealthSummary? = nil) {
+        if UITestLaunchConfiguration.isEnabled,
+           let mock = UserDefaults.standard.string(forKey: "uitest_mock_health_status") {
+            connectionStatus = Self.uitestMockConnectionStatus(kind: mock)
+            return
+        }
+
+        let summary = healthSummary ?? HealthStore.shared.latest
+        let authorizePassed = verificationReport?.checks.first(where: { $0.id == "authorize" })?.status == .passed
+        let authorizationGranted: Bool? = {
+            if authorizePassed { return true }
+            if verificationReport?.checks.first(where: { $0.id == "authorize" })?.status == .failed {
+                return false
+            }
+            if healthManager.isAuthorized { return true }
+            if lastSyncDate != nil, importedMetricCount > 0 { return true }
+            return nil
+        }()
+
+        let input = HealthConnectionStatusInput.from(
+            summary: summary,
+            isHealthEnabled: isHealthEnabled,
+            isHealthKitAvailable: isAvailable,
+            isSignedIn: !userId.isEmpty,
+            lastSyncDate: lastSyncDate,
+            authorizationGranted: authorizationGranted
+        )
+        connectionStatus = HealthConnectionStatusResolver.resolve(input)
     }
 
     /// Registers HealthKit background observers — call once after onboarding / when health is enabled.
@@ -182,6 +215,7 @@ final class HealthSyncService: ObservableObject {
         setupStatusMessage = nil
         importedMetricCount = 0
         verificationReport = nil
+        connectionStatus = nil
     }
 
     /// User-facing connect — waits for the full HealthKit import so the sheet shows real progress.
@@ -240,6 +274,7 @@ final class HealthSyncService: ObservableObject {
 
         defer {
             isConnectingForSetup = false
+            refreshConnectionStatus(userId: userId)
         }
 
         do {
@@ -316,6 +351,9 @@ final class HealthSyncService: ObservableObject {
     // MARK: - Private sync
     
     private func performFullSync(userId: String, triggeredFromSetup: Bool) async {
+        let healthSignpost = PerformanceSignposts.beginHealthSync()
+        defer { PerformanceSignposts.endHealthSync(healthSignpost) }
+        defer { refreshConnectionStatus(userId: userId) }
         guard isHealthEnabled else {
             failSync(message: "Health tracking is disabled in Settings.", stepId: "prepare")
             syncSteps = []
@@ -448,6 +486,7 @@ final class HealthSyncService: ObservableObject {
                 lastSyncError = report.summary
             }
             syncMessage = report.summary
+            refreshConnectionStatus(userId: userId, healthSummary: summaryToSave)
             HealthSyncLogger.log("Database write completed")
             await syncCycleFromHealthKitIfEnabled()
             NotificationCenter.default.post(
@@ -933,5 +972,49 @@ final class HealthSyncService: ObservableObject {
         importedMetricCount = 0
         verificationReport = nil
         UserDefaults.standard.removeObject(forKey: "healthLastSyncDate")
+        connectionStatus = nil
+    }
+
+    /// Preset resolver inputs for UI tests (`-MockHealthStatus waitingForData|notSetUp`).
+    private static func uitestMockConnectionStatus(kind raw: String) -> HealthConnectionStatus {
+        let now = Date()
+        let input: HealthConnectionStatusInput
+        switch raw {
+        case "waitingForData":
+            input = HealthConnectionStatusInput(
+                isHealthEnabled: true,
+                isHealthKitAvailable: true,
+                isSignedIn: true,
+                lastSyncDate: now,
+                authorizationGranted: true,
+                hasAnyImportedMetrics: false,
+                now: now
+            )
+        case "notSetUp":
+            input = HealthConnectionStatusInput(
+                isHealthEnabled: true,
+                isHealthKitAvailable: true,
+                isSignedIn: true,
+                authorizationGranted: nil,
+                now: now
+            )
+        case "accessBlocked":
+            input = HealthConnectionStatusInput(
+                isHealthEnabled: true,
+                isHealthKitAvailable: true,
+                isSignedIn: true,
+                lastSyncDate: now,
+                authorizationGranted: false,
+                now: now
+            )
+        default:
+            input = HealthConnectionStatusInput(
+                isHealthEnabled: true,
+                isHealthKitAvailable: true,
+                isSignedIn: true,
+                now: now
+            )
+        }
+        return HealthConnectionStatusResolver.resolve(input)
     }
 }

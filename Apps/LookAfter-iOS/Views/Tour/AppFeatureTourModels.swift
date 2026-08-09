@@ -7,13 +7,17 @@ import LookAfterCore
 enum AppFeatureTourAnchorID: String, Hashable, CaseIterable, Sendable {
     case tabBriefing
     case tabToday
+    case tabReview
     case tabCapture
     case tabBrain
     case tabYou
     case briefingHero
+    case briefingHealthStrip
     case briefingScrollTop
     case todayTimeline
+    case todayAllTasks
     case todayAssistant
+    case reviewHero
     case brainVoiceOrb
     case youProfile
 }
@@ -48,7 +52,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
         AppFeatureTourStep(
             id: "welcome",
             title: "Welcome to Look After",
-            message: "A one-minute tour of where everything lives.",
+            message: "A quick tour of the app — six tabs along the bottom: Briefing, Today, Review, Capture, Brain, and You.",
             icon: "sparkles",
             tab: .briefing,
             anchor: nil,
@@ -58,7 +62,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
         AppFeatureTourStep(
             id: "briefing",
             title: "Briefing",
-            message: "Start each day here. AI summarizes sleep, tasks, and energy in three short points.",
+            message: "Start each day here. Your AI day summary lives up top — scroll for sleep, energy, and recovery tiles.",
             icon: "doc.text.fill",
             tab: .briefing,
             anchor: .briefingHero,
@@ -66,9 +70,19 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             allowsTargetInteraction: false
         ),
         AppFeatureTourStep(
+            id: "briefing-health",
+            title: "How you're doing",
+            message: "Sleep, energy, recovery, and your best focus window — updated through the day, even before HealthKit syncs overnight.",
+            icon: "sun.max.fill",
+            tab: .briefing,
+            anchor: .briefingHealthStrip,
+            preferredSides: [.below, .above, .floating],
+            allowsTargetInteraction: false
+        ),
+        AppFeatureTourStep(
             id: "today",
             title: "Today",
-            message: "Your live timeline. Swipe tasks, start focus, and replan the day from here.",
+            message: "Your live timeline — start focus, reschedule, and see what's now. Tap All tasks to view and edit everything in one place.",
             icon: "calendar",
             tab: .today,
             anchor: .todayTimeline,
@@ -86,10 +100,20 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             allowsTargetInteraction: false
         ),
         AppFeatureTourStep(
+            id: "review",
+            title: "Weekly Review",
+            message: "Your weekly debrief — tasks finished, time reclaimed, and patterns without digging through logs.",
+            icon: "chart.bar.fill",
+            tab: .review,
+            anchor: .reviewHero,
+            preferredSides: [.below, .floating, .center],
+            allowsTargetInteraction: false
+        ),
+        AppFeatureTourStep(
             id: "capture",
             title: "Capture",
-            message: "Tap + anytime to dump a thought, task, or note. Voice or text — no sorting required.",
-            icon: "plus.circle.fill",
+            message: "The Capture tab in the bottom bar — dump a thought, task, or note by voice or text, no sorting required.",
+            icon: "plus.circle",
             tab: nil,
             anchor: .tabCapture,
             preferredSides: [.above, .floating],
@@ -108,7 +132,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
         AppFeatureTourStep(
             id: "you",
             title: "You",
-            message: "Profile, modules, inbox, insights, and settings. Customize the app to how you work.",
+            message: "Profile, life areas, inbox, and settings. Life State bars mirror the same signals as Briefing.",
             icon: "person.fill",
             tab: .you,
             anchor: .youProfile,
@@ -118,7 +142,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
         AppFeatureTourStep(
             id: "focus",
             title: "Focus & ADHD tools",
-            message: "Start a task for focus mode. Use Decide for Me, body doubling, or a reset from Brain.",
+            message: "Start a task for focus mode. Use Decide for Me, body doubling, or a physiological reset from Brain.",
             icon: "timer",
             tab: .briefing,
             anchor: nil,
@@ -194,6 +218,7 @@ extension AppFeatureTourAnchorID {
     var tourScrollAnchor: String {
         switch self {
         case .briefingHero: return "top"
+        case .briefingHealthStrip: return "center"
         default: return "center"
         }
     }

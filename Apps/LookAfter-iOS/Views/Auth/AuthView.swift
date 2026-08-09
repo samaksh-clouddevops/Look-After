@@ -1,5 +1,4 @@
 import SwiftUI
-import AuthenticationServices
 import LookAfterData
 import LookAfterCore
 
@@ -16,11 +15,9 @@ public struct AuthView: View {
     
     @State private var errorMessage: String? = nil
     @State private var isLoading: Bool = false
-    @State private var showGooglePrompt: Bool = false
-    @State private var showApplePrompt: Bool = false
-    @State private var ssoEmailInput: String = ""
     @State private var authSuccess: Bool = false
     @State private var welcomeName: String = ""
+    @State private var showLicensePrompt: Bool = false
     
     public var onGuestContinue: (() -> Void)?
     
@@ -52,11 +49,8 @@ public struct AuthView: View {
                     
                     // SSO Section
                     VStack(spacing: 12) {
-                        // Sign in with Apple
-                        Button(action: {
-                            ssoEmailInput = ""
-                            showApplePrompt = true
-                        }) {
+                        #if SIGN_IN_WITH_APPLE
+                        Button(action: { performAppleSignIn() }) {
                             HStack(spacing: 10) {
                                 Image(systemName: "apple.logo")
                                     .font(.system(size: 20))
@@ -70,12 +64,9 @@ public struct AuthView: View {
                         }
                         .disabled(isLoading)
                         .opacity(isLoading ? 0.5 : 1)
-                        
-                        // Sign in with Google
-                        Button(action: {
-                            ssoEmailInput = ""
-                            showGooglePrompt = true
-                        }) {
+                        #endif
+
+                        Button(action: { performGoogleSignIn() }) {
                             HStack(spacing: 10) {
                                 Image(systemName: "g.circle.fill")
                                     .font(.system(size: 20))
@@ -164,7 +155,6 @@ public struct AuthView: View {
                         .disabled(isLoading || emailText.trimmingCharacters(in: .whitespaces).isEmpty || passwordText.isEmpty)
                         .opacity(isLoading ? 0.7 : 1)
                         
-                        // Switch between Login and Signup
                         Button(action: {
                             withAnimation {
                                 isSignUpMode.toggle()
@@ -181,7 +171,6 @@ public struct AuthView: View {
                     .elevatedSurface()
                     .padding(.horizontal)
                     
-                    // Guest Option
                     Button(action: {
                         performGuestSignIn()
                     }) {
@@ -194,7 +183,6 @@ public struct AuthView: View {
                 }
             }
             
-            // Loading overlay
             if isLoading {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
@@ -217,7 +205,6 @@ public struct AuthView: View {
                 .zIndex(100)
             }
             
-            // Success overlay
             if authSuccess {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
@@ -251,65 +238,48 @@ public struct AuthView: View {
         .scrollDismissesKeyboard(.interactively)
         .animation(.easeInOut(duration: 0.3), value: isLoading)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: authSuccess)
-        .alert("Sign In with Google", isPresented: $showGooglePrompt, actions: {
-            TextField("Google Email (e.g. name@gmail.com)", text: $ssoEmailInput)
-            Button("Sign In") {
-                performSSOSignIn(provider: "Google")
+        .sheet(isPresented: $showLicensePrompt) {
+            NavigationStack {
+                LicenseRedeemView(onFinished: {
+                    showLicensePrompt = false
+                    dismiss()
+                })
             }
-            Button("Cancel", role: .cancel) {}
-        }, message: {
-            Text("Enter your Google account email to sign in and sync your \(UserFacingCopy.productName) profile.")
-        })
-        .alert("Sign In with Apple", isPresented: $showApplePrompt, actions: {
-            TextField("Apple ID Email (e.g. name@icloud.com)", text: $ssoEmailInput)
-            Button("Sign In") {
-                performSSOSignIn(provider: "Apple")
-            }
-            Button("Cancel", role: .cancel) {}
-        }, message: {
-            Text("Enter your Apple ID email to sign in and sync your \(UserFacingCopy.productName) profile.")
-        })
+        }
         .interactiveDismissDisabled(isLoading)
         .accessibilityIdentifier("screen-auth")
     }
     
-    // MARK: - SSO Sign In
+    // MARK: - SSO
     
-    private func performSSOSignIn(provider: String) {
-        let email = ssoEmailInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !email.isEmpty else {
-            errorMessage = "Please enter your \(provider) email address."
-            return
-        }
-        
+    private func performAppleSignIn() {
         isLoading = true
         errorMessage = nil
-        
         Task {
             do {
-                let password = provider == "Google" ? "GoogleSSOPassword123!" : "AppleSSOPassword123!"
-                try await firebase.signIn(email: email, password: password)
-                
-                // Extract name from email for welcome message
-                let name = UserDefaults.standard.string(forKey: "userName") ?? email.components(separatedBy: "@").first ?? ""
-                welcomeName = name
-                
-                HapticManager.notification(.success)
-                
-                withAnimation {
-                    isLoading = false
-                    authSuccess = true
-                }
-                
-                // Dismiss after showing success
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-                dismiss()
+                try await firebase.signInWithApple()
+                welcomeName = UserDefaults.standard.string(forKey: "userName")
+                    ?? firebase.userEmail?.components(separatedBy: "@").first
+                    ?? "there"
+                await finishAuthenticated(offerLicense: true)
             } catch {
-                HapticManager.notification(.error)
-                withAnimation {
-                    isLoading = false
-                    errorMessage = "Sign in failed: \(error.localizedDescription)"
-                }
+                failAuth(error)
+            }
+        }
+    }
+    
+    private func performGoogleSignIn() {
+        isLoading = true
+        errorMessage = nil
+        Task {
+            do {
+                try await firebase.signInWithGoogle()
+                welcomeName = UserDefaults.standard.string(forKey: "userName")
+                    ?? firebase.userEmail?.components(separatedBy: "@").first
+                    ?? "there"
+                await finishAuthenticated(offerLicense: true)
+            } catch {
+                failAuth(error)
             }
         }
     }
@@ -337,24 +307,9 @@ public struct AuthView: View {
                     try await firebase.signIn(email: emailText, password: passwordText)
                     welcomeName = UserDefaults.standard.string(forKey: "userName") ?? emailText.components(separatedBy: "@").first ?? ""
                 }
-                
-                HapticManager.notification(.success)
-                
-                withAnimation {
-                    isLoading = false
-                    authSuccess = true
-                }
-                
-                // Dismiss after showing success
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                dismiss()
+                await finishAuthenticated(offerLicense: true)
             } catch {
-                HapticManager.notification(.error)
-                withAnimation {
-                    isLoading = false
-                    errorMessage = error.localizedDescription
-                }
-                // Stay on login screen — never dismiss on failure
+                failAuth(error)
             }
         }
     }
@@ -377,6 +332,32 @@ public struct AuthView: View {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             onGuestContinue?()
             dismiss()
+        }
+    }
+
+    private func finishAuthenticated(offerLicense: Bool) async {
+        HapticManager.notification(.success)
+        withAnimation {
+            isLoading = false
+            authSuccess = true
+        }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        let needsLicense = offerLicense
+            && LicenseManager.shared.proxyClient != nil
+            && !LicenseManager.shared.isLicensed
+        if needsLicense {
+            authSuccess = false
+            showLicensePrompt = true
+        } else {
+            dismiss()
+        }
+    }
+
+    private func failAuth(_ error: Error) {
+        HapticManager.notification(.error)
+        withAnimation {
+            isLoading = false
+            errorMessage = error.localizedDescription
         }
     }
 }

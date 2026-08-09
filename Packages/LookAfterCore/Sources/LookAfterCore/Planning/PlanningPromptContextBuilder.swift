@@ -39,7 +39,10 @@ public enum PlanningPromptContextBuilder {
         {"kind":"deferTask","taskID":"<id from TASKS>"},
         {"kind":"rescheduleTask","taskID":"<id from TASKS>","startHour":<0-23>,"startMinute":<0-59>}
       ],
-      "negotiation": {"question":"<overload question>","options":["<option1>","<option2>"]},
+      "negotiation": {"question":"<overload question>","options":["<option1>","<option2>"],"optionVariantIDs":["<variant-id-1>","<variant-id-2>"]},
+      "planVariants": [
+        {"id":"protect-focus","label":"Protect deep work","summary":"<trade-off summary>","tradeoffs":["<pro>","<con>"],"recommended":true,"scheduleChanges":[{"taskID":"<id>","deferToTomorrow":true,"reason":"<why>"}],"timelineDeltas":[{"timeLabel":"—","title":"<task>","change":"removed"}]}
+      ],
       "timelineDeltas": [
         {"timeLabel":"<h:mm AM/PM>","title":"<task title>","change":"added|moved|removed|reused|conflict","isConflict":false}
       ]
@@ -49,6 +52,10 @@ public enum PlanningPromptContextBuilder {
     public static let dayReplanResponseSchema = """
     {
       "summary": "<human paragraph — no block jargon>",
+      "recommendedVariantID": "<id of best variant>",
+      "planVariants": [
+        {"id":"protect-focus","label":"Protect deep work","summary":"<human summary>","tradeoffs":["<pro>","<con>"],"recommended":true,"scheduleChanges":[{"taskID":"<id from REMAINING>","deferToTomorrow":true,"reason":"<why>"}],"timelineDeltas":[{"timeLabel":"<h:mm AM/PM>","title":"<task>","change":"moved|removed"}]}
+      ],
       "scheduleChanges": [
         {"taskID":"<id from REMAINING>","startHour":<0-23>,"startMinute":<0-59>,"deferToTomorrow":false,"reason":"<why>"},
         {"taskID":"<id from REMAINING>","deferToTomorrow":true,"reason":"<why defer>"}
@@ -249,7 +256,9 @@ public enum PlanningPromptContextBuilder {
 
         var lines: [String] = []
 
-        if let sleepMin = summary.totalSleepMinutes, sleepMin > 0 {
+        if let manual = ManualSleepLogStore.entry(for: Date()) {
+            lines.append("- Self-reported sleep last night: \(manual.rating.label) (\(manual.rating.emoji)) — use for pacing and defer decisions")
+        } else if let sleepMin = summary.totalSleepMinutes, sleepMin > 0 {
             let hours = sleepMin / 60.0
             let quality: String
             if hours >= targetSleepHours + 0.5 {
@@ -414,6 +423,19 @@ public enum PlanningPromptContextBuilder {
         - Reuse existing tasks ONLY when the user clearly refers to the same item.
         - Use kind "reuseTask" with the exact task id — never duplicate on partial word overlap.
         - When overloaded, prefer deferTask/removeFromToday over silently adding work.
+        RESCHEDULE RULES:
+        - When the user asks to move, shift, push, or reschedule an EXISTING task to a new time, use kind "rescheduleTask" with taskID from TASKS and startHour/startMinute.
+        - NEVER use createTask when the user refers to an existing task by name or id and wants a new time.
+        - If no exact time is given, pick the nearest open slot after fixed blocks and include startHour/startMinute.
+        """
+    }
+
+    public static func proactiveSuggestionsBlock(_ suggestions: [ScheduleProactiveSuggestion]) -> String {
+        guard !suggestions.isEmpty else { return "" }
+        let lines = suggestions.prefix(3).map { "- [\($0.severity.rawValue)] \($0.message)" }
+        return """
+        PROACTIVE SCHEDULE NOTES (mention gently if relevant; use negotiation options when user agrees):
+        \(lines.joined(separator: "\n"))
         """
     }
 
@@ -497,6 +519,58 @@ public enum PlanningPromptContextBuilder {
         - Ideal wind-down begins by \(label)
         - Do not schedule flexible work after this time
         - Keep meals in their windows (Breakfast before 11 AM, Dinner before 9 PM)
+        """
+    }
+
+    public static func missedTasksBlock(_ tasks: [LifeTask]) -> String {
+        guard !tasks.isEmpty else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let lines = tasks.map { task -> String in
+            let time = task.scheduledTime.map { formatter.string(from: $0) } ?? "unscheduled"
+            return "- MISSED id:\(task.id) | \(task.title) | was:\(time) | \(task.estimatedMinutes)m | fixed:\(task.isFixedTimeEvent)"
+        }
+        return """
+        MISSED TASKS (window already passed — decide defer vs salvage for each):
+        \(lines.joined(separator: "\n"))
+        For each missed task: set deferToTomorrow:true OR reschedule if still high-value and fits.
+        Use removeFromToday mutation only for low-value ephemeral items.
+        """
+    }
+
+    public static func postWakeReplanBlock(wakeTime: Date, minutesLate: Int?) -> String {
+        let wakeLabel = wakeTime.formatted(date: .omitted, time: .shortened)
+        let lateLine = minutesLate.map { "User is \($0) minutes behind expected wake." } ?? "User woke later than planned."
+        return """
+        POST-WAKE CONTEXT:
+        - User just woke up at \(wakeLabel)
+        - \(lateLine)
+        - Prioritize salvage over guilt — defer low-value missed items
+        - Do not stack catch-up that exceeds remaining capacity
+        """
+    }
+
+    public static func goingOutBlock(departure: Date, durationMinutes: Int, endTime: Date) -> String {
+        """
+        GOING OUT CONTEXT:
+        - Departure: \(departure.formatted(date: .omitted, time: .shortened))
+        - Duration: \(durationMinutes) minutes
+        - Unavailable until: \(endTime.formatted(date: .omitted, time: .shortened))
+        - AWAY WINDOW is hard busy — no movable tasks inside this range
+        - Pack high-priority work before departure; defer overflow to after return or tomorrow
+        """
+    }
+
+    public static func freedSlotReplanBlock(removedTitle: String, slotStart: Date, slotEnd: Date) -> String {
+        let startLabel = slotStart.formatted(date: .omitted, time: .shortened)
+        let endLabel = slotEnd.formatted(date: .omitted, time: .shortened)
+        let minutes = max(Int(slotEnd.timeIntervalSince(slotStart) / 60), TaskDurationPolicy.minimumMinutes)
+        return """
+        FREED SLOT CONTEXT:
+        - User removed "\(removedTitle)" from today's timeline
+        - Open window: \(startLabel) – \(endLabel) (\(minutes) minutes)
+        - Only schedule movable tasks whose full duration fits inside this window
+        - Do not move anchored/fixed commitments or tasks already placed outside this slot
         """
     }
 

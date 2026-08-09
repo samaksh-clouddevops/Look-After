@@ -2,6 +2,29 @@
 import WidgetKit
 import SwiftUI
 import LookAfterCore
+#if canImport(AppIntents)
+import AppIntents
+#endif
+
+/// Determinate progress bar for Live Activities — `ProgressView` renders as a stuck spinner in ActivityKit.
+private struct LiveActivityLinearProgress: View {
+    let fraction: Double
+    let tint: Color
+    var height: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(tint.opacity(0.22))
+                Capsule()
+                    .fill(tint)
+                    .frame(width: geometry.size.width * min(1, max(0, fraction)))
+            }
+        }
+        .frame(height: height)
+    }
+}
 
 private enum LiveActivityStyle {
     // Fixed opaque colors — adaptive tokens can resolve to zero-size layers in ActivityKit snapshots.
@@ -56,8 +79,10 @@ struct FocusLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 6) {
-                        ProgressView(value: context.state.progressFraction)
-                            .tint(islandAccent(context: context))
+                        LiveActivityLinearProgress(
+                            fraction: context.state.progressFraction,
+                            tint: islandAccent(context: context)
+                        )
                         if !context.state.nextUpSummary.isEmpty {
                             Text(context.state.nextUpSummary)
                                 .font(.dsMetadata())
@@ -160,8 +185,7 @@ struct FocusLiveActivity: Widget {
                     .foregroundColor(LiveActivityStyle.textMuted)
             }
 
-            ProgressView(value: context.state.progressFraction)
-                .tint(accent)
+            LiveActivityLinearProgress(fraction: context.state.progressFraction, tint: accent)
 
             if !context.state.nextUpSummary.isEmpty {
                 Text(context.state.nextUpSummary)
@@ -169,10 +193,34 @@ struct FocusLiveActivity: Widget {
                     .foregroundColor(LiveActivityStyle.textSecondary)
                     .lineLimit(2)
             }
+
+            focusControlButtons
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
         .activityBackgroundTint(LiveActivityStyle.background)
+    }
+
+    @ViewBuilder
+    private var focusControlButtons: some View {
+        if #available(iOS 17.0, *) {
+            HStack(spacing: 12) {
+                Button(intent: WidgetPauseFocusIntent()) {
+                    Label("Rest", systemImage: "pause.circle.fill")
+                        .font(.dsCaption(weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(LiveActivityStyle.textSecondary)
+
+                Button(intent: WidgetCompleteFocusIntent()) {
+                    Label("Done", systemImage: "checkmark.circle.fill")
+                        .font(.dsCaption(weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(LiveActivityStyle.accent)
+            }
+            .padding(.top, 4)
+        }
     }
 }
 
@@ -215,8 +263,10 @@ struct NowPinLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 6) {
                         if context.state.progressFraction > 0 {
-                            ProgressView(value: context.state.progressFraction)
-                                .tint(LiveActivityStyle.accent)
+                            LiveActivityLinearProgress(
+                                fraction: context.state.progressFraction,
+                                tint: LiveActivityStyle.accent
+                            )
                         }
                         Text(nowPinBottomLine(context))
                             .font(.caption2)
@@ -325,7 +375,7 @@ struct NowPinLiveActivity: Widget {
                     .frame(minHeight: 14)
 
                 if !context.state.scheduleLabel.isEmpty {
-                    Text(pinDurationLabel(context))
+                    pinRemainingLabel(context)
                         .font(.caption.weight(.semibold))
                         .monospacedDigit()
                         .foregroundColor(LiveActivityStyle.accent)
@@ -334,11 +384,7 @@ struct NowPinLiveActivity: Widget {
                 }
             }
 
-            if context.state.progressFraction > 0 {
-                ProgressView(value: context.state.progressFraction)
-                    .tint(LiveActivityStyle.accent)
-                    .frame(height: 4)
-            }
+            pinProgressSection(context)
 
             if let footer = pinFooterLine(context) {
                 Text(footer)
@@ -363,6 +409,36 @@ struct NowPinLiveActivity: Widget {
         if contextLine == "Ready when you are." { return nil }
         if contextLine == "Fixed window — stay in this block." { return nil }
         return contextLine
+    }
+
+    @ViewBuilder
+    private func pinProgressSection(_ context: ActivityViewContext<NowPinActivityAttributes>) -> some View {
+        if let start = context.state.windowStart,
+           let end = context.state.windowEnd,
+           end > start {
+            TimelineView(.periodic(from: start, by: 30)) { timeline in
+                let now = timeline.date
+                let fraction = min(1, max(0, now.timeIntervalSince(start) / end.timeIntervalSince(start)))
+                LiveActivityLinearProgress(fraction: fraction, tint: LiveActivityStyle.accent)
+            }
+        } else if context.state.progressFraction > 0 {
+            LiveActivityLinearProgress(fraction: context.state.progressFraction, tint: LiveActivityStyle.accent)
+        }
+    }
+
+    @ViewBuilder
+    private func pinRemainingLabel(_ context: ActivityViewContext<NowPinActivityAttributes>) -> some View {
+        if let end = context.state.windowEnd {
+            if end <= Date() {
+                Text("Ended")
+            } else if context.state.constraintLabel == "Anchored" {
+                Text(timerInterval: Date()...max(Date().addingTimeInterval(1), end), countsDown: true)
+            } else {
+                Text(pinDurationLabel(context))
+            }
+        } else {
+            Text(pinDurationLabel(context))
+        }
     }
 
     private func pinDurationLabel(_ context: ActivityViewContext<NowPinActivityAttributes>) -> String {

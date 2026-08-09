@@ -1,0 +1,9 @@
+node_modules
+dist
+data
+data-smoke
+.env
+.env.*
+infra/deploy-output.json
+*.md
+.git

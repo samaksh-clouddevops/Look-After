@@ -14,8 +14,12 @@ public struct TaskListSnapshot: Sendable, Equatable {
         self.templates = templates
     }
 
-    public static func make(from tasks: [LifeTask], calendar: Calendar = .current) -> TaskListSnapshot {
-        let startOfDay = calendar.startOfDay(for: Date())
+    public static func make(
+        from tasks: [LifeTask],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> TaskListSnapshot {
+        let startOfDay = calendar.startOfDay(for: referenceDate)
         let relevant = tasks.filter { task in
             if TaskRecurrenceEngine.isRecurrenceTemplate(task) { return true }
             switch task.status {
@@ -29,7 +33,11 @@ public struct TaskListSnapshot: Sendable, Equatable {
             }
         }
         let templates = relevant.filter(TaskRecurrenceEngine.isRecurrenceTemplate)
-        let active = TaskScheduleQuery.activeTasksForToday(from: relevant, calendar: calendar)
+        let active = TaskScheduleQuery.activeTasksForToday(
+            from: relevant,
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
             .sorted { $0.priority > $1.priority }
         let completedToday = relevant.filter { task in
             guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
@@ -71,38 +79,56 @@ enum TaskMerge {
 
 enum TaskPersistenceLog {
     static func create(_ task: LifeTask) {
+#if DEBUG
         print("[Tasks] create id=\(task.id.prefix(8)) title=\"\(task.title)\"")
+#endif
     }
 
     static func update(_ task: LifeTask) {
+#if DEBUG
         print("[Tasks] update id=\(task.id.prefix(8)) status=\(task.status.rawValue)")
+#endif
     }
 
     static func delete(_ id: String) {
+#if DEBUG
         print("[Tasks] delete id=\(id.prefix(8))")
+#endif
     }
 
     static func localSave(count: Int) {
+#if DEBUG
         print("[Tasks] local save count=\(count)")
+#endif
     }
 
     static func localLoad(count: Int, userId: String) {
+#if DEBUG
         print("[Tasks] local load count=\(count) userId=\(userId.prefix(8))")
+#endif
     }
 
     static func fetchStarted(source: String) {
+#if DEBUG
         print("[Tasks] fetch started source=\(source)")
+#endif
     }
 
     static func fetchFinished(count: Int, merged: Bool) {
+#if DEBUG
         print("[Tasks] fetch finished count=\(count) merged=\(merged)")
+#endif
     }
 
     static func fetchFailed(_ error: Error) {
+#if DEBUG
         print("[Tasks] fetch failed: \(error.localizedDescription)")
+#endif
     }
 
     static func filterApplied(active: Int, completedToday: Int) {
+#if DEBUG
         print("[Tasks] filter active=\(active) completedToday=\(completedToday)")
+#endif
     }
 }

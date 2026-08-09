@@ -68,23 +68,23 @@ Each flow includes:
 
 ---
 
-### FLOW-003 — Voice capture → Inbox → Task creation
+### FLOW-003 — Universal capture → auto-route → destination
 
 | Field | Detail |
 |-------|--------|
 | **Priority** | P0 |
-| **Preconditions** | Mic + speech permissions granted; GLM key optional |
-| **Trigger** | Open Inbox → voice capture |
-| **Main Flow** | 1. Speak capture 2. Transcript appears 3. Process → category suggestion 4. Confirm → task created 5. Appears in TaskListView |
-| **Alternative** | Text entry without voice |
+| **Preconditions** | Mic + speech permissions granted (optional); GLM key optional (heuristic routing fallback) |
+| **Trigger** | Tap Capture in bottom nav, Briefing header, Brain, Today timeline empty state, post-focus, or Inbox quick capture |
+| **Main Flow** | 1. Composer opens with text field + mic (no type menu) 2. Optional type chip or auto-route 3. Save → CaptureRouter classifies and routes 4. Outcome toast with Undo/View 5. Task on Today, event on timeline, mood in health, note in journal |
+| **Alternative** | Text-only capture; type chip pre-selected from contextual entry (health mood, post-focus note) |
 | **Interrupted** | Phone call during recording → recording stops gracefully |
-| **Cancelled** | Cancel capture → no inbox item |
-| **Offline** | Queue inbox item; process when online if AI required |
-| **Error** | Speech denied → show Settings link + text fallback |
-| **Recovery** | Grant permission → retry |
-| **Success** | Task in repository with correct userId; inbox item archived |
-| **Key files** | `InboxView`, `VoiceCaptureView`, `TasksViewModel.createFromInbox` |
-| **Test IDs** | LO-FEAT-FN-020, LO-AI-AI-002 |
+| **Cancelled** | Dismiss composer → no capture |
+| **Offline** | Request queued locally via CaptureOfflineQueue; auto-routes when connectivity returns |
+| **Error** | Speech denied → Settings link + text fallback; low confidence → Inbox review queue |
+| **Recovery** | Grant permission → retry; fix routing from Inbox review card |
+| **Success** | Correct destination surface updated; inbox item archived or `.actionCreated`; `.captureDidRoute` posted |
+| **Key files** | `CaptureComposerView`, `CaptureRouter`, `CaptureIntentClassifier`, `InboxView`, `LookAfterRootCanvas` |
+| **Test IDs** | LO-FEAT-FN-020, LO-AI-AI-002, `capture-composer`, `capture-outcome-toast` |
 
 ---
 

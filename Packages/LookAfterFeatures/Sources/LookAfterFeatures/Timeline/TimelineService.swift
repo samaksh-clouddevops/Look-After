@@ -28,11 +28,19 @@ public enum TimelineRowProjector {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
 
-        let sorted = TimelineNowResolver.sortedEvents(events)
+        let sorted = TimelineNowResolver.sortedEvents(events, now: now)
         let currentIndex = TimelineNowResolver.currentEventIndex(in: sorted, now: now)
 
         return sorted.enumerated().map { index, event in
-            row(from: event, index: index, currentIndex: currentIndex, now: now, formatter: formatter, isPreview: false)
+            row(
+                from: event,
+                index: index,
+                currentIndex: currentIndex,
+                now: now,
+                allEvents: sorted,
+                formatter: formatter,
+                isPreview: false
+            )
         }
     }
 
@@ -41,7 +49,15 @@ public enum TimelineRowProjector {
         formatter.dateFormat = "h:mm a"
         let sorted = TimelineNowResolver.sortedEvents(events)
         return sorted.enumerated().map { index, event in
-            row(from: event, index: index, currentIndex: nil, now: Date(), formatter: formatter, isPreview: true)
+            row(
+                from: event,
+                index: index,
+                currentIndex: nil,
+                now: Date(),
+                allEvents: sorted,
+                formatter: formatter,
+                isPreview: true
+            )
         }
     }
 
@@ -76,6 +92,7 @@ public enum TimelineRowProjector {
             updated[index].isPast = false
             updated[index].isNow = false
             updated[index].change = .moved
+            updated[index].isUnslottedFlexible = false
             return resortRows(updated)
         }
         return updated
@@ -83,10 +100,15 @@ public enum TimelineRowProjector {
 
     private static func resortRows(_ rows: [ExecutivePlanningTimelineRow], now: Date = Date()) -> [ExecutivePlanningTimelineRow] {
         var sorted = rows.sorted { lhs, rhs in
-            let lhsFlex = lhs.timeLabel == "Flexible"
-            let rhsFlex = rhs.timeLabel == "Flexible"
-            if lhsFlex != rhsFlex { return !lhsFlex }
-            if lhsFlex {
+            let lhsUnslotted = isUnslottedFlexibleRow(lhs)
+            let rhsUnslotted = isUnslottedFlexibleRow(rhs)
+            if lhsUnslotted != rhsUnslotted {
+                // Defer to chronological keys — slotted rows keep sortDate, unslotted use gap anchor below.
+            }
+            let lhsKey = lhsUnslotted ? gapSortDate(for: lhs, rows: rows, now: now) : lhs.sortDate
+            let rhsKey = rhsUnslotted ? gapSortDate(for: rhs, rows: rows, now: now) : rhs.sortDate
+            if lhsKey != rhsKey { return lhsKey < rhsKey }
+            if lhsUnslotted, rhsUnslotted {
                 return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
             }
             return lhs.sortDate < rhs.sortDate
@@ -94,7 +116,7 @@ public enum TimelineRowProjector {
 
         var currentIndex: Int?
         for (index, row) in sorted.enumerated() {
-            guard !row.isCompleted, row.timeLabel != "Flexible" else { continue }
+            guard !row.isCompleted, !isUnslottedFlexibleRow(row) else { continue }
             let minutes = row.estimatedMinutes ?? 30
             let end = row.sortDate.addingTimeInterval(TimeInterval(minutes * 60))
             if row.sortDate <= now, now <= end {
@@ -102,15 +124,55 @@ public enum TimelineRowProjector {
                 break
             }
         }
+        if currentIndex == nil,
+           hasSchedulingGap(in: sorted, now: now),
+           let gapIndex = sorted.firstIndex(where: { !$0.isCompleted && isUnslottedFlexibleRow($0) }) {
+            currentIndex = gapIndex
+        }
         if currentIndex == nil {
             currentIndex = sorted.firstIndex {
-                !$0.isCompleted && $0.timeLabel != "Flexible" && $0.sortDate > now
+                !$0.isCompleted && !isUnslottedFlexibleRow($0) && $0.sortDate > now
             }
         }
         for index in sorted.indices {
             sorted[index].isNow = currentIndex == index && !sorted[index].isCompleted
         }
         return sorted
+    }
+
+    private static func isUnslottedFlexibleRow(_ row: ExecutivePlanningTimelineRow) -> Bool {
+        row.isUnslottedFlexible
+    }
+
+    private static func gapSortDate(
+        for row: ExecutivePlanningTimelineRow,
+        rows: [ExecutivePlanningTimelineRow],
+        now: Date
+    ) -> Date {
+        let slotted = rows.filter { !isUnslottedFlexibleRow($0) && !$0.isCompleted }
+        let nextStart = slotted.filter { $0.sortDate > now }.map(\.sortDate).min()
+        if let nextStart {
+            let lastEnd = slotted
+                .filter { $0.sortDate.addingTimeInterval(TimeInterval(($0.estimatedMinutes ?? 30) * 60)) <= now }
+                .map { $0.sortDate.addingTimeInterval(TimeInterval(($0.estimatedMinutes ?? 30) * 60)) }
+                .max()
+            if let lastEnd { return min(max(now, lastEnd), nextStart) }
+            return min(now, nextStart)
+        }
+        return now
+    }
+
+    private static func hasSchedulingGap(in rows: [ExecutivePlanningTimelineRow], now: Date) -> Bool {
+        let slotted = rows.filter { !$0.isCompleted && !isUnslottedFlexibleRow($0) }
+        let inWindow = slotted.contains { row in
+            let end = row.sortDate.addingTimeInterval(TimeInterval((row.estimatedMinutes ?? 30) * 60))
+            return row.sortDate <= now && now <= end
+        }
+        if inWindow { return false }
+        return slotted.contains { $0.sortDate > now }
+            || slotted.contains {
+                $0.sortDate.addingTimeInterval(TimeInterval(($0.estimatedMinutes ?? 30) * 60)) <= now
+            }
     }
 
     // MARK: - Private
@@ -120,25 +182,72 @@ public enum TimelineRowProjector {
         index: Int,
         currentIndex: Int?,
         now: Date,
+        allEvents: [LifeTimelineEvent],
         formatter: DateFormatter,
-        isPreview: Bool
+        isPreview: Bool,
+        calendar: Calendar = .current
     ) -> ExecutivePlanningTimelineRow {
-        let isFlexible = event.isFlexibleToday
-        let end = event.resolvedEndDate()
-        let endLabel = isFlexible ? "" : formatter.string(from: end)
-        let rangeLabel = isFlexible
-            ? ""
-            : ScheduleTimeFormatting.rangeLabel(from: event.date, to: end)
+        let isFlexible = event.scheduleKind.isFlexibleToday || event.isFlexibleToday
+        let dayStart = calendar.startOfDay(for: now)
+        var isUnslotted = TimelineDisplaySort.isUnslottedFlexible(event)
+        if !isUnslotted,
+           event.id.hasPrefix("task-"),
+           TaskScheduleInterval.isDisplayMidnightSentinel(event.date, on: dayStart, calendar: calendar) {
+            isUnslotted = true
+        }
+        if !isUnslotted,
+           event.isCompleted,
+           event.id.hasPrefix("task-"),
+           TaskScheduleInterval.isDisplayMidnightSentinel(event.date, on: dayStart, calendar: calendar) {
+            isUnslotted = true
+        }
+        let end = isFlexible
+            ? (event.date.addingTimeInterval(TimeInterval((event.estimatedMinutes ?? 30) * 60)))
+            : event.resolvedEndDate()
+        let rangeLabel: String
+        if isUnslotted {
+            rangeLabel = ""
+        } else if event.subtitle.contains(" – ") {
+            let rangePart = event.subtitle.components(separatedBy: " · ").last ?? event.subtitle
+            rangeLabel = rangePart.contains(" – ") ? rangePart : ScheduleTimeFormatting.rangeLabel(from: event.date, to: end)
+        } else if !isFlexible {
+            rangeLabel = ScheduleTimeFormatting.rangeLabel(from: event.date, to: end)
+        } else {
+            rangeLabel = ScheduleTimeFormatting.rangeLabel(from: event.date, to: end)
+        }
         let isPast = !isPreview && !event.isCompleted && !isFlexible && end < now
         let isCompleted = event.isCompleted
         let isNow = !isPreview && !isCompleted && !isPast && currentIndex == index
-        let timeLabel = isFlexible
-            ? "Flexible"
+        let displaySortDate = isUnslotted && !isCompleted
+            ? TimelineDisplaySort.sortKey(for: event, among: allEvents, now: now, calendar: calendar)
+            : event.date
+        let durationMinutes = event.estimatedMinutes ?? 30
+        var timeLabel = isUnslotted
+            ? formatter.string(from: displaySortDate)
             : formatter.string(from: event.date)
+        var endLabel = isUnslotted
+            ? formatter.string(from: displaySortDate.addingTimeInterval(TimeInterval(durationMinutes * 60)))
+            : formatter.string(from: end)
+        if timeLabel == "12:00 AM", event.id.hasPrefix("task-") {
+            if isCompleted {
+                timeLabel = ""
+                endLabel = ""
+            } else if isUnslotted {
+                timeLabel = ""
+                endLabel = ""
+            } else {
+                timeLabel = formatter.string(from: displaySortDate)
+                endLabel = formatter.string(from: displaySortDate.addingTimeInterval(TimeInterval(durationMinutes * 60)))
+                if timeLabel == "12:00 AM" {
+                    timeLabel = ""
+                    endLabel = ""
+                }
+            }
+        }
 
         return ExecutivePlanningTimelineRow(
             id: event.id,
-            sortDate: isFlexible ? end : event.date,
+            sortDate: displaySortDate,
             timeLabel: timeLabel,
             endTimeLabel: endLabel,
             scheduleRangeLabel: rangeLabel,
@@ -153,7 +262,9 @@ public enum TimelineRowProjector {
             estimatedMinutes: event.estimatedMinutes,
             completedAt: event.completedAt,
             isFixedEvent: event.isFixed,
-            timeConstraint: event.resolvedTimeConstraint
+            timeConstraint: event.resolvedTimeConstraint,
+            scheduleKind: event.scheduleKind,
+            isUnslottedFlexible: isUnslotted && !isCompleted
         )
     }
 
@@ -176,6 +287,67 @@ public enum TimelineRowProjector {
         return event.subtitle
     }
 
+    /// Display-only rows for flexible tasks that could not be persisted (overcommitted day).
+    public static func suggestedSlotRows(
+        tasks: [LifeTask],
+        completedToday: [LifeTask],
+        existingRows: [ExecutivePlanningTimelineRow],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [ExecutivePlanningTimelineRow] {
+        let dayStart = calendar.startOfDay(for: now)
+        let existingTaskIds = Set(existingRows.compactMap(\.taskId))
+        let pool = tasks + completedToday
+
+        let unslotted = tasks.filter { task in
+            guard task.status.isActive, task.isSchedulerMovable else { return false }
+            guard !existingTaskIds.contains(task.id) else { return false }
+            if let scheduledDate = task.scheduledDate {
+                guard calendar.isDate(scheduledDate, inSameDayAs: dayStart) else { return false }
+            } else if !calendar.isDateInToday(now) {
+                return false
+            }
+            return !TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar)
+        }
+        guard !unslotted.isEmpty else { return [] }
+
+        let plan = DaySchedulePlanner.plan(tasks: pool, on: dayStart, now: now, calendar: calendar)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+
+        return unslotted.compactMap { task in
+            guard let slot = plan.slots.first(where: { $0.taskID == task.id }) else { return nil }
+            let startLabel = formatter.string(from: slot.start)
+            let endLabel = formatter.string(from: slot.end)
+            let title = UserFacingCopy.sanitize(task.title).isEmpty ? task.title : UserFacingCopy.sanitize(task.title)
+            return ExecutivePlanningTimelineRow(
+                id: "suggested-\(task.id)",
+                sortDate: slot.start,
+                timeLabel: "~\(startLabel)",
+                endTimeLabel: endLabel,
+                scheduleRangeLabel: ScheduleTimeFormatting.rangeLabel(from: slot.start, to: slot.end),
+                title: title,
+                subtitle: "Suggested slot — day is tight",
+                kind: LifeTimelineKindResolver.kind(for: task),
+                taskId: task.id,
+                estimatedMinutes: task.estimatedMinutes,
+                timeConstraint: task.timeConstraintValue,
+                scheduleKind: .floating,
+                isSuggestedSlot: true,
+                suggestedStart: slot.start
+            )
+        }
+    }
+
+    public static func mergeWithSuggestedRows(
+        _ base: [ExecutivePlanningTimelineRow],
+        suggested: [ExecutivePlanningTimelineRow],
+        now: Date = Date()
+    ) -> [ExecutivePlanningTimelineRow] {
+        guard !suggested.isEmpty else { return base }
+        return resortRows(base + suggested, now: now)
+    }
+
 }
 
 /// Single owner for day timelines — builds events once and projects UI rows.
@@ -189,6 +361,8 @@ public final class TimelineService: ObservableObject {
 
     private var pendingPatches: [TimelinePatch] = []
     private var patchVersion: Int = 0
+    private var lastRebuildTasks: [LifeTask] = []
+    private var lastRebuildCompleted: [LifeTask] = []
 
     public init() {}
 
@@ -204,6 +378,8 @@ public final class TimelineService: ObservableObject {
         now: Date = Date(),
         calendar: Calendar = .current
     ) {
+        lastRebuildTasks = tasks
+        lastRebuildCompleted = completedToday
         let today = LifeTimelinePresenter.build(
             tasks: tasks,
             completedToday: completedToday,
@@ -251,8 +427,16 @@ public final class TimelineService: ObservableObject {
         }
     }
 
-    public func projectRows(now: Date = Date(), animated: Bool = true) {
-        let built = TimelineRowProjector.rows(from: snapshot.today, now: now)
+    public func projectRows(now: Date = Date(), animated: Bool = true, calendar: Calendar = .current) {
+        let base = TimelineRowProjector.rows(from: snapshot.today, now: now)
+        let suggested = TimelineRowProjector.suggestedSlotRows(
+            tasks: lastRebuildTasks,
+            completedToday: lastRebuildCompleted,
+            existingRows: base,
+            now: now,
+            calendar: calendar
+        )
+        let built = TimelineRowProjector.mergeWithSuggestedRows(base, suggested: suggested, now: now)
         let tomorrowBuilt = TimelineRowProjector.previewRows(from: snapshot.tomorrow)
         if animated {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {

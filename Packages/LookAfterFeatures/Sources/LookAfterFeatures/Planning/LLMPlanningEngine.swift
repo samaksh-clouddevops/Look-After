@@ -15,13 +15,19 @@ public final class LLMPlanningEngine {
         context: PlanningConversationContext,
         history: [PlanningConversationTurn],
         preAnalysis: PlanningReasoningResult? = nil,
-        forceAI: Bool = false
+        forceAI: Bool = false,
+        voiceOptimized: Bool = false
     ) async throws -> PlanningTurnResponse {
         let analysis = preAnalysis ?? PlanningReasoningPipeline.analyze(message: message, context: context)
 
         do {
-            let system = Self.planningSystemPrompt(context: context)
-            let prompt = Self.planningUserPrompt(context: context, userMessage: message, analysis: analysis)
+            let system = Self.planningSystemPrompt(context: context, voiceOptimized: voiceOptimized)
+            let prompt = Self.planningUserPrompt(
+                context: context,
+                userMessage: message,
+                analysis: analysis,
+                voiceOptimized: voiceOptimized
+            )
             let chatHistory = history.map { turn in
                 ChatMessage(
                     role: turn.role == .user ? .user : .assistant,
@@ -29,11 +35,13 @@ public final class LLMPlanningEngine {
                 )
             }
 
+            let tier = Self.modelTier(for: analysis, voiceOptimized: voiceOptimized)
             let raw = try await glm.sendMessage(
                 prompt,
                 systemPrompt: system,
                 history: chatHistory,
-                tier: .premium
+                tier: tier,
+                maxTokens: voiceOptimized ? 1024 : 4096
             )
 
             var response = try decodeResponse(from: raw, fallbackMessage: message, context: context, analysis: analysis)
@@ -48,7 +56,7 @@ public final class LLMPlanningEngine {
 
     // MARK: - Prompts
 
-    private static func planningSystemPrompt(context: PlanningConversationContext) -> String {
+    private static func planningSystemPrompt(context: PlanningConversationContext, voiceOptimized: Bool = false) -> String {
         let profile = context.lifeProfile
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: profile)
         return """
@@ -77,52 +85,70 @@ public final class LLMPlanningEngine {
         Return ONLY valid JSON — no markdown fences, no prose outside JSON.
         The app executes your mutations automatically (creates tasks, updates timeline, shopping, medications).
         The "reply" field is the ONLY text the user sees — write warm plain English, never JSON or code.
-        \(SpeechVoiceSettings.preferSpokenStyle ? "\n        \(SpeechVoiceSettings.spokenDeliveryInstruction)\n        Apply SPOKEN DELIVERY rules to the \"reply\" field only." : "")
+        \(voiceOptimized ? "Keep reply to 1-2 short spoken sentences for voice." : "")
+        \(SpeechVoiceSettings.preferSpokenStyle || voiceOptimized ? "\n        \(SpeechVoiceSettings.spokenDeliveryInstruction)\n        Apply SPOKEN DELIVERY rules to the \"reply\" field only." : "")
         """
     }
 
-    private static func formatHour(_ hour: Int) -> String {
-        let calendar = Calendar.current
-        let date = calendar.date(bySettingHour: min(max(hour, 0), 23), minute: 0, second: 0, of: Date()) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+    private static func modelTier(for analysis: PlanningReasoningResult, voiceOptimized: Bool) -> AIModelTier {
+        guard voiceOptimized else { return .premium }
+        if analysis.multiDayDetection != nil { return .premium }
+        switch analysis.intent {
+        case .replan, .negotiate, .project, .postWake, .goingOut, .travel:
+            return .premium
+        default:
+            return .standard
+        }
     }
 
-    private static func planningUserPrompt(context: PlanningConversationContext, userMessage: String, analysis: PlanningReasoningResult) -> String {
+    private static func planningUserPrompt(
+        context: PlanningConversationContext,
+        userMessage: String,
+        analysis: PlanningReasoningResult,
+        voiceOptimized: Bool = false
+    ) -> String {
         let profile = context.lifeProfile
         let now = Date()
 
         let matchLines = analysis.existingTaskMatches.prefix(5).map { "- REUSE id:\($0.id) | \($0.title)" }.joined(separator: "\n")
         let deferLines = analysis.deferCandidates.map { "- \($0.title)" }.joined(separator: "\n")
 
-        let supplemental = PlanningPromptContextBuilder.supplementalContextBlock(
-            analytics: context.analyticsContext,
-            includeCalibration: true
-        )
+        let supplemental = voiceOptimized
+            ? ""
+            : PlanningPromptContextBuilder.supplementalContextBlock(
+                analytics: context.analyticsContext,
+                includeCalibration: true
+            )
+        let taskLimit = voiceOptimized ? 10 : 25
+        let timelineLimit = voiceOptimized ? 8 : 20
+        let cycleBlock = voiceOptimized
+            ? ""
+            : PlanningPromptContextBuilder.cycleBlock(
+                snapshot: CycleEngine.snapshot(CycleEngine.Input()),
+                logs: CycleLogStore.load()
+            )
 
         return """
         \(PlanningPromptContextBuilder.temporalBlock(now: now, profile: profile))
         \(PlanningPromptContextBuilder.schedulingRulesBlock())
-        \(PlanningPromptContextBuilder.dailyRoutineBlock())
+        \(voiceOptimized ? "" : "\(PlanningPromptContextBuilder.dailyRoutineBlock())\n")
         \(PlanningPromptContextBuilder.sleepBoundaryBlock(now: now, profile: profile))
         \(PlanningPromptContextBuilder.duplicateReuseRulesBlock())
 
         PRE-ANALYSIS (deterministic — follow this):
         - Classified intent: \(analysis.intent.label)
+        \(analysis.intent == .reschedule ? "- User wants to RESCHEDULE an existing task — use rescheduleTask with taskID + startHour/startMinute, never createTask.\n" : "")
         - Capacity needed: ~\(analysis.capacityMinutesNeeded)m
         - Day overloaded: \(analysis.isOverloaded ? "YES — negotiate, do not silently add work" : "no")
         \(analysis.multiDayDetection.map { "- Multi-day planning: YES — suggested \($0.suggestedDayCount ?? 3) days" } ?? "- Multi-day planning: no")
         \(analysis.existingTaskMatches.isEmpty ? "" : "EXISTING MATCHES (reuse ONLY if user means the same task):\n\(matchLines)\n")
         \(analysis.deferCandidates.isEmpty ? "" : "DEFER OPTIONS if negotiating:\n\(deferLines)\n")
+        \(PlanningPromptContextBuilder.proactiveSuggestionsBlock(analysis.proactiveSuggestions))
 
         \(PlanningPromptContextBuilder.combinedLifeContextBlock(profile: profile))
         \(supplemental.isEmpty ? "" : "\(supplemental)\n")
         \(PlanningPromptContextBuilder.healthBlock(context.healthSummary))
-        \(PlanningPromptContextBuilder.cycleBlock(
-            snapshot: CycleEngine.snapshot(CycleEngine.Input()),
-            logs: CycleLogStore.load()
-        ))
+        \(cycleBlock.isEmpty ? "" : "\(cycleBlock)\n")
         \(PlanningPromptContextBuilder.executiveCapacityBlock(
             label: context.executiveCapacityLabel,
             reasons: context.executiveCapacityReasons,
@@ -133,8 +159,8 @@ public final class LLMPlanningEngine {
             planSummary: context.planSummary
         ))
 
-        \(PlanningPromptContextBuilder.tasksBlock(context.tasks, style: .planning))
-        \(PlanningPromptContextBuilder.timelineBlock(context.timelineItems))
+        \(PlanningPromptContextBuilder.tasksBlock(context.tasks, style: .planning, limit: taskLimit))
+        \(PlanningPromptContextBuilder.timelineBlock(context.timelineItems, limit: timelineLimit))
         \(PlanningPromptContextBuilder.medicationsBlock(context.medications))
 
         USER MESSAGE:
@@ -145,6 +171,14 @@ public final class LLMPlanningEngine {
         Omit negotiation when not needed. mutations may be empty when only negotiating or advising.
         For multi-day planning, populate multiDayDraft + multiDayPlanning and keep mutations empty until user confirms.
         """
+    }
+
+    private static func formatHour(_ hour: Int) -> String {
+        let calendar = Calendar.current
+        let date = calendar.date(bySettingHour: min(max(hour, 0), 23), minute: 0, second: 0, of: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
     }
 
     // MARK: - Decode
@@ -174,17 +208,23 @@ public final class LLMPlanningEngine {
     }
 
     private static func aiUnavailablePrefix(for error: Error) -> String {
+        if case GLMServiceError.licenseRequired = error {
+            return "I couldn't reach the AI planner — activate your product key in Settings → License. Meanwhile, "
+        }
+        if case GLMServiceError.proxyNotConfigured = error {
+            return "AI proxy is not configured — using offline planning. "
+        }
         if case GLMServiceError.noKeysConfigured = error {
-            return "I couldn't reach the AI planner — add a GLM key in Settings → API Keys. Meanwhile, "
+            return "I couldn't reach the AI planner — activate your product key in Settings → License. Meanwhile, "
         }
         if case GLMServiceError.allKeysExhausted = error {
-            return "AI keys are temporarily exhausted — using offline planning. "
+            return "AI is temporarily unavailable — using offline planning. "
         }
         if GLMService.isQuotaOrRateLimitError(error) {
             return "AI quota is limited right now — using offline planning. "
         }
         if case GLMServiceError.invalidAPIKey = error {
-            return "Your GLM API key looks invalid — check Settings → API Keys. Meanwhile, "
+            return "AI is unavailable — check Settings → License. Meanwhile, "
         }
         return "AI planner unavailable — using offline planning. "
     }
@@ -199,12 +239,20 @@ public final class LLMPlanningEngine {
         let lower = message.lowercased()
 
         if analysis.isOverloaded && !analysis.deferCandidates.isEmpty {
-            let options = analysis.deferCandidates.map(\.title) + ["Move new items to tomorrow"]
+            let variants = PlanVariantBuilder.buildOfflinePlanningVariants(
+                context: context,
+                deferCandidates: analysis.deferCandidates
+            )
+            let negotiation = PlanVariantBuilder.negotiation(
+                from: variants,
+                question: "I don't think everything fits today. Pick a plan:"
+            )
             return PlanningTurnResponse(
-                reply: safeReply.isEmpty ? "I don't think everything fits today. Which would you rather postpone?" : safeReply,
+                reply: safeReply.isEmpty ? "I don't think everything fits today. Here are a few ways we could handle it." : safeReply,
                 thinkingSteps: analysis.thinkingSteps,
                 mutations: [],
-                negotiation: PlanningNegotiation(question: "Which would you rather postpone?", options: options)
+                negotiation: negotiation,
+                planVariants: variants
             )
         }
 
@@ -228,6 +276,26 @@ public final class LLMPlanningEngine {
                     options: ["Tomorrow", "This weekend", "Next week"]
                 )
             )
+        case .reschedule:
+            if let task = analysis.existingTaskMatches.first,
+               let time = PlanningTimeParser.parseHourMinute(from: message) {
+                return PlanningTurnResponse(
+                    reply: safeReply.isEmpty ? "Got it — I'll move \"\(task.title)\" to the new time." : safeReply,
+                    thinkingSteps: analysis.thinkingSteps,
+                    mutations: [
+                        PlanMutation(
+                            kind: .rescheduleTask,
+                            taskID: task.id,
+                            title: task.title,
+                            startHour: time.hour,
+                            startMinute: time.minute
+                        )
+                    ],
+                    timelineDeltas: [
+                        PlanningTimelineDelta(timeLabel: "\(time.hour):\(String(format: "%02d", time.minute))", title: task.title, change: .moved)
+                    ]
+                )
+            }
         case .energyAdapt:
             return PlanningTurnResponse(
                 reply: safeReply.isEmpty ? "That makes sense. Based on your energy today, I'd avoid deep work. Would you rather review something lighter, answer emails, or take a short recovery walk?" : safeReply,
@@ -270,7 +338,29 @@ public final class LLMPlanningEngine {
             )
         }
 
-        if !analysis.existingTaskMatches.isEmpty, !createsTasksFromIntent(analysis.intent) {
+        if !analysis.existingTaskMatches.isEmpty,
+           analysis.intent == .reschedule,
+           let task = analysis.existingTaskMatches.first,
+           let time = PlanningTimeParser.parseHourMinute(from: message) {
+            return PlanningTurnResponse(
+                reply: safeReply.isEmpty ? "Got it — I'll move \"\(task.title)\" to the new time." : safeReply,
+                thinkingSteps: analysis.thinkingSteps,
+                mutations: [
+                    PlanMutation(
+                        kind: .rescheduleTask,
+                        taskID: task.id,
+                        title: task.title,
+                        startHour: time.hour,
+                        startMinute: time.minute
+                    )
+                ],
+                timelineDeltas: [
+                    PlanningTimelineDelta(timeLabel: "\(time.hour):\(String(format: "%02d", time.minute))", title: task.title, change: .moved)
+                ]
+            )
+        }
+
+        if !analysis.existingTaskMatches.isEmpty, !createsTasksFromIntent(analysis.intent), analysis.intent != .reschedule {
             let reuse = analysis.existingTaskMatches.map {
                 PlanMutation(kind: .reuseTask, taskID: $0.id, title: $0.title, reason: "Already on your plan")
             }
@@ -345,7 +435,8 @@ public final class LLMPlanningEngine {
         return parts
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { phrase in
-                phrase.count > 3 && phrase.split(separator: " ").count >= 2
+                let wordCount = phrase.split(separator: " ").count
+                return phrase.count >= 4 && (wordCount >= 2 || (wordCount == 1 && phrase.count >= 4))
             }
             .prefix(5)
             .map { String($0.prefix(80)) }

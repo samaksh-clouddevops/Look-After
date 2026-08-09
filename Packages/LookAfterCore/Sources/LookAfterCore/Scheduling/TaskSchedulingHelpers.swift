@@ -50,6 +50,24 @@ public extension LifeTask {
         updatedAt = Date()
     }
 
+    /// Sync semantic constraint + clock fields after Flexible/Fixed picker edits.
+    mutating func applyUserSchedulingModeEdit(
+        _ mode: TaskSchedulingMode,
+        fixedStartTime: Date? = nil,
+        fixedEndTime: Date? = nil
+    ) {
+        switch mode {
+        case .fixedTime:
+            applyTimeConstraint(.anchored)
+            scheduledTime = fixedStartTime
+            scheduledEndTime = fixedEndTime
+        case .flexible:
+            applyTimeConstraint(.flexible)
+            scheduledTime = nil
+            scheduledEndTime = nil
+        }
+    }
+
     /// Effective compress floor for the conflict cascade.
     /// Explicit property > vault-learned floor > semantic defaults.
     func minimumViableDurationValue(

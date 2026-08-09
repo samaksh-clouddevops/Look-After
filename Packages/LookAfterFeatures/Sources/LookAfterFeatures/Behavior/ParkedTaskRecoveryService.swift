@@ -84,6 +84,7 @@ public final class ParkedTaskRecoveryService {
                     ],
                     triggeredRecoveryLock: true
                 ),
+                recoveryDurationMinutes: gapMinutes,
                 now: now
             )
             return .recoveryLocked(block)
@@ -126,6 +127,7 @@ public final class ParkedTaskRecoveryService {
                         ],
                         triggeredRecoveryLock: true
                     ),
+                    recoveryDurationMinutes: gapMinutes,
                     now: now
                 )
                 return .recoveryLocked(block)
@@ -189,6 +191,9 @@ public final class ParkedTaskRecoveryService {
                 placed.append(entry)
             }
             cursor = end.addingTimeInterval(TimeInterval(ConflictResolutionCascade.defaultBufferMinutes * 60))
+        }
+        if !placed.isEmpty, !userId.isEmpty {
+            tasksVM.requestDebouncedScheduleReconcile(userId: userId, immediate: true)
         }
         return placed
     }

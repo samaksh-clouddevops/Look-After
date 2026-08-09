@@ -4,13 +4,25 @@ import LookAfterCore
 
 @MainActor
 final class TaskStoreTests: XCTestCase {
+    private var taskStore: TaskSQLiteStore!
+
+    override func setUp() {
+        super.setUp()
+        taskStore = TaskSQLiteStore(inMemory: true)
+    }
+
     override func tearDown() {
         TaskRepository.invalidateLocalCache()
+        try? taskStore.reset()
         super.tearDown()
     }
 
+    private func makeStore() -> TaskStore {
+        TaskStore(taskRepo: TaskRepository(taskStore: taskStore))
+    }
+
     func testRefreshLocalPublishesSnapshot() async throws {
-        let repo = TaskRepository()
+        let repo = TaskRepository(taskStore: taskStore)
         let store = TaskStore(taskRepo: repo)
         let userId = "task-store-user-\(UUID().uuidString)"
         let task = LifeTask(title: "One task", userId: userId)
@@ -24,7 +36,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testCreateUpdatesPublishedSnapshot() async throws {
-        let store = TaskStore(taskRepo: TaskRepository())
+        let store = makeStore()
         let userId = "task-store-create-\(UUID().uuidString)"
         store.refreshLocal(userId: userId)
 
@@ -39,7 +51,7 @@ final class TaskStoreTests: XCTestCase {
         TaskRepository.invalidateLocalCache()
         XCTAssertFalse(TaskRepository.hasWarmedLocalCache)
 
-        let repo = TaskRepository()
+        let repo = TaskRepository(taskStore: taskStore)
         let userId = "task-store-warm-\(UUID().uuidString)"
         let task = LifeTask(title: "Warm task", userId: userId)
         try await repo.create(task)

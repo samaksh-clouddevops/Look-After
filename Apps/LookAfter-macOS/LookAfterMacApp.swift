@@ -9,6 +9,7 @@ struct LookAfterMacApp: App {
     
     init() {
         LookAfterFirebaseConfiguration.configureIfNeeded()
+        AuthProxyBootstrap.configureIfNeeded()
     }
     
     var body: some Scene {

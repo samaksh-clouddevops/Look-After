@@ -1,6 +1,9 @@
 import WidgetKit
 import SwiftUI
 import LookAfterCore
+#if canImport(AppIntents)
+import AppIntents
+#endif
 
 struct FlowWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> FlowWidgetEntry {
@@ -96,6 +99,16 @@ struct NowWidgetView: View {
             }
 
             Spacer(minLength: 0)
+
+            if #available(iOS 17.0, *), entry.snapshot.resolvedTopTaskTitle != nil {
+                Button(intent: WidgetStartHeroTaskIntent()) {
+                    Text("Start focus")
+                        .font(.dsMetadata(weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(WidgetStyle.accent)
+            }
 
             Text("\(entry.snapshot.completedTodayCount) done today")
                 .font(.dsMetadata())

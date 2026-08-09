@@ -8,6 +8,8 @@ Deferred improvements — not blocking the repository restructure.
 
 ## Persistence consolidation
 
+See **[architecture/mobile-infrastructure-roadmap.md](architecture/mobile-infrastructure-roadmap.md)** for the full phased plan (sync outbox, inbox/health/modules SQLite, cache cleanup).
+
 Move stores into LookAfterData over time:
 
 - Core: `MedicationStore`, `CycleLogStore`, etc. → `LookAfterData/Repositories/`

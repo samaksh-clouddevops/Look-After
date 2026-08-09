@@ -17,6 +17,7 @@ struct LookAfterApp: App {
 
     init() {
         LookAfterFirebaseConfiguration.configureIfNeeded()
+        AuthProxyBootstrap.configureIfNeeded()
         UITestLaunchConfiguration.applyIfNeeded()
     }
     

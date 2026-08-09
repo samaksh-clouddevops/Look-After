@@ -437,6 +437,37 @@ final class ConflictResolutionCascadeTests: XCTestCase {
         XCTAssertTrue([ConflictCascadeAction.shiftLater, .compress, .deferNextGap, .park].contains(action))
     }
 
+    func testEqualStartFlexiblePairStableAcrossInputOrder() {
+        let first = task(id: "aaa-flex", title: "Alpha task", hour: 14, minutes: 45, constraint: .flexible)
+        let second = task(id: "zzz-flex", title: "Zulu task", hour: 14, minutes: 45, constraint: .flexible)
+
+        let forward = ConflictResolutionCascade.resolve(
+            tasks: [first, second], on: day, calendar: calendar
+        )
+        let reverse = ConflictResolutionCascade.resolve(
+            tasks: [second, first], on: day, calendar: calendar
+        )
+
+        let forwardByID = Dictionary(uniqueKeysWithValues: forward.tasks.map { ($0.id, $0.scheduledTime) })
+        let reverseByID = Dictionary(uniqueKeysWithValues: reverse.tasks.map { ($0.id, $0.scheduledTime) })
+
+        XCTAssertEqual(forwardByID["aaa-flex"], reverseByID["aaa-flex"])
+        XCTAssertEqual(forwardByID["zzz-flex"], reverseByID["zzz-flex"])
+        XCTAssertFalse(DayScheduleReconciler.hasOverlap(forward.tasks, on: day, calendar: calendar))
+        XCTAssertFalse(DayScheduleReconciler.hasOverlap(reverse.tasks, on: day, calendar: calendar))
+    }
+
+    func testReconcileTwiceIsIdempotentOnCleanSchedule() {
+        let morning = task(id: "morning", title: "Morning block", hour: 9, minutes: 60, constraint: .anchored)
+        let afternoon = task(id: "afternoon", title: "Afternoon block", hour: 14, minutes: 60, constraint: .flexible)
+
+        let first = DayScheduleReconciler.reconcile(tasks: [morning, afternoon], on: day, calendar: calendar)
+        let second = DayScheduleReconciler.reconcile(tasks: first.tasks, on: day, calendar: calendar)
+
+        XCTAssertTrue(second.changedTaskIDs.isEmpty)
+        XCTAssertFalse(DayScheduleReconciler.hasOverlap(second.tasks, on: day, calendar: calendar))
+    }
+
     // MARK: - Helpers
 
     private func decision(_ result: ConflictCascadeResult, _ id: String) -> ConflictCascadeAction? {

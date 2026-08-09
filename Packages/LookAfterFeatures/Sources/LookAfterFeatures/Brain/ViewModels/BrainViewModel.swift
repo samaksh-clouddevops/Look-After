@@ -13,6 +13,8 @@ public final class BrainViewModel: ObservableObject {
     @Published public var error: String?
     @Published public var topTasks: [LifeTask] = []
     @Published public var healthSummary: HealthSummary?
+    /// Unstripped HealthKit summary — used for sleep display when overnight metrics are gated.
+    @Published public private(set) var rawHealthSummary: HealthSummary?
     @Published public private(set) var presentation: BrainPresentation = .empty
 
     /// Latest orchestrated surface when Flow Director is enabled.
@@ -109,6 +111,25 @@ public final class BrainViewModel: ObservableObject {
         }
     }
 
+    /// Regenerates the cognitive snapshot from current health + task inputs without re-orchestrating.
+    public func regenerateCognitiveSnapshot(
+        completedTasksToday: [LifeTask],
+        userId: String
+    ) async {
+        let todaysEnergy = (try? await energyRepo.getToday(for: userId)) ?? []
+        let briefingHealth = HealthSummaryFreshness.forBriefingMetrics(
+            from: rawHealthSummary ?? healthSummary
+        )
+        let userName = ProfileCoordinator.displayName
+        let profile = UserLifeProfileStore.loadUserProfile(displayName: userName.isEmpty ? "User" : userName)
+        cognitiveSnapshot = cognitiveModel.generateSnapshot(
+            healthSummary: briefingHealth,
+            recentEnergyReports: todaysEnergy,
+            completedTasksToday: completedTasksToday,
+            profile: profile
+        )
+    }
+
     /// Load all data and produce recommendation via Flow Director or legacy ExecutiveBrain.
     public func refresh(
         userId: String,
@@ -133,16 +154,17 @@ public final class BrainViewModel: ObservableObject {
             async let health = loadHealth(for: userId)
             async let energyReports = energyRepo.getToday(for: userId)
 
-            let latestHealth = await health
+            let latestHealth = ManualSleepLogStore.merged(with: await health)
             let todaysEnergy = try await energyReports
 
+            self.rawHealthSummary = latestHealth
             let briefingHealth = HealthSummaryFreshness.forBriefingMetrics(from: latestHealth)
             self.healthSummary = briefingHealth ?? latestHealth
 
             let userName = ProfileCoordinator.displayName
             let profile = UserLifeProfileStore.loadUserProfile(displayName: userName.isEmpty ? "User" : userName)
             let snapshot = cognitiveModel.generateSnapshot(
-                healthSummary: briefingHealth,
+                healthSummary: briefingHealth ?? latestHealth,
                 recentEnergyReports: todaysEnergy,
                 completedTasksToday: completedTasks,
                 profile: profile

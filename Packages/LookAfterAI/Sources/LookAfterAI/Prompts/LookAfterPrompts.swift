@@ -82,6 +82,49 @@ public enum LookAfterPrompts {
     Create actionable task suggestions when appropriate. Use "archive" only when no action is needed.
     """
 
+    public static let captureRoutingSystem = """
+    You route quick captures for Look After (ADHD executive assistant). Return ONLY valid JSON.
+    Classify user input into one intent: task, note, event, mood, insight, or archive.
+    Prefer task when actionable. Prefer note for reflections. Prefer event when a specific time is mentioned.
+    Prefer mood for feelings/energy without a task. Prefer insight for observations to remember later.
+    Use archive only when nothing should be stored.
+    """
+
+    public static func captureRoutingPrompt(text: String, hintedIntent: String?, contextScreen: String?) -> String {
+        var prompt = """
+        Route this capture for Look After.
+
+        CAPTURE: \(text)
+        """
+        if let hintedIntent, hintedIntent != "auto" {
+            prompt += "\nUSER HINT: \(hintedIntent)"
+        }
+        if let contextScreen {
+            prompt += "\nSCREEN: \(contextScreen)"
+        }
+        prompt += """
+
+        Respond as JSON:
+        {
+            "intent": "task|note|event|mood|insight|archive",
+            "confidence": 0.0-1.0,
+            "title": "<short title if applicable>",
+            "summary": "<one sentence summary>",
+            "scheduledAtISO": "<ISO8601 or null>",
+            "durationMinutes": <int or null>,
+            "moodLabel": "<Low|Okay|Good|Great or null>",
+            "lifeArea": "<life area or null>",
+            "priority": "<Critical|High|Medium|Low|Someday or null>",
+            "taskDifficulty": "<Trivial|Easy|Medium|Hard|Intense or null>",
+            "estimatedMinutes": <int or null>
+        }
+
+        Valid lifeArea: \(LifeArea.allCases.map(\.rawValue).joined(separator: ", "))
+        Return ONLY the JSON object.
+        """
+        return prompt
+    }
+
     public static let socialCheckInSystem = """
     You draft warm, casual check-in messages. Return ONLY the raw message text — no quotes, no explanation.
     Match the user's preferred coaching tone when provided.

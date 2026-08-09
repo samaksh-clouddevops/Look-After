@@ -71,7 +71,8 @@ final class NotificationCoordinator {
             focusSessionActive: focusActive,
             focusBreakFireDate: focusBreakDate,
             focusSessionToken: focusToken,
-            userDisplayName: UserLifeProfileStore.resolvedDisplayName()
+            userDisplayName: UserLifeProfileStore.resolvedDisplayName(),
+            proactiveActions: shell.proactiveActions.filter { $0.surface == .notification }
         )
 
         await refresh(input: input)
@@ -158,6 +159,11 @@ final class NotificationCoordinator {
     func resetForFactoryReset() async {
         NotificationPreferencesStore.resetForFactoryReset()
         NotificationDailyBudgetStore.resetForFactoryReset()
+        ProactiveFeedbackStore.resetForFactoryReset()
+        ProactiveDismissStore.resetForFactoryReset()
+        ProactiveSnapshotStore.resetForFactoryReset()
+        ProactivePreviewTimeoutStore.clear()
+        ExperimentReminderStore.resetForFactoryReset()
         await NotificationScheduler.shared.cancelAllManaged()
     }
 }

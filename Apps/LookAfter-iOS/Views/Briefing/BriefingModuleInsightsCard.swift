@@ -39,7 +39,7 @@ struct BriefingModuleInsightsCard: View {
 
     private func insightRow(_ insight: BriefingModuleInsight) -> some View {
         HStack(alignment: .top, spacing: DesignSystem.spacingSM) {
-            Image(systemName: insight.icon)
+            Image.safeSystemName(insight.icon, fallback: "sparkles")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(DesignSystem.accentPrimary)
                 .frame(width: 18)

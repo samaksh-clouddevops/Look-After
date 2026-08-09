@@ -6,11 +6,13 @@ options:
     iOS: 17.0
     macOS: 14.0
   xcodeVersion: "15.0"
+  developmentTeam: QZYBP8F6F5
 
 settings:
   base:
     SWIFT_VERSION: "5.9"
     ENABLE_BITCODE: false
+    DEVELOPMENT_TEAM: QZYBP8F6F5
 
 targets:
   LookAfter-iOS:
@@ -23,6 +25,9 @@ targets:
       - path: Config/GoogleService-Info.plist
       - path: Config/LookAfter-iOS.entitlements
     entitlements:
+      # Personal Team: use LookAfter-iOS.entitlements (no Sign in with Apple).
+      # Paid Apple Developer Program: switch to Config/LookAfter-iOS.production.entitlements
+      # and add SWIFT_ACTIVE_COMPILATION_CONDITIONS: SIGN_IN_WITH_APPLE
       path: Config/LookAfter-iOS.entitlements
       properties:
         com.apple.developer.healthkit: true
@@ -35,6 +40,8 @@ targets:
       properties:
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
+        # Set after Azure deploy, e.g. https://lookafter-auth-xxxx.azurecontainerapps.io
+        AuthProxyBaseURL: "https://lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io"
         NSHealthShareUsageDescription: "Look After reads sleep, heart rate, HRV, steps, and workout data from Apple Health (including Apple Watch) to estimate your energy levels and personalize task recommendations."
         NSCalendarsFullAccessUsageDescription: "Look After reads your calendar to find free blocks and meeting-aware scheduling windows."
         NSCalendarsWriteOnlyAccessUsageDescription: "Look After needs access to your calendar to add scheduled tasks and sync events."
@@ -45,6 +52,7 @@ targets:
           - processing
         BGTaskSchedulerPermittedIdentifiers:
           - com.samaksh.flowos.app.notification-refresh
+          - com.samaksh.flowos.app.behavioral-telemetry
     dependencies:
       - target: LookAfterWidget
         embed: true
@@ -66,7 +74,6 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app
       CODE_SIGN_STYLE: Automatic
-      CODE_SIGN_IDENTITY: ""
       CODE_SIGN_ENTITLEMENTS: Config/LookAfter-iOS.entitlements
       OTHER_LDFLAGS: $(inherited) -ObjC
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -146,6 +153,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.lifeos.mac
       GENERATE_INFOPLIST_FILE: YES
       INFOPLIST_KEY_CFBundleDisplayName: "Look After"
+      INFOPLIST_KEY_AuthProxyBaseURL: "https://lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io"
       INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
       INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "Look After reads your calendar for scheduling."
       INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription: "Look After needs access to your calendar to add scheduled tasks."

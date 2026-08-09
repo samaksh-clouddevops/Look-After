@@ -68,10 +68,6 @@ struct TaskCardView: View {
         }
         if parts.isEmpty { return nil }
 
-        if isLoadingTimeDisplay {
-            return parts[0] + " · refining…"
-        }
-
         if task.isRecurring {
             parts.append(task.recurrenceRule.rawValue)
         }
@@ -266,7 +262,7 @@ struct TaskCardView: View {
                 HStack(spacing: 6) {
                     ProgressView()
                         .scaleEffect(0.75)
-                    Text("Checking your focus window…")
+                    Text("Updating focus tip…")
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(DesignSystem.textMuted)
                 }
@@ -307,24 +303,14 @@ struct TaskCardView: View {
 
     @ViewBuilder
     private var actionButtons: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
             if isCompleted {
                 TaskActionButton(title: "Incomplete", icon: "arrow.uturn.backward.circle", action: onMarkIncomplete)
                 TaskActionButton(title: "Edit", icon: "pencil", action: onEdit)
-                TaskActionButton(title: "Duplicate", icon: "plus.square.on.square", action: onDuplicate)
                 TaskActionButton(title: "Delete", icon: "trash", style: .destructive, action: onDelete)
             } else {
                 TaskActionButton(title: "Start", icon: "play.fill", style: .primary, action: onStart)
                 TaskActionButton(title: "Edit", icon: "pencil", action: onEdit)
-                if task.steps.isEmpty {
-                    TaskActionButton(
-                        title: "Break down",
-                        icon: "square.split.2x2",
-                        isLoading: isDecomposing,
-                        action: onDecompose
-                    )
-                }
-                TaskActionButton(title: "Duplicate", icon: "plus.square.on.square", action: onDuplicate)
                 TaskActionButton(title: "Delete", icon: "trash", style: .destructive, action: onDelete)
             }
         }

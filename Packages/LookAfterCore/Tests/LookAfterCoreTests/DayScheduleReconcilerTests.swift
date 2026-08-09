@@ -25,8 +25,7 @@ final class DayScheduleReconcilerTests: XCTestCase {
             estimatedMinutes: 45,
             scheduledDate: day,
             scheduledTime: dinnerStart,
-            tags: ["onboarding", "fixed", "daily-routine"],
-            schedulingMode: .fixedTime,
+            schedulingMode: .flexible,
             scheduledEndTime: dinnerEnd
         )
         dinner.priority = .medium
@@ -42,6 +41,47 @@ final class DayScheduleReconcilerTests: XCTestCase {
         let dinnerWindow = TaskScheduleInterval.window(for: updatedDinner!, on: day, calendar: calendar)
         XCTAssertNotNil(dinnerWindow)
         XCTAssertGreaterThanOrEqual(dinnerWindow!.start, gymEnd)
+    }
+
+    func testGymOverlapPushesDailyRoutineDinnerLater() {
+        let day = makeDate(year: 2026, month: 8, day: 7)
+        let gymStart = makeDate(year: 2026, month: 8, day: 7, hour: 18, minute: 30)
+        let gymEnd = makeDate(year: 2026, month: 8, day: 7, hour: 20, minute: 0)
+        let dinnerStart = makeDate(year: 2026, month: 8, day: 7, hour: 19, minute: 0)
+        let dinnerEnd = makeDate(year: 2026, month: 8, day: 7, hour: 19, minute: 45)
+
+        var gym = LifeTask(
+            title: "Gym",
+            estimatedMinutes: 90,
+            scheduledDate: day,
+            scheduledTime: gymStart,
+            tags: [LifeModel.commitmentTaskTag, "life-commitment:gym"],
+            schedulingMode: .fixedTime,
+            scheduledEndTime: gymEnd
+        )
+        gym.applyTimeConstraint(.anchored)
+
+        var dinner = LifeTask(
+            title: "Dinner",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: dinnerStart,
+            tags: ["onboarding", "fixed", "daily-routine"],
+            recurrence: .daily,
+            schedulingMode: .fixedTime,
+            scheduledEndTime: dinnerEnd
+        )
+        dinner = TaskConstraintAlignment.align(dinner)
+        XCTAssertEqual(dinner.timeConstraintValue, .flexible)
+
+        let plan = DaySchedulePlanner.plan(tasks: [gym, dinner], on: day, calendar: calendar)
+        let applied = DaySchedulePlanner.apply(plan: plan, to: [gym, dinner], on: day, calendar: calendar)
+        let updatedDinner = applied.tasks.first { $0.title == "Dinner" }
+        XCTAssertNotNil(updatedDinner)
+        let dinnerWindow = TaskScheduleInterval.window(for: updatedDinner!, on: day, calendar: calendar)
+        XCTAssertNotNil(dinnerWindow)
+        XCTAssertGreaterThanOrEqual(dinnerWindow!.start, gymEnd)
+        XCTAssertFalse(DayScheduleReconciler.hasOverlap(applied.tasks, on: day, calendar: calendar))
     }
 
     func testFlexibleTaskMovedAroundFixedGym() {

@@ -3,6 +3,9 @@ import LookAfterCore
 import LookAfterAI
 import LookAfterData
 import LookAfterFeatures
+#if os(iOS)
+import AudioToolbox
+#endif
 
 /// Brain tab — voice-first psychologist companion with optional text chat.
 struct BrainDashboardView: View {
@@ -23,23 +26,32 @@ struct BrainDashboardView: View {
     let onNavigateToCoach: () -> Void
     let onReset: () -> Void
     let onRefresh: () async -> Void
+    /// Routes scheduling / task-creation voice requests through Executive Planning (creates tasks on the timeline).
+    var onExecutivePlan: ((String) async -> String)? = nil
+    /// Whether the planning conversation already has turns from this session.
+    var hasPriorVoiceConversation: Bool = false
 
     @State private var orbState: LABrainVoiceOrbState = .ready
     @State private var statusLine: String?
     @State private var responseSubtitle: String?
+    @State private var isConversationActive = false
+    @State private var proactiveWelcomeTask: Task<Void, Never>?
+    @State private var didDeliverProactiveWelcome = false
+
+    private let proactiveWelcomeDelayNs: UInt64 = 3_500_000_000
 
     var body: some View {
         ZStack {
             PremiumBackground()
 
-            VStack(spacing: DesignSystem.spacingLG) {
+            VStack(spacing: DesignSystem.spacingMD) {
                 headerSection
                 statusRow
-                Spacer(minLength: DesignSystem.spacingMD)
 
                 LABrainVoiceOrb(state: orbState, onTap: handleOrbTap)
                     .featureTourAnchor(.brainVoiceOrb, cornerRadius: 110)
                     .id(AppFeatureTourAnchorID.brainVoiceOrb.rawValue)
+                    .padding(.vertical, DesignSystem.spacingSM)
 
                 contextCopy
 
@@ -52,23 +64,31 @@ struct BrainDashboardView: View {
                         .transition(.opacity)
                 }
 
-                Spacer(minLength: DesignSystem.spacingMD)
+                Spacer(minLength: DesignSystem.spacingLG)
 
                 decideForMeChip
                 askBrainGhostButton
+                siriHint
             }
             .padding(.horizontal, DesignSystem.screenHorizontal)
             .padding(.top, DesignSystem.spacingSM)
-            .padding(.bottom, DesignSystem.spacingXXL)
+            .padding(.bottom, DesignSystem.spacingXL)
         }
         .accessibilityIdentifier("screen-brain-dashboard")
         .task {
             await brainVM.refresh(userId: userId)
-            await onRefresh()
+        }
+        .onAppear {
+            scheduleProactiveWelcome()
+        }
+        .onDisappear {
+            proactiveWelcomeTask?.cancel()
+            proactiveWelcomeTask = nil
         }
         .onChange(of: speechSynthesizer.isSpeaking) { _, speaking in
             if !speaking, orbState == .speaking {
                 orbState = .ready
+                resumeListeningIfNeeded()
             }
         }
         .onChange(of: orbState) { _, state in
@@ -144,7 +164,7 @@ struct BrainDashboardView: View {
             .accessibilityElement(children: .combine)
         } else if orbState == .ready {
             Text("I'm here when you're ready.")
-                .textStyleCaption(color: DesignSystem.textMuted)
+                .textStyleCaption(color: DesignSystem.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -159,9 +179,19 @@ struct BrainDashboardView: View {
 
     private var contextCopy: some View {
         Text("Analyzing your context, commitments, energy, and goals to help you decide.")
-            .textStyleBody(color: DesignSystem.textSecondary)
+            .textStyleBody(color: DesignSystem.textPrimary.opacity(0.72))
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var siriHint: some View {
+        Text(isConversationActive
+             ? "Speak naturally — I'll listen and reply. Tap the orb to end."
+             : "I'll check in shortly — or tap the orb to start now.")
+            .textStyleCaption(color: DesignSystem.textMuted)
+            .multilineTextAlignment(.center)
+            .padding(.top, DesignSystem.spacingXS)
+            .accessibilityHint("Voice input via the orb or Siri shortcut")
     }
 
     private var decideForMeChip: some View {
@@ -208,66 +238,156 @@ struct BrainDashboardView: View {
 
     // MARK: - Voice flow
 
+    private func scheduleProactiveWelcome() {
+        proactiveWelcomeTask?.cancel()
+        didDeliverProactiveWelcome = false
+
+        proactiveWelcomeTask = Task {
+            try? await Task.sleep(nanoseconds: proactiveWelcomeDelayNs)
+            guard !Task.isCancelled else { return }
+            await deliverProactiveWelcomeIfNeeded()
+        }
+    }
+
+    private func deliverProactiveWelcomeIfNeeded() async {
+        guard !didDeliverProactiveWelcome else { return }
+        guard !isConversationActive else { return }
+        guard orbState == .ready else { return }
+        guard !speechSynthesizer.isSpeaking, !brain.isThinking else { return }
+
+        didDeliverProactiveWelcome = true
+        isConversationActive = true
+
+        let welcome = BrainVoiceWelcomeBuilder.message(
+            presentation: brainVM.presentation,
+            userName: UserLifeProfileStore.resolvedDisplayName(),
+            hasPriorConversation: hasPriorVoiceConversation
+        )
+
+        playWelcomeCue()
+
+        let spoken = SpeechTextPreprocessor.prepareForSpeech(welcome)
+        responseSubtitle = spoken.isEmpty ? welcome : spoken
+        statusLine = nil
+
+        if SpeechVoiceSettings.autoSpeakReplies {
+            orbState = .speaking
+            speechSynthesizer.speak(spoken.isEmpty ? welcome : spoken)
+            if !speechSynthesizer.isSpeaking {
+                orbState = .ready
+                await startListening()
+            }
+        } else {
+            orbState = .ready
+            await startListening()
+        }
+    }
+
+    private func playWelcomeCue() {
+        HapticManager.notification(.success)
+        #if os(iOS)
+        AudioServicesPlaySystemSound(1104)
+        #endif
+    }
+
+    private func cancelProactiveWelcome() {
+        proactiveWelcomeTask?.cancel()
+        proactiveWelcomeTask = nil
+        didDeliverProactiveWelcome = true
+    }
+
     private func handleOrbTap() {
         switch orbState {
         case .ready:
+            cancelProactiveWelcome()
+            isConversationActive = true
             Task { await startListening() }
         case .listening:
-            finishListeningAndSend()
+            endConversation()
         case .thinking:
             break
         case .speaking:
             speechSynthesizer.stop()
             orbState = .ready
             statusLine = nil
+            resumeListeningIfNeeded()
         }
+    }
+
+    private func endConversation() {
+        cancelProactiveWelcome()
+        isConversationActive = false
+        speechManager.onUtteranceComplete = nil
+        speechManager.autoCommitEnabled = false
+        speechManager.stopListening()
+        orbState = .ready
+        statusLine = nil
+    }
+
+    private func resumeListeningIfNeeded() {
+        guard isConversationActive, orbState == .ready else { return }
+        Task { await startListening() }
     }
 
     private func startListening() async {
+        guard orbState != .thinking else { return }
         orbState = .listening
         statusLine = "Listening…"
         responseSubtitle = nil
+
+        speechManager.autoCommitEnabled = true
+        speechManager.autoCommitSilenceDuration = 1.2
+        speechManager.onUtteranceComplete = { message in
+            Task { await sendVoiceMessage(message) }
+        }
         await speechManager.startListening()
     }
 
-    private func finishListeningAndSend() {
-        speechManager.stopListening()
-        let message = speechManager.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty else {
-            orbState = .ready
-            statusLine = nil
+    private func sendVoiceMessage(_ message: String) async {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            resumeListeningIfNeeded()
             return
         }
+        guard orbState != .thinking else { return }
 
         orbState = .thinking
         statusLine = "Thinking…"
 
-        Task {
-            // Let the mic session fully release before playback TTS starts.
-            try? await Task.sleep(nanoseconds: 200_000_000)
+        // Let the mic session fully release before playback TTS starts.
+        try? await Task.sleep(nanoseconds: 80_000_000)
 
-            let response = await brain.chat(message: message)
-            await MainActor.run {
-                let rawReply = response.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !rawReply.isEmpty else {
-                    orbState = .ready
-                    statusLine = "I didn't catch that — try again."
-                    return
-                }
-                let reply = SpeechTextPreprocessor.prepareForSpeech(rawReply)
-                responseSubtitle = reply.isEmpty ? rawReply : reply
-                statusLine = nil
-                if SpeechVoiceSettings.autoSpeakReplies {
-                    orbState = .speaking
-                    speechSynthesizer.speak(reply.isEmpty ? rawReply : reply)
-                    if !speechSynthesizer.isSpeaking {
-                        orbState = .ready
-                        statusLine = "Couldn't play voice reply."
-                    }
-                } else {
-                    orbState = .ready
-                }
+        // Always route through Executive Planning so voice turns share one conversation history.
+        let response: String
+        if let onExecutivePlan {
+            response = await onExecutivePlan(trimmed)
+        } else {
+            response = await brain.chat(message: trimmed)
+        }
+
+        let rawReply = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawReply.isEmpty else {
+            orbState = .ready
+            statusLine = "I didn't catch that — try again."
+            resumeListeningIfNeeded()
+            return
+        }
+
+        let reply = SpeechTextPreprocessor.prepareForSpeech(rawReply)
+        responseSubtitle = reply.isEmpty ? rawReply : reply
+        statusLine = nil
+
+        if SpeechVoiceSettings.autoSpeakReplies {
+            orbState = .speaking
+            speechSynthesizer.speak(reply.isEmpty ? rawReply : reply)
+            if !speechSynthesizer.isSpeaking {
+                orbState = .ready
+                statusLine = "Couldn't play voice reply."
+                resumeListeningIfNeeded()
             }
+        } else {
+            orbState = .ready
+            resumeListeningIfNeeded()
         }
     }
 }

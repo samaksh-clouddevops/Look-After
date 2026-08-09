@@ -198,6 +198,10 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     public var semanticProfile: TaskSemanticProfile?
     /// EventKit identifier for the Apple Calendar block mirroring this task.
     public var calendarEventIdentifier: String?
+    /// Set when the user manually placed this task on the timeline — drift correction skips it.
+    public var userPlacedScheduleAt: Date?
+    /// Stable anchor from compiled `DayStructure` (e.g. `routine.dinner`).
+    public var scheduleAnchorID: String?
     
     public init(
         id: String = UUID().uuidString,
@@ -236,7 +240,9 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         userId: String = "",
         isRecurrenceTemplate: Bool? = nil,
         semanticProfile: TaskSemanticProfile? = nil,
-        calendarEventIdentifier: String? = nil
+        calendarEventIdentifier: String? = nil,
+        userPlacedScheduleAt: Date? = nil,
+        scheduleAnchorID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -276,6 +282,8 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         self.isRecurrenceTemplate = isRecurrenceTemplate
         self.semanticProfile = semanticProfile
         self.calendarEventIdentifier = calendarEventIdentifier
+        self.userPlacedScheduleAt = userPlacedScheduleAt
+        self.scheduleAnchorID = scheduleAnchorID
     }
     
     // MARK: - Computed Properties

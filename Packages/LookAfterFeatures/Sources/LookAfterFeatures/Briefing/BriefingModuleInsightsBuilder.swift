@@ -15,6 +15,7 @@ enum BriefingModuleInsightsBuilder {
         var habits: [BriefingHabit]
         var calendar: BriefingCalendarData
         var lifeGaps: [LifeGap]
+        var proactiveSuggestions: [ScheduleProactiveSuggestion]
         var cycleData: BriefingCycleData
         var alerts: [BriefingAlert]
         var aiRecommendation: String?
@@ -75,6 +76,17 @@ enum BriefingModuleInsightsBuilder {
             ))
         }
 
+        if let suggestion = input.proactiveSuggestions.first {
+            insights.insert(
+                BriefingModuleInsight(
+                    module: "Schedule",
+                    icon: "exclamationmark.bubble.fill",
+                    message: suggestion.message
+                ),
+                at: 0
+            )
+        }
+
         if input.cycleData.isVisible, let insight = input.cycleData.topInsight {
             insights.append(BriefingModuleInsight(
                 module: "Cycle",
@@ -117,8 +129,7 @@ enum BriefingModuleInsightsBuilder {
     ) async -> [BriefingModuleInsight] {
         guard existing.count < 2 else { return existing }
 
-        let hasKey = !GLMService.shared.keyManagerAccess.allRecords().filter(\.isEnabled).isEmpty
-            || GLMService.shared.keyManagerAccess.resolveAPIKey() != nil
+        let hasKey = GLMService.shared.hasConfiguredAPIKey
         guard hasKey else {
             return existing + fallbackSuggestions(input: input, excluding: existing)
         }
@@ -204,7 +215,7 @@ enum BriefingModuleInsightsBuilder {
             guard let message = (object["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !message.isEmpty else { return nil }
             let module = (object["module"] as? String) ?? "Today"
-            let icon = (object["icon"] as? String) ?? "sparkles"
+            let icon = SystemImage.resolved(object["icon"] as? String, fallback: "sparkles")
             return BriefingModuleInsight(module: module, icon: icon, message: UserFacingCopy.sanitize(message))
         }
     }

@@ -16,6 +16,40 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         max(Int(end.timeIntervalSince(start) / 60), TaskDurationPolicy.minimumMinutes)
     }
 
+    /// Minutes shown in UI (hourglass, focus hints) — task effort, not a full calendar block.
+    public static func displayDurationMinutes(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Int {
+        let estimated = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        if task.isFixedTimeEvent || task.timeConstraintValue == .anchored {
+            return window(for: task, on: day, calendar: calendar)?.durationMinutes ?? estimated
+        }
+        if isFlexibleDaySchedule(for: task, on: day, calendar: calendar) {
+            return estimated
+        }
+        guard let window = window(for: task, on: day, calendar: calendar) else {
+            return estimated
+        }
+        // When end time spans a work block but effort is smaller, show effort not block length.
+        if window.durationMinutes > estimated + 15 {
+            return estimated
+        }
+        return min(window.durationMinutes, estimated)
+    }
+
+    /// End time used for timeline layout — may span a block; separate from display duration.
+    public static func displayEnd(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        guard let start = resolvedStart(for: task, on: day, calendar: calendar) else { return nil }
+        let minutes = displayDurationMinutes(for: task, on: day, calendar: calendar)
+        return start.addingTimeInterval(TimeInterval(minutes * 60))
+    }
+
     public func overlaps(_ other: TaskScheduleInterval) -> Bool {
         start < other.end && other.start < end
     }
@@ -30,6 +64,7 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         on day: Date,
         calendar: Calendar = .current
     ) -> TaskScheduleInterval? {
+        guard !isPlaceholderMidnightSchedule(for: task, calendar: calendar) else { return nil }
         guard let scheduledDate = task.scheduledDate,
               calendar.isDate(scheduledDate, inSameDayAs: day),
               let startTime = task.scheduledTime,
@@ -75,6 +110,10 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         on day: Date,
         calendar: Calendar = .current
     ) -> Date? {
+        if isPlaceholderMidnightSchedule(for: task, calendar: calendar) {
+            return nil
+        }
+
         if let window = window(for: task, on: day, calendar: calendar) {
             return window.start
         }
@@ -131,11 +170,41 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         return task.scheduledTime == nil
     }
 
-    /// Midnight time-of-day usually means the user picked a day, not a clock time.
-    public static func isMidnightTimeOfDay(_ time: Date?, calendar: Calendar = .current) -> Bool {
-        guard let time else { return true }
+    /// Midnight time-of-day (explicit 00:00 clock).
+    public static func isMidnightClockTime(_ time: Date?, calendar: Calendar = .current) -> Bool {
+        guard let time else { return false }
         return calendar.component(.hour, from: time) == 0
             && calendar.component(.minute, from: time) == 0
+    }
+
+    /// Task has a scheduled day but no explicit clock time.
+    public static func hasNoClockTime(_ task: LifeTask) -> Bool {
+        task.scheduledTime == nil
+    }
+
+    /// Midnight time-of-day usually means the user picked a day, not a clock time.
+    /// `nil` scheduledTime is treated as no clock (date-only), not midnight.
+    public static func isMidnightTimeOfDay(_ time: Date?, calendar: Calendar = .current) -> Bool {
+        isMidnightClockTime(time, calendar: calendar)
+    }
+
+    /// `00:00` clock time is always a day sentinel — never a real schedule intent.
+    public static func isPlaceholderMidnightSchedule(
+        for task: LifeTask,
+        calendar: Calendar = .current
+    ) -> Bool {
+        isMidnightClockTime(task.scheduledTime, calendar: calendar)
+            || isMidnightClockTime(task.scheduledEndTime, calendar: calendar)
+    }
+
+    /// True when a resolved clock time on `day` would render as midnight.
+    public static func isDisplayMidnightSentinel(
+        _ date: Date,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        let dayStart = calendar.startOfDay(for: day)
+        return calendar.isDate(date, equalTo: dayStart, toGranularity: .minute)
     }
 
     /// Date-only or midnight-on-day tasks that should show as "Flexible today" on the timeline.
@@ -144,16 +213,116 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         on day: Date,
         calendar: Calendar = .current
     ) -> Bool {
+        if isPlaceholderMidnightSchedule(for: task, calendar: calendar) {
+            return true
+        }
         guard task.timeConstraintValue != .anchored else { return false }
         if isDateOnlySchedule(for: task, on: day, calendar: calendar) {
             return true
         }
         guard let scheduledDate = task.scheduledDate,
               calendar.isDate(scheduledDate, inSameDayAs: day),
-              isMidnightTimeOfDay(task.scheduledTime, calendar: calendar) else {
+              isMidnightClockTime(task.scheduledTime, calendar: calendar) else {
             return false
         }
         return task.timeConstraintValue != .anchored
+    }
+
+    /// Unified read model for schedule display across timeline, briefing, calendar, notifications.
+    public enum DisplaySchedule: Sendable, Equatable {
+        case unslottedFlexible
+        case window(start: Date, end: Date, rangeLabel: String)
+        case noSchedule
+
+        public var scheduleLabel: String? {
+            switch self {
+            case .unslottedFlexible:
+                return "Flexible today"
+            case .window(_, _, let rangeLabel):
+                return rangeLabel
+            case .noSchedule:
+                return nil
+            }
+        }
+
+        public var startTimeLabel: String? {
+            switch self {
+            case .unslottedFlexible, .noSchedule:
+                return nil
+            case .window(let start, _, _):
+                return ScheduleTimeFormatting.timeLabel(start)
+            }
+        }
+    }
+
+    public static func displaySchedule(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> DisplaySchedule {
+        let dayStart = calendar.startOfDay(for: day)
+        if !hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar) {
+            return .unslottedFlexible
+        }
+        if isFlexibleDaySchedule(for: task, on: dayStart, calendar: calendar) {
+            return .unslottedFlexible
+        }
+        if let start = resolvedStart(for: task, on: dayStart, calendar: calendar),
+           let end = resolvedEnd(for: task, on: dayStart, calendar: calendar) {
+            if isDisplayMidnightSentinel(start, on: dayStart, calendar: calendar) {
+                return .unslottedFlexible
+            }
+            return .window(
+                start: start,
+                end: end,
+                rangeLabel: ScheduleTimeFormatting.rangeLabel(from: start, to: end, calendar: calendar)
+            )
+        }
+        return .noSchedule
+    }
+
+    /// Whether the task has a real clock slot on this day — required for timeline display.
+    /// Date-only and midnight-placeholder flexibles return false until reconcile assigns a time.
+    public static func hasConcreteTimelineSlot(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard window(for: task, on: day, calendar: calendar) != nil else { return false }
+        return !isFlexibleDaySchedule(for: task, on: day, calendar: calendar)
+    }
+
+    /// A clock time safe to show on the timeline rail — nil when unslotted or midnight sentinel.
+    public static func timelineDisplayTime(
+        for task: LifeTask,
+        on day: Date,
+        calendar: Calendar = .current,
+        isCompleted: Bool = false
+    ) -> Date? {
+        let dayStart = calendar.startOfDay(for: day)
+        if isCompleted {
+            if hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar),
+               let start = resolvedStart(for: task, on: dayStart, calendar: calendar),
+               !isDisplayMidnightSentinel(start, on: dayStart, calendar: calendar) {
+                return start
+            }
+            if let completedAt = task.completedAt {
+                return completedAt
+            }
+            if calendar.isDate(task.updatedAt, inSameDayAs: dayStart) {
+                return task.updatedAt
+            }
+            if calendar.isDate(task.createdAt, inSameDayAs: dayStart) {
+                return task.createdAt
+            }
+            return nil
+        }
+        guard hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar) else { return nil }
+        guard let start = resolvedStart(for: task, on: dayStart, calendar: calendar),
+              !isDisplayMidnightSentinel(start, on: dayStart, calendar: calendar) else {
+            return nil
+        }
+        return start
     }
 }
 
@@ -190,7 +359,9 @@ public extension LifeTimelineEvent {
     }
 
     public var isFlexibleToday: Bool {
-        subtitle == "Flexible today" || subtitle.hasSuffix(" · Flexible today")
+        scheduleKind.isFlexibleToday
+            || subtitle == "Flexible today"
+            || subtitle.hasSuffix(" · Flexible today")
     }
 
     /// Display range label preferring subtitle when it already contains a time range.

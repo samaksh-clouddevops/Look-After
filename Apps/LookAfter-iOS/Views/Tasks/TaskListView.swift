@@ -8,14 +8,16 @@ import LookAfterFeatures
 struct TaskListView: View {
     
     @ObservedObject var tasksVM: TasksViewModel
-    @ObservedObject var adhdVM: ADHDViewModel
+    let adhdVM: ADHDViewModel
     var brainVM: BrainViewModel?
     let userId: String
+    let initialFilter: TaskFilter
     
     @State private var showCreateTask = false
     @State private var showImportTasks = false
     @State private var editingTask: LifeTask?
-    @State private var selectedFilter: TaskFilter = .today
+    @State private var fullEditTask: LifeTask?
+    @State private var selectedFilter: TaskFilter
     @State private var selectedLifeArea: LifeArea?
     @State private var isCardStackMode = false
     @StateObject private var plannerVM = DailyPlannerViewModel()
@@ -23,8 +25,25 @@ struct TaskListView: View {
 
     // Performance optimization: Cache filtered/sorted tasks to avoid recomputation on every render
     @State private var cachedFilteredTasks: [LifeTask] = []
-    @State private var lastFilterApplied: TaskFilter = .today
+    @State private var lastFilterApplied: TaskFilter
     @State private var lastTasksHash: Int = 0
+    @State private var timeDisplayRefreshTask: Task<Void, Never>?
+
+    init(
+        tasksVM: TasksViewModel,
+        adhdVM: ADHDViewModel,
+        brainVM: BrainViewModel? = nil,
+        userId: String,
+        initialFilter: TaskFilter = .all
+    ) {
+        self.tasksVM = tasksVM
+        self.adhdVM = adhdVM
+        self.brainVM = brainVM
+        self.userId = userId
+        self.initialFilter = initialFilter
+        _selectedFilter = State(initialValue: initialFilter)
+        _lastFilterApplied = State(initialValue: initialFilter)
+    }
     
     var body: some View {
         ZStack {
@@ -33,7 +52,7 @@ struct TaskListView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text(isCardStackMode ? "Focus Stack" : "Tasks")
+                    Text(isCardStackMode ? "Focus Stack" : listTitle)
                         .font(.dsLargeTitle())
                         .foregroundColor(DesignSystem.textPrimary)
                     
@@ -131,11 +150,20 @@ struct TaskListView: View {
                         ForEach(cachedFilteredTasks) { task in
                             TaskListRowView(
                                 task: task,
-                                tasksVM: tasksVM,
-                                adhdVM: adhdVM,
+                                isDecomposing: tasksVM.isDecomposing(taskId: task.id),
+                                timeDisplayLabel: tasksVM.timeDisplay(for: task).lineLabel,
+                                isLoadingTimeDisplay: tasksVM.isLoadingTimeDisplay(taskId: task.id),
                                 editingTask: $editingTask,
                                 onComplete: handleComplete,
-                                onDelete: handleDelete
+                                onDelete: handleDelete,
+                                onMarkIncomplete: { Task { await tasksVM.markIncomplete(task) } },
+                                onStart: {
+                                    adhdVM.startCountdown(for: task) {
+                                        adhdVM.startFocusSession(task: task)
+                                    }
+                                },
+                                onDecompose: { Task { await tasksVM.decomposeTask(task) } },
+                                onDuplicate: { tasksVM.duplicateTask(task) }
                             )
                         }
                     }
@@ -143,12 +171,15 @@ struct TaskListView: View {
                     .scrollContentBackground(.hidden)
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: cachedFilteredTasks.map(\.id))
                     .onAppear { updateFilteredTasksIfNeeded() }
-                    .onChange(of: selectedFilter) { _, _ in updateFilteredTasksIfNeeded() }
-                    .onChange(of: tasksVM.tasks.count) { _, _ in updateFilteredTasksIfNeeded() }
-                    .onChange(of: tasksVM.completedToday.count) { _, _ in updateFilteredTasksIfNeeded() }
-                    // Cheap invalidation signal when tasks mutate without count change (complete/status).
-                    .onChange(of: tasksVM.tasks.first?.updatedAt) { _, _ in updateFilteredTasksIfNeeded() }
-                    .onChange(of: tasksVM.tasks.last?.updatedAt) { _, _ in updateFilteredTasksIfNeeded() }
+                    .onChange(of: selectedFilter) { _, _ in
+                        updateFilteredTasksIfNeeded()
+                        scheduleTimeDisplayRefresh()
+                    }
+                    .onChange(of: tasksVM.tasksContentRevision) { _, _ in
+                        updateFilteredTasksIfNeeded()
+                        scheduleTimeDisplayRefresh()
+                    }
+                    .onChange(of: editingTask?.id) { _, _ in updateFilteredTasksIfNeeded() }
                 }
             }
         }
@@ -159,14 +190,24 @@ struct TaskListView: View {
             TaskImportSheet(tasksVM: tasksVM, userId: userId)
         }
         .sheet(item: $editingTask) { task in
+            QuickTaskEditSheet(
+                tasksVM: tasksVM,
+                task: task,
+                onMoreOptions: { fullEditTask = $0 }
+            )
+        }
+        .sheet(item: $fullEditTask) { task in
             TaskFormSheet(tasksVM: tasksVM, mode: .edit(task))
         }
         .task {
-            await tasksVM.loadTasks(userId: userId)
+            if tasksVM.tasks.isEmpty, tasksVM.completedToday.isEmpty {
+                await tasksVM.loadTasks(userId: userId)
+            }
             updateFilteredTasksIfNeeded()
+            scheduleTimeDisplayRefresh()
         }
-        .task(id: cachedFilteredTasks.map(\.id).joined()) {
-            await refreshTaskTimeDisplays()
+        .onDisappear {
+            timeDisplayRefreshTask?.cancel()
         }
         .undoToast(
             isShowing: Binding(
@@ -184,6 +225,13 @@ struct TaskListView: View {
             showReschedulePreview = newID != nil
         }
         .accessibilityIdentifier("screen-task-list")
+    }
+
+    private var listTitle: String {
+        switch selectedFilter {
+        case .all: return "All Tasks"
+        default: return "Tasks"
+        }
     }
 
     @ViewBuilder
@@ -218,6 +266,15 @@ struct TaskListView: View {
     private func handleComplete(_ task: LifeTask) {
         HapticManager.notification(.success)
         Task { await tasksVM.completeTask(task) }
+    }
+
+    private func scheduleTimeDisplayRefresh() {
+        timeDisplayRefreshTask?.cancel()
+        timeDisplayRefreshTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            await refreshTaskTimeDisplays()
+        }
     }
 
     private func refreshTaskTimeDisplays() async {
@@ -262,11 +319,15 @@ struct TaskListView: View {
     
     /// Update cached filtered tasks only when filter or tasks change (performance optimization).
     private func updateFilteredTasksIfNeeded() {
-        // Include status + updatedAt so mutations (complete/reschedule) invalidate the cache.
-        let currentHash = tasksVM.tasks
-            .map { "\($0.id):\($0.status.rawValue):\($0.updatedAt.timeIntervalSince1970)" }
-            .joined()
-            .hashValue
+        let currentHash = tasksVM.tasksContentRevision
+            &+ tasksVM.tasks
+                .map { "\($0.id):\($0.status.rawValue):\($0.title):\($0.updatedAt.timeIntervalSince1970)" }
+                .joined()
+                .hashValue
+            &+ tasksVM.recurrenceTemplates
+                .map { "\($0.id):\($0.title):\($0.updatedAt.timeIntervalSince1970)" }
+                .joined()
+                .hashValue
             &+ tasksVM.completedToday.map(\.id).joined().hashValue
         if selectedFilter != lastFilterApplied || currentHash != lastTasksHash {
             cachedFilteredTasks = computeFilteredTasks()
@@ -280,6 +341,14 @@ struct TaskListView: View {
         let calendar = Calendar.current
         let context = tasksVM.schedulingContext
         switch selectedFilter {
+        case .all:
+            return TaskListSorter.sortByPriorityThenSchedule(
+                TaskScheduleQuery.uniqueActiveTasks(
+                    from: tasksVM.tasks,
+                    context: context,
+                    calendar: calendar
+                )
+            )
         case .today:
             return TaskListSorter.sortForToday(
                 tasksVM.tasks.filter { $0.isActionableToday(allTasks: context, calendar: calendar) }
@@ -307,10 +376,11 @@ struct TaskListView: View {
 }
 
 enum TaskFilter: String, CaseIterable {
-    case today, tomorrow, upcoming, active, scheduled, completed
+    case all, today, tomorrow, upcoming, active, scheduled, completed
 
     var displayName: String {
         switch self {
+        case .all: return "All"
         case .today: return "Today"
         case .tomorrow: return "Tomorrow"
         case .upcoming: return "Upcoming"
@@ -349,12 +419,15 @@ struct TaskFormSheet: View {
     @State private var priority: Priority = .medium
     @State private var difficulty: TaskDifficulty = .medium
     @State private var estimatedMinutes = 30
+    @State private var estimatedMinutesText = "30"
     @State private var recurrence: TaskRecurrence = .none
     @State private var selectedWeekdays: Set<Int> = []
     @State private var schedulingMode: TaskSchedulingMode = .flexible
     @State private var fixedStartTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var fixedEndTime = Calendar.current.date(bySettingHour: 17, minute: 30, second: 0, of: Date()) ?? Date()
     @State private var autoFillError: String?
+    @State private var isSaving = false
+    @State private var showAdvancedOptions = false
     
     @Environment(\.dismiss) private var dismiss
     
@@ -397,34 +470,36 @@ struct TaskFormSheet: View {
                             .lineLimit(3...6)
                     }
                     
-                    Section("Categorize") {
-                        Picker("Life Area", selection: $lifeArea) {
-                            ForEach(LifeArea.allCases) { area in
-                                Label(area.rawValue, systemImage: area.icon)
-                                    .tag(area)
+                    Section("Categorize & repeat") {
+                        DisclosureGroup("Advanced options", isExpanded: $showAdvancedOptions) {
+                            Picker("Life Area", selection: $lifeArea) {
+                                ForEach(LifeArea.allCases) { area in
+                                    Label(area.rawValue, systemImage: area.icon)
+                                        .tag(area)
+                                }
                             }
-                        }
-                        
-                        Picker("Priority", selection: $priority) {
-                            ForEach(Priority.allCases) { p in
-                                Text(p.label).tag(p)
-                            }
-                        }
-                        
-                        Picker("Difficulty", selection: $difficulty) {
-                            ForEach(TaskDifficulty.allCases) { d in
-                                Text(d.rawValue).tag(d)
-                            }
-                        }
 
-                        Picker("Repeat", selection: $recurrence) {
-                            ForEach(TaskRecurrence.allCases) { r in
-                                Text(r.rawValue).tag(r)
+                            Picker("Priority", selection: $priority) {
+                                ForEach(Priority.allCases) { p in
+                                    Text(p.label).tag(p)
+                                }
                             }
-                        }
 
-                        if recurrence == .custom {
-                            WeekdaySelectionView(selectedWeekdays: $selectedWeekdays)
+                            Picker("Difficulty", selection: $difficulty) {
+                                ForEach(TaskDifficulty.allCases) { d in
+                                    Text(d.rawValue).tag(d)
+                                }
+                            }
+
+                            Picker("Repeat", selection: $recurrence) {
+                                ForEach(TaskRecurrence.allCases) { r in
+                                    Text(r.rawValue).tag(r)
+                                }
+                            }
+
+                            if recurrence == .custom {
+                                WeekdaySelectionView(selectedWeekdays: $selectedWeekdays)
+                            }
                         }
                     }
 
@@ -446,7 +521,22 @@ struct TaskFormSheet: View {
                     }
                     
                     Section("Time Estimate") {
-                        Stepper("\(estimatedMinutes) minutes", value: $estimatedMinutes, in: 1...240, step: 1)
+                        HStack(spacing: 12) {
+                            TextField("Minutes", text: $estimatedMinutesText)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 72)
+                                .onSubmit(commitEstimatedMinutesText)
+
+                            Text("minutes")
+                                .font(.system(size: 15, design: .default))
+                                .foregroundColor(DesignSystem.textMuted)
+
+                            Spacer(minLength: 0)
+
+                            Stepper("", value: $estimatedMinutes, in: 1...240)
+                                .labelsHidden()
+                        }
                     }
                     
                     if mode.isEditing {
@@ -475,10 +565,13 @@ struct TaskFormSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(mode.isEditing ? "Save" : "Create", action: saveTask)
-                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || tasksVM.isAutoFilling)
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || tasksVM.isAutoFilling || isSaving)
                 }
             }
             .onAppear(perform: loadExistingValues)
+            .onChange(of: estimatedMinutes) { _, newValue in
+                estimatedMinutesText = String(newValue)
+            }
             .keyboardDismissToolbar(label: "Done")
         }
     }
@@ -491,10 +584,11 @@ struct TaskFormSheet: View {
             priority = task.priority
             difficulty = task.difficulty
             estimatedMinutes = task.estimatedMinutes
+            estimatedMinutesText = String(task.estimatedMinutes)
             let recurrenceFields = tasksVM.recurrenceFieldsForEditing(task)
             recurrence = recurrenceFields.recurrence
             selectedWeekdays = Set(recurrenceFields.weekdays)
-            schedulingMode = task.schedulingModeValue
+            schedulingMode = task.timeConstraintValue.asSchedulingMode
             if let start = task.scheduledTime { fixedStartTime = start }
             if let end = task.scheduledEndTime { fixedEndTime = end }
             return
@@ -506,6 +600,17 @@ struct TaskFormSheet: View {
         fixedStartTime = calendar.date(bySettingHour: profile.workStartHour, minute: profile.workStartMinute, second: 0, of: today) ?? today
         fixedEndTime = calendar.date(bySettingHour: profile.workEndHour, minute: profile.workEndMinute, second: 0, of: today) ?? today
         estimatedMinutes = TaskDurationPolicy.defaultMinutes
+        estimatedMinutesText = String(estimatedMinutes)
+    }
+
+    private func commitEstimatedMinutesText() {
+        let digits = estimatedMinutesText.filter(\.isNumber)
+        guard let value = Int(digits), value >= 1 else {
+            estimatedMinutesText = String(estimatedMinutes)
+            return
+        }
+        estimatedMinutes = min(value, 240)
+        estimatedMinutesText = String(estimatedMinutes)
     }
     
     private func fillWithAI() {
@@ -513,7 +618,7 @@ struct TaskFormSheet: View {
         HapticManager.impact(.light)
         Task {
             guard let result = await tasksVM.autoFillDetails(for: title) else {
-                autoFillError = "AI couldn't fill details. Add a GLM key in Settings → API Keys."
+                autoFillError = "AI couldn't fill details. Activate your product key in Settings → License."
                 return
             }
             description = result.description
@@ -528,6 +633,7 @@ struct TaskFormSheet: View {
     
     private func saveTask() {
         KeyboardDismiss.dismiss()
+        commitEstimatedMinutesText()
         guard recurrence != .custom || !selectedWeekdays.isEmpty else {
             autoFillError = "Select at least one day for custom recurrence."
             return
@@ -571,12 +677,28 @@ struct TaskFormSheet: View {
             updated.requiredEnergy = difficulty.minimumEnergy
             updated.recurrence = recurrence == .none ? nil : recurrence
             updated.recurrenceWeekdays = weekdays
-            updated.schedulingMode = scheduling
-            updated.scheduledTime = startTime
-            updated.scheduledEndTime = endTime
+            updated.applyUserSchedulingModeEdit(
+                scheduling,
+                fixedStartTime: startTime,
+                fixedEndTime: endTime
+            )
             updated.updatedAt = Date()
             HapticManager.impact(.medium)
-            tasksVM.updateTask(updated)
+            isSaving = true
+            Task {
+                let userId = updated.userId.isEmpty ? existing.userId : updated.userId
+                await tasksVM.scheduleMutation.persist(
+                    updated,
+                    userId: userId,
+                    userPlaced: scheduling == .fixedTime
+                )
+                isSaving = false
+                if tasksVM.error == nil {
+                    HapticManager.notification(.success)
+                    dismiss()
+                }
+            }
+            return
         }
         HapticManager.notification(.success)
         dismiss()

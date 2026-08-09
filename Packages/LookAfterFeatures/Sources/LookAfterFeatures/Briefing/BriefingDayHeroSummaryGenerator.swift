@@ -23,8 +23,7 @@ enum BriefingDayHeroSummaryGenerator {
         let deterministic = polish(buildDeterministic(input))
         guard shouldCallAI(input) else { return deterministic }
 
-        let hasKey = !GLMService.shared.keyManagerAccess.allRecords().filter(\.isEnabled).isEmpty
-            || GLMService.shared.keyManagerAccess.resolveAPIKey() != nil
+        let hasKey = GLMService.shared.hasConfiguredAPIKey
         guard hasKey else { return deterministic }
 
         let prompt = buildPrompt(input)

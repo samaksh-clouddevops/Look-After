@@ -8,11 +8,12 @@ import LookAfterData
 final class TasksViewModelInteractionTests: XCTestCase {
     private var store: InMemoryTaskStore!
     private var viewModel: TasksViewModel!
-    private var calendar: Calendar { TestCalendarFixtures.calendar }
+    private var calendar: Calendar { Calendar.current }
     private var today: Date { calendar.startOfDay(for: Date()) }
 
     override func setUp() async throws {
-        store = InMemoryTaskStore(referenceDate: today, calendar: calendar)
+        let referenceDay = calendar.startOfDay(for: Date())
+        store = InMemoryTaskStore(referenceDate: referenceDay, calendar: calendar)
         let glm = mockGLMService()
         viewModel = TasksViewModel(
             taskRepo: store,
@@ -30,8 +31,8 @@ final class TasksViewModelInteractionTests: XCTestCase {
             userId: "user-1"
         )
         viewModel.createTask(task)
-        try await Task.sleep(nanoseconds: 50_000_000)
-        await viewModel.loadTasks(userId: "user-1")
+        try await Task.sleep(nanoseconds: 200_000_000)
+        viewModel.refreshFromLocal(userId: "user-1")
 
         guard let occurrence = viewModel.tasks.first else {
             XCTFail("Expected today's occurrence")
@@ -98,8 +99,8 @@ final class TasksViewModelInteractionTests: XCTestCase {
     func testUndoRestoresCompletedTask() async throws {
         let task = LifeTask(title: "Repeat", scheduledDate: today, recurrence: .daily, userId: "user-1")
         viewModel.createTask(task)
-        try await Task.sleep(nanoseconds: 50_000_000)
-        await viewModel.loadTasks(userId: "user-1")
+        try await Task.sleep(nanoseconds: 200_000_000)
+        viewModel.refreshFromLocal(userId: "user-1")
         guard let occurrence = viewModel.tasks.first else {
             XCTFail("Expected occurrence")
             return
@@ -187,6 +188,42 @@ final class TasksViewModelInteractionTests: XCTestCase {
         XCTAssertNotEqual(viewModel.tasks[0].id, task.id)
         XCTAssertNil(viewModel.tasks[0].parentTaskId)
     }
+
+    func testUpdateTaskAndPersistSurvivesStaleSnapshotRefresh() async {
+        let task = LifeTask(title: "Original", userId: "user-1")
+        try? await store.create(task)
+        viewModel.tasks = [task]
+
+        var edited = task
+        edited.title = "Renamed"
+        edited.updatedAt = Date()
+
+        await viewModel.updateTaskAndPersist(edited)
+        XCTAssertEqual(viewModel.tasks.first?.title, "Renamed")
+
+        viewModel.tasks = [task]
+        viewModel.refreshFromLocal(userId: "user-1")
+        XCTAssertEqual(viewModel.tasks.first?.title, "Renamed")
+    }
+
+    func testUpdateTaskAndPersistCompletesWithoutBlockingOnSemanticAnalysis() async {
+        let task = LifeTask(title: "Deep work block", estimatedMinutes: 45, userId: "user-1")
+        try? await store.create(task)
+        viewModel.tasks = [task]
+
+        var edited = task
+        edited.title = "Deep work block — OAuth"
+        edited.estimatedMinutes = 60
+        edited.updatedAt = Date()
+
+        let started = Date()
+        await viewModel.updateTaskAndPersist(edited)
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertLessThan(elapsed, 1.0, "Save should not wait on LLM semantic analysis")
+        XCTAssertEqual(viewModel.tasks.first?.title, "Deep work block — OAuth")
+        XCTAssertNotNil(viewModel.tasks.first?.semanticProfile)
+    }
 }
 
 @MainActor
@@ -205,7 +242,11 @@ final class InMemoryTaskStore: TaskStoring {
     }
 
     func localSnapshot(for userId: String) -> TaskListSnapshot {
-        TaskListSnapshot.make(from: tasks.filter { $0.userId == userId || userId.isEmpty })
+        TaskListSnapshot.make(
+            from: tasks.filter { $0.userId == userId || userId.isEmpty },
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
     }
 
     func localAllTasks(for userId: String) -> [LifeTask] {

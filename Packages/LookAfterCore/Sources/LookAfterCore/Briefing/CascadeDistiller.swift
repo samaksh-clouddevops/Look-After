@@ -176,23 +176,34 @@ public enum CascadeDistiller {
 // MARK: - Overnight action log (reconcile → briefing wire)
 
 /// Persists distilled macro actions from overnight/background cascade runs.
+/// Also retains a rolling multi-day structured history for Weekly Review aggregation.
 public final class CascadeActionLog: @unchecked Sendable {
     public static let shared = CascadeActionLog()
+
+    /// Retain structured history for this many calendar days.
+    public static let historyRetentionDays = 28
 
     private let lock = NSLock()
     private var dayKey: String = ""
     private var actions: [String] = []
+    /// Rolling structured cascade records (multi-day) feeding `WeeklyReviewAggregator`.
+    private var history: [CascadeActionRecord] = []
     private let fileURL: URL?
+    private let historyURL: URL?
 
     public init(directory: URL? = nil) {
         if let directory {
             fileURL = directory.appendingPathComponent("cascade_action_log.json")
+            historyURL = directory.appendingPathComponent("cascade_action_history.json")
         } else if let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             fileURL = support.appendingPathComponent("cascade_action_log.json")
+            historyURL = support.appendingPathComponent("cascade_action_history.json")
         } else {
             fileURL = nil
+            historyURL = nil
         }
         load()
+        loadHistory()
     }
 
     public static func inMemory() -> CascadeActionLog {
@@ -201,20 +212,30 @@ public final class CascadeActionLog: @unchecked Sendable {
 
     private init(memory: Bool) {
         fileURL = nil
+        historyURL = nil
         dayKey = ""
         actions = []
+        history = []
     }
 
-    /// Record a cascade result — distills first, merges into today's log.
+    /// Record a cascade result — distills first, merges into today's log,
+    /// and appends structured records into multi-day history.
     public func record(
         result: ConflictCascadeResult,
         resurrectedCount: Int = 0,
+        recoveryDurationMinutes: Int = 0,
         now: Date = Date(),
         calendar: Calendar = .current
     ) {
         let key = TelemetryLogRotation.dayKey(for: now, calendar: calendar)
         let distilled = CascadeDistiller.distill(result: result, resurrectedCount: resurrectedCount)
-        guard !distilled.isEmpty else { return }
+        let records = CascadeActionRecordBuilder.records(
+            from: result.decisions,
+            triggeredRecoveryLock: result.triggeredRecoveryLock,
+            recoveryDurationMinutes: recoveryDurationMinutes,
+            now: now
+        )
+
         lock.lock()
         if dayKey != key {
             dayKey = key
@@ -223,10 +244,32 @@ public final class CascadeActionLog: @unchecked Sendable {
         for action in distilled where !actions.contains(action) {
             actions.append(action)
         }
+        if !records.isEmpty {
+            history = CascadeHistoryDedup.merge(incoming: records, into: history, calendar: calendar)
+            pruneHistoryLocked(now: now, calendar: calendar)
+        }
         let snapshot = actions
         let snapKey = dayKey
+        let historySnap = history
         lock.unlock()
-        persist(dayKey: snapKey, actions: snapshot)
+
+        if !distilled.isEmpty {
+            persist(dayKey: snapKey, actions: snapshot)
+        }
+        if !records.isEmpty {
+            persistHistory(historySnap)
+        }
+    }
+
+    /// Append pre-built structured records (tests / backfill).
+    public func appendHistory(_ records: [CascadeActionRecord], now: Date = Date(), calendar: Calendar = .current) {
+        guard !records.isEmpty else { return }
+        lock.lock()
+        history = CascadeHistoryDedup.merge(incoming: records, into: history, calendar: calendar)
+        pruneHistoryLocked(now: now, calendar: calendar)
+        let snap = history
+        lock.unlock()
+        persistHistory(snap)
     }
 
     /// Macro system actions for today's briefing (empty if none).
@@ -237,12 +280,36 @@ public final class CascadeActionLog: @unchecked Sendable {
         return actions
     }
 
+    /// Full structured history retained for weekly review (thread-safe copy).
+    public func historyRecords() -> [CascadeActionRecord] {
+        lock.lock(); defer { lock.unlock() }
+        return history
+    }
+
+    /// Structured history filtered to the 7-day window ending at `weekEnding`.
+    public func historyRecords(
+        weekEnding: Date,
+        calendar: Calendar = .current
+    ) -> [CascadeActionRecord] {
+        let bounds = WeeklyReviewAggregator.weekBounds(ending: weekEnding, calendar: calendar)
+        lock.lock(); defer { lock.unlock() }
+        return history.filter { $0.timestamp >= bounds.start && $0.timestamp < bounds.endExclusive }
+    }
+
     public func clear() {
         lock.lock()
         dayKey = ""
         actions = []
+        history = []
         lock.unlock()
         if let fileURL { try? FileManager.default.removeItem(at: fileURL) }
+        if let historyURL { try? FileManager.default.removeItem(at: historyURL) }
+    }
+
+    private func pruneHistoryLocked(now: Date, calendar: Calendar) {
+        let endDay = calendar.startOfDay(for: now)
+        guard let cutoff = calendar.date(byAdding: .day, value: -Self.historyRetentionDays, to: endDay) else { return }
+        history.removeAll { $0.timestamp < cutoff }
     }
 
     private func persist(dayKey: String, actions: [String]) {
@@ -250,6 +317,12 @@ public final class CascadeActionLog: @unchecked Sendable {
         let envelope = ["dayKey": dayKey, "actions": actions] as [String: Any]
         guard let data = try? JSONSerialization.data(withJSONObject: envelope) else { return }
         try? data.write(to: fileURL, options: [.atomic])
+    }
+
+    private func persistHistory(_ records: [CascadeActionRecord]) {
+        guard let historyURL else { return }
+        guard let data = try? JSONEncoder().encode(records) else { return }
+        try? data.write(to: historyURL, options: [.atomic])
     }
 
     private func load() {
@@ -260,5 +333,12 @@ public final class CascadeActionLog: @unchecked Sendable {
               let list = obj["actions"] as? [String] else { return }
         dayKey = key
         actions = list
+    }
+
+    private func loadHistory() {
+        guard let historyURL,
+              let data = try? Data(contentsOf: historyURL),
+              let decoded = try? JSONDecoder().decode([CascadeActionRecord].self, from: data) else { return }
+        history = CascadeHistoryDedup.compact(decoded)
     }
 }

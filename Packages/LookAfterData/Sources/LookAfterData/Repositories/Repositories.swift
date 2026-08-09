@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseFirestore
 import LookAfterCore
+import os
 
 /// Repository for managing tasks in Firestore.
 @MainActor
@@ -8,7 +9,7 @@ public final class TaskRepository: ObservableObject {
     
     private let firebase: FirebaseManager
     private let collection = "tasks"
-    private let local = LocalPersistenceManager.shared
+    private let taskStore: TaskSQLiteStore
     private static let cloudReadTimeoutSeconds: TimeInterval = 8
     /// Shared across instances — migration/reassign must not leave stale per-instance caches.
     private static var cachedAll: [LifeTask]?
@@ -22,11 +23,12 @@ public final class TaskRepository: ObservableObject {
         cachedAll != nil
     }
 
-    public init(firebase: FirebaseManager? = nil) {
+    public init(firebase: FirebaseManager? = nil, taskStore: TaskSQLiteStore? = nil) {
         self.firebase = firebase ?? FirebaseManager.shared
+        self.taskStore = taskStore ?? .shared
     }
 
-    /// Loads `tasks.json` off the main thread into `cachedAll`.
+    /// Loads `tasks.sqlite` off the main thread into `cachedAll`.
     /// Call once before first `localSnapshot` / `localAllTasks` on a cold process.
     /// Safe to call repeatedly — no-ops when already warm (unless `force` is true).
     @discardableResult
@@ -34,7 +36,7 @@ public final class TaskRepository: ObservableObject {
         if !force, let cached = Self.cachedAll {
             return cached
         }
-        let loaded = await local.loadAsync([LifeTask].self, filename: collection)
+        let loaded = await taskStore.loadAllAsync()
         if force {
             // Explicit reload from disk (tests / recovery). May race with concurrent saves.
             Self.cachedAll = loaded
@@ -54,8 +56,7 @@ public final class TaskRepository: ObservableObject {
     // MARK: - CRUD
 
     /// Instant read from on-device cache — no network.
-    /// Prefers in-memory `cachedAll`. Cold path still uses barrier load as a safety net
-    /// for callers that have not awaited `warmLocalCache()` yet.
+    /// Requires `await warmLocalCache()` before first use on a cold process.
     public func localSnapshot(for userId: String) -> TaskListSnapshot {
         let tasks = tasksForUser(userId)
         TaskPersistenceLog.localLoad(count: tasks.count, userId: userId)
@@ -129,7 +130,10 @@ public final class TaskRepository: ObservableObject {
                     .getDocuments()
             }
             let remote = try snapshot.documents.compactMap { try firebase.decode(LifeTask.self, from: $0) }
-            let merged = TaskMerge.merge(local: allLocalTasks(), remote: remote)
+            var merged = TaskMerge.merge(local: allLocalTasks(), remote: remote)
+            for index in merged.indices {
+                ScheduleNormalization.normalizeFields(&merged[index])
+            }
             persistAllLocally(merged)
             var result = tasksForUser(userId)
             for task in localTasks where !result.contains(where: { $0.id == task.id }) {
@@ -154,6 +158,7 @@ public final class TaskRepository: ObservableObject {
     
     public func create(_ task: LifeTask) async throws {
         var mutableTask = task
+        ScheduleNormalization.normalizeFields(&mutableTask)
         let explicitUserId = task.userId.trimmingCharacters(in: .whitespacesAndNewlines)
         if !explicitUserId.isEmpty {
             mutableTask.userId = explicitUserId
@@ -169,6 +174,7 @@ public final class TaskRepository: ObservableObject {
     
     public func update(_ task: LifeTask) async throws {
         var mutableTask = task
+        ScheduleNormalization.normalizeFields(&mutableTask)
         mutableTask.updatedAt = Date()
         saveLocally(mutableTask)
         TaskPersistenceLog.update(mutableTask)
@@ -224,15 +230,22 @@ public final class TaskRepository: ObservableObject {
         persistAllLocally(tasks)
     }
 
+    private static let perfLog = OSLog(subsystem: "com.samaksh.flowos.app", category: "TaskRepository")
+
     private func allLocalTasks() -> [LifeTask] {
         if let cached = Self.cachedAll { return cached }
-        let loaded = local.load([LifeTask].self, filename: collection)
-        Self.cachedAll = loaded
-        return loaded
+#if DEBUG
+        os_log(
+            "allLocalTasks() before warmLocalCache() — returning empty (no main-thread disk read)",
+            log: Self.perfLog,
+            type: .debug
+        )
+#endif
+        return []
     }
 
     private func persistAllLocally(_ tasks: [LifeTask]) {
-        local.save(tasks, filename: collection)
+        taskStore.replaceAllAsync(tasks)
         Self.cachedAll = tasks
         TaskPersistenceLog.localSave(count: tasks.count)
     }
@@ -240,14 +253,17 @@ public final class TaskRepository: ObservableObject {
     /// Clears on-device task cache (factory reset).
     public func resetLocalStore() {
         TaskDeletionRegistry.reset()
-        persistAllLocally([])
+        try? taskStore.replaceAllSync([])
+        Self.cachedAll = []
+        TaskPersistenceLog.localSave(count: 0)
     }
 
     /// Skips Firestore merge until cloud wipe completes — prevents old data reappearing.
     public func enterFreshInstallMode() {
         FreshInstallGuard.enter()
+        try? taskStore.replaceAllSync([])
         Self.cachedAll = []
-        persistAllLocally([])
+        TaskPersistenceLog.localSave(count: 0)
     }
 
     public func exitFreshInstallMode() {
@@ -289,7 +305,7 @@ public final class TaskRepository: ObservableObject {
         if let cached = Self.cachedAll {
             all = cached
         } else {
-            all = await local.loadAsync([LifeTask].self, filename: collection)
+            all = await taskStore.loadAllAsync()
             Self.cachedAll = all
         }
 
@@ -298,7 +314,7 @@ public final class TaskRepository: ObservableObject {
             TaskRecurrenceCompactor.compact(all, retentionDays: retentionDays)
         }.value
         guard removed > 0 else { return 0 }
-        await local.saveAsync(pruned, filename: collection)
+        await taskStore.replaceAllAwait(pruned)
         Self.cachedAll = pruned
         print("[Tasks] compacted \(removed) recurrence rows (\(before) → \(pruned.count))")
         return removed

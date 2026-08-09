@@ -264,3 +264,20 @@ public extension View {
         modifier(ShimmerEffect())
     }
 }
+
+// MARK: - SF Symbol safety
+
+/// Guards against `Image(systemName: "")` which logs `CUICatalog: Invalid asset name supplied: '(null)'`.
+public enum SystemImage {
+    public static func resolved(_ raw: String?, fallback: String = "circle") -> String {
+        guard let raw else { return fallback }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+}
+
+public extension Image {
+    static func safeSystemName(_ name: String?, fallback: String = "circle") -> Image {
+        Image(systemName: SystemImage.resolved(name, fallback: fallback))
+    }
+}

@@ -26,9 +26,14 @@ struct DailyBriefingView: View {
     var onCapture: () -> Void
     var onStartTask: (LifeTask) -> Void
     var onReplanDay: (() -> Void)?
+    var onPostWake: (() -> Void)?
+    var isPostWake: Bool = false
+    var onDismissPostWake: (() -> Void)?
 
     @State private var showCustomization = false
     @State private var showHealthConnectSheet = false
+    @State private var showHealthVerification = false
+    @State private var showHealthTroubleshooting = false
     @State private var showCycleLog = false
     @State private var showCycleDashboard = false
     @State private var scrollOffset: CGFloat = 0
@@ -71,24 +76,30 @@ struct DailyBriefingView: View {
                 .refreshable {
                     await reload()
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if showsScrollHint {
+                        scrollHintOverlay
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
-                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String,
-                          raw == AppFeatureTourAnchorID.briefingHero.rawValue else { return }
+                    guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
                     let scrollAnchor = note.userInfo?[TourScrollUserInfoKey.scrollAnchor] as? String ?? "center"
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        if scrollAnchor == "top" {
-                            // Keep greeting + hero below Dynamic Island — scroll to top, not center on hero.
-                            proxy.scrollTo(AppFeatureTourAnchorID.briefingScrollTop.rawValue, anchor: .top)
-                        } else {
-                            proxy.scrollTo(AppFeatureTourAnchorID.briefingHero.rawValue, anchor: .center)
+                        switch raw {
+                        case AppFeatureTourAnchorID.briefingHero.rawValue:
+                            if scrollAnchor == "top" {
+                                proxy.scrollTo(AppFeatureTourAnchorID.briefingScrollTop.rawValue, anchor: .top)
+                            } else {
+                                proxy.scrollTo(AppFeatureTourAnchorID.briefingHero.rawValue, anchor: .center)
+                            }
+                        case AppFeatureTourAnchorID.briefingHealthStrip.rawValue:
+                            proxy.scrollTo(AppFeatureTourAnchorID.briefingHealthStrip.rawValue, anchor: .center)
+                        default:
+                            break
                         }
                     }
                 }
-            }
-
-            if showsScrollHint {
-                scrollHintOverlay
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .animation(.easeOut(duration: 0.25), value: showsScrollHint)
@@ -117,6 +128,44 @@ struct DailyBriefingView: View {
             guard phase == .complete else { return }
             Task { await reload() }
         }
+        .onAppear {
+            healthSync.refreshConnectionStatus(userId: userId, healthSummary: brainVM.healthSummary)
+        }
+        .sheet(isPresented: $showHealthVerification) {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: DesignSystem.spacingMD) {
+                        if let status = healthSync.connectionStatus {
+                            HealthStatusBanner(
+                                status: status,
+                                style: .full,
+                                onPrimaryAction: { handleHealthPrimaryAction(status.primaryAction) },
+                                onLearnMore: { showHealthTroubleshooting = true }
+                            )
+                        }
+                        if let report = healthSync.verificationReport {
+                            HealthVerificationReportView(report: report)
+                        }
+                    }
+                    .padding(DesignSystem.spacingLG)
+                }
+                .background(DesignSystem.backgroundPrimary.ignoresSafeArea())
+                .navigationTitle("Health status")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showHealthVerification = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showHealthTroubleshooting) {
+            NavigationStack {
+                HealthTroubleshootingView(healthSync: healthSync, userId: userId)
+                    .environmentObject(shell)
+            }
+        }
         .accessibilityIdentifier("screen-briefing")
     }
 
@@ -139,6 +188,10 @@ struct DailyBriefingView: View {
             )
             .featureTourAnchor(.briefingHero, cornerRadius: DesignSystem.radiusLG)
             .id(AppFeatureTourAnchorID.briefingHero.rawValue)
+
+            if isPostWake, let onPostWake {
+                postWakeCard(onReplan: onPostWake, onDismiss: onDismissPostWake)
+            }
 
             todayAtAGlanceSection
         }
@@ -222,10 +275,43 @@ struct DailyBriefingView: View {
         }
     }
 
+    @ViewBuilder
+    private func postWakeCard(onReplan: @escaping () -> Void, onDismiss: (() -> Void)?) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+            HStack {
+                Image(systemName: "sun.max.fill")
+                    .foregroundColor(DesignSystem.accentPrimary)
+                Text("Just woke up?")
+                    .font(.dsBody(weight: .semibold))
+                    .foregroundColor(DesignSystem.textPrimary)
+                Spacer()
+                if let onDismiss {
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(DesignSystem.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("I can replan what's left — defer what you missed and keep today realistic.")
+                .font(.dsCaption())
+                .foregroundColor(DesignSystem.textSecondary)
+            Button(action: onReplan) {
+                Text("Replan my day")
+                    .font(.dsCaption(weight: .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
+        .accessibilityIdentifier("briefing-post-wake-card")
+    }
+
     // MARK: - Scroll chapters (below the fold)
 
     private var scrollChapters: some View {
-        VStack(spacing: DesignSystem.BriefingViewport.chapterSpacing) {
+        LazyVStack(spacing: DesignSystem.BriefingViewport.chapterSpacing) {
             Color.clear.frame(height: 1).id(chaptersAnchorID)
 
             BriefingChapterSection(
@@ -234,7 +320,21 @@ struct DailyBriefingView: View {
                 icon: "sun.max"
             ) {
                 VStack(spacing: DesignSystem.spacingLG) {
-                    BriefingSnapshotStrip(snapshot: briefingVM.healthSnapshot)
+                    if let status = healthSync.connectionStatus, status.needsAttention {
+                        HealthStatusBanner(
+                            status: status,
+                            style: .compact,
+                            onPrimaryAction: { handleHealthPrimaryAction(status.primaryAction) },
+                            onSeeDetails: { showHealthVerification = true },
+                            onLearnMore: { showHealthTroubleshooting = true }
+                        )
+                    }
+                    BriefingSnapshotStrip(
+                        snapshot: briefingVM.healthSnapshot,
+                        healthNeedsAttention: healthSync.connectionStatus?.needsAttention ?? false
+                    )
+                        .featureTourAnchor(.briefingHealthStrip, cornerRadius: DesignSystem.radiusMD)
+                        .id(AppFeatureTourAnchorID.briefingHealthStrip.rawValue)
                     LifeGapsCard(gaps: briefingVM.lifeGaps, onOpenTimeline: onOpenToday)
                 }
             }
@@ -315,7 +415,15 @@ struct DailyBriefingView: View {
     private var healthChapterContent: some View {
         VStack(spacing: DesignSystem.spacingLG) {
             if isVisible(.sleep) {
-                BriefingSleepCard(sleep: briefingVM.sleep, compact: true, onConnectHealth: connectHealth)
+                BriefingSleepCard(
+                    sleep: briefingVM.sleep,
+                    compact: true,
+                    connectionStatus: healthSync.connectionStatus,
+                    onConnectHealth: connectHealth,
+                    onHealthPrimaryAction: { handleHealthPrimaryAction(healthSync.connectionStatus?.primaryAction ?? .connect) },
+                    onSeeHealthDetails: { showHealthVerification = true },
+                    onLearnMore: { showHealthTroubleshooting = true }
+                )
             }
             if isVisible(.energy) {
                 ExecutiveCapacityCard(capacity: briefingVM.executiveCapacity, compact: true)
@@ -325,7 +433,11 @@ struct DailyBriefingView: View {
                     health: briefingVM.health,
                     compact: true,
                     showsTitle: false,
-                    onConnectHealth: connectHealth
+                    connectionStatus: healthSync.connectionStatus,
+                    onConnectHealth: connectHealth,
+                    onHealthPrimaryAction: { handleHealthPrimaryAction(healthSync.connectionStatus?.primaryAction ?? .connect) },
+                    onSeeHealthDetails: { showHealthVerification = true },
+                    onLearnMore: { showHealthTroubleshooting = true }
                 )
             }
             if isVisible(.cycle), briefingVM.cycleData.isVisible {
@@ -476,6 +588,15 @@ struct DailyBriefingView: View {
                     .scaleEffect(0.8)
             }
 
+            Button(action: onCapture) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(DesignSystem.textSecondary)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(DesignSystem.backgroundElevated))
+            }
+            .accessibilityLabel("Capture a thought")
+
             Button(action: { showCustomization = true }) {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 16, weight: .medium))
@@ -501,20 +622,35 @@ struct DailyBriefingView: View {
     private var refreshToken: String {
         [
             userId,
-            String(brainVM.cognitiveSnapshot?.executiveFunctionScore ?? 0),
-            String(tasksVM.tasks.count),
-            String(tasksVM.completedToday.count),
-            String(brainVM.healthSummary?.totalSleepMinutes ?? 0),
-            String(brainVM.healthSummary?.stepCount ?? 0),
             healthSync.lastSyncDate?.timeIntervalSince1970.description ?? "0",
             brainVM.flowSurface?.generatedAt.description ?? "",
             shell.contextOrchestrator.briefing?.generatedAt.description ?? "",
+            String(brainVM.cognitiveSnapshot?.executiveFunctionScore ?? 0),
+            String(brainVM.cognitiveSnapshot?.energyScore ?? 0),
         ].joined(separator: "-")
     }
 
     private func connectHealth() {
         guard enableHealth else { return }
         showHealthConnectSheet = true
+    }
+
+    private func syncHealthNow() {
+        guard enableHealth else { return }
+        Task {
+            let resolvedId = FirebaseManager.shared.resolvedUserId.isEmpty ? userId : FirebaseManager.shared.resolvedUserId
+            await healthSync.syncHealthData(userId: resolvedId)
+            healthSync.refreshConnectionStatus(userId: resolvedId, healthSummary: brainVM.healthSummary)
+        }
+    }
+
+    private func handleHealthPrimaryAction(_ action: HealthStatusAction) {
+        HealthStatusActionHandler.perform(
+            action,
+            onConnect: connectHealth,
+            onSync: syncHealthNow,
+            onOpenSettings: onOpenSettings
+        )
     }
 
     private func reload() async {

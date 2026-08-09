@@ -59,6 +59,29 @@ public enum HighLoadDayEvaluator {
         }
         return streak
     }
+
+    /// Longest run of high-load days inside the weekly review window.
+    public static func maxConsecutiveHighLoadDays(
+        inWeekEnding weekEnding: Date,
+        tasks: [LifeTask],
+        calendar: Calendar = .current
+    ) -> Int {
+        let bounds = WeeklyReviewAggregator.weekBounds(ending: weekEnding, calendar: calendar)
+        var maxStreak = 0
+        var current = 0
+        var day = bounds.start
+        while day <= bounds.endInclusive {
+            if isHighLoadDay(tasks: tasks, on: day, calendar: calendar) {
+                current += 1
+                maxStreak = max(maxStreak, current)
+            } else {
+                current = 0
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        return maxStreak
+    }
 }
 
 // MARK: - Sabotage cool-down (Do Not Sabotage)

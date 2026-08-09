@@ -9,6 +9,7 @@ import LookAfterFeatures
 struct AIMemoryView: View {
     @ObservedObject var modulesVM: LifeModulesViewModel
     @State private var searchText = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     
     var body: some View {
         ZStack {
@@ -24,11 +25,15 @@ struct AIMemoryView: View {
                         .font(.system(size: 15, design: .default))
                         .foregroundColor(DesignSystem.textPrimary)
                         .onChange(of: searchText) { _, newValue in
-                            modulesVM.performSemanticSearch(query: newValue)
+                            scheduleSemanticSearch(query: newValue)
                         }
                     
                     if !searchText.isEmpty {
-                        Button(action: { searchText = ""; modulesVM.performSemanticSearch(query: "") }) {
+                        Button(action: {
+                            searchDebounceTask?.cancel()
+                            searchText = ""
+                            modulesVM.performSemanticSearch(query: "")
+                        }) {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(DesignSystem.textMuted)
                         }
@@ -88,6 +93,18 @@ struct AIMemoryView: View {
             }
             .navigationTitle("AI Memory")
             .keyboardDismissToolbar()
+        }
+        .onDisappear {
+            searchDebounceTask?.cancel()
+        }
+    }
+
+    private func scheduleSemanticSearch(query: String) {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            modulesVM.performSemanticSearch(query: query)
         }
     }
 }
@@ -1226,6 +1243,10 @@ struct ReflectionJournalView: View {
             ) {
                 await MainActor.run {
                     let trimmed = JournalCalibrationSanitizer.plainText(from: calibration)
+                    guard !trimmed.isEmpty else {
+                        isProcessingAI = false
+                        return
+                    }
                     calibrationBadge = trimmed
                     UserCalibrationStore.append(
                         summary: trimmed,

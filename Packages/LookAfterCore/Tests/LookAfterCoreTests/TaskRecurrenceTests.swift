@@ -97,6 +97,7 @@ final class TaskRecurrenceTests: XCTestCase {
             title: "Brush teeth — morning",
             scheduledTime: makeDate(year: 2026, month: 1, day: 1, hour: 7, minute: 30),
             recurrence: .daily,
+            createdAt: makeDate(year: 2026, month: 7, day: 1),
             userId: "user-1",
             isRecurrenceTemplate: true
         )
@@ -410,6 +411,64 @@ final class TaskRecurrenceTests: XCTestCase {
         let occurrenceIDs = Set(pruned.map { $0.id })
         XCTAssertTrue(occurrenceIDs.contains(keeper.id) || occurrenceIDs.contains(duplicate.id))
         XCTAssertFalse(occurrenceIDs.contains(superseded.id))
+    }
+
+    func testUniqueActiveTasksDedupesSeriesAndExcludesCompletedAdhoc() {
+        let today = makeDate(year: 2026, month: 8, day: 6)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let template = LifeTask(
+            id: "tmpl-gym",
+            title: "Gym",
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let gymToday = LifeTask(
+            id: "gym-today",
+            title: "Gym",
+            status: .pending,
+            scheduledDate: today,
+            parentTaskId: template.id,
+            userId: "user-1"
+        )
+        let gymTomorrow = LifeTask(
+            id: "gym-tomorrow",
+            title: "Gym",
+            status: .pending,
+            scheduledDate: tomorrow,
+            parentTaskId: template.id,
+            userId: "user-1"
+        )
+        let backlog = LifeTask(
+            id: "backlog-1",
+            title: "Call dentist",
+            status: .pending,
+            userId: "user-1"
+        )
+        let completedAdhoc = LifeTask(
+            id: "done-1",
+            title: "Buy milk",
+            status: .completed,
+            scheduledDate: today,
+            completedAt: today,
+            userId: "user-1"
+        )
+        let active = [gymToday, gymTomorrow, backlog]
+        let context = active + [template, completedAdhoc]
+
+        let unique = TaskScheduleQuery.uniqueActiveTasks(
+            from: active,
+            context: context,
+            calendar: calendar,
+            referenceDate: today
+        )
+
+        XCTAssertEqual(unique.count, 2)
+        XCTAssertTrue(unique.contains(where: { $0.id == gymToday.id }))
+        XCTAssertTrue(unique.contains(where: { $0.id == backlog.id }))
+        XCTAssertFalse(unique.contains(where: { $0.id == gymTomorrow.id }))
+        XCTAssertFalse(unique.contains(where: { $0.id == completedAdhoc.id }))
+        XCTAssertFalse(unique.contains(where: { $0.id == template.id }))
     }
 
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {

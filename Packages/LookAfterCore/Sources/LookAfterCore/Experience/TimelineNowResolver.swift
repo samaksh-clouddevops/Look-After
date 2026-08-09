@@ -3,9 +3,9 @@ import Foundation
 /// Resolves the timeline NOW marker — shared by Today timeline UI and pin-to-lock-screen.
 public enum TimelineNowResolver {
 
-    /// Events sorted the same way as `TimelineRowProjector`.
-    public static func sortedEvents(_ events: [LifeTimelineEvent]) -> [LifeTimelineEvent] {
-        events.sorted(by: timelineEventSortOrder)
+    /// Events sorted chronologically with unslotted flexibles in the current gap.
+    public static func sortedEvents(_ events: [LifeTimelineEvent], now: Date = Date()) -> [LifeTimelineEvent] {
+        TimelineDisplaySort.sorted(events, now: now)
     }
 
     /// The event marked NOW on the Today timeline at `now`.
@@ -14,7 +14,7 @@ public enum TimelineNowResolver {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> LifeTimelineEvent? {
-        let sorted = sortedEvents(events)
+        let sorted = sortedEvents(events, now: now)
         guard let index = currentEventIndex(in: sorted, now: now, calendar: calendar) else { return nil }
         return sorted[index]
     }
@@ -26,29 +26,32 @@ public enum TimelineNowResolver {
         calendar: Calendar = .current
     ) -> Int? {
         for (index, event) in events.enumerated() {
-            guard !event.isCompleted else { continue }
+            guard !event.isCompleted, !TimelineDisplaySort.isUnslottedFlexible(event) else { continue }
             let end = event.resolvedEndDate(calendar: calendar)
             if event.date <= now, now <= end { return index }
         }
-        return events.firstIndex { !$0.isCompleted && $0.date > now }
+
+        if TimelineDisplaySort.isInSchedulingGap(now: now, among: events, calendar: calendar),
+           let gapIndex = events.firstIndex(where: {
+               !$0.isCompleted && TimelineDisplaySort.isUnslottedFlexible($0)
+           }) {
+            return gapIndex
+        }
+
+        if let upcoming = events.firstIndex(where: {
+            !$0.isCompleted && !TimelineDisplaySort.isUnslottedFlexible($0) && $0.date > now
+        }) {
+            return upcoming
+        }
+
+        return events.firstIndex(where: {
+            !$0.isCompleted && TimelineDisplaySort.isUnslottedFlexible($0)
+        })
     }
 
     public static func taskId(from eventId: String) -> String? {
         guard eventId.hasPrefix("task-") else { return nil }
         let id = String(eventId.dropFirst(5))
         return id.isEmpty ? nil : id
-    }
-
-    private static func timelineEventSortOrder(_ lhs: LifeTimelineEvent, _ rhs: LifeTimelineEvent) -> Bool {
-        if lhs.id.hasPrefix("sleep-boundary") != rhs.id.hasPrefix("sleep-boundary") {
-            return !lhs.id.hasPrefix("sleep-boundary")
-        }
-        if lhs.isFlexibleToday != rhs.isFlexibleToday {
-            return !lhs.isFlexibleToday
-        }
-        if lhs.isFlexibleToday {
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-        }
-        return lhs.date < rhs.date
     }
 }

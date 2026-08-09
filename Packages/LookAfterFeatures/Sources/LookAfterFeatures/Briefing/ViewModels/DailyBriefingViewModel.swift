@@ -1,4 +1,5 @@
 import Foundation
+
 import LookAfterCore
 import LookAfterData
 import LookAfterAI
@@ -41,7 +42,7 @@ public final class DailyBriefingViewModel: ObservableObject {
         energyLevel: .moderate
     )
     @Published public private(set) var executiveCapacity: ExecutiveCapacityState = .moderate
-    @Published public private(set) var mission = BriefingMissionData(tasks: [], completionPercent: 0)
+    @Published public private(set) var mission = BriefingMissionData(tasks: [], completionPercent: 0, hiddenCompletedCount: 0)
     @Published public private(set) var calendar = BriefingCalendarData(isConnected: false)
     @Published public private(set) var health = BriefingHealthMetrics(isAvailable: false)
     @Published public private(set) var habits: [BriefingHabit] = BriefingHabit.defaults
@@ -76,12 +77,21 @@ public final class DailyBriefingViewModel: ObservableObject {
     private let healthRepo: HealthSummaryRepository
     private let analyticsService: BackgroundAnalyticsService?
     private var habitCompletionDates: [String: String] = [:]
+    private var orchestratedProactiveActions: [ProactiveAction] = []
 
     public var isPostWake: Bool { postWakeState.isPostWake }
 
     public func dismissPostWakeForToday() {
         PostWakeSessionStore.dismissForToday()
         postWakeState = .inactive
+    }
+
+    public func setProactiveActions(_ actions: [ProactiveAction]) {
+        orchestratedProactiveActions = actions
+    }
+
+    public var proactiveActions: [ProactiveAction] {
+        orchestratedProactiveActions
     }
 
     public init(
@@ -167,13 +177,21 @@ public final class DailyBriefingViewModel: ObservableObject {
         lifeTimelineEvents: [LifeTimelineEvent] = [],
         tomorrowLifeTimelineEvents: [LifeTimelineEvent] = []
     ) async {
-        let resolvedHealth = await resolveHealthSummary(
+        let rawHealth = await resolveRawHealthSummary(
+            brainRawSummary: brainVM.rawHealthSummary,
             brainSummary: brainVM.healthSummary,
             userId: userId
         )
+        let resolvedHealth = HealthSummaryFreshness.forBriefingMetrics(from: rawHealth)
+
+        updateGreeting(
+            userName: userName,
+            flowSurface: brainVM.flowSurface,
+            heroBriefing: heroBriefing
+        )
 
         buildDailySummary(snapshot: brainVM.cognitiveSnapshot, flowSurface: brainVM.flowSurface)
-        buildSleep(health: resolvedHealth, snapshot: brainVM.cognitiveSnapshot, available: healthKitAvailable)
+        buildSleep(health: rawHealth, snapshot: brainVM.cognitiveSnapshot, available: healthKitAvailable)
         buildEnergy(snapshot: brainVM.cognitiveSnapshot, flowSurface: brainVM.flowSurface)
         buildHealthSnapshot(
             snapshot: brainVM.cognitiveSnapshot,
@@ -202,37 +220,47 @@ public final class DailyBriefingViewModel: ObservableObject {
         buildCycleData(healthSummary: resolvedHealth)
         await buildDayHeroSummary(userName: userName, tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
         await buildChiefOfStaffNarrative(userName: userName, tasksVM: tasksVM)
-        await buildModuleInsights(userName: userName)
+        await buildModuleInsights(userName: userName, tasksVM: tasksVM)
         await loadWeeklyTrends(userId: userId, tasksVM: tasksVM)
     }
 
-    /// Prefers brain cache, then health store, then repository fallback — strips stale overnight data.
-    private func resolveHealthSummary(brainSummary: HealthSummary?, userId: String) async -> HealthSummary? {
-        let raw: HealthSummary?
-        if let brainSummary, healthHasVisibleMetrics(brainSummary) {
-            raw = brainSummary
-        } else if let storeSummary = HealthStore.shared.latest, healthHasVisibleMetrics(storeSummary) {
-            raw = storeSummary
-        } else if let refreshed = await HealthStore.shared.refresh(userId: userId), healthHasVisibleMetrics(refreshed) {
-            raw = refreshed
-        } else {
-            let canonicalId = FirebaseManager.shared.resolvedUserId
-            let candidates = [canonicalId, userId].filter { !$0.isEmpty }
-            var resolved: HealthSummary?
-            for candidate in candidates {
-                if let summary = try? await healthRepo.getLatest(for: candidate),
-                   healthHasVisibleMetrics(summary) {
-                    resolved = summary
-                    break
-                }
-            }
-            if resolved == nil {
-                resolved = try? await healthRepo.getLatest(for: "")
-            }
-            raw = resolved
+    /// Latest health with overnight fields intact — used for sleep display.
+    private func resolveRawHealthSummary(
+        brainRawSummary: HealthSummary?,
+        brainSummary: HealthSummary?,
+        userId: String
+    ) async -> HealthSummary? {
+        if let brainRawSummary, healthHasVisibleMetrics(brainRawSummary) {
+            return ManualSleepLogStore.merged(with: brainRawSummary)
+        }
+        if let storeSummary = HealthStore.shared.latest, healthHasVisibleMetrics(storeSummary) {
+            return storeSummary
+        }
+        if let refreshed = await HealthStore.shared.refresh(userId: userId), healthHasVisibleMetrics(refreshed) {
+            return refreshed
         }
 
-        return HealthSummaryFreshness.forBriefingMetrics(from: raw)
+        let canonicalId = FirebaseManager.shared.resolvedUserId
+        let candidates = [canonicalId, userId].filter { !$0.isEmpty }
+        var resolved: HealthSummary?
+        for candidate in candidates {
+            if let summary = try? await healthRepo.getLatest(for: candidate),
+               healthHasVisibleMetrics(summary) {
+                resolved = summary
+                break
+            }
+        }
+        if resolved == nil {
+            resolved = try? await healthRepo.getLatest(for: "")
+        }
+        if let resolved {
+            return ManualSleepLogStore.merged(with: resolved)
+        }
+
+        if let brainSummary, healthHasVisibleMetrics(brainSummary) {
+            return ManualSleepLogStore.merged(with: brainSummary)
+        }
+        return ManualSleepLogStore.merged(with: nil)
     }
 
     public func toggleHabit(_ habit: BriefingHabit, tasksVM: TasksViewModel? = nil, userId: String = "") {
@@ -313,7 +341,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             recoveryPercent: 50,
             energyLevel: .moderate
         )
-        mission = BriefingMissionData(tasks: [], completionPercent: 0)
+        mission = BriefingMissionData(tasks: [], completionPercent: 0, hiddenCompletedCount: 0)
         calendar = BriefingCalendarData(isConnected: false)
         health = BriefingHealthMetrics(isAvailable: false)
         progress = BriefingProgressData(
@@ -538,20 +566,17 @@ public final class DailyBriefingViewModel: ObservableObject {
         healthSummary: HealthSummary?
     ) {
         let hasOvernight = healthSummary.map { HealthSummaryFreshness.hasLastNightSleep($0) } ?? false
-        let score = snapshot?.executiveFunctionScore ?? Int((flowSurface?.energyScore ?? 0.5) * 100)
-        let energyPercent = hasOvernight
-            ? Int((snapshot?.energyScore ?? flowSurface?.energyScore ?? 0.5) * 100)
-            : 0
-        let recoveryPercent = hasOvernight
-            ? Int((snapshot?.recoveryScore ?? 0.5) * 100)
-            : 0
+        let liveEnergyPercent = Int((snapshot?.energyScore ?? flowSurface?.energyScore ?? 0.5) * 100)
+        let liveRecoveryPercent = Int((snapshot?.recoveryScore ?? 0.5) * 100)
+        let score = snapshot?.executiveFunctionScore ?? liveEnergyPercent
+        let energyPercent = liveEnergyPercent
+        let recoveryPercent = liveRecoveryPercent
         let sleepLabel = sleep.isAvailable ? sleep.totalHours.map { String(format: "%.1fh", $0) } : nil
         let focusWindow = resolveFocusWindow(flowSurface: flowSurface, hasOvernightHealth: hasOvernight)
 
-        let sleepQuality = sleepQualityLabel(score: score)
+        let sleepQuality = sleepQualityLabel(score: score, hasOvernightSleep: sleep.isLastNightSleep)
         let hasImportedHealth = sleep.isAvailable
             || (healthSummary.map(healthHasVisibleMetrics) ?? false)
-            || UserDefaults.standard.object(forKey: "healthLastSyncDate") as? Date != nil
         healthSnapshot = BriefingHealthSnapshot(
             readinessLabel: UserFacingCopy.readinessLabel(score: score),
             readinessScore: score,
@@ -560,9 +585,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             sleepQuality: sleepQuality,
             energyPercent: energyPercent,
             energyLevel: (snapshot?.energy ?? energy.energyLevel).rawValue,
-            recoveryLabel: hasOvernight
-                ? UserFacingCopy.recoveryLabel(percent: recoveryPercent)
-                : "No data",
+            recoveryLabel: UserFacingCopy.recoveryLabel(percent: recoveryPercent),
             recoveryPercent: recoveryPercent,
             focusWindow: focusWindow,
             isHealthConnected: healthKitAvailable && hasImportedHealth,
@@ -570,8 +593,9 @@ public final class DailyBriefingViewModel: ObservableObject {
         )
     }
 
-    private func sleepQualityLabel(score: Int) -> String? {
+    private func sleepQualityLabel(score: Int, hasOvernightSleep: Bool) -> String? {
         guard sleep.isAvailable else { return nil }
+        if !hasOvernightSleep { return "Last recorded" }
         if let pct = sleep.qualityPercent {
             switch pct {
             case 80...: return "Good"
@@ -647,6 +671,19 @@ public final class DailyBriefingViewModel: ObservableObject {
     }
 
     private func buildSleep(health: HealthSummary?, snapshot: CognitiveSnapshot?, available: Bool) {
+        if let entry = ManualSleepLogStore.entry() {
+            let targetHours = IdealSleepPlanner.defaultTargetSleepHours()
+            let hours = entry.rating.estimatedMinutes(targetSleepHours: targetHours) / 60
+            sleep = BriefingSleepData(
+                totalHours: hours,
+                qualityPercent: Int(entry.rating.qualityScore * 100),
+                sleepDebtHours: snapshot?.sleepDebtHours ?? 0,
+                isAvailable: true,
+                isLastNightSleep: true
+            )
+            return
+        }
+
         guard available,
               let health,
               (health.totalSleepMinutes ?? 0) > 0 else {
@@ -654,13 +691,15 @@ public final class DailyBriefingViewModel: ObservableObject {
             return
         }
 
+        let isLastNight = HealthSummaryFreshness.hasLastNightSleep(health)
         sleep = BriefingSleepData(
             totalHours: health.totalSleepMinutes.map { $0 / 60 },
             deepHours: health.deepSleepMinutes.map { $0 / 60 },
             remHours: health.remSleepMinutes.map { $0 / 60 },
-            qualityPercent: health.sleepQualityScore.map { Int($0 * 100) },
+            qualityPercent: isLastNight ? health.sleepQualityScore.map { Int($0 * 100) } : nil,
             sleepDebtHours: snapshot?.sleepDebtHours ?? 0,
-            isAvailable: true
+            isAvailable: true,
+            isLastNightSleep: isLastNight
         )
     }
 
@@ -748,29 +787,61 @@ public final class DailyBriefingViewModel: ObservableObject {
                 now: now,
                 calendar: calendar
             )
-            scheduledActive = LifeTimelinePresenter.tasksScheduledForToday(
-                from: tasksVM.tasks.filter { $0.status.isActive },
-                allTasks: allTasks,
-                now: now,
-                calendar: calendar
-            )
+            scheduledActive = tasksVM.reconciledScheduledTasksForToday(now: now, calendar: calendar)
         }
 
-        let completedIds = Set(scheduledCompleted.map(\.id))
-        let pending = scheduledActive.filter { !completedIds.contains($0.id) }
+        let dedupedCompleted = dedupeMissionTasks(scheduledCompleted)
+        let dedupedActive = dedupeMissionTasks(scheduledActive)
+        let completedIds = Set(dedupedCompleted.map(\.id))
+        let pending = dedupedActive.filter { !completedIds.contains($0.id) }
 
-        var items: [BriefingMissionTask] = scheduledCompleted.prefix(3).map {
-            BriefingMissionTask(id: $0.id, title: $0.title, isCompleted: true, priority: $0.priority)
-        }
-        items += pending.prefix(6).map {
-            BriefingMissionTask(id: $0.id, title: $0.title, isCompleted: false, priority: $0.priority)
-        }
+        let completedCap = 5
+        let visibleCompleted = Array(dedupedCompleted.prefix(completedCap))
+        let hiddenCompleted = max(0, dedupedCompleted.count - visibleCompleted.count)
 
-        let totalScheduled = Set(scheduledCompleted.map(\.id) + scheduledActive.map(\.id)).count
-        let done = scheduledCompleted.count
+        var items: [BriefingMissionTask] = visibleCompleted.map { missionTask(from: $0, isCompleted: true) }
+        items += pending.prefix(6).map { missionTask(from: $0, isCompleted: false) }
+
+        let totalScheduled = Set(dedupedCompleted.map(\.id) + dedupedActive.map(\.id)).count
+        let done = dedupedCompleted.count
         let percent = totalScheduled > 0 ? Int((Double(done) / Double(totalScheduled)) * 100) : 0
 
-        mission = BriefingMissionData(tasks: items, completionPercent: percent)
+        mission = BriefingMissionData(
+            tasks: items,
+            completionPercent: percent,
+            hiddenCompletedCount: hiddenCompleted
+        )
+    }
+
+    private func dedupeMissionTasks(_ tasks: [LifeTask]) -> [LifeTask] {
+        var seen = Set<String>()
+        var result: [LifeTask] = []
+        for task in tasks {
+            let key = TaskScheduleQuery.seriesKey(for: task)
+            guard seen.insert(key).inserted else { continue }
+            result.append(task)
+        }
+        return result
+    }
+
+    private func missionTask(from task: LifeTask, isCompleted: Bool) -> BriefingMissionTask {
+        let day = Calendar.current.startOfDay(for: Date())
+        let scheduleLabel: String?
+        switch TaskScheduleInterval.displaySchedule(for: task, on: day) {
+        case .unslottedFlexible:
+            scheduleLabel = "Flexible today"
+        case .window(_, _, let rangeLabel):
+            scheduleLabel = "Start \(rangeLabel.components(separatedBy: " – ").first ?? rangeLabel)"
+        case .noSchedule:
+            scheduleLabel = nil
+        }
+        return BriefingMissionTask(
+            id: task.id,
+            title: task.title,
+            isCompleted: isCompleted,
+            priority: task.priority,
+            scheduleLabel: scheduleLabel
+        )
     }
 
     private func buildCalendar(flowSurface: FlowSurface?) {
@@ -905,23 +976,22 @@ public final class DailyBriefingViewModel: ObservableObject {
         let now = Date()
         let calendar = Calendar.current
 
-        let scheduledActive = LifeTimelinePresenter.tasksScheduledForToday(
-            from: tasksVM.tasks.filter { $0.status.isActive },
-            allTasks: allTasks,
-            now: now,
-            calendar: calendar
-        )
         let scheduledCompleted = LifeTimelinePresenter.completedTasksScheduledForToday(
             from: tasksVM.completedToday,
             allTasks: allTasks,
             now: now,
             calendar: calendar
         )
+        let dedupedCompleted = dedupeMissionTasks(scheduledCompleted)
+        let scheduledActive = tasksVM.reconciledScheduledTasksForToday(now: now, calendar: calendar)
+        let dedupedActive = dedupeMissionTasks(scheduledActive)
 
-        let overdue = scheduledActive.filter(\.isOverdue).count
-        let completed = scheduledCompleted.count
-        let remaining = scheduledActive.count
-        let deepWork = scheduledCompleted.reduce(0) { $0 + $1.estimatedMinutes }
+        let overdue = dedupedActive.filter(\.isOverdue).count
+        let completed = dedupedCompleted.count
+        let remaining = dedupedActive.filter { task in
+            !dedupedCompleted.contains(where: { $0.id == task.id })
+        }.count
+        let deepWork = dedupedCompleted.reduce(0) { $0 + $1.estimatedMinutes }
         let productivity = snapshot?.executiveFunctionScore ?? min(completed * 15, 100)
 
         progress = BriefingProgressData(
@@ -1129,12 +1199,23 @@ public final class DailyBriefingViewModel: ObservableObject {
 
     /// Lightweight progress + mission refresh after task completion — avoids a full briefing reload.
     public func refreshTaskProgress(
+        brainVM: BrainViewModel,
         tasksVM: TasksViewModel,
-        cognitiveSnapshot: CognitiveSnapshot?,
+        healthKitAvailable: Bool,
         lifeTimelineEvents: [LifeTimelineEvent] = []
     ) {
-        buildProgress(tasksVM: tasksVM, snapshot: cognitiveSnapshot)
+        let metricsHealth = HealthSummaryFreshness.forBriefingMetrics(
+            from: brainVM.rawHealthSummary ?? brainVM.healthSummary
+        )
+        buildProgress(tasksVM: tasksVM, snapshot: brainVM.cognitiveSnapshot)
         buildMission(tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
+        buildEnergy(snapshot: brainVM.cognitiveSnapshot, flowSurface: brainVM.flowSurface)
+        buildHealthSnapshot(
+            snapshot: brainVM.cognitiveSnapshot,
+            flowSurface: brainVM.flowSurface,
+            healthKitAvailable: healthKitAvailable,
+            healthSummary: metricsHealth
+        )
     }
 
     private func buildLifeGaps(tasksVM: TasksViewModel, userId: String) {
@@ -1250,8 +1331,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             chiefNarrativeSource = "deterministic"
         }
 
-        let hasKey = !GLMService.shared.keyManagerAccess.allRecords().filter(\.isEnabled).isEmpty
-            || GLMService.shared.keyManagerAccess.resolveAPIKey() != nil
+        let hasKey = GLMService.shared.hasConfiguredAPIKey
 
         // AIRouter: distilled systemActions → immutable system prompt (no raw cascade spam).
         let routerPayload = BriefingRouterPayload(from: finalPayload)
@@ -1277,9 +1357,23 @@ public final class DailyBriefingViewModel: ObservableObject {
         snapshotChips = result.chips
     }
 
-    private func buildModuleInsights(userName: String) async {
+    private func buildModuleInsights(userName: String, tasksVM: TasksViewModel) async {
         isLoadingModuleInsights = true
         defer { isLoadingModuleInsights = false }
+
+        let proactive: [ScheduleProactiveSuggestion] = {
+            if !orchestratedProactiveActions.isEmpty {
+                return orchestratedProactiveActions.compactMap(\.asScheduleSuggestion)
+            }
+            return ScheduleProactiveAnalyzer.analyze(
+                ScheduleProactiveAnalyzer.Input(
+                    tasks: tasksVM.schedulingContext,
+                    now: Date(),
+                    energyPercent: energy.currentEnergyPercent,
+                    completedTodayCount: progress.completedCount
+                )
+            )
+        }()
 
         let input = BriefingModuleInsightsBuilder.Input(
             userName: userName,
@@ -1291,6 +1385,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             habits: habits,
             calendar: calendar,
             lifeGaps: lifeGaps,
+            proactiveSuggestions: proactive,
             cycleData: cycleData,
             alerts: alerts,
             aiRecommendation: aiRecommendation

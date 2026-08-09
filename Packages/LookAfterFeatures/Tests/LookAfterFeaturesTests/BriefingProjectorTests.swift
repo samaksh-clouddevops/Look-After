@@ -12,7 +12,7 @@ final class BriefingProjectorTests: XCTestCase {
             outcomeLine: "You'll feel done",
             whyNowReasons: ["Best window now"],
             buttonLabel: "Start",
-            action: ContextAction(label: "Start", taskID: "task-1", kind: .task),
+            action: ContextAction(label: "Start", taskID: "task-1", kind: .startTask),
             durationEstimate: DurationEstimate(pointMinutes: 25)
         )
 

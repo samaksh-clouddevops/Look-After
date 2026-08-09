@@ -77,6 +77,8 @@ struct NowPinActivityAttributes: ActivityAttributes {
         var progressFraction: Double
         var sectionLabel: String
         var categoryIcon: String
+        var windowStart: Date?
+        var windowEnd: Date?
 
         init(
             topTaskTitle: String,
@@ -89,7 +91,9 @@ struct NowPinActivityAttributes: ActivityAttributes {
             nextUpSummary: String = "",
             progressFraction: Double = 0,
             sectionLabel: String = "NOW",
-            categoryIcon: String = "sparkles"
+            categoryIcon: String = "sparkles",
+            windowStart: Date? = nil,
+            windowEnd: Date? = nil
         ) {
             self.topTaskTitle = topTaskTitle
             self.energyScore = energyScore
@@ -102,6 +106,8 @@ struct NowPinActivityAttributes: ActivityAttributes {
             self.progressFraction = min(1, max(0, progressFraction))
             self.sectionLabel = sectionLabel
             self.categoryIcon = categoryIcon
+            self.windowStart = windowStart
+            self.windowEnd = windowEnd
         }
     }
 

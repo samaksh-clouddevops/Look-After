@@ -44,6 +44,13 @@ LifeOS-clean.zip
 Pods/
 Carthage/Build/
 
+# Auth proxy (Node)
+services/auth-proxy/node_modules/
+services/auth-proxy/dist/
+services/auth-proxy/data/
+services/auth-proxy/data-smoke/
+services/auth-proxy/.env
+
 # Package build artifacts
 Packages/*/build/
 Tools/PerformanceBudgetHarness/.build/

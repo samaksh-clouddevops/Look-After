@@ -1,6 +1,7 @@
 import Foundation
 import LookAfterCore
 import LookAfterData
+import LookAfterHealth
 
 /// Configures app state when launched under XCUITest (`-UITesting`).
 enum UITestLaunchConfiguration {
@@ -59,6 +60,15 @@ enum UITestLaunchConfiguration {
         }
         if ProcessInfo.processInfo.arguments.contains("-ReduceMotion") {
             UserDefaults.standard.set(true, forKey: "uitest_reduce_motion")
+        }
+        if let mockHealthStatus = argumentValue(prefix: "-MockHealthStatus") {
+            UserDefaults.standard.set(mockHealthStatus, forKey: "uitest_mock_health_status")
+        }
+
+        if UserDefaults.standard.string(forKey: "uitest_mock_health_status") != nil {
+            MainActor.assumeIsolated {
+                HealthSyncService.shared.refreshConnectionStatus(userId: userId)
+            }
         }
     }
 

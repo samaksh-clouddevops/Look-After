@@ -33,6 +33,7 @@ public enum InboxItemStatus: String, Codable, CaseIterable, Sendable {
     case actionCreated = "Action Created"
     case archived = "Archived"
     case dismissed = "Dismissed"
+    case needsReview = "Needs Review"
 }
 
 /// A universal inbox item — anything the user captures goes here first.

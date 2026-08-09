@@ -12,6 +12,9 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     @Published public private(set) var isProcessing = false
     @Published public private(set) var inputMode: PlanningInputMode?
     @Published public private(set) var negotiation: PlanningNegotiation?
+    @Published public private(set) var planVariants: [PlanVariant]?
+    @Published public private(set) var selectedVariantID: String?
+    @Published public private(set) var negotiationPhase: PlanningNegotiationPhase = .idle
     @Published public private(set) var multiDayDraft: MultiDayPlanDraft?
     @Published public private(set) var multiDayPlanning: PlanningNegotiation?
     @Published public private(set) var multiDaySession: MultiDayPlanningSession?
@@ -24,6 +27,11 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     @Published public private(set) var replanSummary: String?
     @Published public private(set) var isReplanning = false
     @Published public private(set) var isRedesigningWithAI = false
+    @Published public private(set) var contextualReplanResult: DayReplanResult?
+    @Published public private(set) var contextualReplanTrigger: DayReplanTrigger?
+    @Published public private(set) var contextualReplanTitle: String = "Replan Preview"
+
+    private var pendingContextualReplan: DayReplanContext?
 
     public var onSpeakReply: ((String) -> Void)?
 
@@ -33,6 +41,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     private var medications: [Medication] = []
     private weak var timelineService: TimelineService?
     private var cancellables = Set<AnyCancellable>()
+    private var hasSeededProactiveSuggestions = false
 
     public init(engine: LLMPlanningEngine = LLMPlanningEngine()) {
         self.engine = engine
@@ -58,6 +67,9 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         isProcessing = false
         inputMode = nil
         negotiation = nil
+        planVariants = nil
+        selectedVariantID = nil
+        negotiationPhase = .idle
         multiDayDraft = nil
         multiDayPlanning = nil
         multiDaySession = nil
@@ -69,7 +81,53 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         replanSummary = nil
         isReplanning = false
         isRedesigningWithAI = false
+        contextualReplanResult = nil
+        contextualReplanTrigger = nil
+        contextualReplanTitle = "Replan Preview"
+        pendingContextualReplan = nil
         medications = []
+        hasSeededProactiveSuggestions = false
+    }
+
+    /// Surfaces high-severity schedule anomalies when Plan With Me opens with an empty conversation.
+    public func seedProactiveSuggestionsIfNeeded(from actions: [ProactiveAction]) {
+        guard !hasSeededProactiveSuggestions, turns.isEmpty, !isProcessing else { return }
+
+        guard let top = actions.first(where: { $0.surface == .planning || $0.surface == .autoApplyPreview })
+            ?? actions.first(where: { $0.severity == .high })
+            ?? actions.first(where: { $0.severity == .medium }) else { return }
+
+        hasSeededProactiveSuggestions = true
+        negotiation = PlanningNegotiation(question: top.message, options: top.options)
+        turns.append(PlanningConversationTurn(
+            role: .assistant,
+            text: "I noticed something on your schedule — \(top.message)",
+            responseSource: .offline
+        ))
+    }
+
+    /// Legacy entry — builds from tasks only when orchestrator actions are unavailable.
+    public func seedProactiveSuggestionsIfNeeded(
+        tasks: [LifeTask],
+        profile: UserLifeProfile = UserLifeProfileStore.load(),
+        energyPercent: Int = 55,
+        completedTodayCount: Int = 0
+    ) {
+        guard !hasSeededProactiveSuggestions, turns.isEmpty, !isProcessing else { return }
+
+        let suggestions = ScheduleProactiveAnalyzer.analyze(
+            ScheduleProactiveAnalyzer.Input(
+                tasks: tasks,
+                profile: profile,
+                now: Date(),
+                energyPercent: energyPercent,
+                completedTodayCount: completedTodayCount
+            )
+        )
+        guard let top = suggestions.first(where: { $0.severity == .high })
+            ?? suggestions.first(where: { $0.severity == .medium }) else { return }
+
+        seedProactiveSuggestionsIfNeeded(from: suggestions.map { ProactiveAction.from($0, surface: .planning) })
     }
 
     public func bootstrapTimeline(from events: [LifeTimelineEvent], now: Date = Date()) {
@@ -192,6 +250,94 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         visibleThinkingStep = nil
     }
 
+    /// Builds a contextual replan proposal (post-wake, going out) without applying.
+    public func proposeContextualReplan(
+        context: DayReplanContext,
+        title: String
+    ) async {
+        isReplanning = true
+        replanSummary = nil
+        negotiation = nil
+        isProcessing = true
+        visibleThinkingStep = context.trigger == .postWake
+            ? "Replanning after wake-up"
+            : context.trigger == .goingOut
+                ? "Working around your outing"
+                : context.trigger == .freedSlot
+                    ? "Finding what fits this slot"
+                    : context.trigger == .calendarChange
+                        ? "Adjusting for calendar change"
+                        : "Reconsidering the rest of your day"
+        pendingContextualReplan = context
+        contextualReplanTrigger = context.trigger
+        contextualReplanTitle = title
+
+        let analysis = PlanningReasoningPipeline.analyze(
+            message: context.trigger == .postWake
+                ? "I just woke up"
+                : context.trigger == .goingOut
+                    ? "going out"
+                    : context.trigger == .freedSlot
+                        ? "fill this slot"
+                        : context.trigger == .calendarChange
+                            ? "new meeting on my calendar"
+                            : "Replan my day",
+            context: context.planningContext
+        )
+        await animateThinking(steps: analysis.thinkingSteps)
+
+        do {
+            let result = try await replanEngine.replan(context: context)
+            contextualReplanResult = result
+            planVariants = result.planVariants
+            selectedVariantID = result.recommendedVariantID ?? result.planVariants?.first(where: \.recommended)?.id
+            replanSummary = result.summary
+        } catch {
+            errorMessage = error.localizedDescription
+            contextualReplanResult = nil
+        }
+
+        isReplanning = false
+        isProcessing = false
+        visibleThinkingStep = nil
+    }
+
+    public func regenerateContextualReplan() async {
+        guard let context = pendingContextualReplan else { return }
+        await proposeContextualReplan(context: context, title: contextualReplanTitle)
+    }
+
+    public func rejectContextualReplan() {
+        contextualReplanResult = nil
+        contextualReplanTrigger = nil
+        pendingContextualReplan = nil
+        replanSummary = nil
+    }
+
+    public func applyContextualReplanResult(
+        tasksVM: TasksViewModel,
+        modulesVM: LifeModulesViewModel,
+        userId: String,
+        refreshContext: @escaping () async -> Void
+    ) async {
+        guard let result = contextualReplanResult else { return }
+        await applyReplanResult(
+            result,
+            tasksVM: tasksVM,
+            modulesVM: modulesVM,
+            userId: userId,
+            refreshContext: refreshContext
+        )
+        contextualReplanResult = nil
+        contextualReplanTrigger = nil
+        pendingContextualReplan = nil
+        replanSummary = result.summary
+        turns.append(PlanningConversationTurn(role: .assistant, text: result.summary))
+        recentDeltas = result.effectiveTimelineDeltas(selectedVariantID: selectedVariantID)
+        planVariants = nil
+        selectedVariantID = nil
+    }
+
     private func applyReplanResult(
         _ result: DayReplanResult,
         tasksVM: TasksViewModel,
@@ -202,25 +348,39 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         let calendar = Calendar.current
         let taskByID = Dictionary(uniqueKeysWithValues: tasksVM.tasks.map { ($0.id, $0) })
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
+        let freedSlot = pendingContextualReplan?.freedSlotWindow
 
-        for suggestion in result.scheduleChanges {
+        for suggestion in result.effectiveChanges(selectedVariantID: selectedVariantID) {
             guard var task = taskByID[suggestion.taskID], !task.isFixedTimeEvent else { continue }
+
             if suggestion.deferToTomorrow {
                 task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
                 task.scheduledTime = nil
                 task.scheduledEndTime = nil
             } else if let hour = suggestion.startHour, let minute = suggestion.startMinute,
-                      let time = PlanningSchedulePolicy.validatedSchedule(
+                      let time = resolveReplanScheduleTime(
                         hour: hour,
                         minute: minute,
-                        workHours: workHours
+                        freedSlot: freedSlot,
+                        workHours: workHours,
+                        calendar: calendar
                       ) {
-                task.scheduledDate = calendar.startOfDay(for: Date())
-                task.scheduledTime = time
                 let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
-                task.scheduledEndTime = time.addingTimeInterval(TimeInterval(duration * 60))
+                let end = time.addingTimeInterval(TimeInterval(duration * 60))
+                if let slot = freedSlot {
+                    let day = calendar.startOfDay(for: slot.start)
+                    let now = Date()
+                    let effectiveStart = calendar.isDate(day, inSameDayAs: now) ? max(slot.start, now) : slot.start
+                    if time < effectiveStart || end > slot.end { continue }
+                }
+                task.scheduledDate = calendar.startOfDay(for: freedSlot?.start ?? Date())
+                task.scheduledTime = time
+                task.scheduledEndTime = end
+            } else {
+                continue
             }
-            tasksVM.updateTask(task)
+
+            await tasksVM.updateTaskAndPersist(task)
         }
 
         if !result.mutations.isEmpty {
@@ -238,18 +398,53 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         await refreshContext()
     }
 
+    /// Resolves a replan time — slot-scoped replans keep the AI hour/minute on the slot day;
+    /// generic replans use validated future scheduling within work hours.
+    private func resolveReplanScheduleTime(
+        hour: Int,
+        minute: Int,
+        freedSlot: DayReplanAwayWindow?,
+        workHours: PlanningSchedulePolicy.WorkHours,
+        calendar: Calendar
+    ) -> Date? {
+        guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+
+        if let slot = freedSlot {
+            let day = calendar.startOfDay(for: slot.start)
+            guard let time = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) else {
+                return nil
+            }
+            let now = Date()
+            let effectiveStart = calendar.isDate(day, inSameDayAs: now) ? max(slot.start, now) : slot.start
+            guard time >= effectiveStart else { return nil }
+            return time
+        }
+
+        return PlanningSchedulePolicy.validatedSchedule(
+            hour: hour,
+            minute: minute,
+            calendar: calendar,
+            workHours: workHours
+        )
+    }
+
     private func appendApplyNotices(
         to reply: String,
         applyResult: PlanMutationApplier.ApplyResult
     ) -> String {
-        guard !applyResult.reusedTasks.isEmpty else { return reply }
-        let notices = applyResult.reusedTasks.map {
-            "I kept your existing task \"\($0.existingTitle)\" instead of creating \"\($0.requestedTitle)\" again."
+        var parts: [String] = []
+        if !applyResult.reusedTasks.isEmpty {
+            parts.append(contentsOf: applyResult.reusedTasks.map {
+                "I kept your existing task \"\($0.existingTitle)\" instead of creating \"\($0.requestedTitle)\" again."
+            })
         }
-        if reply.isEmpty {
-            return notices.joined(separator: " ")
+        if !applyResult.skippedReasons.isEmpty {
+            parts.append(contentsOf: applyResult.skippedReasons)
         }
-        return reply + "\n\n" + notices.joined(separator: " ")
+        guard !parts.isEmpty else { return reply }
+        let notices = parts.joined(separator: " ")
+        if reply.isEmpty { return notices }
+        return reply + "\n\n" + notices
     }
 
     public func submit(
@@ -330,49 +525,45 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         visibleThinkingStep = nil
 
         medications = context.medications
+        let isVoiceTurn = inputMode == .voice
 
-        let analysis = PlanningReasoningPipeline.analyze(message: message, context: context)
-        await animateThinking(steps: Array(analysis.thinkingSteps.prefix(3)))
+        let effectiveMessage = PlanningConversationExpander.effectiveMessage(message, history: turns)
+        let analysis = PlanningReasoningPipeline.analyze(message: effectiveMessage, context: context)
+        if !isVoiceTurn {
+            await animateThinking(steps: Array(analysis.thinkingSteps.prefix(3)))
+        }
 
         do {
             let response = try await engine.processTurn(
-                message: message,
+                message: effectiveMessage,
                 context: context,
                 history: turns,
                 preAnalysis: analysis,
-                forceAI: forceAI
+                forceAI: forceAI,
+                voiceOptimized: isVoiceTurn
             )
 
-            let extraSteps = response.thinkingSteps.filter { !analysis.thinkingSteps.contains($0) }
-            if !extraSteps.isEmpty {
-                await animateThinking(steps: extraSteps)
-            }
-
-            var applyResult = PlanMutationApplier.ApplyResult()
-            let hasMultiDayCommit = response.mutations.contains { $0.kind == .createMultiDayTask }
-            if !response.mutations.isEmpty {
-                var meds = medications
-                applyResult = await applier.apply(
-                    mutations: response.mutations,
-                    tasksVM: tasksVM,
-                    modulesVM: modulesVM,
-                    userId: userId,
-                    medications: &meds,
-                    userMessage: message,
-                    lifeProfile: context.lifeProfile
-                )
-                medications = meds
-                await refreshContext()
-                NotificationCenter.default.post(name: .taskListDidChange, object: nil)
-                if hasMultiDayCommit {
-                    multiDaySession = MultiDayPlanningSession(phase: .committed, draft: multiDayDraft)
-                    multiDayDraft = nil
-                    multiDayPlanning = nil
+            if !isVoiceTurn {
+                let extraSteps = response.thinkingSteps.filter { !analysis.thinkingSteps.contains($0) }
+                if !extraSteps.isEmpty {
+                    await animateThinking(steps: extraSteps)
                 }
             }
 
+            var displayReply = PlanningResponseParser.userFacingReply(response)
+            let hasMultiDayCommit = response.mutations.contains { $0.kind == .createMultiDayTask }
+
             recentDeltas = response.timelineDeltas
+            planVariants = response.planVariants
+            negotiationPhase = (response.planVariants?.isEmpty == false) ? .proposingVariants : .idle
             negotiation = response.negotiation?.isActive == true ? response.negotiation : nil
+            if let variants = response.planVariants, !variants.isEmpty, negotiation == nil {
+                negotiation = PlanVariantBuilder.negotiation(
+                    from: variants,
+                    question: "Pick the plan that fits best:"
+                )
+                negotiationPhase = .proposingVariants
+            }
 
             if let draft = response.multiDayDraft {
                 multiDayDraft = draft
@@ -393,8 +584,6 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 )
             }
 
-            var displayReply = PlanningResponseParser.userFacingReply(response)
-            displayReply = appendApplyNotices(to: displayReply, applyResult: applyResult)
             turns.append(PlanningConversationTurn(
                 role: .assistant,
                 text: displayReply,
@@ -402,12 +591,66 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 responseSource: response.planningSource
             ))
 
-            if inputMode == .voice {
+            if isVoiceTurn {
                 onSpeakReply?(displayReply)
             }
 
-            if applyResult.appliedCount == 0, !response.mutations.isEmpty {
-                print("[ExecutivePlanning] mutations skipped: \(applyResult.skippedReasons)")
+            if !response.mutations.isEmpty {
+                let mutations = response.mutations
+                if isVoiceTurn {
+                    Task { @MainActor in
+                        var applyResult = PlanMutationApplier.ApplyResult()
+                        var meds = self.medications
+                        applyResult = await self.applier.apply(
+                            mutations: mutations,
+                            tasksVM: tasksVM,
+                            modulesVM: modulesVM,
+                            userId: userId,
+                            medications: &meds,
+                            userMessage: message,
+                            lifeProfile: context.lifeProfile,
+                            deferReconcile: true
+                        )
+                        self.medications = meds
+                        await refreshContext()
+                        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+                        if hasMultiDayCommit {
+                            self.multiDaySession = MultiDayPlanningSession(phase: .committed, draft: self.multiDayDraft)
+                            self.multiDayDraft = nil
+                            self.multiDayPlanning = nil
+                        }
+                        if applyResult.appliedCount == 0 {
+                            print("[ExecutivePlanning] mutations skipped: \(applyResult.skippedReasons)")
+                        }
+                    }
+                } else {
+                    var applyResult = PlanMutationApplier.ApplyResult()
+                    var meds = medications
+                    applyResult = await applier.apply(
+                        mutations: mutations,
+                        tasksVM: tasksVM,
+                        modulesVM: modulesVM,
+                        userId: userId,
+                        medications: &meds,
+                        userMessage: message,
+                        lifeProfile: context.lifeProfile
+                    )
+                    medications = meds
+                    displayReply = appendApplyNotices(to: displayReply, applyResult: applyResult)
+                    if let lastIndex = turns.indices.last {
+                        turns[lastIndex].text = displayReply
+                    }
+                    await refreshContext()
+                    NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+                    if hasMultiDayCommit {
+                        multiDaySession = MultiDayPlanningSession(phase: .committed, draft: multiDayDraft)
+                        multiDayDraft = nil
+                        multiDayPlanning = nil
+                    }
+                    if applyResult.appliedCount == 0 {
+                        print("[ExecutivePlanning] mutations skipped: \(applyResult.skippedReasons)")
+                    }
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -454,7 +697,24 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 return
             }
         }
+
+        if let variantID = negotiation?.variantID(forOption: option),
+           let variant = planVariants?.first(where: { $0.id == variantID })
+            ?? contextualReplanResult?.planVariants?.first(where: { $0.id == variantID }) {
+            await applySelectedVariant(
+                variant,
+                context: context,
+                tasksVM: tasksVM,
+                modulesVM: modulesVM,
+                userId: userId,
+                refreshContext: refreshContext
+            )
+            return
+        }
+
         negotiation = nil
+        planVariants = nil
+        negotiationPhase = .idle
         await submit(
             text: option,
             startedWithVoice: inputMode == .voice,
@@ -464,6 +724,46 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             userId: userId,
             refreshContext: refreshContext
         )
+    }
+
+    public func applySelectedVariant(
+        _ variant: PlanVariant,
+        context: PlanningConversationContext,
+        tasksVM: TasksViewModel,
+        modulesVM: LifeModulesViewModel,
+        userId: String,
+        refreshContext: @escaping () async -> Void
+    ) async {
+        selectedVariantID = variant.id
+        negotiationPhase = .awaitingSelection
+        let result = PlanVariantBuilder.result(from: variant)
+        await applyReplanResult(result, tasksVM: tasksVM, modulesVM: modulesVM, userId: userId, refreshContext: refreshContext)
+        if contextualReplanTrigger == .badDay || contextualReplanTrigger == .calendarChange || contextualReplanTrigger == .travelDisruption {
+            let kind: ProactiveAction.Kind = contextualReplanTrigger == .badDay ? .badDay : .calendarChange
+            ProactiveFeedbackStore.record(kind: kind, outcome: .accepted)
+        }
+        negotiation = nil
+        planVariants = nil
+        negotiationPhase = .idle
+        selectedVariantID = nil
+        contextualReplanResult = nil
+        contextualReplanTrigger = nil
+        pendingContextualReplan = nil
+        replanSummary = variant.summary
+        turns.append(PlanningConversationTurn(role: .assistant, text: variant.summary))
+        recentDeltas = variant.timelineDeltas
+        if inputMode == .voice {
+            onSpeakReply?(variant.summary)
+        }
+    }
+
+    public func selectContextualVariant(_ variant: PlanVariant) {
+        selectedVariantID = variant.id
+        guard var result = contextualReplanResult else { return }
+        result.summary = variant.summary
+        result.scheduleChanges = variant.scheduleChanges
+        result.timelineDeltas = variant.timelineDeltas
+        contextualReplanResult = result
     }
 
     public func commitMultiDayPlan(

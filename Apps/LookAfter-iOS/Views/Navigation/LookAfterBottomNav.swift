@@ -4,6 +4,7 @@ import LookAfterCore
 enum LookAfterTab: Int, CaseIterable, Identifiable {
     case briefing
     case today
+    case review
     case brain
     case you
 
@@ -13,6 +14,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
         switch self {
         case .briefing: return "Briefing"
         case .today: return "Today"
+        case .review: return "Review"
         case .brain: return "Brain"
         case .you: return "You"
         }
@@ -22,6 +24,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
         switch self {
         case .briefing: return "doc.text"
         case .today: return "calendar"
+        case .review: return "chart.bar"
         case .brain: return "brain.head.profile"
         case .you: return "person"
         }
@@ -31,6 +34,7 @@ enum LookAfterTab: Int, CaseIterable, Identifiable {
         switch self {
         case .briefing: return "doc.text.fill"
         case .today: return "calendar"
+        case .review: return "chart.bar.fill"
         case .brain: return "brain.head.profile"
         case .you: return "person.fill"
         }
@@ -46,6 +50,7 @@ struct LookAfterBottomNav: View {
         HStack(spacing: 0) {
             tabButton(.briefing)
             tabButton(.today)
+            tabButton(.review)
             captureButton
             tabButton(.brain)
             tabButton(.you)
@@ -70,15 +75,20 @@ struct LookAfterBottomNav: View {
 
     private var captureButton: some View {
         Button(action: {
-            HapticManager.impact(.medium)
+            HapticManager.impact(.light)
             onCapture()
         }, label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.dsIconLarge())
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(DesignSystem.accentOnPrimary, DesignSystem.accentPrimary)
-                .frame(maxWidth: .infinity)
-                .offset(y: -8)
+            VStack(spacing: 4) {
+                Image(systemName: "plus.circle")
+                    .font(.dsIcon(weight: .medium))
+                    .symbolRenderingMode(.monochrome)
+                Text("Capture")
+                    .textStyleTabLabel(color: DesignSystem.textSecondary, active: false)
+                    .lineLimit(1)
+            }
+            .foregroundColor(DesignSystem.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
         })
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-capture")
@@ -120,6 +130,7 @@ struct LookAfterBottomNav: View {
         switch tab {
         case .briefing: return .tabBriefing
         case .today: return .tabToday
+        case .review: return .tabReview
         case .brain: return .tabBrain
         case .you: return .tabYou
         }

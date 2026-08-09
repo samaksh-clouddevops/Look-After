@@ -48,10 +48,17 @@ public enum DayAssembler {
             }
 
             let tag = model.commitmentID(for: commitment.title)
+            let seriesKey = "recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(commitment.title))"
             let alreadyExists = all.contains { task in
-                task.tags.contains(tag)
-                    || (normalized(task.title) == normalized(commitment.title)
-                        && task.scheduledDate.map { calendar.isDate($0, inSameDayAs: date) } == true)
+                if task.tags.contains(tag) { return true }
+                let onDay = task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } ?? true
+                if TaskScheduleQuery.seriesKey(for: task) == seriesKey,
+                   task.status.isActive || task.status == .completed,
+                   onDay {
+                    return true
+                }
+                return normalized(task.title) == normalized(commitment.title)
+                    && task.scheduledDate.map { calendar.isDate($0, inSameDayAs: date) } == true
             }
 
             if alreadyExists {

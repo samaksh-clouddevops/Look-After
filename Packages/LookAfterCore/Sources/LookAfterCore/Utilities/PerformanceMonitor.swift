@@ -52,4 +52,26 @@ public enum PerformanceMonitor {
         }
         return try await block()
     }
+
+    /// Named os_signpost interval for QA-09 benchmarks (matches `PerformanceSignposts` names in the app target).
+    @discardableResult
+    public static func signpostInterval<T>(
+        _ name: StaticString,
+        warnAfterMs: Double = frameBudgetMs,
+        _ block: () throws -> T
+    ) rethrows -> T {
+        let signpostID = OSSignpostID(log: log)
+        os_signpost(.begin, log: log, name: name, signpostID: signpostID)
+        let start = CFAbsoluteTimeGetCurrent()
+        defer {
+            let durationMs = (CFAbsoluteTimeGetCurrent() - start) * 1000
+            os_signpost(.end, log: log, name: name, signpostID: signpostID)
+            #if DEBUG
+            if durationMs > warnAfterMs {
+                print(String(format: "⚠️ [PERF] %@: %.1fms (budget %.0fms)", "\(name)", durationMs, warnAfterMs))
+            }
+            #endif
+        }
+        return try block()
+    }
 }

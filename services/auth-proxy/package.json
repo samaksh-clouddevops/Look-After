@@ -1,0 +1,29 @@
+{
+  "name": "lookafter-auth-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Look After license + GLM proxy for Azure Container Apps",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.3.0",
+    "express": "^4.21.2",
+    "firebase-admin": "^12.7.0",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

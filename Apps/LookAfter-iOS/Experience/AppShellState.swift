@@ -1,4 +1,5 @@
 import Foundation
+import os
 import LookAfterCore
 import LookAfterAI
 import LookAfterData
@@ -26,7 +27,14 @@ final class AppShellState: ObservableObject {
     @Published private(set) var factoryResetGeneration = 0
     @Published private(set) var isPerformingFactoryReset = false
     @Published private(set) var isBootstrappingFreshStart = false
+    @Published var showManualSleepSheet = false
+    @Published private(set) var proactiveActions: [ProactiveAction] = []
+    @Published private(set) var pendingCalendarChange: CalendarChangeResult?
+    @Published var pendingInitiationScript: InitiationScript?
+    @Published var showInitiationScriptSheet = false
 
+    private var deferralRecoveryObserver: NSObjectProtocol?
+    private var taskCompletedObserver: NSObjectProtocol?
     private var flowDirector: FlowDirector?
     private var flowDirectorUserName: String = ""
     private let calendarSyncService = CalendarSyncService()
@@ -58,6 +66,61 @@ final class AppShellState: ObservableObject {
             ExecutionEnvironmentCoordinator.shared.setManualFocusActive(true)
             WidgetSyncService.shared.startFocusActivity(adhdVM: self.adhdVM)
         }
+
+        deferralRecoveryObserver = NotificationCenter.default.addObserver(
+            forName: .deferralRecoveryScriptReady,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let script = DeferralRecoveryScriptStore.pending else { return }
+                self.pendingInitiationScript = script
+                self.showInitiationScriptSheet = true
+                let action = DeferralRecoveryCoordinator.shared.proactiveAction(from: script)
+                self.proactiveActions = [action] + self.proactiveActions.filter { $0.kind != .deferralRecovery }
+            }
+        }
+
+        taskCompletedObserver = NotificationCenter.default.addObserver(
+            forName: .analyticsDataDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let reason = notification.userInfo?["reason"] as? String,
+                  reason == AnalyticsDataChangeReason.taskCompleted.rawValue else { return }
+            Task { @MainActor in
+                await self?.handleTaskCompletedForProactive()
+            }
+        }
+    }
+
+    func removeProactiveAction(_ action: ProactiveAction) {
+        proactiveActions.removeAll { $0.id == action.id }
+        briefingVM.setProactiveActions(proactiveActions)
+        ProactiveSnapshotStore.save(proactiveActions)
+    }
+
+    private func handleTaskCompletedForProactive() async {
+        let completedCount = briefingVM.progress.completedCount
+        let nextTask = tasksVM.tasks.first(where: { $0.status.isActive })
+        let momentum = PostCompletionAgent.evaluate(
+            completedTodayCount: completedCount,
+            nextTask: nextTask
+        )
+        guard !momentum.isEmpty else { return }
+        proactiveActions = momentum + proactiveActions.filter { $0.kind != .postCompletionMomentum }
+        briefingVM.setProactiveActions(proactiveActions)
+        ProactiveSnapshotStore.save(proactiveActions)
+        await NotificationCoordinator.shared.refreshFromShell(self)
+    }
+
+    func recordTaskDeferral(_ task: LifeTask) async {
+        if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
+            pendingInitiationScript = script
+            showInitiationScriptSheet = true
+            let action = DeferralRecoveryCoordinator.shared.proactiveAction(from: script)
+            proactiveActions = [action] + proactiveActions.filter { $0.kind != .deferralRecovery }
+        }
     }
 
     func bootstrap(userId: String, healthSync: HealthSyncService) {
@@ -68,6 +131,34 @@ final class AppShellState: ObservableObject {
             return
         }
 
+        if bootstrappedUserId != userId {
+            bootstrapTask?.cancel()
+            bootstrapTask = nil
+            hasCompletedBootstrap = false
+            bootstrappedUserId = userId
+        }
+
+        if hasCompletedBootstrap, bootstrappedUserId == userId {
+            return
+        }
+        if let bootstrapTask, bootstrappedUserId == userId, !bootstrapTask.isCancelled {
+            return
+        }
+
+        launchSignpostID = PerformanceSignposts.beginLaunchToBriefing()
+        bootstrapTask = Task { [weak self] in
+            guard let self else { return }
+            await self.runBootstrapWork(userId: userId, healthSync: healthSync)
+            if let launchSignpostID = self.launchSignpostID {
+                PerformanceSignposts.endLaunchToBriefing(launchSignpostID)
+                self.launchSignpostID = nil
+            }
+            self.hasCompletedBootstrap = true
+            self.bootstrapTask = nil
+        }
+    }
+
+    private func runBootstrapWork(userId: String, healthSync: HealthSyncService) async {
         BackgroundAnalyticsScheduler.shared.start(userId: userId)
 
         if let aiContext = BackgroundAnalyticsService.shared.cachedAIContext(userId: userId) {
@@ -78,78 +169,113 @@ final class AppShellState: ObservableObject {
 
         inboxVM.onCreateTask = { [weak self] draft in
             guard let self else { return }
-            try await self.tasksVM.createFromInbox(draft, userId: userId)
+            _ = try await self.tasksVM.createFromInbox(draft, userId: userId)
         }
+
+        configureCaptureRouter(userId: userId)
+        LookAfterIntentBridge.shared.register(shell: self, userId: userId)
 
         if healthSync.isHealthEnabled {
             healthSync.startHealthObservers()
         }
 
-        Task {
-            await ensureFlowDirector()
+        await ensureFlowDirector()
 
-            if UserLifeProfileStore.hasCompletedOnboarding, healthSync.isHealthEnabled {
-                HealthSummaryRepository().migrateAllSummariesToCanonicalUserId()
-                await healthSync.ensureSynced(userId: userId)
-            }
+        if UserLifeProfileStore.hasCompletedOnboarding, healthSync.isHealthEnabled {
+            HealthSummaryRepository().migrateAllSummariesToCanonicalUserId()
+            await healthSync.ensureSynced(userId: userId)
+        }
 
-            async let brainLoad: Void = orchestrateBrain(userId: userId)
-            async let taskLoad: Void = tasksVM.loadTasks(userId: userId)
-            async let moduleLoad: Void = modulesVM.loadAllData(userId: userId)
-            async let inboxLoad: Void = inboxVM.loadItems(userId: userId)
-            _ = await (brainLoad, taskLoad, moduleLoad, inboxLoad)
-            await compileLifeModelIfNeeded()
-            if let lifeModel = LifeModelStore.load(), lifeModel.hasContent {
-                await tasksVM.dedupeLifeCommitmentTasks(userId: userId, model: lifeModel)
-                await tasksVM.ensureLifeCommitmentTasks(userId: userId, model: lifeModel)
-                await tasksVM.reconcileTodaySchedule(userId: userId, model: lifeModel)
-                await assembleTomorrowFromLifeModel(userId: userId)
-            } else {
-                await seedInitialTasksFromProfile(userId: userId, sections: nil)
-                await tasksVM.ensureDailyRoutineTasks(userId: userId)
-            }
+        async let brainLoad: Void = orchestrateBrain(userId: userId)
+        async let taskLoad: Void = tasksVM.loadTasks(userId: userId)
+        async let moduleLoad: Void = modulesVM.loadAllData(userId: userId)
+        async let inboxLoad: Void = inboxVM.loadItems(userId: userId)
+        _ = await (brainLoad, taskLoad, moduleLoad, inboxLoad)
+        await LookAfterIntentBridge.shared.processPendingQueue(userId: userId)
+        await compileLifeModelIfNeeded()
+        if let lifeModel = LifeModelStore.load(), lifeModel.hasContent {
+            await tasksVM.dedupeLifeCommitmentTasks(userId: userId, model: lifeModel)
+            await tasksVM.ensureLifeCommitmentTasks(userId: userId, model: lifeModel)
+            await assembleTomorrowFromLifeModel(userId: userId)
+        } else {
+            await seedInitialTasksFromProfile(userId: userId, sections: nil)
+            await tasksVM.ensureDailyRoutineTasks(userId: userId)
+        }
 
-            UserLifeProfileStore.syncUserNameFromProfileIfNeeded()
+        UserLifeProfileStore.syncUserNameFromProfileIfNeeded()
 
-            let completed = tasksVM.completedToday
-            let pending = tasksVM.tasks.filter { $0.status.isActive }
-            let focusMins = resolvedFocusMinutes(userId: userId, completed: completed)
-            brain.updateLiveProgress(
-                completedTasks: completed,
-                pendingTasks: pending,
-                focusMinutes: focusMins,
-                health: brainVM.healthSummary,
-                executiveCapacityLabel: contextOrchestrator.executiveCapacity.band.displayLabel,
-                actualFocusMinutes: focusMins
-            )
-            rebuildTimelineFromTasks()
-            WidgetSyncService.shared.sync(
-                brainVM: brainVM,
-                taskStore: taskStore,
-                healthStore: healthStore,
-                scheduleTasks: tasksVM.tasks + tasksVM.completedToday,
-                timelineEvents: timelineService.snapshot.today
-            )
-            if WidgetSyncService.shared.isNowPinned {
-                LiveActivityManager.shared.reattachNowPinIfNeeded()
-            }
-            startExecutionEnvironment()
+        let completed = tasksVM.completedToday
+        let pending = tasksVM.tasks.filter { $0.status.isActive }
+        let focusMins = resolvedFocusMinutes(userId: userId, completed: completed)
+        brain.updateLiveProgress(
+            completedTasks: completed,
+            pendingTasks: pending,
+            focusMinutes: focusMins,
+            health: brainVM.healthSummary,
+            executiveCapacityLabel: contextOrchestrator.executiveCapacity.band.displayLabel,
+            actualFocusMinutes: focusMins
+        )
+        rebuildTimelineFromTasks(immediate: true)
+        syncWidgetDataOnly()
+        if WidgetSyncService.shared.isNowPinned {
+            LiveActivityManager.shared.reattachNowPinIfNeeded()
+        }
+        startExecutionEnvironment()
 
-            await seedUITestFocusTaskIfNeeded(userId: userId)
+        await seedUITestFocusTaskIfNeeded(userId: userId)
 
-            let userName = UserLifeProfileStore.resolvedDisplayName()
-            await refreshContext(
+        let userName = UserLifeProfileStore.resolvedDisplayName()
+        await refreshContext(
+            userId: userId,
+            userName: userName,
+            peakStartHour: UserLifeProfileStore.load().peakStartHour
+        )
+        startContextLoop(userId: userId)
+
+        if UITestLaunchConfiguration.shouldAutoStartFocusSession {
+            startFocusSessionForUITestIfNeeded(userId: userId)
+        }
+
+        scheduleAppleCalendarSync()
+    }
+
+    func configureCaptureRouter(userId: String) {
+        let router = CaptureRouter.shared
+        router.onCreateTask = { [weak self] draft, inboxItemId in
+            guard let self else { throw CaptureRouterError.unavailable }
+            return try await self.tasksVM.createFromInbox(draft, userId: userId, sourceInboxItemId: inboxItemId)
+        }
+        router.onCreateScheduledTask = { [weak self] draft, scheduledAt, inboxItemId in
+            guard let self else { throw CaptureRouterError.unavailable }
+            return try await self.tasksVM.createScheduledFromCapture(
+                draft,
+                scheduledAt: scheduledAt,
                 userId: userId,
-                userName: userName,
-                peakStartHour: UserLifeProfileStore.load().peakStartHour
+                sourceInboxItemId: inboxItemId
             )
-            startContextLoop(userId: userId)
-
-            if UITestLaunchConfiguration.shouldAutoStartFocusSession {
-                startFocusSessionForUITestIfNeeded(userId: userId)
-            }
-
-            scheduleAppleCalendarSync()
+        }
+        router.onJournalEntry = { [weak self] content, mood in
+            guard let self else { throw CaptureRouterError.unavailable }
+            await self.modulesVM.addJournalEntry(content: content, mood: mood, gratitudes: [])
+            return self.modulesVM.journalEntries.first?.id ?? UUID().uuidString
+        }
+        router.onHealthLog = { [weak self] mood, note, uid in
+            guard let self else { throw CaptureRouterError.unavailable }
+            let energy: EnergyLevel = mood == "Low" ? .low : (mood == "Good" || mood == "Great" ? .high : .moderate)
+            await self.brainVM.logEnergyReport(energy: energy, focusNote: note, userId: uid)
+        }
+        router.onInboxItemsChanged = { [weak self] in
+            guard let self else { return }
+            await self.inboxVM.loadItems(userId: userId)
+            self.refreshWidgetData()
+        }
+        CaptureOfflineQueue.shared.onConnectivityRestored = { [weak self] uid in
+            guard let self else { return }
+            await self.inboxVM.processOfflineCaptureQueue(userId: uid)
+            self.refreshWidgetData()
+        }
+        Task {
+            await inboxVM.processOfflineCaptureQueue(userId: userId)
         }
     }
 
@@ -289,6 +415,45 @@ final class AppShellState: ObservableObject {
         _ = await compileAndSaveLifeModel(markdown: profileText)
     }
 
+    /// Materializes starter tasks from profile + compiled life model for onboarding review.
+    func materializeStarterTasks(
+        userId: String,
+        sections: StructuredLifeProfileSections? = nil
+    ) async {
+        let resolvedUserId = resolvedUserId(userId)
+        guard !resolvedUserId.isEmpty else { return }
+
+        var profile = UserLifeProfileStore.load()
+        ProfileScheduleSync.enrichFixedScheduleNotes(profile: &profile, sections: sections)
+        UserLifeProfileStore.save(profile)
+
+        let profileText = profile.profileText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !profileText.isEmpty, !LifeModelStore.hasCompiledModel {
+            _ = await compileAndSaveLifeModel(markdown: profileText)
+        }
+
+        await tasksVM.removeOnboardingSeededTasks(userId: resolvedUserId)
+        profile.hasSeededInitialTasks = false
+        UserLifeProfileStore.save(profile)
+
+        if let model = LifeModelStore.load(), model.hasContent {
+            await tasksVM.ensureLifeCommitmentTasks(userId: resolvedUserId, model: model)
+        } else {
+            await seedInitialTasksFromProfile(userId: resolvedUserId, sections: sections)
+        }
+
+        profile = UserLifeProfileStore.load()
+        profile.hasSeededInitialTasks = true
+        UserLifeProfileStore.save(profile)
+
+        await refreshContext(
+            userId: resolvedUserId,
+            userName: UserLifeProfileStore.resolvedDisplayName(),
+            peakStartHour: UserLifeProfileStore.load().peakStartHour
+        )
+        refreshWidgetData()
+    }
+
     /// Re-reads the life profile and recreates onboarding starter tasks (e.g. after Organize with AI).
     func refreshTasksFromProfile(
         userId: String,
@@ -331,6 +496,15 @@ final class AppShellState: ObservableObject {
     private var pendingContextRefresh: PendingContextRefresh?
     private var didForceInitialTaskSync = false
 
+    private var bootstrapTask: Task<Void, Never>?
+    private var bootstrappedUserId: String?
+    private var hasCompletedBootstrap = false
+    private var launchSignpostID: OSSignpostID?
+
+    private var timelineRebuildTask: Task<Void, Never>?
+    private var syncWidgetsAfterDebouncedRebuild = false
+    private static let timelineRebuildDebounceNs: UInt64 = 75_000_000
+
     /// Keeps brain/timeline fresh while the app is open. Capacity stays deterministic — no LLM polling.
     /// Performance: skips ticks while a refresh is already running or a focus session is active.
     func startContextLoop(userId: String) {
@@ -355,8 +529,27 @@ final class AppShellState: ObservableObject {
         }
     }
 
-    func refreshWidgetData() {
-        rebuildTimelineFromTasks()
+    func requestDebouncedTimelineRebuild(reason: String = "") {
+        rebuildTimelineFromTasks(immediate: false)
+    }
+
+    func refreshWidgetData(rebuildTimeline: Bool = true, immediateTimelineRebuild: Bool = false) {
+        if rebuildTimeline {
+            if immediateTimelineRebuild {
+                rebuildTimelineFromTasks(immediate: true)
+                syncWidgetDataOnly()
+                syncExecutionEnvironment()
+            } else {
+                syncWidgetsAfterDebouncedRebuild = true
+                rebuildTimelineFromTasks(immediate: false)
+            }
+        } else {
+            syncWidgetDataOnly()
+            syncExecutionEnvironment()
+        }
+    }
+
+    private func syncWidgetDataOnly() {
         WidgetSyncService.shared.sync(
             brainVM: brainVM,
             taskStore: taskStore,
@@ -364,12 +557,11 @@ final class AppShellState: ObservableObject {
             scheduleTasks: tasksVM.tasks + tasksVM.completedToday,
             timelineEvents: timelineService.snapshot.today
         )
-        syncExecutionEnvironment()
     }
 
     func refreshPinNow() {
         guard WidgetSyncService.shared.isNowPinned else { return }
-        rebuildTimelineFromTasks()
+        rebuildTimelineFromTasks(immediate: true)
         Task {
             await WidgetSyncService.shared.refreshPinNow(
                 brainVM: brainVM,
@@ -442,7 +634,9 @@ final class AppShellState: ObservableObject {
             return
         }
         isContextRefreshInFlight = true
+        let contextSignpost = PerformanceSignposts.beginContextRefresh()
         defer {
+            PerformanceSignposts.endContextRefresh(contextSignpost)
             isContextRefreshInFlight = false
             if let pending = pendingContextRefresh {
                 pendingContextRefresh = nil
@@ -463,21 +657,67 @@ final class AppShellState: ObservableObject {
         await tasksVM.compactTaskStorageIfNeeded(userId: uid)
         let forceTaskSync = !didForceInitialTaskSync
         didForceInitialTaskSync = true
-        await tasksVM.syncRecurringSchedule(userId: uid, force: forceTaskSync)
+        await tasksVM.syncScheduleAndReconcileToday(
+            userId: uid,
+            forceRecurrenceSync: true,
+            localRecurrenceOnly: !forceTaskSync
+        )
         await healthStore.refresh(userId: uid)
         await orchestrateBrain(userId: uid)
+        rebuildTimelineFromTasks(immediate: true)
+        await projectBriefingSurface(
+            userId: uid,
+            resolvedName: resolvedName,
+            peakHour: peakHour,
+            capacityLLMPolicy: capacityLLMPolicy
+        )
+    }
+
+    /// Read-mostly briefing refresh — updates hero, health, and brain presentation without schedule reconcile.
+    func refreshBriefingSurface(
+        userId: String,
+        userName: String = "",
+        peakStartHour: Int = 9,
+        capacityLLMPolicy: ExecutiveCapacityLLMPolicy = .deterministicOnly,
+        refreshHealth: Bool = true
+    ) async {
+        guard !isPerformingFactoryReset else { return }
+        accountIdentity.refresh()
+        let uid = resolvedUserId(userId)
+        guard !uid.isEmpty else { return }
+        let resolvedName = userName.isEmpty ? ProfileCoordinator.displayName : userName
+        let peakHour = peakStartHour > 0 ? peakStartHour : ProfileCoordinator.peakStartHour
+        if refreshHealth {
+            await healthStore.refresh(userId: uid)
+        }
+        await orchestrateBrain(userId: uid)
+        await projectBriefingSurface(
+            userId: uid,
+            resolvedName: resolvedName,
+            peakHour: peakHour,
+            capacityLLMPolicy: capacityLLMPolicy
+        )
+    }
+
+    /// Syncs in-memory task state, reconciles overlaps, and rebuilds timeline after AI reschedule apply.
+    func syncScheduleAfterRescheduleApply(userId: String) async {
+        let uid = resolvedUserId(userId)
+        guard !uid.isEmpty else { return }
+        tasksVM.syncFromTaskStore()
+        await tasksVM.reconcileTodaySchedule(userId: uid)
+        rebuildTimelineFromTasks(immediate: true)
+        refreshWidgetData(rebuildTimeline: false)
+    }
+
+    private func projectBriefingSurface(
+        userId uid: String,
+        resolvedName: String,
+        peakHour: Int,
+        capacityLLMPolicy: ExecutiveCapacityLLMPolicy
+    ) async {
         let shoppingCount = modulesVM.shoppingItems.filter { !$0.isPurchased }.count
         let bills = modulesVM.bills.filter { !$0.isPaid }
         let medications = MedicationStore.load()
-        timelineService.rebuild(
-            tasks: tasksVM.tasks,
-            completedToday: tasksVM.completedToday,
-            recurrenceTemplates: tasksVM.recurrenceTemplates,
-            bills: modulesVM.bills,
-            shoppingItems: modulesVM.shoppingItems,
-            contacts: modulesVM.contacts,
-            medications: medications
-        )
         let lifeEvents = timelineService.snapshot.today
         let tomorrowEvents = timelineService.snapshot.tomorrow
         let timeline = lifeEvents
@@ -543,7 +783,9 @@ final class AppShellState: ObservableObject {
             lifeTimelineEvents: timelineService.snapshot.today,
             tomorrowLifeTimelineEvents: timelineService.snapshot.tomorrow
         )
-        refreshWidgetData()
+        await refreshProactiveActions(userId: uid)
+        refreshWidgetData(rebuildTimeline: false)
+        evaluateManualSleepPrompt()
 
         brainVM.applyPresentation(
             BriefingProjector.project(
@@ -570,7 +812,7 @@ final class AppShellState: ObservableObject {
 
         let completed = tasksVM.completedToday
         let pending = tasksVM.tasks.filter { $0.status.isActive }
-        let focusMins = resolvedFocusMinutes(userId: userId, completed: completed)
+        let focusMins = resolvedFocusMinutes(userId: uid, completed: completed)
         brain.updateLiveProgress(
             completedTasks: completed,
             pendingTasks: pending,
@@ -598,7 +840,28 @@ final class AppShellState: ObservableObject {
     }
 
     /// Rebuilds timeline snapshot from in-memory task state (no network / recurrence sync).
-    func rebuildTimelineFromTasks() {
+    func rebuildTimelineFromTasks(immediate: Bool = false) {
+        if immediate {
+            timelineRebuildTask?.cancel()
+            timelineRebuildTask = nil
+            performTimelineRebuild()
+            return
+        }
+        timelineRebuildTask?.cancel()
+        timelineRebuildTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.timelineRebuildDebounceNs)
+            guard !Task.isCancelled, let self else { return }
+            self.performTimelineRebuild()
+            if self.syncWidgetsAfterDebouncedRebuild {
+                self.syncWidgetsAfterDebouncedRebuild = false
+                self.syncWidgetDataOnly()
+                self.syncExecutionEnvironment()
+            }
+            self.timelineRebuildTask = nil
+        }
+    }
+
+    private func performTimelineRebuild() {
         timelineService.rebuild(
             tasks: tasksVM.tasks,
             completedToday: tasksVM.completedToday,
@@ -608,13 +871,109 @@ final class AppShellState: ObservableObject {
             contacts: modulesVM.contacts,
             medications: MedicationStore.load()
         )
+        if let change = CalendarChangeDetector.evaluate(timelineEvents: timelineService.snapshot.today) {
+            pendingCalendarChange = change
+        }
+    }
+
+    func refreshProactiveActions(userId: String) async {
+        let uid = resolvedUserId(userId)
+        guard !uid.isEmpty else { return }
+
+        let heroTask = brainVM.flowSurface?.heroTask
+            ?? brainVM.topTasks.first
+            ?? tasksVM.tasks.first(where: { $0.status.isActive })
+        let behavior = await ProactiveActionsBuilder.loadBehaviorMemory()
+        let captureEdges = await ProactiveActionsBuilder.loadCaptureGraphEdges()
+        let analytics = BackgroundAnalyticsService.shared.cachedAIContext(userId: uid)
+        let elapsedMinutes = adhdVM.isFocusSessionActive
+            ? max(0, Int(adhdVM.focusSessionElapsed / 60))
+            : 0
+
+        let snapshot = ProactiveActionsBuilder.ShellSnapshot(
+            tasks: tasksVM.schedulingContext,
+            timelineEvents: timelineService.snapshot.today,
+            inboxItems: inboxVM.items,
+            memoryEntries: modulesVM.memoryEntries,
+            contacts: modulesVM.contacts,
+            heroTask: heroTask,
+            focusSessionActive: adhdVM.isFocusSessionActive,
+            focusSessionElapsedMinutes: elapsedMinutes,
+            focusTaskTitle: adhdVM.currentFocusTask?.title,
+            capacityBand: contextOrchestrator.executiveCapacity.band,
+            energyPercent: briefingVM.energy.currentEnergyPercent,
+            completedTodayCount: briefingVM.progress.completedCount,
+            analyticsContext: analytics,
+            behaviorMemory: behavior,
+            calendarChange: pendingCalendarChange,
+            bills: modulesVM.bills,
+            shoppingItems: modulesVM.shoppingItems,
+            medications: MedicationStore.load(),
+            sleepHours: brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60.0 },
+            captureGraphEdges: captureEdges
+        )
+        proactiveActions = ProactiveActionsBuilder.analyze(snapshot: snapshot)
+        let integrationActions = await IntegrationProactiveBridge.emailAndTravelActions(
+            timelineEvents: timelineService.snapshot.today
+        )
+        proactiveActions = integrationActions + proactiveActions
+        storeAutoApplyPreviewTimeouts()
+        await emitExpiredPreviewConfirmationIfNeeded()
+        ProactiveSnapshotStore.save(proactiveActions)
+        briefingVM.setProactiveActions(proactiveActions)
+        for action in proactiveActions where action.kind == .initiationBridge {
+            AccountabilityScheduler.scheduleIfEnabled(for: action)
+        }
+    }
+
+    private func storeAutoApplyPreviewTimeouts() {
+        for action in proactiveActions where action.surface == .autoApplyPreview {
+            if let bundle = ProactiveActionBundleCodec.decode(from: action) {
+                ProactivePreviewTimeoutStore.save(
+                    action: action,
+                    bundle: bundle,
+                    expiresAt: Date().addingTimeInterval(15 * 60)
+                )
+            }
+        }
+    }
+
+    private func emitExpiredPreviewConfirmationIfNeeded() async {
+        guard let pending = ProactivePreviewTimeoutStore.load(), pending.expiresAt <= Date() else { return }
+        ProactivePreviewTimeoutStore.clear()
+        guard NotificationPermissionService.shared.isAuthorized else { return }
+        let candidate = NotificationCandidate(
+            id: NotificationIdentifier.proactive(.brainHero, suffix: "previewConfirm.\(pending.actionID)"),
+            kind: .brainHero,
+            title: "Replan ready",
+            body: "Your calendar change preview expired — tap to confirm before applying.",
+            fireDate: Date().addingTimeInterval(30),
+            route: .today,
+            proactiveKind: pending.kind
+        )
+        await NotificationScheduler.shared.scheduleSnooze(for: candidate, fireDate: candidate.fireDate)
+    }
+
+    func clearPendingCalendarChange() {
+        pendingCalendarChange = nil
+    }
+
+    private func resetBootstrapAndTimelineCoordinators() {
+        bootstrapTask?.cancel()
+        bootstrapTask = nil
+        bootstrappedUserId = nil
+        hasCompletedBootstrap = false
+        launchSignpostID = nil
+        timelineRebuildTask?.cancel()
+        timelineRebuildTask = nil
+        syncWidgetsAfterDebouncedRebuild = false
     }
 
     private var healthKitEnabled: Bool {
         (UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true) && HealthManager().isAvailable
     }
 
-    /// Erases every persisted layer and reboots the app like a fresh install (API keys preserved).
+    /// Erases every persisted layer and reboots the app like a fresh install (account and license preserved).
     func performFactoryReset(userId: String, healthSync: HealthSyncService) async {
         isPerformingFactoryReset = true
         contextLoopTask?.cancel()
@@ -628,11 +987,12 @@ final class AppShellState: ObservableObject {
         stopExecutionEnvironment()
         LiveActivityManager.shared.endAllActivities()
         await NotificationCoordinator.shared.resetForFactoryReset()
-        refreshWidgetData()
+        refreshWidgetData(immediateTimelineRebuild: true)
         factoryResetGeneration += 1
 
         await FactoryResetManager.shared.resetCloudIfAvailable()
         await bootstrapFreshStart(userId: userId, healthSync: healthSync)
+        FactoryResetManager.shared.finishFreshInstall()
         isPerformingFactoryReset = false
     }
 
@@ -668,7 +1028,7 @@ final class AppShellState: ObservableObject {
             executiveCapacityLabel: contextOrchestrator.executiveCapacity.band.displayLabel,
             actualFocusMinutes: focusMins
         )
-        refreshWidgetData()
+        refreshWidgetData(immediateTimelineRebuild: true)
         startExecutionEnvironment()
 
         UserLifeProfileStore.syncUserNameFromProfileIfNeeded()
@@ -683,6 +1043,7 @@ final class AppShellState: ObservableObject {
     }
 
     private func clearInMemoryState(userId: String) {
+        resetBootstrapAndTimelineCoordinators()
         brainVM.resetForFactoryReset()
         contextOrchestrator.resetInMemoryState()
         tasksVM.tasks = []
@@ -692,10 +1053,42 @@ final class AppShellState: ObservableObject {
         briefingVM.resetAfterDeveloperWipe()
         adhdVM.endFocusSession()
         continueSession.endSession()
+        timelineService.factoryReset()
         flowDirector = nil
         flowDirectorUserName = ""
         ResumeEngine.shared.clear(userId: userId)
         PostWakeSessionStore.resetForFactoryReset()
+        UserDayConstraintStore.resetForFactoryReset()
+        ManualSleepLogStore.resetForFactoryReset()
+        CalendarChangeDetector.resetFingerprint()
+        AppForegroundTracker.reset()
+        proactiveActions = []
+        pendingCalendarChange = nil
+    }
+
+    func evaluateManualSleepPrompt() {
+        guard !isPerformingFactoryReset else { return }
+        showManualSleepSheet = ManualSleepLogStore.shouldPrompt(
+            healthSummary: brainVM.rawHealthSummary ?? brainVM.healthSummary
+        )
+    }
+
+    func submitManualSleep(_ rating: ManualSleepRating, userId: String) async {
+        ManualSleepLogStore.save(rating: rating)
+        showManualSleepSheet = false
+        let name = UserLifeProfileStore.resolvedDisplayName()
+        let peak = UserLifeProfileStore.load().peakStartHour
+        await refreshContext(
+            userId: userId,
+            userName: name,
+            peakStartHour: peak,
+            capacityLLMPolicy: .deterministicOnly
+        )
+    }
+
+    func dismissManualSleepPromptForToday() {
+        ManualSleepLogStore.dismissForToday()
+        showManualSleepSheet = false
     }
 
     func persistResume(

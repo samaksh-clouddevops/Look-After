@@ -15,7 +15,11 @@ struct TodayEndOfDayJournalCard: View {
     @FocusState private var isFieldFocused: Bool
 
     private var recentCalibrations: [UserCalibrationEntry] {
-        Array(UserCalibrationStore.load().prefix(3))
+        Array(
+            UserCalibrationStore.load()
+                .filter { !$0.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .prefix(3)
+        )
     }
 
     private var completedToday: [LifeTask] { tasksVM.completedToday }
@@ -120,7 +124,7 @@ struct TodayEndOfDayJournalCard: View {
                     text: $entryText,
                     axis: .vertical
                 )
-                .lineLimit(3...5)
+                .lineLimit(3...8)
                 .font(.system(size: 14))
                 .foregroundColor(DesignSystem.textPrimary)
                 .focused($isFieldFocused)
@@ -258,6 +262,10 @@ struct TodayEndOfDayJournalCard: View {
                 tier: .economy
             ) {
                 let trimmed = JournalCalibrationSanitizer.plainText(from: calibration)
+                guard !trimmed.isEmpty else {
+                    isProcessingAI = false
+                    return
+                }
                 UserCalibrationStore.append(summary: trimmed, source: .journal, rawInput: text)
                 calibrationBadge = trimmed
                 HapticManager.notification(.success)

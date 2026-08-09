@@ -57,6 +57,70 @@ final class DailyBriefingViewModelTests: XCTestCase {
         XCTAssertEqual(vm.progress.completedCount, 1)
     }
 
+    func testRefreshBuildsLiveHealthSnapshotWithoutOvernightSleep() async {
+        let vm = DailyBriefingViewModel()
+        let brain = ExecutiveBrain(glmService: mockGLMService())
+        let brainVM = BrainViewModel(brain: brain)
+        let tasksVM = TasksViewModel(decomposer: TaskDecomposer(glmService: mockGLMService()))
+
+        brainVM.cognitiveSnapshot = CognitiveSnapshot(
+            energy: .high,
+            energyScore: 0.78,
+            recoveryScore: 0.62,
+            executiveFunctionScore: 74
+        )
+
+        await vm.refresh(
+            brainVM: brainVM,
+            tasksVM: tasksVM,
+            userId: "user-1",
+            userName: "Alex",
+            healthKitAvailable: false
+        )
+
+        XCTAssertFalse(vm.healthSnapshot.hasOvernightHealthSignal)
+        XCTAssertEqual(vm.healthSnapshot.energyPercent, 78)
+        XCTAssertEqual(vm.healthSnapshot.recoveryPercent, 62)
+        XCTAssertEqual(vm.healthSnapshot.readinessScore, 74)
+    }
+
+    func testRefreshTaskProgressRebuildsHealthSnapshot() async {
+        let vm = DailyBriefingViewModel()
+        let brain = ExecutiveBrain(glmService: mockGLMService())
+        let brainVM = BrainViewModel(brain: brain)
+        let tasksVM = TasksViewModel(decomposer: TaskDecomposer(glmService: mockGLMService()))
+
+        brainVM.cognitiveSnapshot = CognitiveSnapshot(
+            energyScore: 0.55,
+            recoveryScore: 0.48,
+            executiveFunctionScore: 58
+        )
+
+        await vm.refresh(
+            brainVM: brainVM,
+            tasksVM: tasksVM,
+            userId: "user-1",
+            userName: "Alex",
+            healthKitAvailable: false
+        )
+        XCTAssertEqual(vm.healthSnapshot.readinessScore, 58)
+
+        brainVM.cognitiveSnapshot = CognitiveSnapshot(
+            energyScore: 0.82,
+            recoveryScore: 0.71,
+            executiveFunctionScore: 85
+        )
+        vm.refreshTaskProgress(
+            brainVM: brainVM,
+            tasksVM: tasksVM,
+            healthKitAvailable: false
+        )
+
+        XCTAssertEqual(vm.healthSnapshot.readinessScore, 85)
+        XCTAssertEqual(vm.healthSnapshot.energyPercent, 82)
+        XCTAssertEqual(vm.healthSnapshot.recoveryPercent, 71)
+    }
+
     func testGreetingDoesNotDuplicateUserNameWhenHeroBriefingIncludesName() async {
         let vm = DailyBriefingViewModel()
         let brain = ExecutiveBrain(glmService: mockGLMService())

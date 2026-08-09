@@ -2,54 +2,83 @@ import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
 
-/// Interactive timeline block — constraint physics, haptics, and a11y mutations.
+/// Interactive timeline block — long-press to lift, then drag to reschedule.
 /// Business rules live in `TimelineConstraintViewModel`; this view only renders + routes intents.
 struct LifeBlockView<Content: View>: View {
     let taskID: String
     let constraint: TimeConstraint
+    let baselineStart: Date?
     let isEnabled: Bool
-    @ObservedObject var viewModel: TimelineConstraintViewModel
+    let viewModel: TimelineConstraintViewModel
+    let dragCoordinator: TimelineDragCoordinator
     @Binding var scrollDisabled: Bool
     let content: Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var verticalOffset: CGFloat = 0
     @State private var horizontalOffset: CGFloat = 0
-    @State private var isDraggingVertically = false
+    @State private var isLifted = false
     @State private var lastDragSample: (time: Date, y: CGFloat)?
+    @State private var lastDragTextureAt: Date?
     @State private var didFireRubberBand = false
     @State private var thresholdPulse = false
+    @State private var lastSnappedMinute: Int?
 
     private let engine = InteractionEngine.shared
     private let swipeThreshold = TimeConstraintPhysics.swipeThreshold
+    private let dragTextureInterval: TimeInterval = 0.07
+    private let longPressDuration: Double = 0.25
 
     init(
         taskID: String,
         constraint: TimeConstraint,
+        baselineStart: Date? = nil,
         isEnabled: Bool = true,
         viewModel: TimelineConstraintViewModel,
+        dragCoordinator: TimelineDragCoordinator,
         scrollDisabled: Binding<Bool>,
         @ViewBuilder content: () -> Content
     ) {
         self.taskID = taskID
         self.constraint = constraint
+        self.baselineStart = baselineStart
         self.isEnabled = isEnabled
         self.viewModel = viewModel
+        self.dragCoordinator = dragCoordinator
         self._scrollDisabled = scrollDisabled
         self.content = content()
     }
 
     var body: some View {
-        content
+        blockContent
             .offset(x: horizontalOffset, y: verticalOffset)
-            .modifier(FluidDragVisualEffect(
-                active: isDraggingVertically && constraint == .fluid && !reduceMotion
-            ))
-            // `.subviews` lets double-tap on the card reach EventTimelineCard; drag still wins on movement.
-            .highPriorityGesture(dragGesture, including: .subviews)
+            .scaleEffect(isLifted ? 1.03 : 1)
+            .shadow(
+                color: isLifted ? DesignSystem.shadowElevated.opacity(0.28) : .clear,
+                radius: isLifted ? 16 : 0,
+                y: isLifted ? 8 : 0
+            )
+            .zIndex(isLifted ? 2 : 0)
+            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.82), value: isLifted)
+            .background {
+                if isLifted {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: TimelineDragAnchorKey.self,
+                            value: proxy.frame(in: .named("timelineScroll")).midY + verticalOffset
+                        )
+                    }
+                }
+            }
+            .environment(\.timelineBlockIsDragging, isLifted)
             .sensoryFeedback(.impact(weight: .heavy), trigger: thresholdPulse)
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
             .accessibilityValue(constraint.accessibilityDescription)
+            .accessibilityHint(accessibilityHintText)
+            .accessibilityAction(named: "Pick up to reschedule") {
+                guard constraint.isSchedulerMovable else { return }
+                pickUpForAccessibility()
+            }
             .accessibilityAction(named: "Anchor Task") {
                 viewModel.handle(.setConstraint(taskID: taskID, .anchored))
                 thresholdPulse.toggle()
@@ -64,35 +93,90 @@ struct LifeBlockView<Content: View>: View {
             }
     }
 
-    // MARK: - Gesture
-
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .local)
-            .onChanged(handleDragChanged)
-            .onEnded(handleDragEnded)
+    private var accessibilityHintText: String {
+        if constraint.isSchedulerMovable {
+            return "Press and hold, then drag up or down to change the start time."
+        }
+        return "Press and hold for a rubber-band preview. This task is anchored."
     }
 
-    private func handleDragChanged(_ value: DragGesture.Value) {
+    @ViewBuilder
+    private var blockContent: some View {
+        if isEnabled {
+            content.gesture(liftAndDragGesture)
+        } else {
+            content
+        }
+    }
+
+    // MARK: - Gesture
+
+    private var liftAndDragGesture: some Gesture {
+        LongPressGesture(minimumDuration: longPressDuration)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .onChanged(handleLiftAndDragChanged)
+            .onEnded(handleLiftAndDragEnded)
+    }
+
+    private func handleLiftAndDragChanged(_ value: SequenceGesture<LongPressGesture, DragGesture>.Value) {
+        switch value {
+        case .second(true, let drag?):
+            if !isLifted {
+                beginLiftSession()
+            }
+            applyDrag(drag)
+        default:
+            break
+        }
+    }
+
+    private func handleLiftAndDragEnded(_ value: SequenceGesture<LongPressGesture, DragGesture>.Value) {
+        switch value {
+        case .second(true, let drag?):
+            finishDrag(drag)
+        default:
+            cancelLift()
+        }
+    }
+
+    private func beginLiftSession() {
+        isLifted = true
+        scrollDisabled = true
+        engine.prepare()
+        engine.constraintChanged(to: constraint)
+        viewModel.handle(.beginVerticalDrag(taskID: taskID))
+        let duration = viewModel.proposedDragDurationMinutes
+            ?? TaskDurationPolicy.minimumMinutes
+        dragCoordinator.begin(taskID: taskID, durationMinutes: duration)
+    }
+
+    private func cancelLift() {
+        guard isLifted else { return }
+        isLifted = false
+        scrollDisabled = false
+        verticalOffset = 0
+        horizontalOffset = 0
+        viewModel.handle(.endVerticalDrag)
+        dragCoordinator.end()
+        didFireRubberBand = false
+        lastDragSample = nil
+        lastDragTextureAt = nil
+        lastSnappedMinute = nil
+    }
+
+    private func applyDrag(_ value: DragGesture.Value) {
         let dx = value.translation.width
         let dy = value.translation.height
-        let dominantHorizontal = abs(dx) > abs(dy)
+        let velocityY = sampleVerticalVelocity(currentY: value.location.y)
+        fireDragTextureIfNeeded(velocity: Double(velocityY))
 
-        if dominantHorizontal {
-            // Soft horizontal preview while deciding mutation.
+        if abs(dx) > abs(dy), abs(dx) > 12 {
             horizontalOffset = dx * 0.35
             verticalOffset = 0
-            if isDraggingVertically {
-                endVerticalSession(commit: false)
-            }
             return
         }
 
-        if !isDraggingVertically {
-            beginVerticalSession()
-        }
-
-        let velocityY = sampleVerticalVelocity(currentY: value.location.y)
-        engine.dragTexture(velocity: Double(velocityY), constraint: constraint)
+        horizontalOffset = 0
 
         switch constraint {
         case .anchored:
@@ -105,10 +189,12 @@ struct LifeBlockView<Content: View>: View {
             }
         case .flexible, .fluid:
             verticalOffset = dy
+            publishDragPreview()
+            fireSnapHapticIfNeeded()
         }
     }
 
-    private func handleDragEnded(_ value: DragGesture.Value) {
+    private func finishDrag(_ value: DragGesture.Value) {
         let dx = value.translation.width
         let dy = value.translation.height
 
@@ -122,33 +208,67 @@ struct LifeBlockView<Content: View>: View {
             thresholdPulse.toggle()
         }
 
-        if isDraggingVertically {
-            // ~ minute snap from pt offset (48pt ≈ 15 min heuristics).
-            let minutes = Int((verticalOffset / 3.2).rounded())
-            endVerticalSession(commit: constraint != .anchored, offsetMinutes: minutes)
+        if isLifted, constraint.isSchedulerMovable {
+            commitLiftedDrag()
         }
 
         withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82)) {
-            horizontalOffset = 0
             verticalOffset = 0
+            horizontalOffset = 0
+            isLifted = false
         }
-        didFireRubberBand = false
-        lastDragSample = nil
-    }
-
-    private func beginVerticalSession() {
-        isDraggingVertically = true
-        scrollDisabled = true
-        engine.prepare()
-        viewModel.handle(.beginVerticalDrag(taskID: taskID))
-    }
-
-    private func endVerticalSession(commit: Bool, offsetMinutes: Int = 0) {
-        isDraggingVertically = false
         scrollDisabled = false
         viewModel.handle(.endVerticalDrag)
-        if commit, offsetMinutes != 0 {
-            viewModel.handle(.commitVerticalOffset(taskID: taskID, offsetMinutes: offsetMinutes))
+        dragCoordinator.end()
+        didFireRubberBand = false
+        lastDragSample = nil
+        lastDragTextureAt = nil
+        lastSnappedMinute = nil
+    }
+
+    private func commitLiftedDrag() {
+        if let baseline = baselineStart {
+            let proposed = TimelineDragTimeMapping.proposedStart(
+                baseline: baseline,
+                verticalOffset: verticalOffset
+            )
+            viewModel.handle(.commitVerticalDrag(taskID: taskID, proposedStart: proposed))
+        } else {
+            let minutes = TimelineDragTimeMapping.offsetMinutes(from: verticalOffset)
+            if minutes != 0 {
+                viewModel.handle(.commitVerticalOffset(taskID: taskID, offsetMinutes: minutes))
+            }
+        }
+    }
+
+    private func pickUpForAccessibility() {
+        guard !isLifted else { return }
+        beginLiftSession()
+    }
+
+    private func publishDragPreview() {
+        guard let baseline = baselineStart else { return }
+        let proposed = TimelineDragTimeMapping.proposedStart(
+            baseline: baseline,
+            verticalOffset: verticalOffset
+        )
+        dragCoordinator.updatePreview(proposedStart: proposed, anchorY: nil)
+    }
+
+    private func fireDragTextureIfNeeded(velocity: Double) {
+        let now = Date()
+        if let last = lastDragTextureAt, now.timeIntervalSince(last) < dragTextureInterval {
+            return
+        }
+        lastDragTextureAt = now
+        engine.dragTexture(velocity: velocity, constraint: constraint)
+    }
+
+    private func fireSnapHapticIfNeeded() {
+        let snapped = TimelineDragTimeMapping.offsetMinutes(from: verticalOffset)
+        if lastSnappedMinute != snapped {
+            lastSnappedMinute = snapped
+            engine.scheduleSnapBoundary()
         }
     }
 
@@ -162,16 +282,26 @@ struct LifeBlockView<Content: View>: View {
     }
 }
 
-// MARK: - Fluid visual
+/// Suppresses card tap-to-expand while a timeline block is being dragged.
+private struct TimelineBlockIsDraggingKey: EnvironmentKey {
+    static let defaultValue = false
+}
 
-/// iOS 17 visual effect: dim + slightly scale while a fluid block is dragged.
-private struct FluidDragVisualEffect: ViewModifier {
-    let active: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(active ? TimeConstraintPhysics.fluidDragOpacity : 1)
-            .scaleEffect(active ? TimeConstraintPhysics.fluidDragScale : 1)
-            .animation(active ? .interactiveSpring(response: 0.2, dampingFraction: 0.85) : .easeOut(duration: 0.2), value: active)
+extension EnvironmentValues {
+    var timelineBlockIsDragging: Bool {
+        get { self[TimelineBlockIsDraggingKey.self] }
+        set { self[TimelineBlockIsDraggingKey.self] = newValue }
     }
 }
+
+/// Global Y anchor for the active drag — consumed by `TimelineDragTimeMeter`.
+struct TimelineDragAnchorKey: PreferenceKey {
+    static var defaultValue: CGFloat?
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        if let next = nextValue() {
+            value = next
+        }
+    }
+}
+
+/// Global Y anchor for the active drag — consumed by `TimelineDragTimeMeter`.

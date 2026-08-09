@@ -175,8 +175,63 @@ public final class FirebaseManager: ObservableObject {
         userEmail = nil
         UserDefaults.standard.removeObject(forKey: "saved_user_uid")
         UserDefaults.standard.removeObject(forKey: "userEmail")
+        LicenseManager.shared.clearLocalLicense()
     }
-    
+
+    /// Firebase ID token for Azure auth-proxy calls.
+    public func idToken(forceRefresh: Bool = false) async throws -> String? {
+        guard FirebaseApp.app() != nil, let user = Auth.auth().currentUser else { return nil }
+        return try await user.getIDToken(forcingRefresh: forceRefresh)
+    }
+
+    /// Sign in with Apple (AuthenticationServices → Firebase).
+    public func signInWithApple() async throws {
+        guard FirebaseApp.app() != nil else {
+            throw FirebaseManagerError.ssoFailed("Firebase is not configured")
+        }
+        let coordinator = AppleSignInCoordinator()
+        let credential = try await coordinator.signIn()
+        let result = try await Auth.auth().signIn(with: credential)
+        applyAuthenticatedUser(result.user)
+        if let fullName = result.user.displayName, !fullName.isEmpty {
+            UserDefaults.standard.set(fullName, forKey: "userName")
+        }
+    }
+
+    /// Sign in with Google via Firebase OAuth provider (browser sheet). Available on iOS.
+    public func signInWithGoogle() async throws {
+        guard FirebaseApp.app() != nil else {
+            throw FirebaseManagerError.ssoFailed("Firebase is not configured")
+        }
+        #if os(iOS)
+        let provider = OAuthProvider(providerID: "google.com")
+        provider.scopes = ["email", "profile", "https://www.googleapis.com/auth/gmail.readonly"]
+        let credential = try await provider.credential(with: nil)
+        let result = try await Auth.auth().signIn(with: credential)
+        applyAuthenticatedUser(result.user)
+        if let name = result.user.displayName, !name.isEmpty {
+            UserDefaults.standard.set(name, forKey: "userName")
+        }
+        #else
+        throw FirebaseManagerError.ssoFailed("Google Sign-In is available on iOS. Use Apple or email on Mac.")
+        #endif
+    }
+
+    private func applyAuthenticatedUser(_ user: User) {
+        let previous = currentUserId
+        currentUserId = user.uid
+        userEmail = user.email ?? userEmail
+        isAuthenticated = true
+        UserDefaults.standard.set(user.uid, forKey: "saved_user_uid")
+        if let email = user.email {
+            UserDefaults.standard.set(email, forKey: "userEmail")
+        }
+        if let previous, !previous.isEmpty, previous != user.uid {
+            HealthSummaryRepository().reassignSummaries(from: previous, to: user.uid)
+            TaskStore.shared.reassignTasks(from: previous, to: user.uid)
+        }
+    }
+
     // MARK: - Firestore Helpers
     
     /// Get a reference to a user's collection.
@@ -214,6 +269,7 @@ public enum FirebaseManagerError: Error, LocalizedError {
     case documentNotFound
     case encodingError
     case collectionNotFound
+    case ssoFailed(String)
     
     public var errorDescription: String? {
         switch self {
@@ -221,6 +277,7 @@ public enum FirebaseManagerError: Error, LocalizedError {
         case .documentNotFound: return "Document not found"
         case .encodingError: return "Failed to encode data"
         case .collectionNotFound: return "Collection not found"
+        case .ssoFailed(let message): return message
         }
     }
 }

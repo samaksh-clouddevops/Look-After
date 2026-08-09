@@ -103,4 +103,83 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         let delta = updated[0].scheduledTime!.timeIntervalSince(start)
         XCTAssertEqual(delta, 15 * 60, accuracy: 0.5)
     }
+
+    func testCommitAbsoluteDragSetsUserPlacedStart() {
+        let calendar = Calendar.current
+        let start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!
+        let target = calendar.date(bySettingHour: 10, minute: 30, second: 0, of: Date())!
+        var task = LifeTask(
+            id: "b",
+            title: "Move me",
+            scheduledDate: calendar.startOfDay(for: start),
+            scheduledTime: start,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        vm.upsert(task: task)
+        updated.removeAll()
+        vm.handle(.commitVerticalDrag(taskID: "b", proposedStart: target))
+        XCTAssertEqual(updated.count, 1)
+        XCTAssertEqual(updated[0].scheduledTime, target)
+        XCTAssertNotNil(updated[0].userPlacedScheduleAt)
+    }
+
+    func testBeginVerticalDragExposesDurationForMeter() {
+        var task = LifeTask(
+            id: "b",
+            title: "Move me",
+            estimatedMinutes: 45,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        vm.upsert(task: task)
+        vm.handle(.beginVerticalDrag(taskID: "b"))
+        XCTAssertEqual(vm.proposedDragDurationMinutes, 45)
+        vm.handle(.endVerticalDrag)
+        XCTAssertNil(vm.proposedDragDurationMinutes)
+    }
+
+    func testScheduleDragCommittedCallbackFires() {
+        let calendar = Calendar.current
+        let start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!
+        let target = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: Date())!
+        var task = LifeTask(
+            id: "b",
+            title: "Move me",
+            scheduledDate: calendar.startOfDay(for: start),
+            scheduledTime: start,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        vm.upsert(task: task)
+        var commitCount = 0
+        vm.onScheduleDragCommitted = { commitCount += 1 }
+        vm.handle(.commitVerticalDrag(taskID: "b", proposedStart: target))
+        XCTAssertEqual(commitCount, 1)
+    }
+
+    func testCommitAbsoluteDragForUnslottedTask() {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: Date())
+        let target = calendar.date(bySettingHour: 15, minute: 30, second: 0, of: Date())!
+        var task = LifeTask(
+            id: "unslotted",
+            title: "Vocal Practice",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        vm.upsert(task: task)
+        updated.removeAll()
+        vm.handle(.commitVerticalDrag(taskID: "unslotted", proposedStart: target))
+        XCTAssertEqual(updated.count, 1)
+        XCTAssertEqual(updated[0].scheduledTime, target)
+        XCTAssertNotNil(updated[0].scheduledEndTime)
+        XCTAssertNotNil(updated[0].userPlacedScheduleAt)
+    }
 }
