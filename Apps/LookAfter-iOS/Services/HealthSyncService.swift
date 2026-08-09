@@ -100,7 +100,9 @@ final class HealthSyncService: ObservableObject {
     private var backgroundSyncTask: Task<Void, Never>?
     private var observerSyncTask: Task<Void, Never>?
     private var lastObserverSyncAt: Date?
-    
+    /// Single-flight task so stacked ensureSynced callers share one run (PERF-023).
+    private var ensureSyncedTask: Task<Void, Never>?
+
     private init() {
         lastSyncDate = UserDefaults.standard.object(forKey: "healthLastSyncDate") as? Date
         refreshConnectionStatus(userId: "", healthSummary: HealthStore.shared.latest)
@@ -164,8 +166,14 @@ final class HealthSyncService: ObservableObject {
     }
 
     /// Ensures health data is synced before brain/UI refresh — skips if recently synced.
+    /// Concurrent callers await the same in-flight work (PERF-023).
     func ensureSynced(userId: String, maxAgeSeconds: TimeInterval = 30 * 60) async {
         guard isHealthEnabled, !userId.isEmpty, healthManager.isAvailable else { return }
+
+        if let existing = ensureSyncedTask {
+            await existing.value
+            return
+        }
 
         if isSyncing || isConnectingForSetup {
             await waitUntilIdle()
@@ -178,9 +186,16 @@ final class HealthSyncService: ObservableObject {
             return
         }
 
-        await syncHealthData(userId: userId)
+        let task = Task { @MainActor in
+            await self.syncHealthData(userId: userId)
+        }
+        ensureSyncedTask = task
+        await task.value
+        if ensureSyncedTask == task {
+            ensureSyncedTask = nil
+        }
     }
-    
+
     var isHealthEnabled: Bool {
         UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
     }
