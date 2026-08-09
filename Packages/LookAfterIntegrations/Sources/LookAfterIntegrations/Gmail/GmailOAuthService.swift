@@ -8,33 +8,52 @@ public enum GmailTokenStore {
     private static let service = "com.lookafter.gmail"
     private static let account = "gmail_refresh_token"
 
-    public static func saveRefreshToken(_ token: String) {
-        let data = Data(token.utf8)
-        let query: [String: Any] = [
+    private static var baseQuery: [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary)
-        var add = query
+    }
+
+    public static func saveRefreshToken(_ token: String) {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            deleteRefreshToken()
+            return
+        }
+
+        let data = Data(trimmed.utf8)
+        SecItemDelete(baseQuery as CFDictionary)
+        var add = baseQuery
         add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(add as CFDictionary, nil)
     }
 
     public static func loadRefreshToken() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true
-        ]
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+              let data = result as? Data,
+              let token = String(data: data, encoding: .utf8) else { return nil }
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
-    public static var isConnected: Bool { loadRefreshToken() != nil }
+    /// Removes the Keychain item entirely (BUG-010).
+    @discardableResult
+    public static func deleteRefreshToken() -> Bool {
+        let status = SecItemDelete(baseQuery as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+
+    public static var isConnected: Bool {
+        guard let token = loadRefreshToken(), !token.isEmpty else { return false }
+        return true
+    }
 }
 
 /// Gmail OAuth scope management — extends Firebase Google sign-in.
@@ -53,7 +72,7 @@ public enum GmailOAuthService {
     }
 
     public static func disconnect() {
-        GmailTokenStore.saveRefreshToken("")
+        GmailTokenStore.deleteRefreshToken()
         isEnabled = false
     }
 }

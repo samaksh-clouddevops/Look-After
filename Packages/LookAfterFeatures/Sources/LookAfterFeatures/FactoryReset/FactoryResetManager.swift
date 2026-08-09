@@ -3,6 +3,7 @@ import WidgetKit
 import LookAfterCore
 import LookAfterData
 import LookAfterAI
+import LookAfterIntegrations
 import ExecutiveBrain
 
 /// Orchestrates a complete factory reset — every persisted layer except auth session and dev flags.
@@ -63,6 +64,10 @@ public final class FactoryResetManager {
             AnalyticsCacheManager.shared.invalidate(userId: userId)
         }
 
+        // Third-party secrets + shared containers (BUG-010 / BUG-011).
+        wipeIntegrationSecrets()
+        wipeAppGroupStores()
+
         WidgetDataStore.clear()
         WidgetCenter.shared.reloadAllTimelines()
 
@@ -112,16 +117,37 @@ public final class FactoryResetManager {
         }
     }
 
+    private func wipeIntegrationSecrets() {
+        GmailOAuthService.disconnect()
+        // Creative projects & Gmail flags live in standard defaults (already wiped except preserved).
+        UserDefaults.standard.removeObject(forKey: "gmail_integration_enabled")
+        UserDefaults.standard.removeObject(forKey: "lifeos_creative_projects")
+    }
+
+    private func wipeAppGroupStores() {
+        AppGroupWidgetStore.clear()
+        AppGroupIntentStore.clear()
+        WidgetDataStore.clear()
+    }
+
     private func deleteAllDocuments(in collection: String) async {
         guard let ref = firebase.userCollection(collection) else { return }
-        guard let snapshot = try? await ref.getDocuments() else { return }
-
-        await withTaskGroup(of: Void.self) { group in
-            for document in snapshot.documents {
-                group.addTask {
-                    try? await document.reference.delete()
+        do {
+            let snapshot = try await ref.getDocuments()
+            await withTaskGroup(of: Void.self) { group in
+                for document in snapshot.documents {
+                    group.addTask {
+                        do {
+                            try await document.reference.delete()
+                        } catch {
+                            // Best-effort cloud wipe; local reset already completed.
+                            print("[FactoryReset] cloud delete failed \(document.documentID): \(error.localizedDescription)")
+                        }
+                    }
                 }
             }
+        } catch {
+            print("[FactoryReset] cloud list failed for \(collection): \(error.localizedDescription)")
         }
     }
 }
