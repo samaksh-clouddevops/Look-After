@@ -38,6 +38,14 @@ enum BackgroundNotificationRefreshTask {
 
     @MainActor
     private static func performDeterministicRefresh() async {
+        let userId = FirebaseManager.shared.resolvedUserId
+
+        // Phase 2: drain durable cloud outbox even when notifications are off.
+        if ArchitectureFeatureFlags.useSyncOutbox, !userId.isEmpty {
+            SyncOutboxWorker.shared.setTransport(FirestoreSyncOutboxTransport())
+            _ = await SyncOutboxWorker.shared.drainOnce(userId: userId)
+        }
+
         guard NotificationPermissionService.shared.isAuthorized else { return }
         guard NotificationPreferencesStore.load().globallyEnabled else { return }
 
@@ -45,7 +53,6 @@ enum BackgroundNotificationRefreshTask {
         let calendarProvider = EventKitCalendarEnvironmentSignalProvider()
         let calendarSignals = await calendarProvider.currentSignals(at: now)
         let medications = MedicationStore.load()
-        let userId = FirebaseManager.shared.resolvedUserId
         let snapshot = TaskStore.shared.localSnapshot(for: userId)
         let tasks = snapshot.active
 

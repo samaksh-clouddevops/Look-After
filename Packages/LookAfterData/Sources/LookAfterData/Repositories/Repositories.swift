@@ -410,81 +410,114 @@ public final class TaskRepository: ObservableObject {
     }
 }
 
-/// Repository for managing inbox items in Firestore.
+/// Repository for inbox items — local-first SQLite + optional cloud/outbox (Phase 2 WP 2.2).
 @MainActor
 public final class InboxRepository: ObservableObject {
-    
+
     private let firebase: FirebaseManager
+    private let localStore: InboxSQLiteStore
     private let collection = "inbox_items"
-    
-    public init(firebase: FirebaseManager? = nil) {
+
+    public init(firebase: FirebaseManager? = nil, localStore: InboxSQLiteStore = .shared) {
         self.firebase = firebase ?? FirebaseManager.shared
+        self.localStore = localStore
     }
-    
+
     public func getAll(for userId: String) async throws -> [InboxItem] {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
+        // Local-first
+        let local = (try? localStore.loadAll(userId: userId)) ?? []
+        if !local.isEmpty || !firebase.isCloudSyncAvailable {
+            return local
         }
-        
-        let snapshot = try await ref
-            .order(by: "createdAt", descending: true)
-            .getDocuments()
-        
-        return try snapshot.documents.compactMap { doc in
-            try firebase.decode(InboxItem.self, from: doc)
+
+        guard let ref = firebase.userCollection(collection) else {
+            return local
+        }
+
+        do {
+            let snapshot = try await ref
+                .order(by: "createdAt", descending: true)
+                .getDocuments()
+
+            let remote = try snapshot.documents.compactMap { doc in
+                try firebase.decode(InboxItem.self, from: doc)
+            }
+            if !remote.isEmpty {
+                try? localStore.replaceAll(userId: userId, items: remote)
+            }
+            return remote.isEmpty ? local : remote
+        } catch {
+            return local
         }
     }
-    
+
     public func getUnprocessed(for userId: String) async throws -> [InboxItem] {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
-        }
-        
-        let snapshot = try await ref
-            .whereField("status", isEqualTo: "Unprocessed")
-            .order(by: "createdAt", descending: true)
-            .getDocuments()
-        
-        return try snapshot.documents.compactMap { doc in
-            try firebase.decode(InboxItem.self, from: doc)
-        }
+        let all = try await getAll(for: userId)
+        return all.filter { $0.status == .unprocessed }
     }
-    
+
     public func create(_ item: InboxItem) async throws {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
-        }
-        
         var mutableItem = item
-        mutableItem.userId = firebase.currentUserId ?? ""
-        
-        let data = try SharedFormatters.jsonEncoderSeconds.encode(mutableItem)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw FirebaseManagerError.encodingError
+        if mutableItem.userId.isEmpty {
+            mutableItem.userId = firebase.currentUserId ?? firebase.resolvedUserId
         }
-        
-        try await ref.document(item.id).setData(dict)
+        try localStore.upsert(mutableItem)
+        try await pushCloud(mutableItem, merge: false)
     }
-    
+
     public func update(_ item: InboxItem) async throws {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
+        try localStore.upsert(item)
+        try await pushCloud(item, merge: true)
+    }
+
+    public func delete(_ id: String) async throws {
+        try localStore.delete(id: id)
+        let uid = firebase.resolvedUserId
+        if ArchitectureFeatureFlags.useSyncOutbox {
+            try? SyncOutboxStore.shared.enqueue(
+                SyncOutboxRecord(
+                    userId: uid,
+                    entityType: .inboxItem,
+                    entityId: id,
+                    operation: .delete
+                )
+            )
+            SyncOutboxWorker.shared.scheduleDrain(userId: uid)
+            return
         }
-        
+        guard let ref = firebase.userCollection(collection) else { return }
+        try? await ref.document(id).delete()
+    }
+
+    private func pushCloud(_ item: InboxItem, merge: Bool) async throws {
+        let uid = item.userId.isEmpty ? firebase.resolvedUserId : item.userId
+        if ArchitectureFeatureFlags.useSyncOutbox {
+            let data = try SharedFormatters.jsonEncoderSeconds.encode(item)
+            try SyncOutboxStore.shared.enqueue(
+                SyncOutboxRecord(
+                    userId: uid,
+                    entityType: .inboxItem,
+                    entityId: item.id,
+                    operation: .upsert,
+                    payloadJSON: data
+                )
+            )
+            SyncOutboxWorker.shared.scheduleDrain(userId: uid)
+            return
+        }
+
+        guard firebase.isCloudSyncAvailable, let ref = firebase.userCollection(collection) else {
+            return // local-only ok offline
+        }
         let data = try SharedFormatters.jsonEncoderSeconds.encode(item)
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw FirebaseManagerError.encodingError
         }
-        
-        try await ref.document(item.id).setData(dict, merge: true)
-    }
-    
-    public func delete(_ id: String) async throws {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
+        if merge {
+            try await ref.document(item.id).setData(dict, merge: true)
+        } else {
+            try await ref.document(item.id).setData(dict)
         }
-        
-        try await ref.document(id).delete()
     }
 }
 

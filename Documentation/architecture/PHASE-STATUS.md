@@ -7,9 +7,9 @@
 | Phase | Status | Notes |
 |-------|--------|-------|
 | **0 Foundations** | **Done** | Flags, ADRs 005–008, env matrix, inventory, CI, tests |
-| **1 Identity + Session** | **Mostly done** | IdentityService (Combine), SessionContainer, bootstrap gate; flag off by default |
-| **2 Sync outbox** | **WP 2.1 landed** | Store + worker + task repo enqueue; Firestore transport; flag off by default |
-| 3 Brain façade / proxy-only | Not started | Flag + ADR only |
+| **1 Identity + Session** | **Done (flag off)** | Identity Combine, SessionContainer + brain/inbox/outbox refs |
+| **2 Sync outbox + inbox** | **WP 2.1–2.2 landed** | Outbox + Inbox SQLite local-first + BG drain hook |
+| **3 Brain façade** | **Scaffold landed** | `BrainFacade` + deterministic backend; proxy-only still ADR/flag only |
 | 4 Split shell / Features | Not started | |
 | 5 Event bus | Not started | |
 | 6 Infra hardening | Not started | |
@@ -40,14 +40,17 @@ Defaults remain **false** until soak.
 
 ## Next work packages
 
-1. Phase 2 WP 2.2 — Inbox SQLite local-first
-2. Phase 3 — BrainFacade scaffold
-3. BG task hook to call `SyncOutboxWorker.drainOnce`
+1. Phase 2 WP 2.3 — Health summaries SQLite
+2. Wire BrainViewModel to BrainFacade behind `useBrainFacade`
+3. Phase 3.2 — enforce `proxyOnlyAI` in `GLMService`
+4. Phase 4.1 — extract `BootstrapCoordinator` from AppShellState
 
 ## Test commands
 
 ```bash
 swift test --package-path Packages/LookAfterCore --filter ArchitectureFeatureFlagsTests
+swift test --package-path Packages/LookAfterCore --filter BrainFacadeTests
 swift test --package-path Packages/LookAfterData --filter IdentityServiceTests
 swift test --package-path Packages/LookAfterData --filter SyncOutboxStoreTests
+swift test --package-path Packages/LookAfterData --filter InboxSQLiteStoreTests
 ```

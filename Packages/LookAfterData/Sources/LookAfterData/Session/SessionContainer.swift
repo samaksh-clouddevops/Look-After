@@ -12,6 +12,10 @@ public final class SessionContainer {
     public let identityGenerationAtStart: UInt64
     public let userId: String
     public let taskStore: TaskStore
+    public let inboxStore: InboxSQLiteStore
+    public let outboxStore: SyncOutboxStore
+    /// Scaffold brain entry (Phase 3); swap primary backend when Flow/LLM adapters land.
+    public let brainFacade: any BrainFacadeProtocol
     public let createdAt: Date
 
     private var tornDown = false
@@ -21,12 +25,19 @@ public final class SessionContainer {
 
     public init(
         identity: IdentityProviding,
-        taskStore: TaskStore = .shared
+        taskStore: TaskStore = .shared,
+        inboxStore: InboxSQLiteStore = .shared,
+        outboxStore: SyncOutboxStore = .shared,
+        brainFacade: (any BrainFacadeProtocol)? = nil
     ) {
         self.identity = identity
         self.identityGenerationAtStart = identity.generation
         self.userId = identity.resolvedUserId
         self.taskStore = taskStore
+        self.inboxStore = inboxStore
+        self.outboxStore = outboxStore
+        self.brainFacade = brainFacade
+            ?? BrainFacadeRouter(primary: DeterministicBrainFacadeBackend())
         self.createdAt = Date()
     }
 
