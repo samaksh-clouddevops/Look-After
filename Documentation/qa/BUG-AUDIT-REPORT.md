@@ -16,11 +16,11 @@
 | **High (P1)** | 11 | 10 | 1 (BUG-007 device lag verify) |
 | **Medium (P2)** | 16 | 15 | 1 (misc UX polish) |
 | **Low (P3)** | 8 | 5 | 3 (entitlement BG ids, Reduce Motion full audit, iPad) |
-| **Brain / decision** | 3 open | 0 | Ship gate per QA-14 |
+| **Brain / decision** | 3 | 2 coded (#12, #L-003) | 1 (verify staging + H-001 already fixed) |
 
-**Remediation branch:** `fix/bug-audit-remediation` (one commit per fix cluster).
+**Remediation branch:** `fix/bug-audit-remediation` (one commit per fix cluster) — **21 commits**.
 
-**Still open for ship quality:** BUG-007 device focus-lag verification; brain issues #12 / #L-003.
+**Still open for ship quality:** BUG-007 device focus-lag verification (Instruments on device).
 **Do not rename** App Group / BGTask identifiers (`group.com.samaksh.flowos`, BG task ids) without a coordinated entitlement + migration plan — those are OS-registered.
 
 ---
@@ -604,6 +604,30 @@ Unique-key dictionary helper applied to Data analytics, module repos, and RootCa
 
 ---
 
+## Phase 5 — brain decision quality
+
+### Brain #12 — sleep-deprived deep work *(code fixed)*
+
+- `TaskSemanticScheduler`: hard-block deep work/deep focus when `sleepHours < 6`; score penalties under 6.5h / low energy.
+- `ExecutiveRecommendationEngine`: if hero is deep work and unschedulable, pick alternate or recovery recommendation.
+- Tests: `testDeepWorkBlockedAfterShortSleep`.
+
+### Brain #L-003 — chronic deferral learning *(code fixed)*
+
+- `ChronicDeferralLearning` + enhanced `DeferralRule`: ≥5 deferrals on recurring/life commitments → micro-start coach + weekday-shift `RescheduleNotice`.
+- Tests: `testChronicDeferralSuggestsWeekdayShift`.
+
+### Still open after phase 5
+
+| Item | Why |
+|------|-----|
+| BUG-007 | Physical device Instruments verification only |
+| Staging DQS/HRS re-run | Confirm Brain #12 / #L-003 with LO-COST-001 / LO-LEARN-001 |
+| Reduce Motion full audit / iPad | UX P3 |
+| App Group / BGTask brand IDs | Entitlement migration project |
+
+---
+
 ## Change log
 
 | Date | Change |
@@ -612,6 +636,7 @@ Unique-key dictionary helper applied to Data analytics, module repos, and RootCa
 | 2026-08-09 | Phase 1 fixes: BUG-001–006, 008–011, 013, 015–019, 023–025 |
 | 2026-08-09 | Phase 2/3 fixes: BUG-014/036–040 |
 | 2026-08-09 | Phase 4 fixes: BUG-022, 027–029, 040 remainder |
+| 2026-08-09 | Phase 5 brain: #12 sleep deep-work block, #L-003 deferral learning |
 
 ### Commits on `fix/bug-audit-remediation`
 
@@ -632,6 +657,9 @@ Unique-key dictionary helper applied to Data analytics, module repos, and RootCa
 | fix(ai): migrate keychain service id and log empty catches | BUG-027, BUG-029 |
 | fix(health): replace HealthKit force unwraps with safe type lookup | BUG-028 |
 | fix(data): document weather stub and finish unique-key hardening | BUG-022, BUG-040 |
+| fix(brain): block deep work after short sleep and prefer recovery hero | Brain #12 |
+| fix(brain): chronic deferral learning suggests weekday shift | Brain #L-003 |
+| docs(qa): mark brain issues #12 and #L-003 fixed in code | — |
 
 ---
 
