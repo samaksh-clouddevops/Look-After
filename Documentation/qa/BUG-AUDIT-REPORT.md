@@ -10,17 +10,17 @@
 
 ## Executive summary
 
-| Severity | Count | Fixed on branch | Remaining |
+| Severity | Found | Fixed on branch | Remaining |
 |----------|------:|:---------------:|----------:|
 | **Critical (P0)** | 6 | 6 | 0 |
-| **High (P1)** | 9 | 7 | 2 (device lag verify; planning choke-point audit) |
-| **Medium (P2)** | 12 | 6 | 6 |
+| **High (P1)** | 11 | 10 | 1 (BUG-007 device lag verify) |
+| **Medium (P2)** | 16 | 12 | 4 |
 | **Low (P3)** | 8 | 0 | 8 |
-| **Brain / decision** | 3 open (existing log) | 0 | Ship gate per QA-14 |
+| **Brain / decision** | 3 open | 0 | Ship gate per QA-14 |
 
 **Remediation branch:** `fix/bug-audit-remediation` (one commit per fix cluster).
 
-**Still open for ship quality:** BUG-007 device focus-lag verification, BUG-014 full planning-apply choke-point audit, brain issues #12 / #L-003.
+**Still open for ship quality:** BUG-007 device focus-lag verification; brain issues #12 / #L-003.
 
 ---
 
@@ -519,26 +519,83 @@ Auth (optimistic UID)
 
 ---
 
+## Phase 2 / 3 findings (second pass)
+
+### BUG-036 — LLM planning mutations auto-applied without confirm *(fixed)*
+
+| | |
+|--|--|
+| **Files** | `ExecutivePlanningViewModel`, `ProactiveActionRouter` |
+| **Impact** | Hallucinated or unwanted schedule/create/complete mutations applied immediately on chat/voice/proactive tap. |
+| **Fix** | Stage mutations → `pendingMutations` + “Apply changes” negotiation; proactive only applies on explicit apply/confirm labels; unknown task IDs rejected in applier. |
+
+### BUG-037 — Plan mutation create/defer not awaiting durable write *(fixed)*
+
+| | |
+|--|--|
+| **Files** | `PlanMutationApplier`, `TasksViewModel.createTaskAndAwait` |
+| **Impact** | Apply reported success while SQLite write still in flight / failed silently. |
+| **Fix** | Await `createTaskAndAwait` / `updateTaskAndPersist` on apply path. |
+
+### BUG-038 — Notifications scheduled with past `fireDate` *(fixed)*
+
+| | |
+|--|--|
+| **Files** | `NotificationScheduler.schedule` |
+| **Impact** | Undefined immediate/failed delivery; wasted permission budget. |
+| **Fix** | Skip candidates with `fireDate` ≤ now+1s. |
+
+### BUG-039 — ISO8601 date-only deadlines unparsed *(fixed)*
+
+| | |
+|--|--|
+| **Files** | `PlanMutationApplier`, `PlanningResponseParser` |
+| **Impact** | Multi-day deadlines like `2026-08-15` ignored by default ISO8601 formatter. |
+| **Fix** | Flexible parser: full ISO + fractional + `yyyy-MM-dd`. |
+
+### BUG-040 — `Dictionary(uniqueKeysWithValues:)` crash on duplicate IDs *(fixed)*
+
+| | |
+|--|--|
+| **Files** | Core planning + Features task/module VMs; helper `Dictionary.uniquingFirstValue` |
+| **Impact** | Runtime trap if merge/sync produces duplicate task IDs. |
+| **Fix** | First-wins dictionary builder across schedule/planning hot paths. |
+
+### Still open after phase 3
+
+| ID | Notes |
+|----|--------|
+| BUG-007 | Focus UI lag — needs **physical device** Instruments verification |
+| Brain #12 | Sleep-deprived deep-work recommendation (decision quality) |
+| Brain #L-003 | Learning not shifting deferred gym |
+| P3 tech debt | HK force unwraps, empty catches, brand Keychain service string, weather stub |
+
+---
+
 ## Change log
 
 | Date | Change |
 |------|--------|
 | 2026-08-09 | Initial static audit — 6 P0, 9 P1, 12 P2, 8 P3 + brain cross-ref |
-| 2026-08-09 | Branch `fix/bug-audit-remediation`: code fixes for BUG-001–006, 008–011, 013, 015–019, 023–025 |
+| 2026-08-09 | Phase 1 fixes: BUG-001–006, 008–011, 013, 015–019, 023–025 |
+| 2026-08-09 | Phase 2/3 fixes: BUG-014/036–040 |
 
 ### Commits on `fix/bug-audit-remediation`
 
 | Commit message | Bugs |
 |----------------|------|
 | docs(qa): add application bug audit report | — |
-| fix(auth): await Firebase auth and handle session end | BUG-001, BUG-002 (+ stable offline UID / BUG-020) |
+| fix(auth): await Firebase auth and handle session end | BUG-001, BUG-002 (+ BUG-020) |
 | fix(flow): serialize FlowDirector orchestration | BUG-003 |
 | fix(data): durable task SQLite writes and crash-free DB open | BUG-004, BUG-005 |
 | fix(capture): keep failed offline routes and cap queue | BUG-006, BUG-016 |
-| fix(focus): preserve pomodoro counter and fix countdown timer | BUG-008, BUG-009, BUG-023, BUG-024, BUG-025 |
+| fix(focus): preserve pomodoro counter and fix countdown timer | BUG-008, BUG-009, BUG-023–025 |
 | fix(privacy): delete Gmail keychain token and wipe App Group | BUG-010, BUG-011 |
-| fix(ios): cleanup observers, speech throttle, orphan Live Activities | BUG-015, BUG-017, BUG-018, BUG-019 |
+| fix(ios): cleanup observers, speech throttle, orphan Live Activities | BUG-015, BUG-017–019 |
 | fix(capacity): block Peak Focus without fresh sleep evidence | BUG-013 |
+| fix(planning): stage mutations for confirm and reject unknown task IDs | BUG-014, BUG-036, BUG-037, BUG-039 |
+| fix(notifications): skip past fire dates when scheduling | BUG-038 |
+| fix(core): avoid fatal duplicate-key dictionaries and parse flexible ISO dates | BUG-040, BUG-039 |
 
 ---
 
