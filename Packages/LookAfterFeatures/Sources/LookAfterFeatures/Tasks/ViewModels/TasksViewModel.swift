@@ -57,15 +57,38 @@ public final class TasksViewModel: ObservableObject {
 
     /// Single write gate for schedule field mutations.
     public var scheduleMutation: ScheduleMutationService { _scheduleMutation }
-    
+
+    /// Invalidated when tasks / completed / templates change (PERF-015).
+    private var cachedSchedulingContext: [LifeTask]?
+    private var cachedActiveTasks: [LifeTask]?
+    private var taskIndexByID: [String: Int] = [:]
+
     /// Active, completed-today, and recurrence templates for schedule validation.
     public var schedulingContext: [LifeTask] {
-        taskStore?.snapshot.schedulingContext ?? (tasks + completedToday + recurrenceTemplates)
+        if let taskStore {
+            return taskStore.snapshot.schedulingContext
+        }
+        if let cachedSchedulingContext { return cachedSchedulingContext }
+        let combined = tasks + completedToday + recurrenceTemplates
+        cachedSchedulingContext = combined
+        return combined
     }
 
     /// Active task occurrences — excludes recurrence templates.
     public var activeTasks: [LifeTask] {
-        tasks.filter { $0.status.isActive && !$0.isRecurrenceTemplateTask }
+        if let cachedActiveTasks { return cachedActiveTasks }
+        let active = tasks.filter { $0.status.isActive && !$0.isRecurrenceTemplateTask }
+        cachedActiveTasks = active
+        return active
+    }
+
+    /// O(1) lookup into `tasks` by id (PERF-016).
+    public func taskIndex(id: String) -> Int? {
+        if let idx = taskIndexByID[id], tasks.indices.contains(idx), tasks[idx].id == id {
+            return idx
+        }
+        rebuildTaskIndex()
+        return taskIndexByID[id]
     }
 
     /// Full on-device task history for analytics and gap detection.
@@ -155,6 +178,39 @@ public final class TasksViewModel: ObservableObject {
 
     private func bumpTasksRevision() {
         tasksContentRevision &+= 1
+        invalidateDerivedTaskCaches()
+    }
+
+    private func invalidateDerivedTaskCaches() {
+        cachedSchedulingContext = nil
+        cachedActiveTasks = nil
+        taskIndexByID = [:]
+    }
+
+    private func rebuildTaskIndex() {
+        var map: [String: Int] = [:]
+        map.reserveCapacity(tasks.count)
+        for (index, task) in tasks.enumerated() {
+            map[task.id] = index
+        }
+        taskIndexByID = map
+    }
+
+    /// Apply an in-memory row update using the id index when possible (PERF-016).
+    @discardableResult
+    private func applyInMemoryTaskUpdate(_ updated: LifeTask) -> Bool {
+        if let index = taskIndex(id: updated.id) {
+            tasks[index] = updated
+            cachedSchedulingContext = nil
+            cachedActiveTasks = nil
+            return true
+        }
+        if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
+            completedToday[index] = updated
+            cachedSchedulingContext = nil
+            return true
+        }
+        return false
     }
 
     private func notifyTaskListDidChange() {
@@ -750,9 +806,7 @@ public final class TasksViewModel: ObservableObject {
         for var occurrence in plan.occurrenceUpdates {
             occurrence.userId = userId
             try await taskRepo.update(occurrence)
-            if let index = tasks.firstIndex(where: { $0.id == occurrence.id }) {
-                tasks[index] = occurrence
-            }
+            if !applyInMemoryTaskUpdate(occurrence) { /* not in active list */ }
 #if DEBUG
             print("[Tasks] re-parented occurrence id=\(occurrence.id.prefix(8)) → template=\(occurrence.parentTaskId?.prefix(8) ?? "?")")
 #endif
@@ -1107,9 +1161,7 @@ public final class TasksViewModel: ObservableObject {
             tasks.removeAll { $0.id == originalID }
             completedToday.removeAll { $0.id == originalID }
         }
-        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[index] = task
-        } else if let index = completedToday.firstIndex(where: { $0.id == task.id }) {
+        if !applyInMemoryTaskUpdate(task) { /* not in active list */ } else if let index = completedToday.firstIndex(where: { $0.id == task.id }) {
             completedToday[index] = task
         } else {
             tasks.insert(task, at: 0)
@@ -1125,9 +1177,7 @@ public final class TasksViewModel: ObservableObject {
         }
         tasks.removeAll { $0.id == saved.id && saved.id != previous.id }
         completedToday.removeAll { $0.id == saved.id && saved.id != previous.id }
-        if let index = tasks.firstIndex(where: { $0.id == previous.id }) {
-            tasks[index] = previous
-        } else if let index = completedToday.firstIndex(where: { $0.id == previous.id }) {
+        if !applyInMemoryTaskUpdate(previous) { /* not in active list */ } else if let index = completedToday.firstIndex(where: { $0.id == previous.id }) {
             completedToday[index] = previous
         } else if previous.status.isActive {
             tasks.insert(previous, at: 0)
@@ -1254,9 +1304,7 @@ public final class TasksViewModel: ObservableObject {
             occurrence.recurrenceInterval = nil
             occurrence.recurrenceWeekdays = nil
             try await taskRepo.update(occurrence)
-            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                tasks[index] = occurrence
-            }
+            _ = applyInMemoryTaskUpdate(occurrence)
             return
         }
 
@@ -1267,9 +1315,7 @@ public final class TasksViewModel: ObservableObject {
             try await taskRepo.create(template)
             try await taskRepo.update(occurrence)
             recurrenceTemplates.append(template)
-            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                tasks[index] = occurrence
-            }
+            _ = applyInMemoryTaskUpdate(occurrence)
         }
     }
 
@@ -2045,9 +2091,7 @@ public final class TasksViewModel: ObservableObject {
             )
             let applied = DaySchedulePlanner.apply(plan: plan, to: tasks, on: day, calendar: calendar)
             for var task in applied.tasks where applied.changedIDs.contains(task.id) {
-                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                    tasks[index] = task
-                }
+                if !applyInMemoryTaskUpdate(task) { /* not in active list */ }
                 do {
                     try await taskRepo.update(task)
                     allChangedIDs.insert(task.id)
@@ -2076,9 +2120,7 @@ public final class TasksViewModel: ObservableObject {
                         calendar: calendar
                     )
                     for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
-                        if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
-                            tasks[index] = updated
-                        }
+                        if !applyInMemoryTaskUpdate(updated) { /* not in active list */ }
                         if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
                             completedToday[index] = updated
                         }
@@ -2261,9 +2303,7 @@ public final class TasksViewModel: ObservableObject {
                     cleared.scheduledEndTime = nil
                     cleared = TaskConstraintAlignment.align(cleared)
                     cleared.updatedAt = Date()
-                    if let index = tasks.firstIndex(where: { $0.id == cleared.id }) {
-                        tasks[index] = cleared
-                    }
+                    if !applyInMemoryTaskUpdate(cleared) { /* not in active list */ }
                     do {
                         try await taskRepo.update(cleared)
                     } catch {
@@ -2281,9 +2321,7 @@ public final class TasksViewModel: ObservableObject {
             }
             updated = TaskConstraintAlignment.align(updated)
             updated.updatedAt = Date()
-            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
-                tasks[index] = updated
-            }
+            if !applyInMemoryTaskUpdate(updated) { /* not in active list */ }
             do {
                 try await taskRepo.update(updated)
             } catch {
@@ -2296,9 +2334,7 @@ public final class TasksViewModel: ObservableObject {
         cleared.scheduledTime = nil
         cleared.scheduledEndTime = nil
         cleared.updatedAt = Date()
-        if let index = tasks.firstIndex(where: { $0.id == cleared.id }) {
-            tasks[index] = cleared
-        }
+        if !applyInMemoryTaskUpdate(cleared) { /* not in active list */ }
         do {
             try await taskRepo.update(cleared)
         } catch {
@@ -2377,9 +2413,7 @@ public final class TasksViewModel: ObservableObject {
                 updated.applyTimeConstraint(.anchored)
             }
             updated.updatedAt = Date()
-            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
-                tasks[index] = updated
-            }
+            if !applyInMemoryTaskUpdate(updated) { /* not in active list */ }
             do {
                 try await taskRepo.update(updated)
                 didChange = true
@@ -2465,9 +2499,7 @@ public final class TasksViewModel: ObservableObject {
             updated.schedulingMode = .fixedTime
             updated = TaskConstraintAlignment.align(updated)
             updated.updatedAt = Date()
-            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
-                tasks[index] = updated
-            }
+            if !applyInMemoryTaskUpdate(updated) { /* not in active list */ }
             do {
                 try await taskRepo.update(updated)
             } catch {
@@ -2514,11 +2546,11 @@ public final class TasksViewModel: ObservableObject {
                 var working = tasks
                 let changed = AIScheduleSlotService.applySuggestions(suggestions, to: &working, on: day, calendar: calendar)
                 var aiBatch: [LifeTask] = []
+                rebuildTaskIndex()
+                let workingByID = Dictionary.uniquingFirstValue(working.map { ($0.id, $0) })
                 for taskID in changed {
-                    guard let updated = working.first(where: { $0.id == taskID }) else { continue }
-                    if let index = tasks.firstIndex(where: { $0.id == taskID }) {
-                        tasks[index] = updated
-                    }
+                    guard let updated = workingByID[taskID] else { continue }
+                    _ = applyInMemoryTaskUpdate(updated)
                     occupied.append(updated)
                     aiBatch.append(updated)
                 }
@@ -2579,9 +2611,7 @@ public final class TasksViewModel: ObservableObject {
             let duration = max(updated.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
             updated.scheduledEndTime = slot.addingTimeInterval(TimeInterval(duration * 60))
             updated.updatedAt = Date()
-            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
-                tasks[index] = updated
-            }
+            if !applyInMemoryTaskUpdate(updated) { /* not in active list */ }
             slotBatch.append(updated)
         }
         if !slotBatch.isEmpty {
@@ -2622,13 +2652,17 @@ public final class TasksViewModel: ObservableObject {
         )
         var batch: [LifeTask] = []
         batch.reserveCapacity(result.changedTaskIDs.count)
-        for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
-            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
-                if updated.status.isActive {
-                    tasks[index] = updated
-                } else {
-                    tasks.remove(at: index)
+        rebuildTaskIndex()
+        let changed = Set(result.changedTaskIDs)
+        for updated in result.tasks where changed.contains(updated.id) {
+            if updated.status.isActive {
+                if !applyInMemoryTaskUpdate(updated) {
+                    tasks.insert(updated, at: 0)
+                    rebuildTaskIndex()
                 }
+            } else if let index = taskIndex(id: updated.id) {
+                tasks.remove(at: index)
+                rebuildTaskIndex()
             }
             if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
                 if updated.status == .completed {
@@ -2636,6 +2670,8 @@ public final class TasksViewModel: ObservableObject {
                 } else {
                     completedToday.remove(at: index)
                 }
+            } else if updated.status == .completed {
+                completedToday.insert(updated, at: 0)
             }
             batch.append(updated)
         }
