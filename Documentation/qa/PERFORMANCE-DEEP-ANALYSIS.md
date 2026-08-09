@@ -31,9 +31,11 @@
 | PERF-012 | **Fixed** | TaskList animates `tasksContentRevision` |
 | PERF-013 | **Fixed** | Stage local displays → one publish; AI refine concurrent×3 |
 | PERF-014 | **Fixed** | `focusDisplayElapsed` 5s buckets; overlay keeps 1 Hz elapsed |
+| PERF-015 | **Fixed** | Cached `schedulingContext` / `activeTasks` until revision |
+| PERF-016 | **Fixed** | `taskIndex` + `applyInMemoryTaskUpdate` on hot mutate paths |
 | PERF-017 | **Fixed** | Cap 40 tasks + concurrent refine group |
-| PERF-018 | **Partial** | `SharedFormatters` + Firestore encode; migrate more call sites later |
-| PERF-015/016/019+ | Open | Next wave |
+| PERF-018 | **Partial** | SharedFormatters + CaptureGraph / GLM usage / Firestore |
+| PERF-019+ | Open | Wide shell observation / planner bitmap / prompt caps |
 
 ---
 
