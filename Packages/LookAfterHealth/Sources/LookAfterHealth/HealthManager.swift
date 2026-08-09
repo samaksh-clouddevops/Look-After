@@ -39,15 +39,32 @@ public final class HealthManager: ObservableObject {
     
     private enum HealthManagerError: LocalizedError {
         case queryTimeout
-        
+        case typeUnavailable
+
         var errorDescription: String? {
             switch self {
             case .queryTimeout:
                 return "Health data request timed out"
+            case .typeUnavailable:
+                return "Required HealthKit type is unavailable on this device"
             }
         }
     }
-    
+
+    /// Safe HealthKit type lookup — avoids force unwraps (BUG-028).
+    static func quantityType(_ id: HKQuantityTypeIdentifier) -> HKQuantityType? {
+        HKQuantityType.quantityType(forIdentifier: id)
+    }
+
+    static func categoryType(_ id: HKCategoryTypeIdentifier) -> HKCategoryType? {
+        HKObjectType.categoryType(forIdentifier: id)
+    }
+
+    static func requireQuantityType(_ id: HKQuantityTypeIdentifier) throws -> HKQuantityType {
+        guard let type = quantityType(id) else { throw HealthManagerError.typeUnavailable }
+        return type
+    }
+
     // MARK: - Authorization
     
     /// Clears cached authorization so the next connect re-shows the Health permission flow when needed.
@@ -106,7 +123,7 @@ public final class HealthManager: ObservableObject {
         var hasData = false
 
         do {
-            let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
+            let stepsType = try Self.requireQuantityType(.stepCount)
             let startOfDay = Calendar.current.startOfDay(for: Date())
             let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
             if let stats = try await fetchStatistics(type: stepsType, predicate: predicate, options: .cumulativeSum) {
@@ -149,23 +166,21 @@ public final class HealthManager: ObservableObject {
     }
 
     private static var readObjectTypes: Set<HKObjectType> {
-        [
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
-            HKObjectType.quantityType(forIdentifier: .restingHeartRate)!,
-            HKObjectType.quantityType(forIdentifier: .stepCount)!,
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
-            HKObjectType.quantityType(forIdentifier: .appleExerciseTime)!,
-            HKObjectType.quantityType(forIdentifier: .appleStandTime)!,
-            HKObjectType.workoutType(),
-            HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!,
-            HKObjectType.categoryType(forIdentifier: .mindfulSession)!,
-            HKObjectType.quantityType(forIdentifier: .dietaryWater)!,
-            HKObjectType.categoryType(forIdentifier: .menstrualFlow)!,
-            HKObjectType.categoryType(forIdentifier: .intermenstrualBleeding)!,
-            HKObjectType.categoryType(forIdentifier: .ovulationTestResult)!,
+        var types: Set<HKObjectType> = [HKObjectType.workoutType()]
+        let quantityIDs: [HKQuantityTypeIdentifier] = [
+            .heartRate, .heartRateVariabilitySDNN, .restingHeartRate, .stepCount,
+            .activeEnergyBurned, .appleExerciseTime, .appleStandTime, .oxygenSaturation, .dietaryWater
         ]
+        for id in quantityIDs {
+            if let type = quantityType(id) { types.insert(type) }
+        }
+        let categoryIDs: [HKCategoryTypeIdentifier] = [
+            .sleepAnalysis, .mindfulSession, .menstrualFlow, .intermenstrualBleeding, .ovulationTestResult
+        ]
+        for id in categoryIDs {
+            if let type = categoryType(id) { types.insert(type) }
+        }
+        return types
     }
 
     /// Reads menstrual flow samples and maps them to cycle day logs.
@@ -437,33 +452,34 @@ public final class HealthManager: ObservableObject {
     
     private func fetchHeartRateData() async throws -> HeartRateData {
         var result = HeartRateData()
-        
+
         // Resting heart rate
-        let restingType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
-        if let restingSample = try await fetchLatestQuantity(type: restingType) {
+        if let restingType = Self.quantityType(.restingHeartRate),
+           let restingSample = try await fetchLatestQuantity(type: restingType) {
             result.resting = restingSample.doubleValue(for: HKUnit(from: "count/min"))
         }
-        
+
         // Average heart rate today
-        let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-        let startOfDay = Calendar.current.startOfDay(for: Date())
-        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
-        
-        if let stats = try await fetchStatistics(type: hrType, predicate: predicate, options: .discreteAverage) {
-            result.average = stats.averageQuantity()?.doubleValue(for: HKUnit(from: "count/min"))
+        if let hrType = Self.quantityType(.heartRate) {
+            let startOfDay = Calendar.current.startOfDay(for: Date())
+            let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
+
+            if let stats = try await fetchStatistics(type: hrType, predicate: predicate, options: .discreteAverage) {
+                result.average = stats.averageQuantity()?.doubleValue(for: HKUnit(from: "count/min"))
+            }
         }
-        
+
         return result
     }
-    
+
     // MARK: - HRV
-    
+
     private func fetchHRVData() async throws -> Double? {
-        let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
+        guard let hrvType = Self.quantityType(.heartRateVariabilitySDNN) else { return nil }
         guard let sample = try await fetchLatestQuantity(type: hrvType) else { return nil }
         return sample.doubleValue(for: HKUnit.secondUnit(with: .milli))
     }
-    
+
     // MARK: - Activity
     
     private struct ActivityData {

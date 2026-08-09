@@ -16,14 +16,11 @@ public final class HealthKitObserverService {
         guard HKHealthStore.isHealthDataAvailable(), !isObserving else { return }
         isObserving = true
 
-        let sampleTypes: [HKSampleType] = [
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.quantityType(forIdentifier: .stepCount)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
-            HKObjectType.quantityType(forIdentifier: .restingHeartRate)!,
-            HKObjectType.workoutType()
-        ]
+        var sampleTypes: [HKSampleType] = [HKObjectType.workoutType()]
+        if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { sampleTypes.append(sleep) }
+        for id: HKQuantityTypeIdentifier in [.stepCount, .heartRate, .heartRateVariabilitySDNN, .restingHeartRate] {
+            if let type = HKQuantityType.quantityType(forIdentifier: id) { sampleTypes.append(type) }
+        }
 
         for sampleType in sampleTypes {
             healthStore.enableBackgroundDelivery(for: sampleType, frequency: .hourly) { _, _ in }
