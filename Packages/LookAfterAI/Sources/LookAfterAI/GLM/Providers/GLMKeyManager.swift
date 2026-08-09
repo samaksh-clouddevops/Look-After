@@ -1,5 +1,6 @@
 import Foundation
 import LookAfterCore
+import os
 
 /// Secure storage and health tracking for GLM API keys.
 public final class GLMKeyManager: @unchecked Sendable {
@@ -9,6 +10,7 @@ public final class GLMKeyManager: @unchecked Sendable {
     private let secretStore: SecretStore
     private let lock = NSLock()
     private var records: [GLMKeyRecord] = []
+    private let logger = Logger(subsystem: "com.lookafter.app", category: "GLMKeyManager")
 
     public init(secretStore: SecretStore = KeychainSecretStore(), metadataKey: String = "glmKeyRecords") {
         self.secretStore = secretStore
@@ -302,7 +304,9 @@ public final class GLMKeyManager: @unchecked Sendable {
                 records = [record]
                 persistLocked()
                 UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
-            } catch {}
+            } catch {
+                logger.error("Legacy API key migration failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -324,7 +328,9 @@ public final class GLMKeyManager: @unchecked Sendable {
             try secretStore.save(bundled, account: record.id)
             records = [record]
             persistLocked()
-        } catch {}
+        } catch {
+            logger.error("Bundled default API key seed failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private static func maskedSuffix(for secret: String) -> String {
