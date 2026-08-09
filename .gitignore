@@ -53,6 +53,8 @@ services/auth-proxy/.env
 
 # Package build artifacts
 Packages/*/build/
+# SQLite test spill (invalid filename on Windows — never commit)
+Packages/**/:memory:
 Tools/PerformanceBudgetHarness/.build/
 Tools/PerformanceBudgetHarness/test-output.txt
 
