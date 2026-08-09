@@ -64,11 +64,11 @@ Track **decision mistakes** separately from software bugs.
 
 ### Brain Issue #12
 
-**Filed:** 2026-08-01  
-**Status:** Open  
-**Severity:** Critical  
-**Category:** executive-cost  
-**Priority:** P0  
+**Filed:** 2026-08-01
+**Status:** Fixed (code) — verify on staging
+**Severity:** Critical
+**Category:** executive-cost
+**Priority:** P0
 
 #### Scenario
 User slept **4h 52m**. Calendar shows 4 meetings before noon. Cognitive load: overloaded.
@@ -83,15 +83,18 @@ User slept **4h 52m**. Calendar shows 4 meetings before noon. Cognitive load: ov
 Energy model underweighted sleep deficit; deadline urgency overweighted in `DecisionEngine` / hero eligibility.
 
 #### Evidence
-- DQ-EVAL-012 DQS 1.8  
-- Human eval: Would follow? **No** — "I knew I'd fail"  
+- DQ-EVAL-012 DQS 1.8
+- Human eval: Would follow? **No** — "I knew I'd fail"
 - LO-COST-001 **FAIL**
 
 #### Fixed in
-_TBD — ExecutiveBrain / SimulationEngine weight tuning_
+`TaskSemanticScheduler` — deep work blocked when sleepHours &lt; 6 (and low energy);
+`ExecutiveRecommendationEngine` — swaps hero away from deep work + recovery recommendation;
+unit: `testDeepWorkBlockedAfterShortSleep`
+Branch: `fix/bug-audit-remediation`
 
 #### Regression
-LO-COST-001, LO-TWIN-003, DQ-EVAL fixture `sleep_deprived_deadline.json`
+LO-COST-001, LO-TWIN-003, DQ-EVAL fixture `sleep_deprived_deadline.json`, `testDeepWorkBlockedAfterShortSleep`
 
 ---
 
@@ -125,11 +128,11 @@ LO-HALL-001
 
 ### Brain Issue #L-003
 
-**Filed:** 2026-08-03  
-**Status:** Investigating  
-**Severity:** Major  
-**Category:** learning-fail  
-**Priority:** P1  
+**Filed:** 2026-08-03
+**Status:** Fixed (code) — verify on staging
+**Severity:** Major
+**Category:** learning-fail
+**Priority:** P1
 
 #### Scenario
 User deferred **Tuesday gym** 3 consecutive weeks.
@@ -143,8 +146,14 @@ Shift to Wednesday per [16-learning-validation.md](16-learning-validation.md) LE
 #### Root cause
 Behavior defer events recorded but `FlowSchedulingEngine` not shifting recurring commitment.
 
+#### Fixed in
+`DeferralRule` + `ChronicDeferralLearning` — chronic deferrals (≥5) on recurring/life commitments
+suggest micro-start + weekday shift notice; score penalties on scheduling rank.
+unit: `testChronicDeferralSuggestsWeekdayShift`
+Branch: `fix/bug-audit-remediation`
+
 #### Regression
-LO-LEARN-001
+LO-LEARN-001, `testChronicDeferralSuggestsWeekdayShift`
 
 ---
 
