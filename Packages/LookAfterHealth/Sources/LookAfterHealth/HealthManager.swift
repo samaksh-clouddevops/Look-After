@@ -387,7 +387,9 @@ public final class HealthManager: ObservableObject {
     }
     
     private func fetchSleepData() async throws -> SleepData {
-        let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+        guard let sleepType = Self.categoryType(.sleepAnalysis) else {
+            return SleepData()
+        }
 
         let now = Date()
         let calendar = Calendar.current
