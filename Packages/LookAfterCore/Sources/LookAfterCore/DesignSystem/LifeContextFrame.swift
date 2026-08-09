@@ -225,6 +225,7 @@ public enum FallbackGradientStyle {
 }
 
 public struct FallbackGradient: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let style: FallbackGradientStyle
     @State private var breathe: Double = 0
 
@@ -236,7 +237,7 @@ public struct FallbackGradient: View {
         LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
             .opacity(style == .sleep ? 0.88 + breathe * 0.12 : 1)
             .onAppear {
-                guard style == .sleep else { return }
+                guard style == .sleep, !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 5).repeatForever(autoreverses: true)) {
                     breathe = 1
                 }

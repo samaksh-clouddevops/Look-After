@@ -23,9 +23,11 @@ public final class StateCoalescer<Value>: ObservableObject {
     public func update(_ newValue: Value) {
         pendingValue = newValue
         coalesceTask?.cancel()
+        let delay = delayNanoseconds
         coalesceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: self?.delayNanoseconds ?? 16_000_000)
-            guard let self, !Task.isCancelled, let pending = self.pendingValue else { return }
+            try? await Task.sleep(nanoseconds: delay)
+            guard let self, !Task.isCancelled else { return }
+            guard let pending = self.pendingValue else { return }
             self.value = pending
             self.pendingValue = nil
         }

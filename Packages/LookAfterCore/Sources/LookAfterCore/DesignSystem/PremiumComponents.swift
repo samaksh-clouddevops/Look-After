@@ -117,6 +117,7 @@ public struct ScreenChrome: View {
 // MARK: - Motion
 
 public struct AppearAnimation: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
     var delay: Double
 
@@ -127,9 +128,9 @@ public struct AppearAnimation: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 12)
+            .offset(y: (visible || reduceMotion) ? 0 : 12)
             .onAppear {
-                withAnimation(PremiumMotion.appear(delay: delay)) {
+                withAnimation(PremiumMotion.appear(delay: delay, reduceMotion: reduceMotion)) {
                     visible = true
                 }
             }
