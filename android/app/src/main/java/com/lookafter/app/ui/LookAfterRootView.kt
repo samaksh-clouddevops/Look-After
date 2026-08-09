@@ -28,6 +28,8 @@ import com.lookafter.app.ui.health.HealthScreen
 import com.lookafter.app.ui.inbox.InboxScreen
 import com.lookafter.app.ui.insights.InsightsScreen
 import com.lookafter.app.ui.medication.MedicationScreen
+import com.lookafter.app.ui.modules.ComingSoonScreen
+import com.lookafter.app.ui.modules.ModulesScreen
 import com.lookafter.app.ui.motion.CalmAnimatedContent
 import com.lookafter.app.ui.navigation.AppDestination
 import com.lookafter.app.ui.onboarding.OnboardingScreen
@@ -46,6 +48,8 @@ import com.lookafter.core.models.ConstraintType
 import com.lookafter.core.models.LifeTask
 import com.lookafter.core.models.TaskExpirationPolicy
 import com.lookafter.core.models.TaskStatus
+import com.lookafter.core.modules.AppModuleCatalog
+import com.lookafter.core.modules.ModuleDestination
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
@@ -116,10 +120,65 @@ fun LookAfterRootView(
     var privacyOpen by remember { mutableStateOf(false) }
     var notificationSettingsOpen by remember { mutableStateOf(false) }
     var bodyDoubleRoomOpen by remember { mutableStateOf(false) }
+    var modulesOpen by remember { mutableStateOf(false) }
+    var comingSoonTitle by remember { mutableStateOf<String?>(null) }
+    var comingSoonSubtitle by remember { mutableStateOf("") }
     var captureOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<LifeTask?>(null) }
     var hypotheticals by remember { mutableStateOf<List<LifeTask>>(emptyList()) }
+
+    fun closeSecondarySurfaces() {
+        reviewOpen = false
+        medicationOpen = false
+        healthOpen = false
+        inboxOpen = false
+        insightsOpen = false
+        privacyOpen = false
+        notificationSettingsOpen = false
+        bodyDoubleRoomOpen = false
+        modulesOpen = false
+        comingSoonTitle = null
+        simulationOpen = false
+    }
+
+    fun openModule(dest: ModuleDestination) {
+        closeSecondarySurfaces()
+        when (dest) {
+            ModuleDestination.TODAY -> destination = AppDestination.TODAY.name
+            ModuleDestination.BRIEFING -> destination = AppDestination.BRIEFING.name
+            ModuleDestination.BRAIN -> destination = AppDestination.BRAIN.name
+            ModuleDestination.HEALTH -> healthOpen = true
+            ModuleDestination.MEDICATION -> medicationOpen = true
+            ModuleDestination.INSIGHTS -> insightsOpen = true
+            ModuleDestination.INBOX -> inboxOpen = true
+            ModuleDestination.COMPANION -> bodyDoubleRoomOpen = true
+            ModuleDestination.REVIEW -> reviewOpen = true
+            ModuleDestination.SIMULATION -> {
+                if (hypotheticals.isEmpty()) {
+                    val open = state.activeTasks.filter { it.status.isActive }.take(3)
+                    hypotheticals = open.ifEmpty {
+                        listOf(dummyHypotheticalMeeting(state.currentDay))
+                    }
+                }
+                simulationOpen = true
+            }
+            ModuleDestination.NOTIFICATIONS -> notificationSettingsOpen = true
+            ModuleDestination.PRIVACY -> privacyOpen = true
+            ModuleDestination.TRAVEL,
+            ModuleDestination.CYCLE,
+            ModuleDestination.LEARNING,
+            ModuleDestination.CREATIVITY,
+            ModuleDestination.BEHAVIOR,
+            ModuleDestination.LIFE_HUB,
+            ModuleDestination.TOUR,
+            -> {
+                val mod = AppModuleCatalog.all.firstOrNull { it.destination == dest }
+                comingSoonTitle = mod?.title ?: dest.name
+                comingSoonSubtitle = mod?.subtitle ?: "This module is not on Android yet."
+            }
+        }
+    }
 
     // Body-double auto-focus → open focus overlay.
     LaunchedEffect(focus.phase, bodyDoubleRoomOpen) {
@@ -193,18 +252,12 @@ fun LookAfterRootView(
                 current = when {
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
                         insightsOpen || privacyOpen || notificationSettingsOpen ||
-                        bodyDoubleRoomOpen -> AppDestination.YOU
+                        bodyDoubleRoomOpen || modulesOpen ||
+                        comingSoonTitle != null -> AppDestination.YOU
                     else -> current
                 },
                 onSelect = { dest ->
-                    reviewOpen = false
-                    medicationOpen = false
-                    healthOpen = false
-                    inboxOpen = false
-                    insightsOpen = false
-                    privacyOpen = false
-                    notificationSettingsOpen = false
-                    bodyDoubleRoomOpen = false
+                    closeSecondarySurfaces()
                     destination = dest.name
                 },
                 onCapture = { captureOpen = true },
@@ -239,11 +292,27 @@ fun LookAfterRootView(
             privacyOpen -> "privacy"
             notificationSettingsOpen -> "notif"
             bodyDoubleRoomOpen -> "bd-room"
+            modulesOpen -> "modules"
+            comingSoonTitle != null -> "soon"
             reviewOpen -> "review"
             else -> current.name
         }
         CalmAnimatedContent(targetState = surfaceKey, modifier = contentModifier) {
             when {
+                comingSoonTitle != null -> ComingSoonScreen(
+                    title = comingSoonTitle.orEmpty(),
+                    subtitle = comingSoonSubtitle,
+                    onBack = {
+                        comingSoonTitle = null
+                        modulesOpen = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                modulesOpen -> ModulesScreen(
+                    onOpen = { dest -> openModule(dest) },
+                    onBack = { modulesOpen = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
                 bodyDoubleRoomOpen -> BodyDoubleRoomScreen(
                     room = bodyDoubleRoom,
                     webRtcStateLabel = webRtcState.name.lowercase(),
@@ -437,47 +506,45 @@ fun LookAfterRootView(
                     firebaseAvailable = viewModel.firebaseAuthAvailable,
                     syncMessage = syncMessage,
                     onOpenReview = {
-                        medicationOpen = false; healthOpen = false; inboxOpen = false
-                        insightsOpen = false; reviewOpen = true
+                        closeSecondarySurfaces()
+                        reviewOpen = true
                     },
                     onOpenSimulation = {
-                        medicationOpen = false; healthOpen = false; inboxOpen = false
-                        insightsOpen = false
+                        closeSecondarySurfaces()
                         hypotheticals = listOf(dummyHypotheticalMeeting(state.currentDay))
                         simulationOpen = true
                     },
                     onOpenMedication = {
-                        reviewOpen = false; healthOpen = false; inboxOpen = false
-                        insightsOpen = false; medicationOpen = true
+                        closeSecondarySurfaces()
+                        medicationOpen = true
                     },
                     onOpenHealth = {
-                        reviewOpen = false; medicationOpen = false; inboxOpen = false
-                        insightsOpen = false; healthOpen = true
+                        closeSecondarySurfaces()
+                        healthOpen = true
                     },
                     onOpenInbox = {
-                        reviewOpen = false; medicationOpen = false; healthOpen = false
-                        insightsOpen = false; inboxOpen = true
+                        closeSecondarySurfaces()
+                        inboxOpen = true
                     },
                     onOpenInsights = {
-                        reviewOpen = false; medicationOpen = false; healthOpen = false
-                        inboxOpen = false; privacyOpen = false; insightsOpen = true
+                        closeSecondarySurfaces()
+                        insightsOpen = true
                     },
                     onOpenPrivacySettings = {
-                        reviewOpen = false; medicationOpen = false; healthOpen = false
-                        inboxOpen = false; insightsOpen = false
-                        notificationSettingsOpen = false
-                        bodyDoubleRoomOpen = false; privacyOpen = true
+                        closeSecondarySurfaces()
+                        privacyOpen = true
                     },
                     onOpenNotificationSettings = {
-                        reviewOpen = false; medicationOpen = false; healthOpen = false
-                        inboxOpen = false; insightsOpen = false; privacyOpen = false
-                        bodyDoubleRoomOpen = false; notificationSettingsOpen = true
+                        closeSecondarySurfaces()
+                        notificationSettingsOpen = true
                     },
                     onOpenBodyDoubleRoom = {
-                        reviewOpen = false; medicationOpen = false; healthOpen = false
-                        inboxOpen = false; insightsOpen = false; privacyOpen = false
-                        notificationSettingsOpen = false
+                        closeSecondarySurfaces()
                         bodyDoubleRoomOpen = true
+                    },
+                    onOpenModules = {
+                        closeSecondarySurfaces()
+                        modulesOpen = true
                     },
                     onConnectCalendar = { viewModel.ensureCalendarPermission() },
                     calendarEventCount = calendarEvents.size,

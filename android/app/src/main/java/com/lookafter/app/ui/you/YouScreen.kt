@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Inbox
@@ -65,6 +66,7 @@ fun YouScreen(
     onOpenPrivacySettings: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onOpenBodyDoubleRoom: () -> Unit = {},
+    onOpenModules: () -> Unit = {},
     onConnectCalendar: () -> Unit = {},
     calendarEventCount: Int = 0,
     canScheduleExactAlarms: Boolean = true,
@@ -225,6 +227,14 @@ fun YouScreen(
                 title = "Inbox",
                 subtitle = "Unprocessed captures",
                 onClick = onOpenInbox,
+            )
+        }
+        item {
+            YouRow(
+                icon = Icons.Outlined.Apps,
+                title = "Modules",
+                subtitle = "All features · open & coming soon",
+                onClick = onOpenModules,
             )
         }
         item {
