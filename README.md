@@ -2,6 +2,9 @@
 
 **Look After** is an AI-powered executive function operating system for Apple platforms (iOS, macOS, Widget).
 
+> **Current release:** [0.1.0-alpha](Documentation/releases/0.1.0-alpha.md) — first alpha (August 2026).  
+> Install from source; TestFlight coming after PR merge to `main`.
+
 ## Quick start
 
 ```bash
