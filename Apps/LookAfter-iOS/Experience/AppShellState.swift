@@ -58,7 +58,13 @@ final class AppShellState: ObservableObject {
         self.accountIdentity = accountIdentity
         self.identityService = identityService
         brain = executiveBrain
-        brainVM = BrainViewModel(brain: executiveBrain, taskStore: taskStore, healthStore: healthStore)
+        let sessionFacade = BrainFacadeRouter(primary: DeterministicBrainFacadeBackend())
+        brainVM = BrainViewModel(
+            brain: executiveBrain,
+            taskStore: taskStore,
+            healthStore: healthStore,
+            brainFacade: sessionFacade
+        )
         tasksVM = TasksViewModel(taskStore: taskStore, decomposer: TaskDecomposer(glmService: glm))
         modulesVM = LifeModulesViewModel()
         adhdVM = ADHDViewModel()
@@ -68,6 +74,9 @@ final class AppShellState: ObservableObject {
         continueSession = ContinueSessionController()
         identityService.refreshFromFirebase()
         session = SessionContainer.makeIfReady(identity: identityService, taskStore: taskStore)
+        if let session {
+            brainVM.configure(brainFacade: session.brainFacade)
+        }
 
         adhdVM.onFocusSessionDidStart = { [weak self] in
             guard let self else { return }

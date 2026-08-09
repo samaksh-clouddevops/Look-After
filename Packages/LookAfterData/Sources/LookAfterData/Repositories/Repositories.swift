@@ -521,20 +521,26 @@ public final class InboxRepository: ObservableObject {
     }
 }
 
-/// Repository for health summaries.
+/// Repository for health summaries — SQLite local store + cloud (Phase 2 WP 2.3).
 @MainActor
 public final class HealthSummaryRepository: ObservableObject {
-    
+
     private let firebase: FirebaseManager
     private let local = LocalPersistenceManager.shared
+    private let sqliteStore: HealthSummarySQLiteStore
     private let collection = "health_summaries"
     private static let cloudReadTimeoutSeconds: TimeInterval = 10
     private static let cloudWriteTimeoutSeconds: TimeInterval = 15
-    
-    public init(firebase: FirebaseManager? = nil) {
+
+    public init(
+        firebase: FirebaseManager? = nil,
+        sqliteStore: HealthSummarySQLiteStore = .shared
+    ) {
         self.firebase = firebase ?? FirebaseManager.shared
+        self.sqliteStore = sqliteStore
+        self.sqliteStore.migrateFromJSONIfNeeded(using: local)
     }
-    
+
     /// Saves locally first (milliseconds), then uploads to Firestore in the background.
     public func save(_ summary: HealthSummary) async throws {
         var mutableSummary = summary
@@ -551,27 +557,22 @@ public final class HealthSummaryRepository: ObservableObject {
     /// Moves summaries saved under a pre-auth fallback id to the real Firebase UID.
     public func reassignSummaries(from oldUserId: String, to newUserId: String) {
         guard !oldUserId.isEmpty, !newUserId.isEmpty, oldUserId != newUserId else { return }
-
+        try? sqliteStore.reassign(from: oldUserId, to: newUserId)
+        // Keep JSON mirror in sync during transition.
         var summaries = local.load([HealthSummary].self, filename: collection)
         var changed = false
-
-        for index in summaries.indices {
-            guard summaries[index].userId == oldUserId else { continue }
+        for index in summaries.indices where summaries[index].userId == oldUserId {
             summaries[index].userId = newUserId
             if summaries[index].id.hasPrefix("\(oldUserId)-") {
                 summaries[index].id = summaries[index].id.replacingOccurrences(of: oldUserId, with: newUserId)
-            } else if summaries[index].id == oldUserId || summaries[index].id.isEmpty {
-                summaries[index].id = Self.dailyDocumentId(for: summaries[index].date, userId: newUserId)
             }
             changed = true
         }
-
         if changed {
-            summaries.sort { $0.date > $1.date }
             local.save(summaries, filename: collection)
         }
     }
-    
+
     public func getLatest(for userId: String) async throws -> HealthSummary? {
         if FreshInstallGuard.isActive { return nil }
 
@@ -625,7 +626,8 @@ public final class HealthSummaryRepository: ObservableObject {
         let canonicalId = firebase.resolvedUserId
         guard !canonicalId.isEmpty else { return }
 
-        let all = local.load([HealthSummary].self, filename: collection)
+        let all = (try? sqliteStore.loadAll())
+            ?? local.load([HealthSummary].self, filename: collection)
         let staleIds = Set(all.map(\.userId).filter { !$0.isEmpty && $0 != canonicalId })
         for staleId in staleIds {
             reassignSummaries(from: staleId, to: canonicalId)
@@ -674,16 +676,6 @@ public final class HealthSummaryRepository: ObservableObject {
         return userId.isEmpty ? dayKey : "\(userId)-\(dayKey)"
     }
 
-    private func latestLocalWithHealthSignal(excludingUserId: String?) -> HealthSummary? {
-        let all = local.load([HealthSummary].self, filename: collection)
-            .filter { summary in
-                if let excludingUserId, summary.userId == excludingUserId { return false }
-                return Self.healthSignalScore(summary) > 0
-            }
-            .sorted { $0.date > $1.date }
-        return all.first
-    }
-    
     public func getForDateRange(from: Date, to: Date, userId: String) async throws -> [HealthSummary] {
         if FreshInstallGuard.isActive { return [] }
 
@@ -715,6 +707,8 @@ public final class HealthSummaryRepository: ObservableObject {
     }
     
     private func saveLocally(_ summary: HealthSummary) {
+        try? sqliteStore.upsert(summary)
+        // Dual-write JSON during transition so older code paths still see data.
         var summaries = local.load([HealthSummary].self, filename: collection)
         if let index = summaries.firstIndex(where: { $0.id == summary.id }) {
             summaries[index] = summary
@@ -723,9 +717,12 @@ public final class HealthSummaryRepository: ObservableObject {
         }
         local.save(summaries, filename: collection)
     }
-    
+
     private func mergeLocally(_ incoming: [HealthSummary]) {
-        var summaries = local.load([HealthSummary].self, filename: collection)
+        for summary in incoming {
+            try? sqliteStore.upsert(summary)
+        }
+        var summaries = (try? sqliteStore.loadAll()) ?? local.load([HealthSummary].self, filename: collection)
         for summary in incoming {
             if let index = summaries.firstIndex(where: { $0.id == summary.id }) {
                 summaries[index] = summary
@@ -735,18 +732,32 @@ public final class HealthSummaryRepository: ObservableObject {
         }
         summaries.sort { $0.date > $1.date }
         local.save(summaries, filename: collection)
+        try? sqliteStore.replaceAll(summaries)
     }
-    
+
     private func summaries(for userId: String) -> [HealthSummary] {
-        let all = local.load([HealthSummary].self, filename: collection)
+        let all = (try? sqliteStore.loadAll())
+            ?? local.load([HealthSummary].self, filename: collection)
         guard !userId.isEmpty else { return all.sorted { $0.date > $1.date } }
         return all.filter { $0.userId.isEmpty || $0.userId == userId }.sorted { $0.date > $1.date }
     }
-    
+
     private func latestLocal(for userId: String) -> HealthSummary? {
         summaries(for: userId).first
     }
-    
+
+    private func latestLocalWithHealthSignal(excludingUserId: String?) -> HealthSummary? {
+        let all = (try? sqliteStore.loadAll())
+            ?? local.load([HealthSummary].self, filename: collection)
+        return all
+            .filter { summary in
+                if let excludingUserId, summary.userId == excludingUserId { return false }
+                return Self.healthSignalScore(summary) > 0
+            }
+            .sorted { $0.date > $1.date }
+            .first
+    }
+
     private func syncToFirestore(_ summary: HealthSummary) {
         Task {
             guard let ref = firebase.userCollection(collection) else { return }

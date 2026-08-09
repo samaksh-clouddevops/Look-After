@@ -52,7 +52,17 @@ public final class GLMService: @unchecked Sendable {
         authProxyClient != nil && (licenseStatusProvider?.isLicensed == true)
     }
 
+    /// ADR-008 / `ArchitectureFeatureFlags.proxyOnlyAI` — Release defaults true.
+    public var isProxyOnlyMode: Bool {
+        ArchitectureFeatureFlags.proxyOnlyAI
+    }
+
     private func requireLicensedProxy() throws -> AuthProxyClient {
+        // Direct z.ai key path is intentionally not used for chat/complete.
+        // When proxy-only is on (default Release), missing proxy is a hard error.
+        if isProxyOnlyMode {
+            guard authProxyClient != nil else { throw GLMServiceError.proxyNotConfigured }
+        }
         guard authProxyClient != nil else { throw GLMServiceError.proxyNotConfigured }
         guard licenseStatusProvider?.isLicensed == true else { throw GLMServiceError.licenseRequired }
         guard let proxy = authProxyClient else { throw GLMServiceError.proxyNotConfigured }

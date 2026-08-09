@@ -8,8 +8,8 @@
 |-------|--------|-------|
 | **0 Foundations** | **Done** | Flags, ADRs 005–008, env matrix, inventory, CI, tests |
 | **1 Identity + Session** | **Done (flag off)** | Identity Combine, SessionContainer + brain/inbox/outbox refs |
-| **2 Sync outbox + inbox** | **WP 2.1–2.2 landed** | Outbox + Inbox SQLite local-first + BG drain hook |
-| **3 Brain façade** | **Scaffold landed** | `BrainFacade` + deterministic backend; proxy-only still ADR/flag only |
+| **2 Sync outbox + storage** | **WP 2.1–2.3 landed** | Outbox, Inbox SQLite, Health SQLite (+ JSON dual-write) |
+| **3 Brain + proxy AI** | **Partial** | Facade wired into BrainVM (flag); GLM already proxy-only + flag surface |
 | 4 Split shell / Features | Not started | |
 | 5 Event bus | Not started | |
 | 6 Infra hardening | Not started | |
@@ -40,10 +40,10 @@ Defaults remain **false** until soak.
 
 ## Next work packages
 
-1. Phase 2 WP 2.3 — Health summaries SQLite
-2. Wire BrainViewModel to BrainFacade behind `useBrainFacade`
-3. Phase 3.2 — enforce `proxyOnlyAI` in `GLMService`
-4. Phase 4.1 — extract `BootstrapCoordinator` from AppShellState
+1. Phase 2 WP 2.4 — Module entities (shopping/bills/…) SQLite
+2. Phase 4.1 — extract `BootstrapCoordinator` from AppShellState
+3. FlowDirector adapter backend for BrainFacade
+4. Phase 5 — typed EventBus dual-publish
 
 ## Test commands
 
@@ -53,4 +53,5 @@ swift test --package-path Packages/LookAfterCore --filter BrainFacadeTests
 swift test --package-path Packages/LookAfterData --filter IdentityServiceTests
 swift test --package-path Packages/LookAfterData --filter SyncOutboxStoreTests
 swift test --package-path Packages/LookAfterData --filter InboxSQLiteStoreTests
+swift test --package-path Packages/LookAfterData --filter HealthSummarySQLiteStoreTests
 ```
