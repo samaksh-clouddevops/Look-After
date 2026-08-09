@@ -1456,41 +1456,75 @@ public final class TasksViewModel: ObservableObject {
         context: TaskFocusStretchResolver.Context
     ) async {
         let useAI = TaskManagementPreferences.smarterFocusTipsEnabled
+        // Cap work to visible-ish window; avoid serial GLM storms (PERF-013 / PERF-017).
+        let workItems = Array(tasks.prefix(40))
 
-        for task in tasks {
+        // Stage local displays, then publish once.
+        var nextDisplays = taskTimeDisplays
+        var nextFingerprints = timeDisplayFingerprints
+        var pendingAI: [(LifeTask, TimeDisplayFingerprint)] = []
+
+        for task in workItems {
             let fingerprint = TimeDisplayFingerprint(task: task, context: context)
             let local = localTimeDisplay(for: task, context: context)
 
             if !useAI {
-                taskTimeDisplays[task.id] = local
-                timeDisplayFingerprints[task.id] = fingerprint
+                nextDisplays[task.id] = local
+                nextFingerprints[task.id] = fingerprint
                 continue
             }
 
-            if let cached = taskTimeDisplays[task.id],
-               timeDisplayFingerprints[task.id] == fingerprint,
+            if let cached = nextDisplays[task.id],
+               nextFingerprints[task.id] == fingerprint,
                !cached.needsAIRefinement {
                 continue
             }
 
-            taskTimeDisplays[task.id] = local
-            timeDisplayFingerprints[task.id] = fingerprint
+            nextDisplays[task.id] = local
+            nextFingerprints[task.id] = fingerprint
 
-            guard TaskFocusStretchResolver.displayInfo(for: task, context: context).needsAIRefinement else {
-                continue
+            if TaskFocusStretchResolver.displayInfo(for: task, context: context).needsAIRefinement {
+                pendingAI.append((task, fingerprint))
             }
+        }
 
-            loadingTimeDisplayTaskIds.insert(task.id)
-            defer { loadingTimeDisplayTaskIds.remove(task.id) }
+        taskTimeDisplays = nextDisplays
+        timeDisplayFingerprints = nextFingerprints
 
-            if let refined = await focusStretchRefiner.refine(
-                task: task,
-                context: context,
-                estimatedMinutes: task.estimatedMinutes
-            ) {
-                taskTimeDisplays[task.id] = refined
-                timeDisplayFingerprints[task.id] = fingerprint
+        guard useAI, !pendingAI.isEmpty else { return }
+
+        // Limited concurrency for AI refine.
+        let maxConcurrent = 3
+        var index = 0
+        while index < pendingAI.count {
+            let slice = Array(pendingAI[index..<min(index + maxConcurrent, pendingAI.count)])
+            index += slice.count
+            let loadingIds = Set(slice.map(\.0.id))
+            loadingTimeDisplayTaskIds.formUnion(loadingIds)
+            await withTaskGroup(of: (String, TaskTimeDisplayInfo, TimeDisplayFingerprint)?.self) { group in
+                for (task, fingerprint) in slice {
+                    group.addTask { @MainActor in
+                        if let refined = await self.focusStretchRefiner.refine(
+                            task: task,
+                            context: context,
+                            estimatedMinutes: task.estimatedMinutes
+                        ) {
+                            return (task.id, refined, fingerprint)
+                        }
+                        return nil
+                    }
+                }
+                var batch = taskTimeDisplays
+                var prints = timeDisplayFingerprints
+                for await result in group {
+                    guard let (id, refined, fingerprint) = result else { continue }
+                    batch[id] = refined
+                    prints[id] = fingerprint
+                }
+                taskTimeDisplays = batch
+                timeDisplayFingerprints = prints
             }
+            loadingTimeDisplayTaskIds.subtract(loadingIds)
         }
     }
 

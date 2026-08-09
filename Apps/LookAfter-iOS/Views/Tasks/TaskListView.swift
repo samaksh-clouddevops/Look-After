@@ -169,7 +169,8 @@ struct TaskListView: View {
                     }
                     .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: cachedFilteredTasks.map(\.id))
+                    // Animate on revision, not a freshly allocated id array every body pass (PERF-012).
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tasksVM.tasksContentRevision)
                     .onAppear { updateFilteredTasksIfNeeded() }
                     .onChange(of: selectedFilter) { _, _ in
                         updateFilteredTasksIfNeeded()
