@@ -6,42 +6,50 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lookafter.app.ui.components.ElevatedSurfaceCard
 import com.lookafter.app.ui.components.SectionHeader
 import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
-import com.lookafter.core.brain.HeroTaskRanker
+import com.lookafter.core.brain.BrainTick
+import com.lookafter.core.brain.ExecutiveBrainEngine
+import com.lookafter.core.briefing.BriefingNarrativeBuilder
+import com.lookafter.core.capacity.CapacityBand
+import com.lookafter.core.capacity.ExecutiveCapacity
+import com.lookafter.core.capacity.ExecutiveCapacityEngine
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.health.HealthSummary
-import com.lookafter.core.models.TaskStatus
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
-/** Calm morning briefing surface — mirrors iOS Daily Briefing layout. */
+/** Morning briefing — narrative from WorldState + capacity + care. */
 @Composable
 fun BriefingScreen(
     state: LifeState,
     health: HealthSummary = HealthSummary.EMPTY,
+    capacity: ExecutiveCapacity? = null,
+    brainTick: BrainTick? = null,
+    onStartFocus: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val active = state.activeTasks.count { it.status.isActive }
-    val done = state.activeTasks.count { it.status == TaskStatus.COMPLETED }
-    val hero = HeroTaskRanker.select(state)
-    val day = state.currentDay ?: LocalDate.now()
-    val dayLabel = day.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+    val tick = brainTick ?: remember(state, health) { ExecutiveBrainEngine.tick(state, health) }
+    val cap = capacity ?: remember(state, health, tick) {
+        ExecutiveCapacityEngine.compute(state, health, tick.world)
+    }
+    val narrative = remember(state, health, tick, cap) {
+        BriefingNarrativeBuilder.build(state, health, tick, cap)
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -52,124 +60,96 @@ fun BriefingScreen(
         verticalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingMD),
     ) {
         item {
-            SectionHeader(
-                title = "Good day",
-                subtitle = dayLabel,
-            )
+            SectionHeader(title = narrative.greeting, subtitle = narrative.orientation)
         }
+        item { CapacityCard(narrative.capacity) }
         item {
             ElevatedSurfaceCard {
+                Text("Primary move", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.AccentPrimary)
+                Text(narrative.heroTitle, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = LookAfterDimens.spacingXXS))
                 Text(
-                    text = "Next up",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = LookAfterColors.AccentPrimary,
-                )
-                Text(
-                    text = hero.task?.title
-                        ?: if (active == 0) {
-                            "Your board is clear. Protect the quiet."
-                        } else {
-                            "You have $active open · $done done today."
-                        },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
-                )
-                Text(
-                    text = hero.reason,
+                    narrative.heroReason,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
                 )
+                if (narrative.showFocusCta && onStartFocus != null) {
+                    Button(
+                        onClick = onStartFocus,
+                        modifier = Modifier.fillMaxWidth().padding(top = LookAfterDimens.spacingSM),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LookAfterColors.AccentPrimary,
+                            contentColor = LookAfterColors.AccentOnPrimary,
+                        ),
+                    ) { Text(narrative.focusCtaLabel) }
+                }
             }
         }
-        if (health.readinessScore != null || health.totalSleepMinutes != null) {
+        narrative.careLine?.let { care ->
             item {
                 ElevatedSurfaceCard {
-                    Text(
-                        text = "Readiness",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = LookAfterColors.Health,
-                    )
-                    Text(
-                        text = health.readinessLabel,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
-                    )
-                    val sleep = health.sleepHours
-                    if (sleep != null) {
-                        Text(
-                            text = "Sleep ${"%.1f".format(sleep)}h",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
-                        )
-                    }
+                    Text("Care", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.Health)
+                    Text(care, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = LookAfterDimens.spacingXS))
+                }
+            }
+        }
+        narrative.calendarLine?.let { cal ->
+            item {
+                ElevatedSurfaceCard {
+                    Text("Calendar", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.Focus)
+                    Text(cal, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = LookAfterDimens.spacingXS))
                 }
             }
         }
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(LookAfterDimens.spacingSM),
-            ) {
-                MetricChip(
-                    icon = Icons.Outlined.Schedule,
-                    label = "Open",
-                    value = "$active",
-                    modifier = Modifier.weight(1f),
-                )
-                MetricChip(
-                    icon = Icons.Outlined.CheckCircle,
-                    label = "Done",
-                    value = "$done",
-                    modifier = Modifier.weight(1f),
-                )
-                MetricChip(
-                    icon = Icons.Outlined.Bolt,
-                    label = "Focus",
-                    value = "Ready",
-                    modifier = Modifier.weight(1f),
-                )
+            ElevatedSurfaceCard {
+                Text("Board", style = MaterialTheme.typography.labelMedium, color = LookAfterColors.AccentPrimary)
+                Text(narrative.boardLine, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = LookAfterDimens.spacingXXS))
             }
         }
-        item {
+        item { Text("Guidance", style = MaterialTheme.typography.titleMedium) }
+        items(narrative.guidance) { line ->
             ElevatedSurfaceCard {
-                Text(
-                    text = "Why now",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = LookAfterColors.AccentPrimary,
-                )
-                Text(
-                    text = "Look After keeps one calm source of truth. " +
-                        "Complete tasks on Today; Briefing only surfaces orientation.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
-                )
+                Text(line.eyebrow, style = MaterialTheme.typography.labelMedium, color = LookAfterColors.AccentPrimary)
+                Text(line.body, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = LookAfterDimens.spacingXXS))
             }
         }
     }
 }
 
 @Composable
-private fun MetricChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    ElevatedSurfaceCard(modifier = modifier) {
-        Column(
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Icon(icon, contentDescription = null, tint = LookAfterColors.AccentPrimary)
-            Text(value, style = MaterialTheme.typography.titleLarge)
+private fun CapacityCard(capacity: ExecutiveCapacity) {
+    val accent = when (capacity.band) {
+        CapacityBand.RECOVERY -> LookAfterColors.Warning
+        CapacityBand.PROTECTIVE -> LookAfterColors.Focus
+        CapacityBand.STEADY -> LookAfterColors.AccentPrimary
+        CapacityBand.HIGH -> LookAfterColors.Success
+    }
+    ElevatedSurfaceCard {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text("Capacity", style = MaterialTheme.typography.labelMedium, color = accent)
+                Text(capacity.headline, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = LookAfterDimens.spacingXXS))
+            }
+            Text("${(capacity.energyScore * 100).roundToInt()}%", style = MaterialTheme.typography.headlineMedium, color = accent)
+        }
+        LinearProgressIndicator(
+            progress = { capacity.energyScore.toFloat().coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().padding(top = LookAfterDimens.spacingSM).height(8.dp),
+            color = accent,
+        )
+        Text(
+            "Favor ~${capacity.recommendedFocusMinutes}m deep work · ≤${capacity.recommendedOpenTasks} open · ${capacity.plannedOpenMinutes}m planned",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+        )
+        if (capacity.isOverCommitted) {
             Text(
-                label,
+                "Over committed — strip fluid before adding load.",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = LookAfterColors.Warning,
+                modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
             )
         }
     }

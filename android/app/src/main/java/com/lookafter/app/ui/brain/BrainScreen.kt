@@ -26,6 +26,8 @@ import com.lookafter.app.ui.theme.LookAfterColors
 import com.lookafter.app.ui.theme.LookAfterDimens
 import com.lookafter.core.brain.BrainTick
 import com.lookafter.core.brain.CognitiveLoadLevel
+import com.lookafter.core.capacity.ExecutiveCapacity
+import kotlin.math.roundToInt
 
 @Composable
 fun BrainScreen(
@@ -39,6 +41,7 @@ fun BrainScreen(
     onAcceptPlan: () -> Unit = {},
     onRejectPlan: () -> Unit = {},
     isStreaming: Boolean = false,
+    capacity: ExecutiveCapacity = ExecutiveCapacity.EMPTY,
     modifier: Modifier = Modifier,
 ) {
     var draft by remember { mutableStateOf("") }
@@ -83,6 +86,16 @@ fun BrainScreen(
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(top = LookAfterDimens.spacingXXS),
                 )
+                if (capacity.band != com.lookafter.core.capacity.CapacityBand.STEADY || capacity.isOverCommitted) {
+                    Text(
+                        "Capacity ${capacity.band.label} · ${(capacity.energyScore * 100).roundToInt()}% · " +
+                            "~${capacity.recommendedFocusMinutes}m focus" +
+                            if (capacity.isOverCommitted) " · over committed" else "",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = LookAfterDimens.spacingXS),
+                    )
+                }
                 if (world.cognitiveLoad == CognitiveLoadLevel.OVERLOADED) {
                     Text("Overloaded — strip to one block.", color = LookAfterColors.Warning, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = LookAfterDimens.spacingXS))
                 }

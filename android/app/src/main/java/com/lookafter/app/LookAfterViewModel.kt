@@ -29,6 +29,8 @@ import com.lookafter.core.brain.CoachService
 import com.lookafter.core.brain.ExecutiveBrainEngine
 import com.lookafter.core.calendar.CalendarEvent
 import com.lookafter.core.calendar.CalendarEventsProvider
+import com.lookafter.core.capacity.ExecutiveCapacity
+import com.lookafter.core.capacity.ExecutiveCapacityEngine
 import com.lookafter.core.engine.LifeEngine
 import com.lookafter.core.engine.LifeState
 import com.lookafter.core.engine.LookAfterIntent
@@ -184,6 +186,10 @@ class LookAfterViewModel(
             isInFlowSession = f.phase == FocusSessionPhase.RUNNING,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrainTick())
+
+    val executiveCapacity: StateFlow<ExecutiveCapacity> = combine(state, health, brainTick) { life, h, tick ->
+        ExecutiveCapacityEngine.compute(life, h, tick.world)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ExecutiveCapacity.EMPTY)
 
     init {
         viewModelScope.launch { refreshCalendarDay() }

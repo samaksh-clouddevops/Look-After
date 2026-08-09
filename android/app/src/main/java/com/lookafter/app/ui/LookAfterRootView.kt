@@ -63,6 +63,7 @@ fun LookAfterRootView(
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     val brainTick by viewModel.brainTick.collectAsStateWithLifecycle()
     val coach by viewModel.coachTranscript.collectAsStateWithLifecycle()
+    val capacity by viewModel.executiveCapacity.collectAsStateWithLifecycle()
     val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
     val deepLink by viewModel.pendingDeepLink.collectAsStateWithLifecycle()
     val ambientEnabled by viewModel.ambientEnabled.collectAsStateWithLifecycle()
@@ -295,6 +296,12 @@ fun LookAfterRootView(
                 current == AppDestination.BRIEFING -> BriefingScreen(
                     state = state,
                     health = health,
+                    capacity = capacity,
+                    brainTick = brainTick,
+                    onStartFocus = {
+                        viewModel.startFocusForHero()
+                        focusOpen = true
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
                 current == AppDestination.TODAY -> TodayTimelineScreen(
@@ -340,6 +347,7 @@ fun LookAfterRootView(
                     onAcceptPlan = viewModel::acceptPendingPlan,
                     onRejectPlan = viewModel::rejectPendingPlan,
                     isStreaming = isStreaming,
+                    capacity = capacity,
                     modifier = Modifier.fillMaxSize(),
                 )
                 current == AppDestination.YOU -> YouScreen(
