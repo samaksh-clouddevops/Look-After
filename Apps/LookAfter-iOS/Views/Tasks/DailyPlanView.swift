@@ -280,7 +280,8 @@ private struct VisualFocusTimer: View {
     @Environment(\.dismiss) private var dismiss
     @State private var remainingSeconds: Int
     @State private var isRunning = true
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    /// Cancellable task tick (PERF-007) — no autoconnect Timer after dismiss.
+    @State private var tickTask: Task<Void, Never>?
 
     init(task: LifeTask, onComplete: @escaping () -> Void) {
         self.task = task
@@ -317,14 +318,33 @@ private struct VisualFocusTimer: View {
             }
         }
         .statusBarHidden()
-        .onAppear { requestOrientation(.landscape) }
-        .onDisappear { requestOrientation(.allButUpsideDown) }
-        .onReceive(ticker) { _ in
-            guard isRunning, remainingSeconds > 0 else { return }
-            remainingSeconds -= 1
-            if remainingSeconds == 0 {
-                isRunning = false
-                onComplete()
+        .onAppear {
+            requestOrientation(.landscape)
+            restartTickerIfNeeded()
+        }
+        .onChange(of: isRunning) { _, running in
+            if running { restartTickerIfNeeded() } else { tickTask?.cancel(); tickTask = nil }
+        }
+        .onDisappear {
+            tickTask?.cancel()
+            tickTask = nil
+            requestOrientation(.allButUpsideDown)
+        }
+    }
+
+    private func restartTickerIfNeeded() {
+        tickTask?.cancel()
+        guard isRunning else { return }
+        tickTask = Task { @MainActor in
+            while !Task.isCancelled, isRunning, remainingSeconds > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, isRunning else { return }
+                remainingSeconds -= 1
+                if remainingSeconds == 0 {
+                    isRunning = false
+                    onComplete()
+                    return
+                }
             }
         }
     }

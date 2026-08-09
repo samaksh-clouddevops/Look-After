@@ -5,11 +5,12 @@ import LookAfterCore
 public struct PhysiologicalResetView: View {
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scale: CGFloat = 0.6
     @State private var phaseText = "Inhale Deeply..."
     @State private var secondsRemaining = 60
-
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    /// Task-based tick — cancelled on dismiss (PERF-007); avoids orphaned Timer.publish.
+    @State private var tickTask: Task<Void, Never>?
 
     public init() {}
 
@@ -77,19 +78,34 @@ public struct PhysiologicalResetView: View {
         }
         .onAppear {
             startBreathingAnimation()
+            startCountdown()
         }
-        .onReceive(timer) { _ in
-            if secondsRemaining > 0 {
-                secondsRemaining -= 1
-            } else {
-                HapticManager.notification(.success)
-                dismiss()
-            }
+        .onDisappear {
+            tickTask?.cancel()
+            tickTask = nil
         }
         .accessibilityIdentifier("screen-physiological-reset")
     }
 
+    private func startCountdown() {
+        tickTask?.cancel()
+        tickTask = Task { @MainActor in
+            while !Task.isCancelled, secondsRemaining > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                secondsRemaining -= 1
+            }
+            guard !Task.isCancelled else { return }
+            HapticManager.notification(.success)
+            dismiss()
+        }
+    }
+
     private func startBreathingAnimation() {
+        guard !reduceMotion else {
+            scale = 1.0
+            return
+        }
         withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
             scale = 1.1
         }
