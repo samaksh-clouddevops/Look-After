@@ -702,7 +702,7 @@ public struct LookAfterRootCanvas: View {
     }
 
     private var contextualReplanTaskTitles: [String: String] {
-        Dictionary(uniqueKeysWithValues: shell.tasksVM.tasks.map { ($0.id, $0.title) })
+        Dictionary.uniquingFirstValue(shell.tasksVM.tasks.map { ($0.id, $0.title) })
     }
 
     private func submitPostWakeReplan(wakeTime: Date) async {

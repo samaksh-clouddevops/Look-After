@@ -95,7 +95,7 @@ public final class ShoppingRepository: ObservableObject {
     }
 
     private static func merge(local: [ShoppingItem], remote: [ShoppingItem]) -> [ShoppingItem] {
-        var byID = Dictionary(uniqueKeysWithValues: remote.map { ($0.id, $0) })
+        var byID = Dictionary.uniquingFirstValue(remote.map { ($0.id, $0) })
         for item in local where byID[item.id] == nil {
             byID[item.id] = item
         }

@@ -111,7 +111,7 @@ public final class BackgroundAnalyticsService: ObservableObject {
             return
         }
 
-        var snapshotMap = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.id, $0) })
+        var snapshotMap = Dictionary.uniquingFirstValue(snapshots.map { ($0.id, $0) })
 
         for key in dirtyKeys {
             guard let day = Self.date(from: key, calendar: calendar) else { continue }
