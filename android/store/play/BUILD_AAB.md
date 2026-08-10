@@ -49,5 +49,18 @@ android/app/build/outputs/bundle/release/app-release.aab
 - [ ] Release notes (`release-notes.txt`)
 
 ## CI
-GitHub Actions `android-build.yml` already runs unit tests, `assembleDebug`, and `assembleRelease`.
-Add a manual `bundleRelease` job when upload keys are in GitHub Secrets.
+GitHub Actions `android-build.yml` already runs unit tests, `assembleDebug`, `assembleRelease`, and `bundleRelease`
+(unsigned unless upload-key secrets are configured).
+
+## F5 internal track
+Full operator checklist: [INTERNAL_TRACK.md](INTERNAL_TRACK.md)
+
+```powershell
+cd android
+.\gradlew.bat :app:bundleRelease
+# → app/build/outputs/bundle/release/app-release.aab
+```
+
+Privacy URL (after Pages enable):
+https://samaksh-clouddevops.github.io/Look-After/privacy
+
