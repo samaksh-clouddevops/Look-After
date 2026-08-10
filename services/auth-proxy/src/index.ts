@@ -8,6 +8,7 @@ import {
   createRateLimitMiddleware,
   requireActiveLicense,
 } from "./middleware/rateLimit";
+import { requestContextMiddleware } from "./middleware/requestContext";
 import { licenseRouter } from "./routes/license";
 import { aiRouter } from "./routes/ai";
 import { adminRouter } from "./routes/admin";
@@ -29,6 +30,8 @@ async function main(): Promise<void> {
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
   app.use(express.json({ limit: "1mb" }));
+  // Phase 6.1 — request id + structured access logs (+ optional App Check enforce).
+  app.use(requestContextMiddleware);
 
   const adminIpLimit = createIpRateLimitMiddleware(config, "admin");
   const licenseIpLimit = createIpRateLimitMiddleware(config, "license");
@@ -36,7 +39,20 @@ async function main(): Promise<void> {
   const rateLimit = createRateLimitMiddleware(config, store);
 
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "lookafter-auth-proxy" });
+    res.json({
+      ok: true,
+      service: "lookafter-auth-proxy",
+      appCheckEnforce: process.env.APP_CHECK_ENFORCE === "true",
+    });
+  });
+
+  app.get("/metrics/summary", requireAdmin(config.adminApiKey), async (_req, res) => {
+    // Lightweight ops snapshot — expand with OTel later (Phase 6.3).
+    res.json({
+      ok: true,
+      uptimeSec: Math.floor(process.uptime()),
+      node: process.version,
+    });
   });
 
   app.use(

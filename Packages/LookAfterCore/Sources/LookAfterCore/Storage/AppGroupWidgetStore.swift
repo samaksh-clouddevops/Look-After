@@ -7,13 +7,25 @@ import Foundation
 public enum AppGroupWidgetStore {
     private static let fileName = "widget-snapshot.json"
 
-    /// True when this process can access the App Group container (entitlements + signing).
+    /// True when this process can access any known App Group container.
     public static var isAvailable: Bool {
         containerURL() != nil
     }
 
+    /// Preferred container for writes (legacy until modern entitlement is live).
     public static func containerURL() -> URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: WidgetAppGroup.identifier)
+        for id in WidgetAppGroup.readIdentifiers {
+            if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private static func snapshotURL(forGroupId id: String) -> URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: id)?
+            .appendingPathComponent(fileName, isDirectory: false)
     }
 
     private static var snapshotURL: URL? {
@@ -21,22 +33,26 @@ public enum AppGroupWidgetStore {
     }
 
     public static func save(_ snapshot: WidgetSnapshot) {
-        guard let url = snapshotURL else { return }
-        do {
-            let data = try SharedFormatters.jsonEncoderSeconds.encode(snapshot)
-            try data.write(to: url, options: [.atomic])
-        } catch {
-            // Container unavailable or disk full — widget will show stale/empty data.
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(snapshot) else { return }
+        // Dual-write modern + legacy when both containers exist (Phase 7.1).
+        for id in WidgetAppGroup.readIdentifiers {
+            guard let url = snapshotURL(forGroupId: id) else { continue }
+            try? data.write(to: url, options: [.atomic])
         }
     }
 
     public static func load() -> WidgetSnapshot {
-        guard isAvailable else { return .empty }
-
-        if let url = snapshotURL,
-           let data = try? Data(contentsOf: url),
-           let snapshot = try? SharedFormatters.jsonDecoderSeconds.decode(WidgetSnapshot.self, from: data) {
-            return snapshot
+        // Prefer modern group, then legacy file, then UserDefaults migration.
+        for id in WidgetAppGroup.readIdentifiers {
+            if let url = snapshotURL(forGroupId: id),
+               let data = try? Data(contentsOf: url),
+               let snapshot = try? SharedFormatters.jsonDecoderSeconds.decode(WidgetSnapshot.self, from: data) {
+                // Best-effort copy into primary write target.
+                if id != WidgetAppGroup.identifier {
+                    save(snapshot)
+                }
+                return snapshot
+            }
         }
 
         if let migrated = migrateLegacyUserDefaults() {
@@ -47,8 +63,10 @@ public enum AppGroupWidgetStore {
     }
 
     public static func clear() {
-        if let url = snapshotURL {
-            try? FileManager.default.removeItem(at: url)
+        for id in WidgetAppGroup.readIdentifiers {
+            if let url = snapshotURL(forGroupId: id) {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
         clearLegacyUserDefaults()
     }

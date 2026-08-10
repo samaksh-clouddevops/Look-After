@@ -6,43 +6,39 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| **0 Foundations** | **Done** | Flags, ADRs 005–008, env matrix, inventory, CI, tests |
-| **1 Identity + Session** | **Done (flag off)** | Identity Combine, SessionContainer + brain/inbox/outbox refs |
-| **2 Sync + modules SQLite** | **WP 2.1–2.4 landed** | Outbox, inbox, health, bills/shopping/relationships/journal |
-| **3 Brain + proxy AI** | **Done (flag gated)** | Facade + FlowAware adapter; proxy-only surface |
-| **4 Bootstrap extract** | **WP 4.1 landed** | `BootstrapCoordinator` + `BootstrapExecuting` |
-| **5 Event bus** | **Landed (flag off)** | `SessionEventBus` dual-publish when `useTypedEventBus` |
-| 6 Infra hardening | Not started | |
-| 7 Brand / multi-account | Not started | |
-| 8 Polish | Not started | |
+| **0 Foundations** | **Done** | Flags, ADRs, env matrix, inventory, CI |
+| **1 Identity + Session** | **Done (flag off)** | Identity Combine, SessionContainer |
+| **2 Sync + modules SQLite** | **Done (flag off for outbox)** | Outbox, inbox, health, module entities |
+| **3 Brain + proxy AI** | **Done (flag gated)** | Facade + FlowAware; proxy-only surface |
+| **4 Bootstrap extract** | **WP 4.1 done** | BootstrapCoordinator (4.2 TasksVM split still open) |
+| **5 Event bus** | **Done (flag off)** | SessionEventBus dual-publish |
+| **6 Infra hardening** | **Foundation landed** | Proxy request-id logs, App Check stub, rules test plan, metrics route, runbook |
+| **7 Brand / multi-account** | **Code dual-path landed** | App Group dual R/W, BG dual IDs, UserStorageRoot — **needs entitlement/plist ops** |
+| **8 Polish** | **Foundation landed** | LookAfterAppGroup pkg, export/encrypt, outbox debugStatus — flag soak remaining |
 
-## Landed on this branch
+## Ops docs
 
-| Artifact | Path |
-|----------|------|
-| Feature flags | `ArchitectureFeatureFlags.swift` |
-| Identity + Combine | `IdentityService.swift` |
-| Session | `SessionContainer.swift` |
-| Outbox store/worker | `Sync/SyncOutbox*.swift` |
-| Task cloud path | `Repositories.swift` → outbox when flag on |
-| Bootstrap drain | `AppShellState.runBootstrapWork` |
-| Tests | `ArchitectureFeatureFlagsTests`, `IdentityServiceTests`, `SyncOutboxStoreTests` |
-| ADRs / env / inventory | `Documentation/architecture/` |
+- [infra-ops-runbook.md](./infra-ops-runbook.md)
+- [firestore-rules-test-plan.md](./firestore-rules-test-plan.md)
+- [environment-matrix.md](./environment-matrix.md)
+
+## Still requires human / platform work
+
+1. Add `group.com.lookafter` to app + widget entitlements
+2. Dual BG identifiers in Info.plist `BGTaskSchedulerPermittedIdentifiers`
+3. Firebase App Check SDK + real token provider
+4. Staging proxy deploy + `APP_CHECK_ENFORCE` soak
+5. Default architecture flags **on** after 1–2 TestFlight builds
+6. Phase 4.2 TasksViewModel split (large, optional next)
 
 ## How to enable (dev)
 
 ```swift
 ArchitectureFeatureFlags.useSessionContainer = true
 ArchitectureFeatureFlags.useSyncOutbox = true
+ArchitectureFeatureFlags.useBrainFacade = true
+ArchitectureFeatureFlags.useTypedEventBus = true
 ```
-
-Defaults remain **false** until soak.
-
-## Next work packages
-
-1. Phase 4.2 — Split TasksViewModel into services
-2. Phase 6 — App Check + outbox metrics Settings row
-3. Default flags on after soak; delete legacy Notification path
 
 ## Test commands
 

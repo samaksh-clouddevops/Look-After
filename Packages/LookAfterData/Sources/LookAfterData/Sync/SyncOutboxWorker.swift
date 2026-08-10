@@ -77,6 +77,15 @@ public final class SyncOutboxWorker {
         (try? store.pendingCount(userId: userId)) ?? 0
     }
 
+    /// Debug / Settings row (Phase 6 ops surface).
+    public func debugStatus(userId: String) -> [String: String] {
+        [
+            "flag": ArchitectureFeatureFlags.useSyncOutbox ? "on" : "off",
+            "pending": String(pendingCount(userId: userId)),
+            "userIdPrefix": String(userId.prefix(8)),
+        ]
+    }
+
     /// Drain ready items once. Safe to call from BG task or after reconnect.
     @discardableResult
     public func drainOnce(userId: String) async -> Int {
@@ -115,6 +124,9 @@ public final class SyncOutboxWorker {
                     "outbox apply failed id=\(record.id, privacy: .public) attempts=\(attempts): \(error.localizedDescription, privacy: .public)"
                 )
             }
+        }
+        if success > 0 {
+            SessionEventBus.shared.publish(.outboxDrained(userId: userId, successCount: success))
         }
         return success
     }

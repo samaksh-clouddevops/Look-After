@@ -5,7 +5,7 @@ import LookAfterCore
 // MARK: - Local dual-write helper (JSON + SQLite)
 
 @MainActor
-enum ModuleLocalStore {
+public enum ModuleLocalStore {
     static func loadBills() -> [BillItem] {
         let sql = JSONEntitySQLiteStore.sharedBills
         sql.migrateFromJSONIfNeeded(

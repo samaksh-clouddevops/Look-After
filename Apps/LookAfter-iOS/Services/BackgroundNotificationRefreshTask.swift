@@ -5,22 +5,36 @@ import LookAfterData
 
 /// Lightweight background pass — reload calendar, meds, and tasks; reschedule local notifications.
 enum BackgroundNotificationRefreshTask {
-    static let identifier = "com.samaksh.flowos.app.notification-refresh"
+    /// Legacy ID still registered in Info.plist / BGTaskSchedulerPermittedIdentifiers.
+    static let legacyIdentifier = "com.samaksh.flowos.app.notification-refresh"
+    /// Brand ID — dual-register when Info.plist lists both (Phase 7.3).
+    static let modernIdentifier = "com.lookafter.app.notification-refresh"
+    /// Primary schedule target remains legacy until dual Info.plist lands.
+    static let identifier = legacyIdentifier
 
     static func register() {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
-            guard let refreshTask = task as? BGAppRefreshTask else {
-                task.setTaskCompleted(success: false)
-                return
+        for id in [legacyIdentifier, modernIdentifier] {
+            BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
+                guard let refreshTask = task as? BGAppRefreshTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                handle(refreshTask)
             }
-            handle(refreshTask)
         }
     }
 
     static func scheduleNextRefresh() {
-        let request = BGAppRefreshTaskRequest(identifier: identifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
-        try? BGTaskScheduler.shared.submit(request)
+        // Prefer modern if submit succeeds (Info.plist must allow it); else legacy.
+        let modern = BGAppRefreshTaskRequest(identifier: modernIdentifier)
+        modern.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        do {
+            try BGTaskScheduler.shared.submit(modern)
+        } catch {
+            let legacy = BGAppRefreshTaskRequest(identifier: legacyIdentifier)
+            legacy.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+            try? BGTaskScheduler.shared.submit(legacy)
+        }
     }
 
     private static func handle(_ task: BGAppRefreshTask) {

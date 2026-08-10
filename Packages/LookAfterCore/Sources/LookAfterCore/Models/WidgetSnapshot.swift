@@ -104,6 +104,16 @@ public extension WidgetSnapshot {
 }
 
 public enum WidgetAppGroup {
-    public static let identifier = "group.com.samaksh.flowos"
+    /// Legacy App Group (current entitlements). Keep until dual-read soak completes (Phase 7).
+    public static let legacyIdentifier = "group.com.samaksh.flowos"
+    /// Target brand App Group — add to entitlements when dual-registered.
+    public static let modernIdentifier = "group.com.lookafter"
+    /// Primary write target — still legacy until entitlement dual-register ships.
+    public static let identifier = legacyIdentifier
     public static let snapshotKey = "flowos.widget.snapshot"
+
+    /// All group IDs to attempt for read (modern first when available).
+    public static var readIdentifiers: [String] {
+        [modernIdentifier, legacyIdentifier]
+    }
 }
