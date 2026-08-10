@@ -28,7 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleOwner
 import com.lookafter.app.ui.theme.LookAfterDimens
 
 /**
@@ -44,6 +44,11 @@ fun CameraBodyDouble(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = remember(context) {
+        generateSequence(context) { ctx ->
+            (ctx as? android.content.ContextWrapper)?.baseContext
+        }.filterIsInstance<LifecycleOwner>().firstOrNull()
+    }
     var granted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -58,7 +63,7 @@ fun CameraBodyDouble(
         if (enabled && !granted) launcher.launch(Manifest.permission.CAMERA)
     }
 
-    if (!enabled || !granted) {
+    if (!enabled || !granted || lifecycleOwner == null) {
         BodyDoublePresencePanel(
             emergency = emergency,
             elapsedActiveSeconds = elapsedActiveSeconds,
@@ -67,7 +72,6 @@ fun CameraBodyDouble(
         return
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
     var bindError by remember { mutableStateOf(false) }
 
     if (bindError) {

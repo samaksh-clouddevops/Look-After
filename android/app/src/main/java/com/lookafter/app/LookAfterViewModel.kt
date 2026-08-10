@@ -518,20 +518,6 @@ class LookAfterViewModel(
 
     fun webRtcEglContext(): org.webrtc.EglBase.Context? = webRtc?.eglContext
 
-    val insights: StateFlow<InsightsSnapshot> = combine(
-        state,
-        health,
-        healthHistory,
-        healthRolling,
-    ) { life, h, hist, rolling ->
-        InsightsEngine.compute(
-            state = life,
-            health = h,
-            healthHistory = hist,
-            rollingHealth = rolling,
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsSnapshot.EMPTY)
-
     fun setCameraBodyDoubleEnabled(enabled: Boolean) {
         _cameraBodyDouble.value = enabled
     }
@@ -568,6 +554,20 @@ class LookAfterViewModel(
     val cycleSnapshot: StateFlow<CycleSnapshot> = combine(_cycle, state) { c, life ->
         CycleEngine.snapshot(c, today = life.currentDay ?: LocalDate.now())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CycleSnapshot())
+
+    val insights: StateFlow<InsightsSnapshot> = combine(
+        state,
+        health,
+        healthHistory,
+        healthRolling,
+    ) { life, h, hist, rolling ->
+        InsightsEngine.compute(
+            state = life,
+            health = h,
+            healthHistory = hist,
+            rollingHealth = rolling,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsSnapshot.EMPTY)
 
     private val _onboarding = MutableStateFlow(app.initialOnboarding)
     val onboarding: StateFlow<OnboardingState> = _onboarding.asStateFlow()
@@ -824,7 +824,9 @@ class LookAfterViewModel(
                 // Deterministic single-day intents still apply immediately (strip/park).
                 val simple = MultiDayPlanEngine.simpleIntents(trimmed, life)
                 if (simple.intents.isNotEmpty()) {
-                    simple.intents.forEach { engine.process(it) }
+                    for (intent in simple.intents) {
+                        engine.process(intent)
+                    }
                     persistPlanning(
                         PlanningConversationEngine.reduce(
                             _planning.value,
@@ -1028,7 +1030,9 @@ class LookAfterViewModel(
             val pending = _planning.value.pending ?: return@launch
             if (pending.accepted != null) return@launch
             val intents = PlanningConversationEngine.intentsForPending(pending, engine.currentState)
-            intents.forEach { engine.process(it) }
+            for (intent in intents) {
+                engine.process(intent)
+            }
             persistPlanning(
                 PlanningConversationEngine.reduce(
                     _planning.value,

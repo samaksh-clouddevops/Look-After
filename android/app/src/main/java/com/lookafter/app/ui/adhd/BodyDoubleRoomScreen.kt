@@ -174,13 +174,13 @@ fun BodyDoubleRoomScreen(
             } else {
                 CameraBodyDouble(
                     emergency = false,
-                    elapsedActiveSeconds = 0,
+                    elapsedActiveSeconds = 0L,
                     enabled = room.useCamera,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 BodyDoublePresencePanel(
                     emergency = false,
-                    elapsedActiveSeconds = 30,
+                    elapsedActiveSeconds = 30L,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
