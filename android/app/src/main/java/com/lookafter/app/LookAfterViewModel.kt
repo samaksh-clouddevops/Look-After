@@ -16,6 +16,7 @@ import com.lookafter.app.notifications.LookAfterNotifier
 import com.lookafter.app.notifications.NotificationPreferencesStore
 import com.lookafter.app.planning.PlanningConversationStore
 import com.lookafter.app.sync.LifeStateSyncTransport
+import com.lookafter.app.behavior.BehaviorStore
 import com.lookafter.app.creativity.CreativityStore
 import com.lookafter.app.cycle.CycleStore
 import com.lookafter.app.learning.LearningStore
@@ -24,6 +25,10 @@ import com.lookafter.app.webrtc.RoomSignalingFactory
 import com.lookafter.app.webrtc.RoomSignalingTransport
 import com.lookafter.app.webrtc.WebRtcPeerController
 import com.lookafter.app.widget.TodayWidgetUpdater
+import com.lookafter.core.behavior.BehaviorEngine
+import com.lookafter.core.behavior.BehaviorIntent
+import com.lookafter.core.behavior.BehaviorState
+import com.lookafter.core.behavior.Habit
 import com.lookafter.core.creativity.CreativeBoard
 import com.lookafter.core.creativity.CreativeSpark
 import com.lookafter.core.creativity.CreativityEngine
@@ -129,6 +134,7 @@ class LookAfterViewModel(
     private val cycleStore: CycleStore = app.cycleStore
     private val creativityStore: CreativityStore = app.creativityStore
     private val learningStore: LearningStore = app.learningStore
+    private val behaviorStore: BehaviorStore = app.behaviorStore
     private val coach: CoachService = app.coachService
     private val planService: HttpLlmPlanService = app.planService
     private val streamingLlm: StreamingLlmClient = app.streamingLlm
@@ -332,6 +338,35 @@ class LookAfterViewModel(
                 today = engine.currentState.currentDay ?: LocalDate.now(),
             ),
         )
+    }
+
+    private val _behavior = MutableStateFlow(app.behaviorStore.load())
+    val behavior: StateFlow<BehaviorState> = _behavior.asStateFlow()
+
+    private fun persistBehavior(next: BehaviorState) {
+        _behavior.value = next
+        behaviorStore.save(next)
+    }
+
+    fun dispatchBehavior(intent: BehaviorIntent) {
+        persistBehavior(BehaviorEngine.reduce(_behavior.value, intent))
+    }
+
+    fun addHabit(habit: Habit) {
+        dispatchBehavior(BehaviorIntent.AddHabit(habit))
+    }
+
+    fun toggleHabitCheckIn(id: String) {
+        val day = engine.currentState.currentDay ?: LocalDate.now()
+        dispatchBehavior(BehaviorIntent.ToggleCheckIn(id = id, day = day))
+    }
+
+    fun archiveHabit(id: String) {
+        dispatchBehavior(BehaviorIntent.ArchiveHabit(id, archived = true))
+    }
+
+    fun deleteHabit(id: String) {
+        dispatchBehavior(BehaviorIntent.DeleteHabit(id))
     }
 
     val roomSignalingName: String
@@ -1444,6 +1479,8 @@ class LookAfterViewModel(
             _creativity.value = creativityStore.load() // re-seed default boards
             learningStore.clear()
             _learning.value = learningStore.load() // re-seed default track
+            behaviorStore.clear()
+            _behavior.value = BehaviorState.EMPTY
             lastAutoHeroKey = null
             teardownRoomSession(publishLeave = false)
             _bodyDoubleRoom.value = BodyDoubleRoomState()

@@ -99,7 +99,7 @@ object AppModuleCatalog {
         AppModule("travel", "Travel", "Trips, packing & day open", ModuleGroup.GROWTH, ModuleDestination.TRAVEL, ModuleStatus.SHIPPED, 310),
         AppModule("learning", "Learning", "Spaced practice · due queue", ModuleGroup.GROWTH, ModuleDestination.LEARNING, ModuleStatus.SHIPPED, 320),
         AppModule("creativity", "Creativity", "Boards & sparks → Capture", ModuleGroup.GROWTH, ModuleDestination.CREATIVITY, ModuleStatus.SHIPPED, 330),
-        AppModule("behavior", "Behavior", "Habit loops", ModuleGroup.GROWTH, ModuleDestination.BEHAVIOR, ModuleStatus.COMING_SOON, 340),
+        AppModule("behavior", "Behavior", "Habits · streaks · check-in", ModuleGroup.GROWTH, ModuleDestination.BEHAVIOR, ModuleStatus.SHIPPED, 340),
         AppModule("life", "Life hub", "Goals & areas", ModuleGroup.GROWTH, ModuleDestination.LIFE_HUB, ModuleStatus.COMING_SOON, 350),
         AppModule("tour", "Tour", "Product coach marks", ModuleGroup.GROWTH, ModuleDestination.TOUR, ModuleStatus.COMING_SOON, 360),
 

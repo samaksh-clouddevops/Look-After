@@ -28,6 +28,7 @@ import com.lookafter.app.ui.health.HealthScreen
 import com.lookafter.app.ui.inbox.InboxScreen
 import com.lookafter.app.ui.insights.InsightsScreen
 import com.lookafter.app.ui.medication.MedicationScreen
+import com.lookafter.app.ui.behavior.BehaviorScreen
 import com.lookafter.app.ui.creativity.CreativityScreen
 import com.lookafter.app.ui.cycle.CycleScreen
 import com.lookafter.app.ui.learning.LearningScreen
@@ -103,6 +104,7 @@ fun LookAfterRootView(
     val cycleSnapshot by viewModel.cycleSnapshot.collectAsStateWithLifecycle()
     val creativity by viewModel.creativity.collectAsStateWithLifecycle()
     val learning by viewModel.learning.collectAsStateWithLifecycle()
+    val behavior by viewModel.behavior.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberLookAfterHaptics { viewModel.hapticsEnabled }
 
@@ -134,6 +136,7 @@ fun LookAfterRootView(
     var cycleOpen by remember { mutableStateOf(false) }
     var creativityOpen by remember { mutableStateOf(false) }
     var learningOpen by remember { mutableStateOf(false) }
+    var behaviorOpen by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf<String?>(null) }
     var comingSoonSubtitle by remember { mutableStateOf("") }
     var captureOpen by remember { mutableStateOf(false) }
@@ -155,6 +158,7 @@ fun LookAfterRootView(
         cycleOpen = false
         creativityOpen = false
         learningOpen = false
+        behaviorOpen = false
         comingSoonTitle = null
         simulationOpen = false
     }
@@ -175,6 +179,7 @@ fun LookAfterRootView(
             ModuleDestination.CYCLE -> cycleOpen = true
             ModuleDestination.CREATIVITY -> creativityOpen = true
             ModuleDestination.LEARNING -> learningOpen = true
+            ModuleDestination.BEHAVIOR -> behaviorOpen = true
             ModuleDestination.SIMULATION -> {
                 if (hypotheticals.isEmpty()) {
                     val open = state.activeTasks.filter { it.status.isActive }.take(3)
@@ -186,7 +191,6 @@ fun LookAfterRootView(
             }
             ModuleDestination.NOTIFICATIONS -> notificationSettingsOpen = true
             ModuleDestination.PRIVACY -> privacyOpen = true
-            ModuleDestination.BEHAVIOR,
             ModuleDestination.LIFE_HUB,
             ModuleDestination.TOUR,
             -> {
@@ -270,7 +274,7 @@ fun LookAfterRootView(
                     reviewOpen || medicationOpen || healthOpen || inboxOpen ||
                         insightsOpen || privacyOpen || notificationSettingsOpen ||
                         bodyDoubleRoomOpen || modulesOpen || travelOpen || cycleOpen ||
-                        creativityOpen || learningOpen ||
+                        creativityOpen || learningOpen || behaviorOpen ||
                         comingSoonTitle != null -> AppDestination.YOU
                     else -> current
                 },
@@ -315,6 +319,7 @@ fun LookAfterRootView(
             cycleOpen -> "cycle"
             creativityOpen -> "creativity"
             learningOpen -> "learning"
+            behaviorOpen -> "behavior"
             comingSoonTitle != null -> "soon"
             reviewOpen -> "review"
             else -> current.name
@@ -394,6 +399,19 @@ fun LookAfterRootView(
                     onReview = viewModel::reviewLearningCard,
                     onBack = {
                         learningOpen = false
+                        modulesOpen = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                behaviorOpen -> BehaviorScreen(
+                    state = behavior,
+                    today = state.currentDay ?: LocalDate.now(),
+                    onAddHabit = viewModel::addHabit,
+                    onToggle = viewModel::toggleHabitCheckIn,
+                    onArchive = viewModel::archiveHabit,
+                    onDelete = viewModel::deleteHabit,
+                    onBack = {
+                        behaviorOpen = false
                         modulesOpen = true
                     },
                     modifier = Modifier.fillMaxSize(),
