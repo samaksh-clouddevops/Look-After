@@ -9,7 +9,11 @@ import java.time.Instant
  * Production can swap [OfflineCoachService] for a network LLM implementation
  * without touching UI or LifeEngine.
  */
-fun interface CoachService {
+/**
+ * Pluggable coach contract.
+ * Not a fun-interface: default args on the abstract method are required for callers.
+ */
+interface CoachService {
     /**
      * @return coach reply text. Implementations should not throw.
      */
