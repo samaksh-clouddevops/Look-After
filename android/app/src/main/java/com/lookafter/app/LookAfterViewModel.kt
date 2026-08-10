@@ -161,10 +161,6 @@ class LookAfterViewModel(
     private val _cycle = MutableStateFlow(app.cycleStore.load())
     val cycle: StateFlow<CycleState> = _cycle.asStateFlow()
 
-    val cycleSnapshot: StateFlow<CycleSnapshot> = combine(_cycle, state) { c, life ->
-        CycleEngine.snapshot(c, today = life.currentDay ?: LocalDate.now())
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CycleSnapshot())
-
     private fun persistTravel(next: TravelState) {
         _travel.value = next
         travelStore.save(next)
@@ -205,9 +201,11 @@ class LookAfterViewModel(
 
     /** Open a trip day on the Today board (week-scrubber / packing scaffolding). */
     fun openTravelDayOnToday(day: LocalDate) {
-        engine.process(LookAfterIntent.SetCurrentDay(day))
-        _lastSyncMessage.value = "Today set to $day · travel packing"
-        TodayWidgetUpdater.requestUpdate(getApplication())
+        viewModelScope.launch {
+            engine.process(LookAfterIntent.SetCurrentDay(day))
+            _lastSyncMessage.value = "Today set to $day · travel packing"
+            TodayWidgetUpdater.requestUpdate(getApplication())
+        }
     }
 
     fun setCycleTracking(enabled: Boolean) {
@@ -287,10 +285,12 @@ class LookAfterViewModel(
             tags = listOf("capture", "creativity") + spark.tags,
             createdAt = Instant.now(),
         )
-        engine.process(LookAfterIntent.AddTask(task))
-        dispatchCreativity(CreativityIntent.PromoteSparkToCapture(sparkId))
-        _lastSyncMessage.value = "Spark → Capture · $title"
-        TodayWidgetUpdater.requestUpdate(getApplication())
+        viewModelScope.launch {
+            engine.process(LookAfterIntent.AddTask(task))
+            dispatchCreativity(CreativityIntent.PromoteSparkToCapture(sparkId))
+            _lastSyncMessage.value = "Spark → Capture · $title"
+            TodayWidgetUpdater.requestUpdate(getApplication())
+        }
     }
 
     private val _learning = MutableStateFlow(app.learningStore.load())
@@ -564,6 +564,10 @@ class LookAfterViewModel(
     val healthPermissionGranted: StateFlow<Boolean> = healthRepo.permissionGranted
     val healthUsingDemo: StateFlow<Boolean> = healthRepo.usingDemo
     val healthRequiredPermissions: Set<String> get() = healthRepo.requiredPermissions()
+
+    val cycleSnapshot: StateFlow<CycleSnapshot> = combine(_cycle, state) { c, life ->
+        CycleEngine.snapshot(c, today = life.currentDay ?: LocalDate.now())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CycleSnapshot())
 
     private val _onboarding = MutableStateFlow(app.initialOnboarding)
     val onboarding: StateFlow<OnboardingState> = _onboarding.asStateFlow()

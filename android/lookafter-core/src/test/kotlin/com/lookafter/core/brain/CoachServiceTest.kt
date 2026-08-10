@@ -33,7 +33,14 @@ class CoachServiceTest {
 
     @Test
     fun fallbackUsesPrimaryWhenPresent() = runTest {
-        val primary = CoachService { msg, _, _, _ -> "REMOTE:$msg" }
+        val primary = object : CoachService {
+            override suspend fun reply(
+                userMessage: String,
+                life: LifeState,
+                health: com.lookafter.core.health.HealthSummary,
+                now: java.time.Instant,
+            ): String = "REMOTE:$userMessage"
+        }
         val coach = FallbackCoachService(primary = primary, fallback = OfflineCoachService())
         val reply = coach.reply("hello", LifeState.EMPTY)
         assertTrue(reply.startsWith("REMOTE:"))
@@ -41,7 +48,14 @@ class CoachServiceTest {
 
     @Test
     fun fallbackWhenPrimaryThrows() = runTest {
-        val boom = CoachService { _, _, _, _ -> error("network") }
+        val boom = object : CoachService {
+            override suspend fun reply(
+                userMessage: String,
+                life: LifeState,
+                health: com.lookafter.core.health.HealthSummary,
+                now: java.time.Instant,
+            ): String = error("network")
+        }
         val coach = FallbackCoachService(primary = boom, fallback = OfflineCoachService())
         val reply = coach.reply("focus", LifeState.EMPTY)
         assertTrue(reply.isNotBlank())

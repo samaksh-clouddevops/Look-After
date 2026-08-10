@@ -40,7 +40,7 @@ import com.lookafter.app.ui.theme.LookAfterDimens
 fun CameraBodyDouble(
     emergency: Boolean,
     elapsedActiveSeconds: Long,
-    enabled: Boolean,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
