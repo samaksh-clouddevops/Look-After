@@ -54,12 +54,12 @@ Install → Auth → Onboarding (minimal) → Home hero
 
 ### UX-0 · Baseline (Week 1)
 
-| # | Work | Exit |
-|---|------|------|
-| 0.1 | Film first-run + morning open (silent, real device) | Baseline tape |
-| 0.2 | Heuristic pass on Briefing, Focus, Capture, Onboarding | Bug/UX list ranked P0–P2 |
-| 0.3 | Copy inventory: every primary button label | Jargon killed |
-| 0.4 | Latency finger-feel: open, start, complete | Numbers noted |
+| # | Work | Exit | Status |
+|---|------|------|--------|
+| 0.1 | Film first-run + morning open (silent, real device) | Baseline tape | **Protocol ready** — [baseline-films/](./baseline-films/README.md) |
+| 0.2 | Heuristic pass on Briefing, Focus, Capture, Onboarding | Bug/UX list ranked P0–P2 | **Done** — [UX-0-BASELINE.md](./UX-0-BASELINE.md) |
+| 0.3 | Copy inventory: every primary button label | Jargon killed | **Done** (CTA vocabulary §0.4) |
+| 0.4 | Latency finger-feel: open, start, complete | Numbers noted | **Needs device film B** |
 
 ### UX-1 · Hero & home (Weeks 2–4) — *highest leverage*
 
