@@ -8,35 +8,48 @@
     body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.55; color: #1c1c1e; }
     h1, h2 { font-weight: 600; }
     a { color: #5a9e3f; }
+    .muted { color: #6b6b6f; font-size: .95rem; }
   </style>
 </head>
 <body>
+  <p class="muted"><a href="index.html">← Look After</a></p>
   <h1>Look After Privacy Policy</h1>
-  <p><em>Last updated: 2026-08-07</em></p>
-  <p>Look After (“the App”) helps you plan days, track medications, and run focus sessions. We design for <strong>local-first</strong> use.</p>
+  <p><em>Last updated: 2026-08-10</em></p>
+  <p>Look After (“the App”) is a calm executive layer for planning days, medications, focus sessions, health trends, and optional life modules. We design for <strong>local-first</strong> use: core data stays on your device unless you opt into cloud features.</p>
 
   <h2>Data we process on device</h2>
   <ul>
-    <li>Tasks, notes, medications, focus sessions, onboarding preferences</li>
-    <li>Optional Health Connect metrics (sleep, steps, heart rate) when you grant access</li>
+    <li>Tasks, notes, tags, areas/projects, planning conversations, and coach history</li>
+    <li>Medications and adherence marks you enter</li>
+    <li>Focus / body-double session state and optional ambient preferences</li>
+    <li>Optional Health Connect metrics (sleep, steps, heart rate, energy) when you grant access</li>
     <li>Optional calendar events when you grant READ_CALENDAR</li>
-    <li>Optional camera frames for the body-double mirror (preview only; not uploaded by default)</li>
+    <li>Optional camera frames for body-double preview (not uploaded by default)</li>
+    <li>Optional module data: travel trips/packing, cycle logs (opt-in), learning cards, creativity sparks, habits</li>
+    <li>Notification and quiet-hours preferences, onboarding state</li>
   </ul>
 
   <h2>Optional cloud services</h2>
   <ul>
-    <li><strong>LLM coach/planner</strong> — if you set an API key, prompts may include task titles and health readiness summaries</li>
-    <li><strong>Firebase Auth / Firestore / Crashlytics</strong> — only when you ship <code>google-services.json</code>; then account ids, sync payloads, and crash stacks may leave the device</li>
+    <li><strong>LLM coach / planner</strong> — only if you configure an API key; prompts may include task titles, board summaries, and health/capacity context</li>
+    <li><strong>Firebase Auth / Firestore / Crashlytics</strong> — only when a <code>google-services.json</code> is shipped; then account ids, sync payloads, room signaling, and crash stacks may leave the device</li>
+    <li><strong>WebRTC body-double</strong> — media may go peer-to-peer via STUN/TURN you configure; signaling may use local files or Firestore when enabled</li>
   </ul>
 
   <h2>Permissions</h2>
-  <p>Notifications, calendar, camera, Health Connect, and DND access are requested only for the features you use. You can deny any permission.</p>
+  <p>Notifications, calendar, camera, microphone (optional), Health Connect, and Do Not Disturb access are requested only for features you use. You can deny any permission; the rest of the App keeps working.</p>
 
   <h2>Children</h2>
-  <p>The App is not directed at children under 13.</p>
+  <p>The App is not directed at children under 13. Medication and cycle tools are adult self-care utilities.</p>
 
   <h2>Your choices</h2>
-  <p>Uninstall clears local data. Disable sync/LLM in settings. For Firebase projects you control, delete the user in the Firebase console.</p>
+  <ul>
+    <li>Export / import backup from Privacy &amp; data</li>
+    <li>Factory reset clears local stores (tasks, modules, prefs)</li>
+    <li>Turn off cycle tracking, notifications, or Health Connect anytime</li>
+    <li>Uninstall removes on-device data</li>
+    <li>For Firebase projects you control, delete the user in the Firebase console</li>
+  </ul>
 
   <h2>Contact</h2>
   <p><a href="mailto:support@lookafter.app">support@lookafter.app</a></p>

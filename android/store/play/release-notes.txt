@@ -1,9 +1,10 @@
-Look After 0.1.0
+Look After 0.1.0 — internal track
 
-• Today board with task create/edit and recurrence
-• Brain coach + multi-day plan review (accept/discard)
-• Focus sessions with ambient audio and camera body double
-• Multi-person body double room (demo WebRTC signaling)
-• Medications, Health Connect, Insights, Inbox
-• Privacy & data: export/import backups, factory reset
-• Optional Firebase Auth/sync and cloud LLM when configured
+• Today: sections, swipe complete/park, week scrubber, reorder, area/project filters
+• Briefing: capacity narrative, care/calendar/cycle lines, begin-focus CTA
+• Brain: horizon picker, streaming plan JSON, mutation diff, coach history pins
+• Focus + body-double room (native WebRTC when available; demo fallback)
+• Health 7-day charts · Insights performance & tag heat
+• Modules: Travel, Cycle, Learning, Creativity, Habits
+• Notifications quiet hours · Privacy export/import/reset
+• Local-first; optional LLM + Firebase when you configure them

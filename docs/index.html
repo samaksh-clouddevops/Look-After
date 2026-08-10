@@ -5,28 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Look After</title>
   <style>
-    :root { --bg:#f8f8f6; --ink:#1c1c1e; --accent:#5a9e3f; --muted:#6b7280; }
-    body { font-family: system-ui, -apple-system, sans-serif; margin:0; background:var(--bg); color:var(--ink); line-height:1.6; }
-    main { max-width: 40rem; margin: 0 auto; padding: 3rem 1.25rem; }
-    h1 { font-size: 2rem; margin: 0 0 .5rem; }
-    .tag { color: var(--accent); font-weight: 600; letter-spacing: .02em; }
-    p { color: var(--muted); }
-    a.btn { display:inline-block; margin:.5rem .5rem .5rem 0; padding:.7rem 1.1rem; border-radius:999px; background:var(--accent); color:#fff; text-decoration:none; font-weight:600; }
-    a.link { color: var(--accent); }
+    :root { --bg:#f6f4ef; --ink:#1c1c1e; --muted:#6b6b6f; --accent:#5a9e3f; --card:#fff; }
+    body { margin:0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+    main { max-width: 40rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    .tag { letter-spacing: .12em; font-size: .75rem; color: var(--accent); font-weight: 600; }
+    h1 { font-weight: 650; font-size: clamp(1.8rem, 4vw, 2.4rem); line-height: 1.15; }
+    p { line-height: 1.55; color: var(--muted); }
+    .btn { display:inline-block; margin:.25rem .5rem .25rem 0; padding:.7rem 1rem; border-radius: 999px;
+           background: var(--accent); color:#fff; text-decoration:none; font-weight:600; font-size:.95rem; }
+    .card { background: var(--card); border-radius: 16px; padding: 1rem 1.1rem; margin: 1rem 0; }
+    h2 { font-size: 1.05rem; margin: 0 0 .35rem; }
+    ul { color: var(--muted); line-height: 1.5; padding-left: 1.1rem; }
     footer { margin-top: 3rem; font-size: .9rem; color: var(--muted); }
+    a.link { color: var(--accent); }
   </style>
 </head>
 <body>
   <main>
     <div class="tag">LOOK AFTER</div>
     <h1>Calm execution for a noisy brain.</h1>
-    <p>ADHD-aware daily board, executive coach, medications, focus body double, and multi-day planning — local-first on Android &amp; iOS.</p>
+    <p>ADHD-aware daily board, executive coach, medications, focus body double, multi-day planning, and optional life modules — local-first on Android &amp; iOS.</p>
     <p>
       <a class="btn" href="privacy.html">Privacy policy</a>
       <a class="btn" href="https://github.com/samaksh-clouddevops/Look-After" style="background:#1c1c1e">GitHub</a>
     </p>
-    <h2>Product</h2>
-    <p>Today · Brain · Focus · Health · Insights · optional cloud LLM &amp; Firebase sync when you configure them.</p>
+    <div class="card">
+      <h2>Daily loop</h2>
+      <ul>
+        <li><strong>Today</strong> — sections, swipe, week scrubber, meds strip</li>
+        <li><strong>Briefing</strong> — capacity, care, cycle-aware narrative</li>
+        <li><strong>Brain</strong> — hero, coach, streaming plans, horizon picker</li>
+        <li><strong>Focus</strong> — timed sessions + optional body double room</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Modules</h2>
+      <ul>
+        <li>Health charts · Insights · Travel · Cycle · Learning · Creativity · Habits</li>
+        <li>Privacy &amp; export · Notifications · Simulation</li>
+      </ul>
+    </div>
     <footer>© Look After · <a class="link" href="privacy.html">Privacy</a> · support@lookafter.app</footer>
   </main>
 </body>
