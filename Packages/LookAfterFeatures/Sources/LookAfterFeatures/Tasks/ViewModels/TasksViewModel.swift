@@ -215,11 +215,19 @@ public final class TasksViewModel: ObservableObject {
 
     private func notifyTaskListDidChange() {
         guard taskStore == nil else { return }
-        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        if ArchitectureFeatureFlags.useTypedEventBus {
+            SessionEventBus.shared.publish(.tasksChanged(userId: ""))
+        } else {
+            NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        }
     }
 
     private func notifyScheduleDidChange() {
-        NotificationCenter.default.post(name: .scheduleDidChange, object: nil)
+        if ArchitectureFeatureFlags.useTypedEventBus {
+            SessionEventBus.shared.publish(.scheduleChanged(userId: ""))
+        } else {
+            NotificationCenter.default.post(name: .scheduleDidChange, object: nil)
+        }
     }
 
     /// Debounced entry point for reconcile after task list mutations.

@@ -43,6 +43,7 @@ final class AppShellState: ObservableObject {
     private var flowDirectorUserName: String = ""
     private let calendarSyncService = CalendarSyncService()
     private var calendarSyncDebounceTask: Task<Void, Never>?
+    private let bootstrapCoordinator = BootstrapCoordinator()
 
     init() {
         let glm = GLMService.shared
@@ -77,6 +78,7 @@ final class AppShellState: ObservableObject {
         if let session {
             brainVM.configure(brainFacade: session.brainFacade)
         }
+        bootstrapCoordinator.executor = self
 
         adhdVM.onFocusSessionDidStart = { [weak self] in
             guard let self else { return }
@@ -119,7 +121,6 @@ final class AppShellState: ObservableObject {
             NotificationCenter.default.removeObserver(taskCompletedObserver)
         }
         calendarSyncDebounceTask?.cancel()
-        bootstrapTask?.cancel()
     }
 
     func removeProactiveAction(_ action: ProactiveAction) {
@@ -152,67 +153,17 @@ final class AppShellState: ObservableObject {
     }
 
     func bootstrap(userId: String, healthSync: HealthSyncService) {
-        guard !userId.isEmpty else { return }
-
-        identityService.refreshFromFirebase()
-        // Prefer stable identity uid when session path is enabled.
-        let resolvedId = {
-            if ArchitectureFeatureFlags.useSessionContainer,
-               identityService.state.isStableForBootstrap,
-               let id = identityService.state.userId,
-               !id.isEmpty {
-                return id
-            }
-            return userId
-        }()
-        guard !resolvedId.isEmpty else { return }
-
-        attachSessionIfNeeded()
-
-        if FactoryResetManager.shared.isPendingFreshStart {
-            Task { await bootstrapFreshStart(userId: resolvedId, healthSync: healthSync) }
-            return
-        }
-
-        if bootstrappedUserId != resolvedId {
-            bootstrapTask?.cancel()
-            bootstrapTask = nil
-            hasCompletedBootstrap = false
-            bootstrappedUserId = resolvedId
-        }
-
-        if hasCompletedBootstrap, bootstrappedUserId == resolvedId {
-            return
-        }
-        if let bootstrapTask, bootstrappedUserId == resolvedId, !bootstrapTask.isCancelled {
-            return
-        }
-
-        let identityGeneration = identityService.generation
-        launchSignpostID = PerformanceSignposts.beginLaunchToBriefing()
-        bootstrapTask = Task { [weak self] in
-            guard let self else { return }
-            await self.runBootstrapWork(
-                userId: resolvedId,
-                healthSync: healthSync,
-                identityGeneration: identityGeneration
-            )
-            if let launchSignpostID = self.launchSignpostID {
-                PerformanceSignposts.endLaunchToBriefing(launchSignpostID)
-                self.launchSignpostID = nil
-            }
-            // Only mark complete if identity did not change mid-flight (Phase 1 WP 1.3).
-            if self.identityService.generation == identityGeneration {
-                self.hasCompletedBootstrap = true
-            } else {
-                self.hasCompletedBootstrap = false
-                self.bootstrappedUserId = nil
-            }
-            self.bootstrapTask = nil
-        }
+        bootstrapCoordinator.bootstrap(
+            userId: userId,
+            healthSync: healthSync,
+            identity: identityService
+        )
     }
 
-    private func attachSessionIfNeeded() {
+    /// True after successful bootstrap (delegates to coordinator).
+    var hasCompletedBootstrap: Bool { bootstrapCoordinator.hasCompletedBootstrap }
+
+    func attachSessionIfNeeded() {
         guard ArchitectureFeatureFlags.useSessionContainer else {
             session?.tearDown()
             session = nil
@@ -227,6 +178,12 @@ final class AppShellState: ObservableObject {
             taskStore: taskStore,
             requireFlag: true
         )
+        if let session, let director = flowDirector {
+            brainVM.configure(brainFacade: FlowAwareBrainFacade(director: director))
+            // Keep session façade in sync when possible.
+        } else if let session {
+            brainVM.configure(brainFacade: session.brainFacade)
+        }
     }
 
     private func shouldAbortBootstrap(identityGeneration: UInt64) -> Bool {
@@ -237,7 +194,7 @@ final class AppShellState: ObservableObject {
         return false
     }
 
-    private func runBootstrapWork(
+    func runBootstrapWork(
         userId: String,
         healthSync: HealthSyncService,
         identityGeneration: UInt64
@@ -599,10 +556,7 @@ final class AppShellState: ObservableObject {
     private var pendingContextRefresh: PendingContextRefresh?
     private var didForceInitialTaskSync = false
 
-    private var bootstrapTask: Task<Void, Never>?
-    private var bootstrappedUserId: String?
-    private var hasCompletedBootstrap = false
-    private var launchSignpostID: OSSignpostID?
+    // Bootstrap task / completion state lives on BootstrapCoordinator (Phase 4.1).
 
     private var timelineRebuildTask: Task<Void, Never>?
     private var syncWidgetsAfterDebouncedRebuild = false
@@ -1077,11 +1031,7 @@ final class AppShellState: ObservableObject {
     }
 
     private func resetBootstrapAndTimelineCoordinators() {
-        bootstrapTask?.cancel()
-        bootstrapTask = nil
-        bootstrappedUserId = nil
-        hasCompletedBootstrap = false
-        launchSignpostID = nil
+        bootstrapCoordinator.reset()
         session?.tearDown()
         session = nil
         identityService.refreshFromFirebase()
@@ -1248,6 +1198,8 @@ final class AppShellState: ObservableObject {
             flowDirector = await FlowDirectorFactory.make(userName: name)
             if let director = flowDirector {
                 brainVM.configure(flowDirector: director)
+                // Phase 3: FlowDirector as primary BrainFacade backend when flag on.
+                brainVM.configure(brainFacade: FlowAwareBrainFacade(director: director))
                 flowDirectorUserName = name
                 FlowDirectorIntegrationLog.log("FlowDirector wired from AppShellState")
             }
@@ -1283,3 +1235,7 @@ final class AppShellState: ObservableObject {
         adhdVM.startFocusSession(task: task)
     }
 }
+
+// MARK: - BootstrapExecuting
+
+extension AppShellState: BootstrapExecuting {}
