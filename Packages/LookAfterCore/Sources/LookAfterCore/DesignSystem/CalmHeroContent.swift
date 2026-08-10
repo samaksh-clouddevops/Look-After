@@ -135,6 +135,11 @@ public enum CalmHeroContentBuilder {
 
     private static func distinctActionLabel(_ button: String, title: String) -> String {
         let trimmedButton = button.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Prefer action verbs — vague continuations read as system chrome (UX excellence).
+        let lower = trimmedButton.lowercased()
+        if lower.isEmpty || lower == "continue" || lower == "ok" || lower == "next" {
+            return "Start now"
+        }
         if !isNearDuplicate(trimmedButton, title) { return trimmedButton }
         return "Start now"
     }

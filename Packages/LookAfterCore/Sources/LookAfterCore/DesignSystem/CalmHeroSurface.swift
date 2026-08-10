@@ -25,25 +25,31 @@ public struct CalmHeroSurface: View {
                 Text(content.title)
                     .font(.dsTitle())
                     .foregroundColor(DesignSystem.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
 
                 if let supporting = content.supportingLine, !supporting.isEmpty {
                     Text(supporting)
                         .font(.dsBody())
                         .foregroundColor(DesignSystem.textSecondary)
-                        .lineLimit(1)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let metadata = content.metadataLine, !metadata.isEmpty {
                     Text(metadata)
                         .font(.dsMetadata())
                         .foregroundColor(DesignSystem.textMuted)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .accessibilityElement(children: .combine)
 
             PremiumPrimaryButton(content.primaryActionTitle, icon: "arrow.right", action: primaryAction)
+                .accessibilityHint("Starts your next step")
 
             if content.disclosure?.hasContent == true || !secondaryActions.isEmpty {
                 disclosureAffordance
@@ -54,6 +60,7 @@ public struct CalmHeroSurface: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder

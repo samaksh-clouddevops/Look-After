@@ -12,6 +12,10 @@ Deferred improvements — not blocking the repository restructure.
 
 **Roadmap:** [releases/APPLE-DESIGN-AWARD-ROADMAP.md](releases/APPLE-DESIGN-AWARD-ROADMAP.md) — 24-week Inclusivity/Interaction polish plan (award-worthiness, not a guarantee).
 
+## UX excellence (do this first)
+
+**Roadmap:** [releases/UX-EXCELLENCE-ROADMAP.md](releases/UX-EXCELLENCE-ROADMAP.md) — 12-week path to top-notch daily UX on the core loop (hero → focus → capture). Awards packaging comes after this bar.
+
 ## Package extraction
 
 - **LifeOSDesignSystem** as a separate SPM package only if Widget + macOS + iOS need independent release cycles
