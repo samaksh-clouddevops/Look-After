@@ -26,6 +26,16 @@ public enum HealthSummaryFreshness {
             return true
         }
 
+        // Apple Health often dates overnight sleep to the calendar day of bedtime.
+        // Treat recent sleep (within 36h) as last night when wake was today-ish or missing.
+        let age = now.timeIntervalSince(summary.date)
+        if age >= 0, age <= 36 * 60 * 60 {
+            if let wake = summary.wakeTime {
+                return wake >= todayStart.addingTimeInterval(-6 * 60 * 60)
+            }
+            return true
+        }
+
         return false
     }
 

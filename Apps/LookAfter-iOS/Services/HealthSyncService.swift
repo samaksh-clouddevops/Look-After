@@ -143,15 +143,25 @@ final class HealthSyncService: ObservableObject {
     }
 
     /// Debounced sync triggered by HealthKit observer callbacks.
-    func scheduleObserverSync(userId: String) {
-        guard isHealthEnabled, !userId.isEmpty else { return }
+    /// `onComplete` runs after the sync attempt (or immediately when throttled).
+    func scheduleObserverSync(userId: String, onComplete: (() async -> Void)? = nil) {
+        guard isHealthEnabled, !userId.isEmpty else {
+            if let onComplete {
+                Task { await onComplete() }
+            }
+            return
+        }
         observerSyncTask?.cancel()
         observerSyncTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard let self, !Task.isCancelled else { return }
-            if let last = self.lastObserverSyncAt, Date().timeIntervalSince(last) < 60 { return }
+            if let last = self.lastObserverSyncAt, Date().timeIntervalSince(last) < 60 {
+                await onComplete?()
+                return
+            }
             self.lastObserverSyncAt = Date()
             await self.syncHealthData(userId: userId)
+            await onComplete?()
         }
     }
 

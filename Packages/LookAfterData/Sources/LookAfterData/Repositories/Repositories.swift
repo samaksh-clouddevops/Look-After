@@ -435,6 +435,11 @@ public final class HealthSummaryRepository: ObservableObject {
         } else if mutableSummary.userId.isEmpty {
             mutableSummary.userId = firebase.currentUserId ?? ""
         }
+        // Preserve overnight metrics if this fetch missed sleep (try? failed / Watch lag).
+        mutableSummary = Self.mergingOvernightMetrics(
+            incoming: mutableSummary,
+            existing: latestLocal(for: mutableSummary.userId)
+        )
         saveLocally(mutableSummary)
         syncToFirestore(mutableSummary)
     }
@@ -472,6 +477,14 @@ public final class HealthSummaryRepository: ObservableObject {
         let resolvedId = !canonicalId.isEmpty ? canonicalId : (userId.isEmpty ? "" : userId)
         var localLatest = latestLocal(for: resolvedId)
 
+        // Prefer a sleep-bearing recent summary when today's row is activity-only.
+        if let coalesced = Self.coalesceWithRecentSleep(
+            primary: localLatest,
+            candidates: summaries(for: resolvedId)
+        ) {
+            localLatest = coalesced
+        }
+
         if localLatest == nil || (localLatest.map { Self.healthSignalScore($0) } ?? 0) == 0 {
             if let orphan = latestLocalWithHealthSignal(excludingUserId: resolvedId.isEmpty ? nil : resolvedId) {
                 let targetId = !canonicalId.isEmpty ? canonicalId : resolvedId
@@ -502,8 +515,12 @@ public final class HealthSummaryRepository: ObservableObject {
             let remote = try firebase.decode(HealthSummary.self, from: doc)
             let preferred = Self.preferredSummary(local: localLatest, remote: remote)
             if let preferred, Self.healthSignalScore(preferred) > 0 {
-                saveLocally(preferred)
-                return preferred
+                let coalesced = Self.coalesceWithRecentSleep(
+                    primary: preferred,
+                    candidates: summaries(for: resolvedId) + [preferred]
+                ) ?? preferred
+                saveLocally(coalesced)
+                return coalesced
             }
             return Self.summaryWithHealthSignal(localLatest)
         } catch {
@@ -555,6 +572,70 @@ public final class HealthSummaryRepository: ObservableObject {
         if summary.hrvAverage != nil { score += 1 }
         if (summary.workoutCount ?? 0) > 0 { score += 1 }
         return score
+    }
+
+    /// Copy overnight fields from an existing same-day (or recent) summary when the new fetch missed them.
+    private static func mergingOvernightMetrics(
+        incoming: HealthSummary,
+        existing: HealthSummary?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> HealthSummary {
+        guard let existing else { return incoming }
+        let sameDay = calendar.isDate(existing.date, inSameDayAs: incoming.date)
+            || calendar.isDate(existing.date, inSameDayAs: now)
+            || abs(existing.date.timeIntervalSince(incoming.date)) < 36 * 60 * 60
+        guard sameDay else { return incoming }
+
+        var merged = incoming
+        if (merged.totalSleepMinutes ?? 0) <= 0, (existing.totalSleepMinutes ?? 0) > 0 {
+            merged.totalSleepMinutes = existing.totalSleepMinutes
+            merged.deepSleepMinutes = existing.deepSleepMinutes
+            merged.remSleepMinutes = existing.remSleepMinutes
+            merged.coreSleepMinutes = existing.coreSleepMinutes
+            merged.awakeMinutes = existing.awakeMinutes
+            merged.sleepQualityScore = existing.sleepQualityScore
+            merged.bedtime = existing.bedtime ?? merged.bedtime
+            merged.wakeTime = existing.wakeTime ?? merged.wakeTime
+        }
+        if merged.hrvAverage == nil { merged.hrvAverage = existing.hrvAverage }
+        if merged.restingHeartRate == nil { merged.restingHeartRate = existing.restingHeartRate }
+        if merged.averageHeartRate == nil { merged.averageHeartRate = existing.averageHeartRate }
+        return merged
+    }
+
+    /// When today's summary has activity but no sleep, overlay last night's sleep from a recent candidate.
+    private static func coalesceWithRecentSleep(
+        primary: HealthSummary?,
+        candidates: [HealthSummary],
+        now: Date = Date()
+    ) -> HealthSummary? {
+        guard var primary else {
+            return candidates
+                .filter { healthSignalScore($0) > 0 }
+                .sorted { $0.date > $1.date }
+                .first
+        }
+        guard (primary.totalSleepMinutes ?? 0) <= 0 else { return primary }
+
+        let lookback = now.addingTimeInterval(-36 * 60 * 60)
+        let sleepDonor = candidates
+            .filter { ($0.totalSleepMinutes ?? 0) > 0 && $0.date >= lookback }
+            .sorted { $0.date > $1.date }
+            .first
+        guard let sleepDonor else { return primary }
+
+        primary.totalSleepMinutes = sleepDonor.totalSleepMinutes
+        primary.deepSleepMinutes = sleepDonor.deepSleepMinutes
+        primary.remSleepMinutes = sleepDonor.remSleepMinutes
+        primary.coreSleepMinutes = sleepDonor.coreSleepMinutes
+        primary.awakeMinutes = sleepDonor.awakeMinutes
+        primary.sleepQualityScore = sleepDonor.sleepQualityScore
+        primary.bedtime = sleepDonor.bedtime
+        primary.wakeTime = sleepDonor.wakeTime
+        if primary.hrvAverage == nil { primary.hrvAverage = sleepDonor.hrvAverage }
+        if primary.restingHeartRate == nil { primary.restingHeartRate = sleepDonor.restingHeartRate }
+        return primary
     }
 
     public static func dailyDocumentId(for date: Date, userId: String) -> String {

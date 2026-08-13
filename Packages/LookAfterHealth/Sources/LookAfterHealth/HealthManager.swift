@@ -98,10 +98,7 @@ public final class HealthManager: ObservableObject {
         }
 
         let requested = UserDefaults.standard.bool(forKey: "healthAuthorizationRequested")
-        guard requested else {
-            return HealthReadAccessStatus(authorizationRequested: false, canExecuteQueries: false, hasSampleData: false)
-        }
-
+        // Still probe HealthKit — access may have been granted via Settings without our prompt flag.
         var canQuery = false
         var hasData = false
 
@@ -128,21 +125,24 @@ public final class HealthManager: ObservableObject {
             }
         }
 
+        if canQuery, !requested {
+            UserDefaults.standard.set(true, forKey: "healthAuthorizationRequested")
+        }
+
+        // Keep probing HRV as a soft signal when steps/sleep were empty.
         if !hasData {
             do {
-                if try await fetchHRVData() != nil {
+                if let hrv = try await fetchHRVData() {
                     canQuery = true
-                    hasData = true
-                } else if canQuery {
-                    // HRV query succeeded but returned no sample — still counts as readable access.
+                    if hrv > 0 { hasData = true }
                 }
             } catch {
-                if !canQuery { canQuery = false }
+                // Soft failure — steps/sleep already decided canQuery.
             }
         }
 
         return HealthReadAccessStatus(
-            authorizationRequested: requested,
+            authorizationRequested: requested || canQuery,
             canExecuteQueries: canQuery,
             hasSampleData: hasData
         )

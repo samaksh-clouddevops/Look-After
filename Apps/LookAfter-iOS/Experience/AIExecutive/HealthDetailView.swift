@@ -32,7 +32,8 @@ struct HealthDetailView: View {
                         )
                     }
 
-                    if let summary = shell.brainVM.healthSummary, hasVisibleMetrics(summary) {
+                    if let summary = shell.brainVM.rawHealthSummary ?? shell.brainVM.healthSummary ?? HealthStore.shared.latest,
+                       hasVisibleMetrics(summary) {
                         sleepHeroCard(summary)
                         metricsGrid(summary)
                     } else if healthSync.connectionStatus == nil || healthSync.connectionStatus?.needsAttention != true {
@@ -69,7 +70,10 @@ struct HealthDetailView: View {
         }
         .onAppear {
             let resolvedId = resolvedUserId
-            healthSync.refreshConnectionStatus(userId: resolvedId, healthSummary: shell.brainVM.healthSummary)
+            healthSync.refreshConnectionStatus(
+                userId: resolvedId,
+                healthSummary: shell.brainVM.rawHealthSummary ?? shell.brainVM.healthSummary ?? HealthStore.shared.latest
+            )
         }
         .accessibilityIdentifier("screen-health-detail")
     }
@@ -198,7 +202,10 @@ struct HealthDetailView: View {
         guard !id.isEmpty else { return }
         Task {
             await healthSync.syncHealthData(userId: id)
-            healthSync.refreshConnectionStatus(userId: id, healthSummary: shell.brainVM.healthSummary)
+            healthSync.refreshConnectionStatus(
+                userId: id,
+                healthSummary: shell.brainVM.rawHealthSummary ?? shell.brainVM.healthSummary ?? HealthStore.shared.latest
+            )
         }
     }
 

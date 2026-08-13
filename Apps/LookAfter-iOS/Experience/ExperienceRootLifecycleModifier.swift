@@ -93,7 +93,10 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
             }
             let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true
             if healthEnabled, !userId.isEmpty, healthSync.isAvailable {
-                healthSync.refreshConnectionStatus(userId: userId, healthSummary: shell.brainVM.healthSummary)
+                healthSync.refreshConnectionStatus(
+                    userId: userId,
+                    healthSummary: shell.brainVM.rawHealthSummary ?? shell.brainVM.healthSummary ?? HealthStore.shared.latest
+                )
                 Task {
                     await healthSync.ensureSynced(userId: userId, maxAgeSeconds: 15 * 60)
                 }
@@ -128,8 +131,8 @@ private struct ExperienceRootSyncModifier: ViewModifier {
                 guard firebase.isAuthenticated, !shell.isPerformingFactoryReset else { return }
                 let userId = firebase.resolvedUserId
                 guard !userId.isEmpty else { return }
-                healthSync.scheduleObserverSync(userId: userId)
-                Task {
+                // Sync first, then refresh UI so Briefing/Brain see the imported summary.
+                healthSync.scheduleObserverSync(userId: userId) {
                     await shell.refreshContext(
                         userId: userId,
                         userName: UserLifeProfileStore.resolvedDisplayName(),
