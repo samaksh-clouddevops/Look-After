@@ -29,40 +29,52 @@ final class AuthenticationTests: XCTestCase {
         XCTAssertNil(firebase.userEmail, "UserEmail should be nil after signOut.")
     }
     
-    func testEmailSignInFlow() async throws {
-        let testEmail = "test.user@flowos.app"
-        let testPass = "FlowOSSecret123!"
-        
-        try await firebase.signIn(email: testEmail, password: testPass)
-        
-        XCTAssertTrue(firebase.isAuthenticated, "FirebaseManager must set isAuthenticated to true upon sign in.")
-        XCTAssertNotNil(firebase.currentUserId, "FirebaseManager must set currentUserId upon sign in.")
-        XCTAssertEqual(firebase.userEmail, testEmail, "UserEmail must match sign-in email.")
+    func testEmailSignInDoesNotMarkAuthenticatedOnAuthFailure() async {
+        let before = firebase.isAuthenticated
+        do {
+            try await firebase.signIn(email: "no.such.user@lookafter.test", password: "DefinitelyWrongPass999!")
+            XCTFail("Expected Auth failure; must not invent fallback UIDs")
+        } catch {
+            XCTAssertFalse(firebase.isAuthenticated || before && firebase.currentUserId?.hasPrefix("usr_") == true)
+            XCTAssertFalse(firebase.currentUserId?.hasPrefix("usr_") ?? false, "Must not use hashValue fallback UIDs")
+        }
     }
     
-    func testAccountCreationFlow() async throws {
-        let newEmail = "user.create@flowos.app"
-        let newPass = "NewAccountPass456!"
-        
-        try await firebase.createAccount(email: newEmail, password: newPass)
-        
-        XCTAssertTrue(firebase.isAuthenticated, "FirebaseManager must set isAuthenticated to true upon account creation.")
-        XCTAssertNotNil(firebase.currentUserId, "FirebaseManager must set currentUserId upon account creation.")
-        XCTAssertEqual(firebase.userEmail, newEmail, "UserEmail must match creation email.")
+    func testAccountCreationDoesNotMarkAuthenticatedOnAuthFailure() async {
+        do {
+            try await firebase.createAccount(email: "likely.invalid", password: "x")
+            XCTFail("Expected Auth failure for invalid email")
+        } catch {
+            XCTAssertFalse(firebase.currentUserId?.hasPrefix("usr_") ?? false)
+        }
     }
     
-    func testGuestAnonymousFlow() async throws {
-        try await firebase.signInAnonymously()
-        
-        XCTAssertTrue(firebase.isAuthenticated, "FirebaseManager must set isAuthenticated to true for guest mode.")
-        XCTAssertNotNil(firebase.currentUserId, "CurrentUserId must be generated for guest mode.")
-        XCTAssertTrue(firebase.currentUserId?.hasPrefix("guest_") ?? false || !(firebase.currentUserId?.isEmpty ?? true))
+    func testGuestAnonymousFlowUsesFirebaseOrThrows() async {
+        // With Firebase configured, anonymous must await Auth — success or throw.
+        // Must never leave a hashValue-based usr_* id.
+        do {
+            try await firebase.signInAnonymously()
+            XCTAssertTrue(firebase.isAuthenticated)
+            XCTAssertNotNil(firebase.currentUserId)
+            XCTAssertFalse(firebase.currentUserId?.hasPrefix("usr_") ?? false)
+        } catch {
+            XCTAssertFalse(firebase.isAuthenticated, "Failed Auth must not leave authenticated=true")
+        }
     }
     
-    func testSignOutFlow() async throws {
-        try await firebase.signIn(email: "signout.test@flowos.app", password: "Password123!")
-        XCTAssertTrue(firebase.isAuthenticated)
-        
+    func testGuestLocalIdentityIsStableAcrossCalls() throws {
+        try GuestLocalIdentity.deleteForTests()
+        let first = try GuestLocalIdentity.resolvedOrCreate()
+        let second = try GuestLocalIdentity.resolvedOrCreate()
+        XCTAssertEqual(first, second)
+        XCTAssertTrue(first.hasPrefix("guest_"))
+        XCTAssertFalse(first.contains("usr_"))
+    }
+    
+    func testSignOutFlowClearsSessionFlags() async throws {
+        // Establish a local guest session via Keychain path is not reachable while FirebaseApp
+        // is configured; verify signOut clears whatever session flags exist.
+        try? await firebase.signInAnonymously()
         try firebase.signOut()
         
         XCTAssertFalse(firebase.isAuthenticated, "SignOut must reset isAuthenticated to false.")

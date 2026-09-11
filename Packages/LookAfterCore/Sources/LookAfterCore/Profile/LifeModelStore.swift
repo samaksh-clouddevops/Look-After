@@ -1,19 +1,20 @@
 import Foundation
+import Synchronization
 
 /// Persists the compiled life model.
 public enum LifeModelStore {
     public static let storageKey = "lifeos.lifeModel"
     /// `nil` = not loaded yet; `.some(nil)` = loaded and empty; `.some(model)` = cached model.
-    private static var cache: LifeModel??
+    private static let cache = Mutex<LifeModel??>(nil)
 
     public static func load() -> LifeModel? {
-        if let cache { return cache }
+        if let cached = cache.withLock({ $0 }) { return cached }
         guard let data = UserDefaults.standard.data(forKey: storageKey),
               let model = try? JSONDecoder().decode(LifeModel.self, from: data) else {
-            cache = .some(nil)
+            cache.withLock { $0 = .some(nil) }
             return nil
         }
-        cache = .some(model)
+        cache.withLock { $0 = .some(model) }
         return model
     }
 
@@ -21,18 +22,18 @@ public enum LifeModelStore {
         if let data = try? JSONEncoder().encode(model) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
-        cache = .some(model)
+        cache.withLock { $0 = .some(model) }
     }
 
     public static func reset() {
-        cache = .some(nil)
+        cache.withLock { $0 = .some(nil) }
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
 
     /// Drops the in-memory cache so the next `load()` re-reads UserDefaults.
     /// Call after bulk UserDefaults wipes (factory reset) that bypass `reset()`.
     public static func invalidateCache() {
-        cache = nil
+        cache.withLock { $0 = nil }
     }
 
     public static var hasCompiledModel: Bool {

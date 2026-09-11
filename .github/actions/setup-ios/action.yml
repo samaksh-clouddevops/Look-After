@@ -65,7 +65,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        DEST_NAME="${SIM_DESTINATION_NAME:-iPhone 16}"
+        DEST_NAME="${SIM_DESTINATION_NAME:-iPhone 17}"
         UDID=$(xcrun simctl list devices available 2>/dev/null | sed -n "s/.*${DEST_NAME} (\([A-F0-9-]*\)).*/\1/p" | head -1 || true)
         if [ -z "${UDID}" ]; then
           UDID=$(xcrun simctl list devices available 2>/dev/null | sed -n 's/.*iPhone[^(]*(\([A-F0-9-]*\)).*/\1/p' | head -1 || true)

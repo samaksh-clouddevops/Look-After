@@ -16,7 +16,7 @@ private struct LiveActivityLinearProgress: View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(tint.opacity(0.22))
+                    .fill(LiveActivityStyle.trackPlate)
                 Capsule()
                     .fill(tint)
                     .frame(width: geometry.size.width * min(1, max(0, fraction)))
@@ -28,17 +28,21 @@ private struct LiveActivityLinearProgress: View {
 
 private enum LiveActivityStyle {
     // Fixed opaque colors — adaptive tokens can resolve to zero-size layers in ActivityKit snapshots.
+    // Dark plate tuned for glass Lock Screen / Dynamic Island contrast (V5 brand green accent).
     static let accent = Color(hex: "5A9E3F")
-    static let textPrimary = Color(hex: "F4F4F4")
-    static let textSecondary = Color(hex: "B7BDC6")
-    static let textMuted = Color(hex: "8D939C")
-    static let background = Color(hex: "111315")
+    static let textPrimary = Color(hex: "F5F6F4")
+    static let textSecondary = Color(hex: "C2C7CE")
+    static let textMuted = Color(hex: "949AA3")
+    static let background = Color(hex: "0E1012")
+    /// Opaque secondary plate for constraint chips / progress tracks (no white.opacity wash).
+    static let chipPlate = Color(hex: "23282E")
+    static let trackPlate = Color(hex: "1A1E22")
 
     static func accent(for mode: String, isOnBreak: Bool) -> Color {
         if isOnBreak { return textSecondary }
         switch mode {
         case "anchored": return accent
-        case "recovery": return Color(red: 0.45, green: 0.72, blue: 0.62)
+        case "recovery": return Color(hex: "74C69D")
         case "fluidGap": return textMuted
         default: return accent
         }
@@ -53,24 +57,24 @@ struct FocusLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: leadingIcon(context: context))
-                        .foregroundColor(islandAccent(context: context))
+                        .foregroundStyle(islandAccent(context: context))
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(context.state.sessionLabel)
                                 .font(.dsMetadata())
-                                .foregroundColor(LiveActivityStyle.textMuted)
+                                .foregroundStyle(LiveActivityStyle.textMuted)
                             Text(context.state.constraintType)
                                 .font(.system(size: 9, weight: .bold))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
-                                .background(LiveActivityStyle.textMuted.opacity(0.2))
-                                .clipShape(Capsule())
-                                .foregroundColor(LiveActivityStyle.textSecondary)
+                                .background(Capsule().fill(LiveActivityStyle.chipPlate))
+                                .foregroundStyle(LiveActivityStyle.textSecondary)
                         }
                         Text(context.state.taskTitle)
                             .font(.dsCaption(weight: .semibold))
+                            .foregroundStyle(LiveActivityStyle.textPrimary)
                             .lineLimit(1)
                     }
                 }
@@ -86,19 +90,19 @@ struct FocusLiveActivity: Widget {
                         if !context.state.nextUpSummary.isEmpty {
                             Text(context.state.nextUpSummary)
                                 .font(.dsMetadata())
-                                .foregroundColor(LiveActivityStyle.textMuted)
+                                .foregroundStyle(LiveActivityStyle.textMuted)
                                 .lineLimit(1)
                         }
                     }
                 }
             } compactLeading: {
                 Image(systemName: leadingIcon(context: context))
-                    .foregroundColor(islandAccent(context: context))
+                    .foregroundStyle(islandAccent(context: context))
             } compactTrailing: {
                 compactTrailing(context: context)
             } minimal: {
                 Image(systemName: leadingIcon(context: context))
-                    .foregroundColor(islandAccent(context: context))
+                    .foregroundStyle(islandAccent(context: context))
             }
         }
     }
@@ -123,12 +127,13 @@ struct FocusLiveActivity: Widget {
         if context.state.isPaused || !context.state.showsStrictCountdown {
             Text(context.state.remainingLabel.isEmpty ? "—" : context.state.remainingLabel)
                 .font(.dsCaption(weight: .semibold).monospacedDigit())
-                .foregroundColor(islandAccent(context: context))
+                .foregroundStyle(islandAccent(context: context))
+                .contentTransition(.numericText())
         } else {
             Text(timerInterval: Date()...endDate(for: context), countsDown: true)
                 .font(.dsCaption(weight: .semibold).monospacedDigit())
                 .multilineTextAlignment(.trailing)
-                .foregroundColor(islandAccent(context: context))
+                .foregroundStyle(islandAccent(context: context))
         }
     }
 
@@ -137,12 +142,13 @@ struct FocusLiveActivity: Widget {
         if context.state.isPaused || !context.state.showsStrictCountdown {
             Text(context.state.remainingLabel.isEmpty ? "·" : context.state.remainingLabel)
                 .font(.dsMetadata().monospacedDigit())
-                .foregroundColor(islandAccent(context: context))
+                .foregroundStyle(islandAccent(context: context))
+                .contentTransition(.numericText())
         } else {
             Text(timerInterval: Date()...endDate(for: context), countsDown: true)
                 .font(.dsMetadata().monospacedDigit())
                 .frame(width: 40)
-                .foregroundColor(islandAccent(context: context))
+                .foregroundStyle(islandAccent(context: context))
         }
     }
 
@@ -153,36 +159,42 @@ struct FocusLiveActivity: Widget {
             HStack {
                 Label(context.state.sessionLabel, systemImage: leadingIcon(context: context))
                     .font(.dsMetadata(weight: .bold))
-                    .foregroundColor(accent)
+                    .foregroundStyle(accent)
                 Spacer()
                 Text(context.state.constraintType)
                     .font(.dsMetadata(weight: .semibold))
-                    .foregroundColor(LiveActivityStyle.textMuted)
+                    .foregroundStyle(LiveActivityStyle.textSecondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(LiveActivityStyle.chipPlate))
             }
 
             Text(context.state.taskTitle)
                 .font(.dsHeadline())
-                .foregroundColor(LiveActivityStyle.textPrimary)
+                .foregroundStyle(LiveActivityStyle.textPrimary)
                 .lineLimit(2)
 
             HStack(alignment: .firstTextBaseline) {
                 if context.state.isPaused {
                     Text("Paused • \(context.state.remainingLabel)")
                         .font(.system(size: 22, weight: .bold, design: .monospaced))
-                        .foregroundColor(accent)
+                        .foregroundStyle(accent)
+                        .contentTransition(.numericText())
                 } else if context.state.showsStrictCountdown {
                     Text(timerInterval: Date()...endDate(for: context), countsDown: true)
                         .font(.system(size: 28, weight: .bold, design: .monospaced))
-                        .foregroundColor(accent)
+                        .foregroundStyle(accent)
                 } else {
                     Text(context.state.remainingLabel.isEmpty ? context.state.constraintType : context.state.remainingLabel)
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
-                        .foregroundColor(accent)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(accent)
+                        .contentTransition(.numericText())
                 }
                 Spacer()
                 Text("\(Int(context.state.progressFraction * 100))%")
                     .font(.dsCaption(weight: .semibold).monospacedDigit())
-                    .foregroundColor(LiveActivityStyle.textMuted)
+                    .foregroundStyle(LiveActivityStyle.textMuted)
+                    .contentTransition(.numericText())
             }
 
             LiveActivityLinearProgress(fraction: context.state.progressFraction, tint: accent)
@@ -190,7 +202,7 @@ struct FocusLiveActivity: Widget {
             if !context.state.nextUpSummary.isEmpty {
                 Text(context.state.nextUpSummary)
                     .font(.dsMetadata())
-                    .foregroundColor(LiveActivityStyle.textSecondary)
+                    .foregroundStyle(LiveActivityStyle.textSecondary)
                     .lineLimit(2)
             }
 
@@ -203,24 +215,22 @@ struct FocusLiveActivity: Widget {
 
     @ViewBuilder
     private var focusControlButtons: some View {
-        if #available(iOS 17.0, *) {
-            HStack(spacing: 12) {
-                Button(intent: WidgetPauseFocusIntent()) {
-                    Label("Rest", systemImage: "pause.circle.fill")
-                        .font(.dsCaption(weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .tint(LiveActivityStyle.textSecondary)
-
-                Button(intent: WidgetCompleteFocusIntent()) {
-                    Label("Done", systemImage: "checkmark.circle.fill")
-                        .font(.dsCaption(weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(LiveActivityStyle.accent)
+        HStack(spacing: 12) {
+            Button(intent: WidgetPauseFocusIntent()) {
+                Label("Rest", systemImage: "pause.circle.fill")
+                    .font(.dsCaption(weight: .semibold))
             }
-            .padding(.top, 4)
+            .buttonStyle(.bordered)
+            .tint(LiveActivityStyle.textSecondary)
+
+            Button(intent: WidgetCompleteFocusIntent()) {
+                Label("Done", systemImage: "checkmark.circle.fill")
+                    .font(.dsCaption(weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(LiveActivityStyle.accent)
         }
+        .padding(.top, 4)
     }
 }
 
@@ -233,30 +243,30 @@ struct NowPinLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: pinIcon(context))
                         .font(.body.weight(.semibold))
-                        .foregroundColor(LiveActivityStyle.accent)
+                        .foregroundStyle(LiveActivityStyle.accent)
                         .frame(width: 24, height: 24)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(context.state.sectionLabel.uppercased())
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(LiveActivityStyle.textMuted)
+                            .foregroundStyle(LiveActivityStyle.textMuted)
                         Text(nowPinTitle(context))
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
-                            .foregroundColor(LiveActivityStyle.textPrimary)
+                            .foregroundStyle(LiveActivityStyle.textPrimary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(max(0, context.state.energyScore))%")
-                            .font(.caption.weight(.bold))
-                            .monospacedDigit()
-                            .foregroundColor(LiveActivityStyle.accent)
+                            .font(.caption.weight(.bold).monospacedDigit())
+                            .foregroundStyle(LiveActivityStyle.accent)
+                            .contentTransition(.numericText())
                         Text(energyLabel(context))
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(LiveActivityStyle.textMuted)
+                            .foregroundStyle(LiveActivityStyle.textMuted)
                     }
                     .frame(minWidth: 28, minHeight: 28)
                 }
@@ -271,25 +281,25 @@ struct NowPinLiveActivity: Widget {
                         Text(nowPinBottomLine(context))
                             .font(.caption2)
                             .lineLimit(2)
-                            .foregroundColor(LiveActivityStyle.textSecondary)
+                            .foregroundStyle(LiveActivityStyle.textSecondary)
                             .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
                     }
                 }
             } compactLeading: {
                 Image(systemName: pinIcon(context))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(LiveActivityStyle.accent)
+                    .foregroundStyle(LiveActivityStyle.accent)
                     .frame(width: 18, height: 18)
             } compactTrailing: {
                 Text("\(max(0, context.state.energyScore))%")
-                    .font(.caption2.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundColor(LiveActivityStyle.accent)
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(LiveActivityStyle.accent)
+                    .contentTransition(.numericText())
                     .frame(minWidth: 24, minHeight: 16)
             } minimal: {
                 Image(systemName: pinIcon(context))
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(LiveActivityStyle.accent)
+                    .foregroundStyle(LiveActivityStyle.accent)
                     .frame(width: 16, height: 16)
             }
         }
@@ -331,12 +341,12 @@ struct NowPinLiveActivity: Widget {
             HStack(alignment: .center, spacing: 6) {
                 Image(systemName: pinIcon(context))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(LiveActivityStyle.accent)
+                    .foregroundStyle(LiveActivityStyle.accent)
                     .frame(width: 16, height: 16)
 
                 Text(context.state.sectionLabel)
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(LiveActivityStyle.accent)
+                    .foregroundStyle(LiveActivityStyle.accent)
                     .lineLimit(1)
                     .frame(minHeight: 14)
 
@@ -345,41 +355,41 @@ struct NowPinLiveActivity: Widget {
                         .font(.system(size: 9, weight: .bold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(LiveActivityStyle.textMuted.opacity(0.2))
-                        .clipShape(Capsule())
-                        .foregroundColor(LiveActivityStyle.textSecondary)
+                        .background(Capsule().fill(LiveActivityStyle.chipPlate))
+                        .foregroundStyle(LiveActivityStyle.textSecondary)
                 }
 
                 Text("\(max(0, context.state.energyScore))%")
-                    .font(.caption2.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundColor(LiveActivityStyle.textMuted)
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(LiveActivityStyle.textMuted)
+                    .contentTransition(.numericText())
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .frame(minHeight: 14)
             }
 
             Text(nowPinTitle(context))
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(LiveActivityStyle.textPrimary)
+                .foregroundStyle(LiveActivityStyle.textPrimary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.9)
                 .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(context.state.scheduleLabel.isEmpty ? pinDurationLabel(context) : context.state.scheduleLabel)
-                    .font(.caption)
-                    .foregroundColor(LiveActivityStyle.textSecondary)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(LiveActivityStyle.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
+                    .contentTransition(.numericText())
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(minHeight: 14)
 
                 if !context.state.scheduleLabel.isEmpty {
                     pinRemainingLabel(context)
-                        .font(.caption.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundColor(LiveActivityStyle.accent)
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(LiveActivityStyle.accent)
                         .lineLimit(1)
+                        .contentTransition(.numericText())
                         .frame(minHeight: 14)
                 }
             }
@@ -389,7 +399,7 @@ struct NowPinLiveActivity: Widget {
             if let footer = pinFooterLine(context) {
                 Text(footer)
                     .font(.caption2)
-                    .foregroundColor(LiveActivityStyle.textMuted)
+                    .foregroundStyle(LiveActivityStyle.textMuted)
                     .lineLimit(2)
                     .minimumScaleFactor(0.9)
                     .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)

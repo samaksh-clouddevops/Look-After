@@ -4,14 +4,20 @@ import XCTest
 import LookAfterCore
 import LookAfterData
 
-@MainActor
 final class PerPageScheduleRegressionTests: XCTestCase {
-    private var store: InMemoryTaskStore!
-    private var viewModel: TasksViewModel!
+    @MainActor private var store: InMemoryTaskStore!
+    @MainActor private var viewModel: TasksViewModel!
     private var calendar: Calendar { TestCalendarFixtures.calendar }
     private var today: Date { TestCalendarFixtures.today }
 
+    @MainActor
     override func setUp() async throws {
+        try await super.setUp()
+        await configureFixture()
+    }
+
+    @MainActor
+    private func configureFixture() {
         store = InMemoryTaskStore(referenceDate: today, calendar: calendar)
         let glm = mockGLMService()
         viewModel = TasksViewModel(
@@ -22,6 +28,7 @@ final class PerPageScheduleRegressionTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testReconcileWithoutDriftDoesNotMutateSchedule() async throws {
         let nine = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
         let eleven = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: today)!
@@ -53,6 +60,7 @@ final class PerPageScheduleRegressionTests: XCTestCase {
         XCTAssertEqual(before, after)
     }
 
+    @MainActor
     func testPostPlannerSyncAndReconcileResolvesOverlap() async throws {
         let overlap = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
         var left = LifeTask(
@@ -88,6 +96,7 @@ final class PerPageScheduleRegressionTests: XCTestCase {
         XCTAssertFalse(DayScheduleReconciler.hasOverlap(active, on: today, calendar: calendar))
     }
 
+    @MainActor
     func testConstraintMigrationOnReconcile() async throws {
         let today = Calendar.current.startOfDay(for: Date())
         let fixed = LifeTask(
@@ -109,6 +118,7 @@ final class PerPageScheduleRegressionTests: XCTestCase {
         XCTAssertFalse(migrated.isSchedulerMovable)
     }
 
+    @MainActor
     private func scheduleSignature(_ tasks: [LifeTask]) -> String {
         tasks
             .sorted { $0.id < $1.id }
@@ -121,6 +131,7 @@ final class PerPageScheduleRegressionTests: XCTestCase {
     }
 }
 
+@MainActor
 private func mockGLMService() -> GLMService {
     let glm = GLMService.makeForTesting(keyManager: GLMKeyManager(
         secretStore: InMemorySecretStore(),

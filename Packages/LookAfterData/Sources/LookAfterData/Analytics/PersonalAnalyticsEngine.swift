@@ -1,7 +1,8 @@
 import Foundation
 import LookAfterCore
 
-public protocol PersonalAnalyticsEngineProtocol: Sendable {
+@MainActor
+public protocol PersonalAnalyticsEngineProtocol {
     func buildReport(timeframe: InsightsTimeframe, userId: String) async -> PersonalAnalyticsReport
 }
 

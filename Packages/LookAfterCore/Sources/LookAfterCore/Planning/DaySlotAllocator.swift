@@ -7,17 +7,42 @@ public enum DaySlotAllocator {
         public let estimatedMinutes: Int
         public let priority: Priority
         public let preferredStart: Date?
+        public let hourBounds: PlanningSchedulePolicy.WorkHours?
+        public let senseTask: LifeTask?
 
         public init(
             id: String,
             estimatedMinutes: Int,
             priority: Priority = .medium,
-            preferredStart: Date? = nil
+            preferredStart: Date? = nil,
+            hourBounds: PlanningSchedulePolicy.WorkHours? = nil,
+            senseTask: LifeTask? = nil
         ) {
             self.id = id
             self.estimatedMinutes = estimatedMinutes
             self.priority = priority
             self.preferredStart = preferredStart
+            self.hourBounds = hourBounds
+            self.senseTask = senseTask
+        }
+
+        /// Preferred start, semantic hour fence, and sense payload for one task.
+        public static func makingSense(
+            of task: LifeTask,
+            on day: Date,
+            preferredStart: Date? = nil,
+            calendar: Calendar = .current
+        ) -> Request {
+            let preferred = preferredStart
+                ?? SemanticPlacementSense.nearestPreferredStart(on: day, for: task, calendar: calendar)
+            return Request(
+                id: task.id,
+                estimatedMinutes: max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes),
+                priority: task.priority,
+                preferredStart: preferred,
+                hourBounds: SemanticPlacementSense.hourBounds(for: task, calendar: calendar),
+                senseTask: task
+            )
         }
     }
 
@@ -35,14 +60,24 @@ public enum DaySlotAllocator {
         referenceDay: Date? = nil,
         now: Date = Date(),
         calendar: Calendar = .current,
-        bufferMinutes: Int = 5
+        bufferMinutes: Int = 5,
+        extraBlocked: [TaskScheduleInterval] = []
     ) -> [Allocation] {
         guard !requests.isEmpty else { return [] }
 
         let day = calendar.startOfDay(for: referenceDay ?? now)
-        let isFutureDay = day > calendar.startOfDay(for: now)
-        let floor = isFutureDay ? day : now
+        let today = calendar.startOfDay(for: now)
+        let floor: Date
+        if calendar.isDate(day, inSameDayAs: today) {
+            floor = now
+        } else {
+            // Past and future days are laid out from that morning, not from wall-clock now.
+            floor = day
+        }
         var blocked = occupiedIntervals(from: existingTasks, on: day, calendar: calendar)
+        blocked.append(contentsOf: extraBlocked)
+        blocked.sort { $0.start < $1.start }
+        var neighbors = existingTasks
         var cursor = PlanningSchedulePolicy.schedulingCursor(now: floor, calendar: calendar, workHours: workHours)
         cursor = advancePastBlocks(cursor, blocked: blocked, bufferMinutes: bufferMinutes, calendar: calendar)
 
@@ -59,6 +94,8 @@ public enum DaySlotAllocator {
         var results: [Allocation] = []
         for request in sorted {
             let duration = max(request.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+            let hours = request.hourBounds ?? workHours
+            let dayEnd = hours.endDate(on: day, calendar: calendar)
             let start = resolveStart(
                 ResolveStartInput(
                     preferred: request.preferredStart,
@@ -66,9 +103,12 @@ public enum DaySlotAllocator {
                     durationMinutes: duration,
                     bufferMinutes: bufferMinutes,
                     blocked: blocked,
-                    workHours: workHours,
+                    workHours: hours,
                     now: floor,
-                    calendar: calendar
+                    calendar: calendar,
+                    senseTask: request.senseTask,
+                    neighborTasks: neighbors,
+                    dayEnd: dayEnd
                 )
             )
             guard let start else { continue }
@@ -77,6 +117,12 @@ public enum DaySlotAllocator {
             blocked.append(Interval(taskID: request.id, start: start, end: end))
             blocked.sort { $0.start < $1.start }
             results.append(Allocation(id: request.id, scheduledTime: start))
+            if var placed = request.senseTask {
+                placed.scheduledDate = day
+                placed.scheduledTime = start
+                placed.scheduledEndTime = end
+                neighbors.append(placed)
+            }
             cursor = advancePastBlocks(
                 calendar.date(byAdding: .minute, value: duration + bufferMinutes, to: start) ?? end,
                 blocked: blocked,
@@ -95,7 +141,8 @@ public enum DaySlotAllocator {
         on day: Date,
         now: Date = Date(),
         calendar: Calendar = .current,
-        bufferMinutes: Int = 5
+        bufferMinutes: Int = 5,
+        calendarEvents: [BriefingCalendarEvent] = []
     ) -> [Allocation] {
         guard !requests.isEmpty else { return [] }
 
@@ -105,6 +152,34 @@ public enum DaySlotAllocator {
             return calendar.isDate(scheduledDate, inSameDayAs: day)
         }
         var results: [Allocation] = []
+        let extraBlocked =
+            OccupiedDay.calendarIntervals(from: calendarEvents, on: day, calendar: calendar)
+            + windows.protectedIntervals(on: day, calendar: calendar)
+
+        let boxed = remaining.filter { $0.hourBounds != nil }
+
+        if !boxed.isEmpty {
+            let allocated = allocate(
+                requests: boxed,
+                existingTasks: occupied,
+                workHours: windows.officeHours,
+                referenceDay: day,
+                now: now,
+                calendar: calendar,
+                bufferMinutes: bufferMinutes,
+                extraBlocked: extraBlocked
+            )
+            for allocation in allocated {
+                results.append(allocation)
+                if let request = requests.first(where: { $0.id == allocation.id }) {
+                    occupied.append(placedTask(from: request, start: allocation.scheduledTime, on: day))
+                }
+            }
+        }
+
+        remaining = requests.filter { request in
+            request.hourBounds == nil && !results.contains(where: { $0.id == request.id })
+        }
 
         for window in windows.allSchedulingWindows {
             guard !remaining.isEmpty else { break }
@@ -115,7 +190,8 @@ public enum DaySlotAllocator {
                 referenceDay: day,
                 now: now,
                 calendar: calendar,
-                bufferMinutes: bufferMinutes
+                bufferMinutes: bufferMinutes,
+                extraBlocked: extraBlocked
             )
             guard !allocated.isEmpty else { continue }
 
@@ -123,13 +199,7 @@ public enum DaySlotAllocator {
                 results.append(allocation)
                 remaining.removeAll { $0.id == allocation.id }
                 if let request = requests.first(where: { $0.id == allocation.id }) {
-                    let placeholder = LifeTask(
-                        title: request.id,
-                        estimatedMinutes: request.estimatedMinutes,
-                        scheduledDate: day,
-                        scheduledTime: allocation.scheduledTime
-                    )
-                    occupied.append(placeholder)
+                    occupied.append(placedTask(from: request, start: allocation.scheduledTime, on: day))
                 }
             }
         }
@@ -138,6 +208,20 @@ public enum DaySlotAllocator {
     }
 
     // MARK: - Intervals
+
+    private static func placedTask(from request: Request, start: Date, on day: Date) -> LifeTask {
+        var task = request.senseTask ?? LifeTask(
+            title: request.id,
+            estimatedMinutes: request.estimatedMinutes,
+            scheduledDate: day,
+            scheduledTime: start
+        )
+        task.scheduledDate = day
+        task.scheduledTime = start
+        let duration = max(request.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        task.scheduledEndTime = start.addingTimeInterval(TimeInterval(duration * 60))
+        return task
+    }
 
     private static func occupiedIntervals(
         from tasks: [LifeTask],
@@ -158,21 +242,47 @@ public enum DaySlotAllocator {
         var workHours: PlanningSchedulePolicy.WorkHours
         var now: Date
         var calendar: Calendar
+        var senseTask: LifeTask?
+        var neighborTasks: [LifeTask]
+        var dayEnd: Date?
     }
 
     private static func resolveStart(_ input: ResolveStartInput) -> Date? {
         let preferred = sanitizedPreferred(input.preferred, calendar: input.calendar)
-        if let preferred,
-           preferred >= input.now,
-           fits(
-            preferred,
-            durationMinutes: input.durationMinutes,
-            blocked: input.blocked,
-            workHours: input.workHours,
-            calendar: input.calendar
-           ) {
-            return preferred
+
+        // Upcoming preferred: try preferred, then later within the window.
+        // Never fall back to `now`/cursor *before* that preferred — that parked meals/gym at wall clock.
+        if let preferred, preferred >= input.now {
+            if fits(
+                preferred,
+                durationMinutes: input.durationMinutes,
+                blocked: input.blocked,
+                workHours: input.workHours,
+                calendar: input.calendar,
+                senseTask: input.senseTask,
+                neighborTasks: input.neighborTasks,
+                dayEnd: input.dayEnd
+            ) {
+                return preferred
+            }
+            if let later = nextOpenSlot(
+                startingAt: preferred,
+                durationMinutes: input.durationMinutes,
+                bufferMinutes: input.bufferMinutes,
+                blocked: input.blocked,
+                workHours: input.workHours,
+                now: input.now,
+                calendar: input.calendar,
+                senseTask: input.senseTask,
+                neighborTasks: input.neighborTasks,
+                dayEnd: input.dayEnd
+            ) {
+                return later
+            }
+            // Preferred window exhausted — leave unscheduled rather than inventing a premature slot.
+            return nil
         }
+
         return nextOpenSlot(
             startingAt: input.cursor,
             durationMinutes: input.durationMinutes,
@@ -180,7 +290,10 @@ public enum DaySlotAllocator {
             blocked: input.blocked,
             workHours: input.workHours,
             now: input.now,
-            calendar: input.calendar
+            calendar: input.calendar,
+            senseTask: input.senseTask,
+            neighborTasks: input.neighborTasks,
+            dayEnd: input.dayEnd
         )
     }
 
@@ -199,11 +312,23 @@ public enum DaySlotAllocator {
         blocked: [Interval],
         workHours: PlanningSchedulePolicy.WorkHours,
         now: Date,
-        calendar: Calendar
+        calendar: Calendar,
+        senseTask: LifeTask?,
+        neighborTasks: [LifeTask],
+        dayEnd: Date?
     ) -> Date? {
         var candidate = max(cursor, now)
         for _ in 0..<96 {
-            if fits(candidate, durationMinutes: durationMinutes, blocked: blocked, workHours: workHours, calendar: calendar) {
+            if fits(
+                candidate,
+                durationMinutes: durationMinutes,
+                blocked: blocked,
+                workHours: workHours,
+                calendar: calendar,
+                senseTask: senseTask,
+                neighborTasks: neighborTasks,
+                dayEnd: dayEnd
+            ) {
                 return candidate
             }
             let probe = Interval(
@@ -228,7 +353,10 @@ public enum DaySlotAllocator {
         durationMinutes: Int,
         blocked: [Interval],
         workHours: PlanningSchedulePolicy.WorkHours,
-        calendar: Calendar
+        calendar: Calendar,
+        senseTask: LifeTask?,
+        neighborTasks: [LifeTask],
+        dayEnd: Date?
     ) -> Bool {
         let end = start.addingTimeInterval(TimeInterval(durationMinutes * 60))
         let interval = Interval(taskID: "", start: start, end: end)
@@ -236,7 +364,20 @@ public enum DaySlotAllocator {
         let endMinutes = minutesFromMidnight(end, calendar: calendar)
         guard startMinutes >= workHours.startMinutesFromMidnight else { return false }
         guard endMinutes <= workHours.endMinutesFromMidnight else { return false }
-        return !blocked.contains { interval.overlaps($0) }
+        guard !blocked.contains(where: { interval.overlaps($0) }) else { return false }
+        guard let task = senseTask else { return true }
+        let verdict = SemanticPlacementSense.judge(
+            SemanticPlacementSense.Input(
+                task: task,
+                proposedStart: start,
+                durationMinutes: durationMinutes,
+                occupied: blocked,
+                neighborTasks: neighborTasks,
+                calendar: calendar,
+                dayEnd: dayEnd
+            )
+        )
+        return SemanticPlacementSense.isSearchableSlot(verdict)
     }
 
     private static func advancePastBlocks(

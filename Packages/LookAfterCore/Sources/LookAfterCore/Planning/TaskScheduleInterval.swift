@@ -188,13 +188,13 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         isMidnightClockTime(time, calendar: calendar)
     }
 
-    /// `00:00` clock time is always a day sentinel — never a real schedule intent.
+    /// `00:00` start clock is a day sentinel — never a real schedule intent.
+    /// An end clock of `00:00` is a legitimate overnight end and is not a placeholder.
     public static func isPlaceholderMidnightSchedule(
         for task: LifeTask,
         calendar: Calendar = .current
     ) -> Bool {
         isMidnightClockTime(task.scheduledTime, calendar: calendar)
-            || isMidnightClockTime(task.scheduledEndTime, calendar: calendar)
     }
 
     /// True when a resolved clock time on `day` would render as midnight.
@@ -365,7 +365,14 @@ public extension LifeTimelineEvent {
     }
 
     /// Display range label preferring subtitle when it already contains a time range.
+    /// Flexible / unslotted items never show a midnight→day-end clock range (trust killer in glance).
     var scheduleRangeLabel: String {
+        if isFlexibleToday {
+            if let minutes = estimatedMinutes, minutes > 0 {
+                return "Flexible today · \(minutes)m"
+            }
+            return "Flexible today"
+        }
         if subtitle.contains(" – "), !subtitle.hasPrefix("About ") {
             let parts = subtitle.components(separatedBy: " · ")
             let rangePart = parts.last ?? subtitle
@@ -377,6 +384,8 @@ public extension LifeTimelineEvent {
     /// Whether this event represents an important fixed commitment for glance views.
     var isImportantCommitment: Bool {
         guard !isCompleted else { return false }
+        // Flexible / unslotted work must not crowd “Today at a Glance” as if it were fixed.
+        guard !isFlexibleToday else { return false }
         return isFixed || kind == .meeting || kind == .work
     }
 }

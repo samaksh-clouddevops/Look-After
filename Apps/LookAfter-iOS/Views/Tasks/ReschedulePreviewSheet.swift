@@ -7,8 +7,8 @@ struct ReschedulePreviewSheet: View {
     @ObservedObject var plannerVM: DailyPlannerViewModel
     let proposal: DayRescheduleProposal
     let userId: String
+    var tasksViewModel: TasksViewModel? = nil
 
-    @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -45,8 +45,9 @@ struct ReschedulePreviewSheet: View {
                                 Text("Regenerate")
                             }
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, DesignSystem.spacingSM)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         .disabled(plannerVM.isScheduling)
                     }
                     .padding(DesignSystem.spacingLG)
@@ -62,17 +63,20 @@ struct ReschedulePreviewSheet: View {
                         plannerVM.rejectRescheduleProposal()
                         dismiss()
                     }
+                    .buttonStyle(.glass)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Apply") {
                         Task {
                             await plannerVM.applyRescheduleProposal(
                                 userId: userId,
-                                tasksViewModel: shell.tasksVM
+                                tasksViewModel: tasksViewModel
                             )
                             dismiss()
                         }
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(LookAfterChrome.accentTint)
                     .disabled(plannerVM.isScheduling)
                 }
             }

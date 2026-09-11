@@ -36,20 +36,16 @@ public final class TaskRepository: ObservableObject {
         if !force, let cached = Self.cachedAll {
             return cached
         }
+        await TaskDeletionRegistry.pullFromCloud(firebase: firebase)
         let loaded = await taskStore.loadAllAsync()
-        if force {
-            // Explicit reload from disk (tests / recovery). May race with concurrent saves.
-            Self.cachedAll = loaded
-            TaskPersistenceLog.localLoad(count: loaded.count, userId: "warm-cache-force")
-            return loaded
-        }
-        // Prefer a cache written by a concurrent mutator (create/save) during the await.
-        // Only adopt disk if cache is still cold — never clobber fresher in-memory writes.
         if let cached = Self.cachedAll {
-            return cached
+            let merged = TaskMerge.merge(local: cached, remote: loaded)
+            Self.cachedAll = merged
+            TaskPersistenceLog.localLoad(count: merged.count, userId: force ? "warm-cache-force" : "warm-cache-merge")
+            return merged
         }
         Self.cachedAll = loaded
-        TaskPersistenceLog.localLoad(count: loaded.count, userId: "warm-cache")
+        TaskPersistenceLog.localLoad(count: loaded.count, userId: force ? "warm-cache-force" : "warm-cache")
         return loaded
     }
 
@@ -190,33 +186,14 @@ public final class TaskRepository: ObservableObject {
         deleteTaskFromFirestore(id)
     }
     
-    /// Push task to Firestore without blocking the caller.
+    /// Push task to Firestore via durable outbox (retries when offline / on drain).
     private func syncTaskToFirestore(_ task: LifeTask, merge: Bool = false) {
-        Task {
-            guard let ref = firebase.userCollection(collection) else { return }
-            
-            do {
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .secondsSince1970
-                let data = try encoder.encode(task)
-                guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-                
-                if merge {
-                    try await ref.document(task.id).setData(dict, merge: true)
-                } else {
-                    try await ref.document(task.id).setData(dict)
-                }
-            } catch {
-                // Local copy is already saved; cloud sync can retry later.
-            }
-        }
+        TaskSyncOutbox.shared.enqueueUpsert(task, merge: merge)
     }
     
     private func deleteTaskFromFirestore(_ id: String) {
-        Task {
-            guard let ref = firebase.userCollection(collection) else { return }
-            try? await ref.document(id).delete()
-        }
+        let userId = firebase.currentUserId ?? ""
+        TaskSyncOutbox.shared.enqueueDelete(taskId: id, userId: userId)
     }
 
     private func saveLocally(_ task: LifeTask) {
@@ -330,85 +307,87 @@ public final class TaskRepository: ObservableObject {
     }
 }
 
-/// Repository for managing inbox items in Firestore.
+/// Repository for managing inbox items — local-first SQLite with Firestore sync when available.
 @MainActor
 public final class InboxRepository: ObservableObject {
     
     private let firebase: FirebaseManager
+    private let store: InboxSQLiteStore
     private let collection = "inbox_items"
     
-    public init(firebase: FirebaseManager? = nil) {
+    public init(firebase: FirebaseManager? = nil, store: InboxSQLiteStore? = nil) {
         self.firebase = firebase ?? FirebaseManager.shared
+        self.store = store ?? .shared
     }
     
     public func getAll(for userId: String) async throws -> [InboxItem] {
+        let local = (try? store.loadAll(for: userId)) ?? []
         guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
+            return local
         }
         
-        let snapshot = try await ref
-            .order(by: "createdAt", descending: true)
-            .getDocuments()
-        
-        return try snapshot.documents.compactMap { doc in
-            try firebase.decode(InboxItem.self, from: doc)
+        do {
+            let snapshot = try await ref
+                .order(by: "createdAt", descending: true)
+                .getDocuments()
+            
+            let remote = try snapshot.documents.compactMap { doc in
+                try firebase.decode(InboxItem.self, from: doc)
+            }
+            if !remote.isEmpty {
+                try? store.mergeRemote(remote)
+                return (try? store.loadAll(for: userId)) ?? remote
+            }
+            return local
+        } catch {
+            return local
         }
     }
     
     public func getUnprocessed(for userId: String) async throws -> [InboxItem] {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
-        }
-        
-        let snapshot = try await ref
-            .whereField("status", isEqualTo: "Unprocessed")
-            .order(by: "createdAt", descending: true)
-            .getDocuments()
-        
-        return try snapshot.documents.compactMap { doc in
-            try firebase.decode(InboxItem.self, from: doc)
-        }
+        let all = try await getAll(for: userId)
+        return all.filter { $0.status == .unprocessed }
     }
     
     public func create(_ item: InboxItem) async throws {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
-        }
-        
         var mutableItem = item
-        mutableItem.userId = firebase.currentUserId ?? ""
-        
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutableItem)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw FirebaseManagerError.encodingError
+        let resolved = firebase.resolvedUserId
+        if !resolved.isEmpty {
+            mutableItem.userId = resolved
+        } else if mutableItem.userId.isEmpty {
+            mutableItem.userId = firebase.currentUserId ?? ""
         }
-        
-        try await ref.document(item.id).setData(dict)
+        try store.upsert(mutableItem)
+        CloudSyncOutbox.shared.enqueueCodable(
+            mutableItem,
+            collection: collection,
+            documentId: mutableItem.id,
+            userId: mutableItem.userId,
+            merge: false
+        )
     }
     
     public func update(_ item: InboxItem) async throws {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
-        }
-        
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(item)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw FirebaseManagerError.encodingError
-        }
-        
-        try await ref.document(item.id).setData(dict, merge: true)
+        try store.upsert(item)
+        CloudSyncOutbox.shared.enqueueCodable(
+            item,
+            collection: collection,
+            documentId: item.id,
+            userId: item.userId,
+            merge: true
+        )
     }
     
     public func delete(_ id: String) async throws {
-        guard let ref = firebase.userCollection(collection) else {
-            throw FirebaseManagerError.notAuthenticated
-        }
-        
-        try await ref.document(id).delete()
+        try store.delete(id: id)
+        let userId = firebase.resolvedUserId
+        CloudSyncOutbox.shared.enqueue(
+            collection: collection,
+            documentId: id,
+            userId: userId,
+            operation: .delete,
+            payloadJSON: nil
+        )
     }
 }
 
@@ -417,13 +396,14 @@ public final class InboxRepository: ObservableObject {
 public final class HealthSummaryRepository: ObservableObject {
     
     private let firebase: FirebaseManager
-    private let local = LocalPersistenceManager.shared
+    private let store: HealthSummarySQLiteStore
     private let collection = "health_summaries"
     private static let cloudReadTimeoutSeconds: TimeInterval = 10
     private static let cloudWriteTimeoutSeconds: TimeInterval = 15
     
-    public init(firebase: FirebaseManager? = nil) {
+    public init(firebase: FirebaseManager? = nil, store: HealthSummarySQLiteStore? = nil) {
         self.firebase = firebase ?? FirebaseManager.shared
+        self.store = store ?? .shared
     }
     
     /// Saves locally first (milliseconds), then uploads to Firestore in the background.
@@ -448,7 +428,7 @@ public final class HealthSummaryRepository: ObservableObject {
     public func reassignSummaries(from oldUserId: String, to newUserId: String) {
         guard !oldUserId.isEmpty, !newUserId.isEmpty, oldUserId != newUserId else { return }
 
-        var summaries = local.load([HealthSummary].self, filename: collection)
+        var summaries = (try? store.loadAll()) ?? []
         var changed = false
 
         for index in summaries.indices {
@@ -464,7 +444,7 @@ public final class HealthSummaryRepository: ObservableObject {
 
         if changed {
             summaries.sort { $0.date > $1.date }
-            local.save(summaries, filename: collection)
+            try? store.replaceAll(summaries)
         }
     }
     
@@ -533,7 +513,7 @@ public final class HealthSummaryRepository: ObservableObject {
         let canonicalId = firebase.resolvedUserId
         guard !canonicalId.isEmpty else { return }
 
-        let all = local.load([HealthSummary].self, filename: collection)
+        let all = (try? store.loadAll()) ?? []
         let staleIds = Set(all.map(\.userId).filter { !$0.isEmpty && $0 != canonicalId })
         for staleId in staleIds {
             reassignSummaries(from: staleId, to: canonicalId)
@@ -647,7 +627,7 @@ public final class HealthSummaryRepository: ObservableObject {
     }
 
     private func latestLocalWithHealthSignal(excludingUserId: String?) -> HealthSummary? {
-        let all = local.load([HealthSummary].self, filename: collection)
+        let all = ((try? store.loadAll()) ?? [])
             .filter { summary in
                 if let excludingUserId, summary.userId == excludingUserId { return false }
                 return Self.healthSignalScore(summary) > 0
@@ -687,17 +667,11 @@ public final class HealthSummaryRepository: ObservableObject {
     }
     
     private func saveLocally(_ summary: HealthSummary) {
-        var summaries = local.load([HealthSummary].self, filename: collection)
-        if let index = summaries.firstIndex(where: { $0.id == summary.id }) {
-            summaries[index] = summary
-        } else {
-            summaries.insert(summary, at: 0)
-        }
-        local.save(summaries, filename: collection)
+        try? store.upsert(summary)
     }
     
     private func mergeLocally(_ incoming: [HealthSummary]) {
-        var summaries = local.load([HealthSummary].self, filename: collection)
+        var summaries = (try? store.loadAll()) ?? []
         for summary in incoming {
             if let index = summaries.firstIndex(where: { $0.id == summary.id }) {
                 summaries[index] = summary
@@ -706,11 +680,11 @@ public final class HealthSummaryRepository: ObservableObject {
             }
         }
         summaries.sort { $0.date > $1.date }
-        local.save(summaries, filename: collection)
+        try? store.replaceAll(summaries)
     }
     
     private func summaries(for userId: String) -> [HealthSummary] {
-        let all = local.load([HealthSummary].self, filename: collection)
+        let all = (try? store.loadAll()) ?? []
         guard !userId.isEmpty else { return all.sorted { $0.date > $1.date } }
         return all.filter { $0.userId.isEmpty || $0.userId == userId }.sorted { $0.date > $1.date }
     }
@@ -720,22 +694,13 @@ public final class HealthSummaryRepository: ObservableObject {
     }
     
     private func syncToFirestore(_ summary: HealthSummary) {
-        Task {
-            guard let ref = firebase.userCollection(collection) else { return }
-            
-            do {
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .secondsSince1970
-                let data = try encoder.encode(summary)
-                guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-                
-                try await AsyncTimeout.withTimeout(seconds: Self.cloudWriteTimeoutSeconds) {
-                    try await ref.document(summary.id).setData(dict)
-                }
-            } catch {
-                // Local copy is already saved; cloud sync can retry on next sync.
-            }
-        }
+        CloudSyncOutbox.shared.enqueueCodable(
+            summary,
+            collection: collection,
+            documentId: summary.id,
+            userId: summary.userId,
+            merge: false
+        )
     }
 }
 

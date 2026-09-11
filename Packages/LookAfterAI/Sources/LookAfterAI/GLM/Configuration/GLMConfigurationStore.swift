@@ -15,9 +15,14 @@ public final class GLMConfigurationStore: @unchecked Sendable {
         defer { lock.unlock() }
         guard
             let data = UserDefaults.standard.data(forKey: storageKey),
-            let config = try? JSONDecoder().decode(GLMConfiguration.self, from: data)
+            var config = try? JSONDecoder().decode(GLMConfiguration.self, from: data)
         else {
             return .default
+        }
+        if config.migrateLegacyModelsIfNeeded() {
+            if let encoded = try? JSONEncoder().encode(config) {
+                UserDefaults.standard.set(encoded, forKey: storageKey)
+            }
         }
         return config
     }

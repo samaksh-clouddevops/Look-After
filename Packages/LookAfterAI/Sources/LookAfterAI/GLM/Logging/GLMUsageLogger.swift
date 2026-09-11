@@ -82,6 +82,11 @@ public final class GLMUsageLogger: @unchecked Sendable {
             return (0.00000007, 0.0000004) // GLM-4.7-FlashX: $0.07 / $0.40 per 1M
         }
 
+        // GLM-5.3-Flash is paid (not the older free 4.x flash tier).
+        if normalized.contains("5.3-flash") {
+            return (0.00000015, 0.0000005) // GLM-5.3-Flash: $0.15 / $0.50 per 1M
+        }
+
         // GLM-4.7-Flash, GLM-4.5-Flash, GLM-4.6V-Flash are free on z.ai.
         if normalized.contains("flash") {
             return (0, 0)
@@ -99,8 +104,10 @@ public final class GLMUsageLogger: @unchecked Sendable {
         if normalized.contains("4.7") || normalized.contains("4.6") || normalized.contains("4.5") {
             return (0.0000006, 0.0000022) // GLM-4.7 / 4.6 / 4.5
         }
-        if normalized.contains("5-turbo") || normalized.contains("5.1") || normalized.contains("5.2") {
-            return (0.0000014, 0.0000044) // GLM-5.1 / 5.2 / 5-Turbo
+        // Full GLM-5.3 (not flash) shares flagship rates with 5.1 / 5.2.
+        if normalized.contains("5-turbo") || normalized.contains("5.1") || normalized.contains("5.2")
+            || (normalized.contains("5.3") && !normalized.contains("flash")) {
+            return (0.0000014, 0.0000044) // GLM-5.1 / 5.2 / 5.3 / 5-Turbo
         }
         if normalized.contains("glm-5") {
             return (0.000001, 0.0000032) // GLM-5 base

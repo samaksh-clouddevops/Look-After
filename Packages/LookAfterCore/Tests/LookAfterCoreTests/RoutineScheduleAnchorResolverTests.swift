@@ -41,7 +41,52 @@ final class RoutineScheduleAnchorResolverTests: XCTestCase {
             RoutineScheduleAnchorResolver.resolve(for: gym, on: day, calendar: calendar)
         )
         XCTAssertEqual(calendar.component(.hour, from: anchor.start), 18)
-        XCTAssertFalse(anchor.treatAsFixed)
+        XCTAssertTrue(anchor.treatAsFixed)
+    }
+
+    func testGymUsesLifeModelEveningBlockOverSeederDefault() throws {
+        let day = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 7)))
+        let gymBlock = ProtectedTimeBlock(
+            label: "Gym",
+            days: .weekdays,
+            startHour: 18,
+            startMinute: 30,
+            endHour: 19,
+            endMinute: 30,
+            protection: .neverSchedule
+        )
+        let model = LifeModel(
+            identity: LifeIdentity(name: "Sam", roleFraming: "", mission: "", longTermVision: ""),
+            timeBlocks: [gymBlock],
+            commitments: [
+                LifeCommitment(
+                    title: "Gym",
+                    lifeArea: .health,
+                    frequency: .weekdays,
+                    preferredBlockLabel: "Gym",
+                    defaultMinutes: 60,
+                    isNonNegotiable: true
+                )
+            ]
+        )
+        var gym = LifeTask(
+            title: "Gym",
+            lifeArea: .health,
+            estimatedMinutes: 60,
+            scheduledDate: day,
+            scheduledTime: calendar.date(bySettingHour: 10, minute: 0, second: 0, of: day),
+            tags: [LifeModel.commitmentTaskTag],
+            userId: "user-1"
+        )
+        gym = TaskEphemeralityDefaults.enrich(gym)
+
+        let anchor = try XCTUnwrap(
+            RoutineScheduleAnchorResolver.resolve(for: gym, on: day, model: model, calendar: calendar)
+        )
+        XCTAssertEqual(calendar.component(.hour, from: anchor.start), 18)
+        XCTAssertEqual(calendar.component(.minute, from: anchor.start), 30)
+        XCTAssertTrue(anchor.treatAsFixed)
+        XCTAssertTrue(RoutineScheduleAnchorResolver.shouldRestore(task: gym, anchor: anchor, calendar: calendar))
     }
 
     func testCommutePreferredBeforeOfficeWork() throws {

@@ -4,6 +4,7 @@ import LookAfterCore
 import ExecutiveBrain
 
 final class BriefingProjectorTests: XCTestCase {
+    @MainActor
     func testHeroPriorityPrefersOrchestratorHero() {
         let hero = HeroBriefing(
             greeting: "Good morning",
@@ -28,6 +29,7 @@ final class BriefingProjectorTests: XCTestCase {
         XCTAssertEqual(surface.greeting.timeGreeting, "Good morning")
     }
 
+    @MainActor
     func testHeroDisplayContentFallsBackToTopTask() {
         let task = LifeTask(title: "Write report", userId: "user-1")
         let display = BriefingProjector.heroDisplayContent(

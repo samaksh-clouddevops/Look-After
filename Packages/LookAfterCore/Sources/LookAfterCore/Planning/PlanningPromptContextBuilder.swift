@@ -490,7 +490,7 @@ public enum PlanningPromptContextBuilder {
             if lines.count == 1 {
                 lines.append("- Meals: Breakfast ~8:00 AM, Lunch ~12:30 PM, Snacks ~4:00 PM, Dinner ~7:00 PM")
             }
-            lines.append("- Hygiene: Brush teeth morning ~7:30 AM and evening ~9:30 PM")
+            lines.append("- Hygiene: Brush teeth after waking ~7:30 AM and before bed ~9:30 PM")
             lines.append("- Medication: use MEDICATIONS list — never invent times")
             lines.append("- Morning review: 10 min flexible block after breakfast when capacity allows")
             lines.append("- End-of-day reflection lives on the Timeline screen (not a schedulable task)")
@@ -500,12 +500,12 @@ public enum PlanningPromptContextBuilder {
         return """
         DAILY ROUTINES (anchor the day — schedule flexible work around these):
         - Meals: Breakfast ~8:00 AM, Lunch ~12:30 PM, Snacks ~4:00 PM, Dinner ~7:00 PM
-        - Hygiene: Brush teeth morning ~7:30 AM and evening ~9:30 PM
+        - Hygiene: Brush teeth after waking ~7:30 AM and before bed ~9:30 PM
         - Medication: use MEDICATIONS list — never invent times
         - Morning review: 10 min flexible block after breakfast when capacity allows
         - End-of-day reflection lives on the Timeline screen (not a schedulable task)
         - Sleep fence: nothing new after ideal bedtime — wind-down marks end of actionable day
-        - Missed hygiene/meals from yesterday do NOT duplicate today's occurrence; add ONE catch-up task with a clear title (e.g. "Brush teeth — catch-up from last night") only when context warrants it
+        - Missed hygiene/meals from yesterday do NOT duplicate today's occurrence; add ONE catch-up task with a clear title (e.g. "Brush teeth (catch-up)") only when context warrants it
         """
     }
 

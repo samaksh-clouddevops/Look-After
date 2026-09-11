@@ -10,6 +10,16 @@ final class ScreenSnapshotTests: FlowTestBase {
         launch(seedFlow: "FLOW-002")
         waitForBriefing()
 
+        let exportUX = UXReviewCapture.exportEnabled
+        let stamp: String = {
+            let f = DateFormatter()
+            f.dateFormat = "yyyyMMdd-HHmmss"
+            return f.string(from: Date())
+        }()
+        if exportUX {
+            UXReviewCapture.writeManifestHeader(stamp: stamp)
+        }
+
         for screen in ScreenNavigator.allScreens {
             let source = QASource(screen.id, document: "Documentation/qa/04-screen-test-cases.md", layer: "L2")
             let start = Date()
@@ -27,6 +37,17 @@ final class ScreenSnapshotTests: FlowTestBase {
             let reached = screen.navigate(app)
             let shot = XCUIScreen.main.screenshot()
             let result = SnapshotEngine.compareScreenshot(shot, screenId: screen.id, recordBaseline: recordBaselines)
+
+            if exportUX {
+                UXReviewCapture.save(
+                    shot,
+                    screenId: screen.id,
+                    title: screen.identifier,
+                    reached: reached,
+                    stamp: stamp,
+                    extraNotes: result.message
+                )
+            }
 
             let layoutOk = auditLayout(app: app, identifier: screen.identifier)
             let status: String

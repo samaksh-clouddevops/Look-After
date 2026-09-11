@@ -92,19 +92,19 @@ struct AppFeatureTourStep: Identifiable, Equatable {
         AppFeatureTourStep(
             id: "assistant",
             title: "Plan With Me",
-            message: "The bottom assistant helps replan your day. Talk or type — it reshapes your schedule with you.",
-            icon: "bubble.left.and.bubble.right.fill",
+            message: "Tap Plan in the Today header to replan your day. Talk or type — it reshapes your schedule with you.",
+            icon: "sparkles",
             tab: .today,
             anchor: .todayAssistant,
-            preferredSides: [.above, .floating],
+            preferredSides: [.below, .floating, .above],
             allowsTargetInteraction: false
         ),
         AppFeatureTourStep(
             id: "review",
             title: "Weekly Review",
-            message: "Your weekly debrief — tasks finished, time reclaimed, and patterns without digging through logs.",
+            message: "Open Review from You — weekly debrief without digging through logs.",
             icon: "chart.bar.fill",
-            tab: .review,
+            tab: .you,
             anchor: .reviewHero,
             preferredSides: [.below, .floating, .center],
             allowsTargetInteraction: false

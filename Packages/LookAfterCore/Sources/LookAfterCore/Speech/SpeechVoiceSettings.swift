@@ -4,7 +4,7 @@ import Foundation
 public enum SpeechVoiceProvider: String, CaseIterable, Identifiable, Sendable {
     case appleEnhanced = "apple_enhanced"
     case appleStandard = "apple_standard"
-    /// OpenAI neural TTS (tts-1-hd) — proxied through the licensed auth API.
+    /// OpenAI neural TTS (tts-1-hd) — local API key preferred; licensed proxy as fallback.
     case cloud = "cloud"
 
     public var id: String { rawValue }
@@ -21,7 +21,7 @@ public enum SpeechVoiceProvider: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleEnhanced: return "Best on-device neural voices when downloaded."
         case .appleStandard: return "System default English voice."
-        case .cloud: return "Natural neural voice via licensed secure proxy."
+        case .cloud: return "Natural neural voice via your OpenAI key (or licensed proxy)."
         }
     }
 }
@@ -36,6 +36,8 @@ public enum SpeechVoiceSettings {
     public static let autoSpeakProactiveKey = "lookafter.speech.autoSpeakProactive"
     public static let spokenStyleKey = "lookafter.speech.spokenStyle"
     public static let cloudVoiceKey = "lookafter.speech.cloudVoice"
+    /// Set by the app when a usable OpenAI key is present in Keychain/credentials (not the secret itself).
+    public static let openAIKeyConfiguredKey = "lookafter.openai.configured"
     public static let licenseActiveKey = "lookafter.license.active"
 
     /// OpenAI TTS voices — warm, conversational options first.
@@ -93,8 +95,16 @@ public enum SpeechVoiceSettings {
         set { UserDefaults.standard.set(newValue, forKey: cloudVoiceKey) }
     }
 
+    /// True when Cloud engine is selected and either a local OpenAI key or license is ready.
     public static var isCloudTTSAvailable: Bool {
-        provider == .cloud && UserDefaults.standard.bool(forKey: licenseActiveKey)
+        guard provider == .cloud else { return false }
+        if UserDefaults.standard.bool(forKey: openAIKeyConfiguredKey) { return true }
+        return UserDefaults.standard.bool(forKey: licenseActiveKey)
+    }
+
+    public static var isOpenAIKeyConfigured: Bool {
+        get { UserDefaults.standard.bool(forKey: openAIKeyConfiguredKey) }
+        set { UserDefaults.standard.set(newValue, forKey: openAIKeyConfiguredKey) }
     }
 
     public static var autoSpeakReplies: Bool {

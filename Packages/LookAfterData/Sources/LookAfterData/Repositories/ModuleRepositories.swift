@@ -2,68 +2,114 @@ import Foundation
 import FirebaseFirestore
 import LookAfterCore
 
+// MARK: - Shared module helpers
+
+@MainActor
+private enum ModuleLocalStore {
+    static let sqlite = ModuleEntitySQLiteStore.shared
+
+    static func loadBills() -> [BillItem] {
+        (try? sqlite.loadAll(BillItem.self, collection: .bills)) ?? []
+    }
+
+    static func saveBills(_ items: [BillItem]) {
+        try? sqlite.replaceAll(items, collection: .bills, id: { $0.id })
+    }
+
+    static func loadShopping() -> [ShoppingItem] {
+        (try? sqlite.loadAll(ShoppingItem.self, collection: .shoppingItems)) ?? []
+    }
+
+    static func saveShopping(_ items: [ShoppingItem]) {
+        try? sqlite.replaceAll(items, collection: .shoppingItems, id: { $0.id })
+    }
+
+    static func loadRelationships() -> [RelationshipContact] {
+        (try? sqlite.loadAll(RelationshipContact.self, collection: .relationships)) ?? []
+    }
+
+    static func saveRelationships(_ items: [RelationshipContact]) {
+        try? sqlite.replaceAll(items, collection: .relationships, id: { $0.id })
+    }
+
+    static func loadJournal() -> [JournalEntry] {
+        (try? sqlite.loadAll(JournalEntry.self, collection: .journalEntries)) ?? []
+    }
+
+    static func saveJournal(_ items: [JournalEntry]) {
+        try? sqlite.replaceAll(items, collection: .journalEntries, id: { $0.id })
+    }
+
+    static func enqueueUpsert<T: Encodable>(_ item: T, collection: String, id: String, userId: String, merge: Bool) {
+        CloudSyncOutbox.shared.enqueueCodable(
+            item,
+            collection: collection,
+            documentId: id,
+            userId: userId,
+            merge: merge
+        )
+    }
+
+    static func enqueueDelete(collection: String, id: String, userId: String) {
+        CloudSyncOutbox.shared.enqueue(
+            collection: collection,
+            documentId: id,
+            userId: userId,
+            operation: .delete,
+            payloadJSON: nil
+        )
+    }
+}
+
 // MARK: - Finance & Bills Repository
 
 @MainActor
 public final class BillRepository: ObservableObject {
     private let firebase: FirebaseManager
     private let collection = "bills"
-    private let local = LocalPersistenceManager.shared
-    
+
     public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
-    
+
     public func getAll(for userId: String) async throws -> [BillItem] {
+        let local = ModuleLocalStore.loadBills()
         guard let ref = firebase.userCollection(collection) else {
-            return local.load([BillItem].self, filename: collection)
+            return local.sorted { $0.dueDate < $1.dueDate }
         }
         do {
             let snapshot = try await ref.order(by: "dueDate", descending: false).getDocuments()
             let remote = try snapshot.documents.compactMap { try firebase.decode(BillItem.self, from: $0) }
-            if !remote.isEmpty { local.save(remote, filename: collection) }
-            return remote.isEmpty ? local.load([BillItem].self, filename: collection) : remote
+            let merged = ModuleEntityMerge.merge(local: local, remote: remote, id: \.id)
+            ModuleLocalStore.saveBills(merged)
+            return merged.sorted { $0.dueDate < $1.dueDate }
         } catch {
-            return local.load([BillItem].self, filename: collection)
+            return local.sorted { $0.dueDate < $1.dueDate }
         }
     }
-    
+
     public func create(_ item: BillItem) async throws {
-        var items = local.load([BillItem].self, filename: collection)
-        items.append(item)
-        local.save(items, filename: collection)
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        var mutable = item; mutable.userId = firebase.currentUserId ?? ""
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutable)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        try? await ref.document(item.id).setData(dict)
+        var mutable = item
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        var items = ModuleLocalStore.loadBills()
+        items.append(mutable)
+        ModuleLocalStore.saveBills(items)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: collection, id: mutable.id, userId: mutable.userId, merge: false)
     }
-    
+
     public func togglePaid(_ item: BillItem) async throws {
-        var items = local.load([BillItem].self, filename: collection)
-        if let idx = items.firstIndex(where: { $0.id == item.id }) {
-            items[idx].isPaid.toggle()
-            items[idx].paidAt = items[idx].isPaid ? Date() : nil
-            local.save(items, filename: collection)
-        }
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        var updated = item
-        updated.isPaid.toggle()
-        updated.paidAt = updated.isPaid ? Date() : nil
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(updated)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        try? await ref.document(item.id).setData(dict, merge: true)
+        var items = ModuleLocalStore.loadBills()
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[idx].isPaid.toggle()
+        items[idx].paidAt = items[idx].isPaid ? Date() : nil
+        let updated = items[idx]
+        ModuleLocalStore.saveBills(items)
+        ModuleLocalStore.enqueueUpsert(updated, collection: collection, id: updated.id, userId: updated.userId, merge: true)
     }
-    
+
     public func delete(_ item: BillItem) async throws {
-        var items = local.load([BillItem].self, filename: collection)
+        var items = ModuleLocalStore.loadBills()
         items.removeAll { $0.id == item.id }
-        local.save(items, filename: collection)
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        try? await ref.document(item.id).delete()
+        ModuleLocalStore.saveBills(items)
+        ModuleLocalStore.enqueueDelete(collection: collection, id: item.id, userId: item.userId)
     }
 }
 
@@ -73,84 +119,52 @@ public final class BillRepository: ObservableObject {
 public final class ShoppingRepository: ObservableObject {
     private let firebase: FirebaseManager
     private let collection = "shopping_items"
-    private let local = LocalPersistenceManager.shared
-    
+
     public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
-    
+
     public func getAll(for userId: String) async throws -> [ShoppingItem] {
-        let localItems = local.load([ShoppingItem].self, filename: collection)
+        let localItems = ModuleLocalStore.loadShopping()
         guard let ref = firebase.userCollection(collection) else {
-            return localItems
+            return localItems.sorted { $0.addedAt > $1.addedAt }
         }
         do {
             let snapshot = try await ref.order(by: "addedAt", descending: true).getDocuments()
             let remote = try snapshot.documents.compactMap { try firebase.decode(ShoppingItem.self, from: $0) }
-            let merged = Self.merge(local: localItems, remote: remote)
-            local.save(merged, filename: collection)
-            return merged
+            let merged = ModuleEntityMerge.merge(local: localItems, remote: remote, id: \.id)
+            ModuleLocalStore.saveShopping(merged)
+            return merged.sorted { $0.addedAt > $1.addedAt }
         } catch {
             print("[ShoppingList] Remote load failed, using local cache: \(error.localizedDescription)")
-            return localItems
+            return localItems.sorted { $0.addedAt > $1.addedAt }
         }
     }
 
-    private static func merge(local: [ShoppingItem], remote: [ShoppingItem]) -> [ShoppingItem] {
-        var byID = Dictionary(uniqueKeysWithValues: remote.map { ($0.id, $0) })
-        for item in local where byID[item.id] == nil {
-            byID[item.id] = item
-        }
-        return byID.values.sorted { $0.addedAt > $1.addedAt }
-    }
-    
     public func create(_ item: ShoppingItem) async throws {
-        var items = local.load([ShoppingItem].self, filename: collection)
-        if !items.contains(where: { $0.id == item.id }) {
-            items.append(item)
-            local.save(items, filename: collection)
+        var mutable = item
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        var items = ModuleLocalStore.loadShopping()
+        if !items.contains(where: { $0.id == mutable.id }) {
+            items.append(mutable)
+            ModuleLocalStore.saveShopping(items)
         }
-
-        // Persist locally first; sync to Firebase in the background so UI never blocks.
-        scheduleRemoteSave(item)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: collection, id: mutable.id, userId: mutable.userId, merge: false)
     }
 
-    private func scheduleRemoteSave(_ item: ShoppingItem) {
-        Task {
-            guard let ref = firebase.userCollection(collection) else { return }
-            var mutable = item
-            mutable.userId = firebase.currentUserId ?? ""
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .secondsSince1970
-            guard let data = try? encoder.encode(mutable),
-                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-            try? await ref.document(item.id).setData(dict)
-        }
-    }
-    
     public func togglePurchased(_ item: ShoppingItem) async throws {
-        var items = local.load([ShoppingItem].self, filename: collection)
-        if let idx = items.firstIndex(where: { $0.id == item.id }) {
-            items[idx].isPurchased.toggle()
-            items[idx].purchasedAt = items[idx].isPurchased ? Date() : nil
-            local.save(items, filename: collection)
-        }
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        var updated = item
-        updated.isPurchased.toggle()
-        updated.purchasedAt = updated.isPurchased ? Date() : nil
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(updated)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        try? await ref.document(item.id).setData(dict, merge: true)
+        var items = ModuleLocalStore.loadShopping()
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[idx].isPurchased.toggle()
+        items[idx].purchasedAt = items[idx].isPurchased ? Date() : nil
+        let updated = items[idx]
+        ModuleLocalStore.saveShopping(items)
+        ModuleLocalStore.enqueueUpsert(updated, collection: collection, id: updated.id, userId: updated.userId, merge: true)
     }
-    
+
     public func delete(_ item: ShoppingItem) async throws {
-        var items = local.load([ShoppingItem].self, filename: collection)
+        var items = ModuleLocalStore.loadShopping()
         items.removeAll { $0.id == item.id }
-        local.save(items, filename: collection)
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        try? await ref.document(item.id).delete()
+        ModuleLocalStore.saveShopping(items)
+        ModuleLocalStore.enqueueDelete(collection: collection, id: item.id, userId: item.userId)
     }
 }
 
@@ -160,60 +174,48 @@ public final class ShoppingRepository: ObservableObject {
 public final class RelationshipRepository: ObservableObject {
     private let firebase: FirebaseManager
     private let collection = "relationships"
-    private let local = LocalPersistenceManager.shared
-    
+
     public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
-    
+
     public func getAll(for userId: String) async throws -> [RelationshipContact] {
+        let local = ModuleLocalStore.loadRelationships()
         guard let ref = firebase.userCollection(collection) else {
-            return local.load([RelationshipContact].self, filename: collection)
+            return local
         }
         do {
             let snapshot = try await ref.getDocuments()
             let remote = try snapshot.documents.compactMap { try firebase.decode(RelationshipContact.self, from: $0) }
-            if !remote.isEmpty { local.save(remote, filename: collection) }
-            return remote.isEmpty ? local.load([RelationshipContact].self, filename: collection) : remote
+            let merged = ModuleEntityMerge.merge(local: local, remote: remote, id: \.id)
+            ModuleLocalStore.saveRelationships(merged)
+            return merged
         } catch {
-            return local.load([RelationshipContact].self, filename: collection)
+            return local
         }
     }
-    
+
     public func create(_ item: RelationshipContact) async throws {
-        var items = local.load([RelationshipContact].self, filename: collection)
-        items.append(item)
-        local.save(items, filename: collection)
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        var mutable = item; mutable.userId = firebase.currentUserId ?? ""
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutable)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        try? await ref.document(item.id).setData(dict)
+        var mutable = item
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        var items = ModuleLocalStore.loadRelationships()
+        items.append(mutable)
+        ModuleLocalStore.saveRelationships(items)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: collection, id: mutable.id, userId: mutable.userId, merge: false)
     }
-    
+
     public func logContact(_ contact: RelationshipContact) async throws {
-        var items = local.load([RelationshipContact].self, filename: collection)
-        if let idx = items.firstIndex(where: { $0.id == contact.id }) {
-            items[idx].lastContactedAt = Date()
-            local.save(items, filename: collection)
-        }
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        var updated = contact
-        updated.lastContactedAt = Date()
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(updated)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        try? await ref.document(contact.id).setData(dict, merge: true)
+        var items = ModuleLocalStore.loadRelationships()
+        guard let idx = items.firstIndex(where: { $0.id == contact.id }) else { return }
+        items[idx].lastContactedAt = Date()
+        let updated = items[idx]
+        ModuleLocalStore.saveRelationships(items)
+        ModuleLocalStore.enqueueUpsert(updated, collection: collection, id: updated.id, userId: updated.userId, merge: true)
     }
-    
+
     public func delete(_ contact: RelationshipContact) async throws {
-        var items = local.load([RelationshipContact].self, filename: collection)
+        var items = ModuleLocalStore.loadRelationships()
         items.removeAll { $0.id == contact.id }
-        local.save(items, filename: collection)
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        try? await ref.document(contact.id).delete()
+        ModuleLocalStore.saveRelationships(items)
+        ModuleLocalStore.enqueueDelete(collection: collection, id: contact.id, userId: contact.userId)
     }
 }
 
@@ -223,43 +225,49 @@ public final class RelationshipRepository: ObservableObject {
 public final class JournalRepository: ObservableObject {
     private let firebase: FirebaseManager
     private let collection = "journal_entries"
-    private let local = LocalPersistenceManager.shared
-    
+
     public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
-    
+
     public func getAll(for userId: String) async throws -> [JournalEntry] {
+        let local = ModuleLocalStore.loadJournal()
         guard let ref = firebase.userCollection(collection) else {
-            return local.load([JournalEntry].self, filename: collection)
+            return local.sorted { $0.createdAt > $1.createdAt }
         }
         do {
             let snapshot = try await ref.order(by: "createdAt", descending: true).getDocuments()
             let remote = try snapshot.documents.compactMap { try firebase.decode(JournalEntry.self, from: $0) }
-            if !remote.isEmpty { local.save(remote, filename: collection) }
-            return remote.isEmpty ? local.load([JournalEntry].self, filename: collection) : remote
+            let merged = ModuleEntityMerge.merge(local: local, remote: remote, id: \.id)
+            ModuleLocalStore.saveJournal(merged)
+            return merged.sorted { $0.createdAt > $1.createdAt }
         } catch {
-            return local.load([JournalEntry].self, filename: collection)
+            return local.sorted { $0.createdAt > $1.createdAt }
         }
     }
-    
+
     public func create(_ item: JournalEntry) async throws {
-        var items = local.load([JournalEntry].self, filename: collection)
-        items.insert(item, at: 0)
-        local.save(items, filename: collection)
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        var mutable = item; mutable.userId = firebase.currentUserId ?? ""
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .secondsSince1970
-        let data = try encoder.encode(mutable)
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        try? await ref.document(item.id).setData(dict)
+        var mutable = item
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        var items = ModuleLocalStore.loadJournal()
+        items.insert(mutable, at: 0)
+        ModuleLocalStore.saveJournal(items)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: collection, id: mutable.id, userId: mutable.userId, merge: false)
     }
-    
+
     public func delete(_ item: JournalEntry) async throws {
-        var items = local.load([JournalEntry].self, filename: collection)
+        var items = ModuleLocalStore.loadJournal()
         items.removeAll { $0.id == item.id }
-        local.save(items, filename: collection)
-        
-        guard let ref = firebase.userCollection(collection) else { return }
-        try? await ref.document(item.id).delete()
+        ModuleLocalStore.saveJournal(items)
+        ModuleLocalStore.enqueueDelete(collection: collection, id: item.id, userId: item.userId)
+    }
+}
+
+/// Union-by-id merge for module entities (local fills gaps remote missed).
+enum ModuleEntityMerge {
+    static func merge<T>(local: [T], remote: [T], id: (T) -> String) -> [T] {
+        var byID = Dictionary(uniqueKeysWithValues: remote.map { (id($0), $0) })
+        for item in local where byID[id(item)] == nil {
+            byID[id(item)] = item
+        }
+        return Array(byID.values)
     }
 }

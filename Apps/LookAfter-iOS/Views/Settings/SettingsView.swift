@@ -115,14 +115,14 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
                     
                     Button(role: .destructive, action: {
                         try? FirebaseManager.shared.signOut()
                     }) {
                         Label("Sign Out", systemImage: "arrow.right.square")
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Account & Cloud Sync")
                 }, footer: {
@@ -136,14 +136,14 @@ struct SettingsView: View {
                         Label("Match iPhone appearance", systemImage: "iphone")
                     }
                     .accessibilityIdentifier("settings-appearance-system-toggle")
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     if !appearance.usesSystemSetting {
                         Toggle(isOn: darkModeEnabled) {
                             Label("Dark Mode", systemImage: "moon.fill")
                         }
                         .accessibilityIdentifier("settings-dark-mode-toggle")
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
                     }
                 }, header: {
                     Text("Display")
@@ -170,7 +170,7 @@ struct SettingsView: View {
                         Label("Proactive reminders", systemImage: "bell.badge")
                     }
                     .accessibilityIdentifier("settings-notifications-master-toggle")
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     if notificationPreferences.globallyEnabled {
                         ForEach(NotificationKind.allCases.filter(\.countsTowardDailyCap)) { kind in
@@ -185,7 +185,7 @@ struct SettingsView: View {
                                 Text(kind.displayName)
                             }
                             .accessibilityIdentifier("settings-notifications-\(kind.rawValue)-toggle")
-                            .listRowBackground(DesignSystem.backgroundSecondary)
+                            .listRowBackground(DesignSystem.contentSurface)
                         }
 
                         Toggle(isOn: Binding(
@@ -199,7 +199,7 @@ struct SettingsView: View {
                             Text(NotificationKind.focusBreak.displayName)
                         }
                         .accessibilityIdentifier("settings-notifications-focusBreak-toggle")
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
                     }
 
                     if notificationPermission.isDenied {
@@ -209,7 +209,7 @@ struct SettingsView: View {
                             Label("Open iOS Settings", systemImage: "gear")
                         })
                         .accessibilityIdentifier("settings-notifications-open-system-settings")
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
                     }
                 }, header: {
                     Text("Notifications")
@@ -238,7 +238,7 @@ struct SettingsView: View {
                         Label("Start tour", systemImage: "map")
                     }
                     .accessibilityIdentifier("settings-start-tour")
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Help")
                 }, footer: {
@@ -263,7 +263,7 @@ struct SettingsView: View {
                             Text(gender.label).tag(gender)
                         }
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Profile")
                 }, footer: {
@@ -310,8 +310,11 @@ struct SettingsView: View {
                             Text(provider.title).tag(provider.rawValue)
                         }
                     }
-                    .onChange(of: speechProviderRaw) { _, _ in
-                        SpeechVoiceSettings.provider = SpeechVoiceProvider(rawValue: speechProviderRaw) ?? .appleEnhanced
+                    .onChange(of: speechProviderRaw) { _, newValue in
+                        SpeechVoiceSettings.provider = SpeechVoiceProvider(rawValue: newValue) ?? .appleEnhanced
+                        if newValue == SpeechVoiceProvider.cloud.rawValue {
+                            _ = GLMKeyManager.shared.syncOpenAIDeveloperCredentials()
+                        }
                     }
 
                     if speechProviderRaw == SpeechVoiceProvider.cloud.rawValue {
@@ -321,8 +324,8 @@ struct SettingsView: View {
                             }
                         }
 
-                        if !LicenseManager.shared.isLicensed {
-                            Text("Activate your product key in Settings → License to use cloud voice.")
+                        if !SpeechVoiceSettings.isOpenAIKeyConfigured && !LicenseManager.shared.isLicensed {
+                            Text("Add an OpenAI key under API Keys / credentials, or activate License for proxied cloud voice.")
                                 .font(.system(size: 12))
                                 .foregroundColor(DesignSystem.warning)
                         }
@@ -377,11 +380,17 @@ struct SettingsView: View {
                             .font(.system(size: 12))
                             .foregroundColor(DesignSystem.textMuted)
                     }
+                    if let error = speechPreview.lastError {
+                        Text(error)
+                            .font(.system(size: 12))
+                            .foregroundColor(DesignSystem.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }, header: {
                     Text("Voice & Speech")
                 }, footer: {
                     if speechProviderRaw == SpeechVoiceProvider.cloud.rawValue {
-                        Text("Cloud voice uses OpenAI neural TTS through the licensed secure proxy — no API keys on your device.")
+                        Text("Cloud voice uses OpenAI neural TTS with your local OpenAI key (or the licensed proxy as fallback).")
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
                     } else {
@@ -405,7 +414,7 @@ struct SettingsView: View {
                         Image(systemName: "sparkles")
                             .foregroundColor(DesignSystem.accentPrimary)
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     Toggle(isOn: $gmailIntegrationEnabled) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -418,19 +427,34 @@ struct SettingsView: View {
                     .onChange(of: gmailIntegrationEnabled) { _, enabled in
                         GmailIntegrationSettings.isEnabled = enabled
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
+
+                    NavigationLink(destination: {
+                        APIKeysSettingsView()
+                    }, label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("API Keys", systemImage: "key.fill")
+                            Text(GLMService.shared.hasConfiguredAPIKey
+                                 ? "Direct z.ai GLM key configured"
+                                 : "Add a GLM API key to enable AI")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textSecondary)
+                        }
+                    })
+                    .listRowBackground(DesignSystem.contentSurface)
+                    .accessibilityIdentifier("settings-api-keys")
 
                     NavigationLink(destination: {
                         LicenseSettingsView()
                     }, label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Label("License", systemImage: "checkmark.seal.fill")
-                            Text(LicenseManager.shared.isLicensed ? "Licensed AI via secure proxy" : "Enter product key to unlock AI")
+                            Text(LicenseManager.shared.isLicensed ? "Product key active (cloud voice)" : "Optional — cloud voice / legacy proxy")
                                 .font(.system(size: 12))
                                 .foregroundColor(DesignSystem.textSecondary)
                         }
                     })
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     NavigationLink(destination: {
                         GLMUsageSettingsView()
@@ -442,7 +466,7 @@ struct SettingsView: View {
                                 .foregroundColor(DesignSystem.textSecondary)
                         }
                     })
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
                     .accessibilityIdentifier("settings-ai-usage")
 
                     NavigationLink(destination: {
@@ -450,14 +474,14 @@ struct SettingsView: View {
                     }, label: {
                         Label("GLM Configuration", systemImage: "cpu")
                     })
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
 
-                    Text(LicenseManager.shared.isLicensed
-                         ? "All AI runs through the secure proxy. Keys never leave the server."
-                         : "Redeem a product key to unlock AI and cloud voice.")
+                    Text(GLMService.shared.hasConfiguredAPIKey
+                         ? "AI calls z.ai directly with your GLM API key. No auth-proxy required."
+                         : "Add a GLM API key in API Keys, or set \(GLMConfiguration.apiKeyEnvVar) in the environment.")
                         .font(.system(size: 12, design: .default))
                         .foregroundColor(DesignSystem.textMuted)
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
 
                     Toggle(isOn: Binding(
                         get: { TaskManagementPreferences.highQualitySchedulingEnabled },
@@ -466,12 +490,12 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("High-quality scheduling")
                                 .font(.system(size: 14, weight: .semibold))
-                            Text("Uses GLM 5.2 (premium tier) for Adjust schedule previews.")
+                            Text("Uses GLM 5.3 (premium tier) for Adjust schedule previews.")
                                 .font(.system(size: 12))
                                 .foregroundColor(DesignSystem.textMuted)
                         }
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     Toggle(isOn: Binding(
                         get: { TaskManagementPreferences.smarterFocusTipsEnabled },
@@ -485,7 +509,7 @@ struct SettingsView: View {
                                 .foregroundColor(DesignSystem.textMuted)
                         }
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
                 } header: {
                     Text("AI Engine")
                 } footer: {
@@ -561,14 +585,14 @@ struct SettingsView: View {
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            .listRowBackground(DesignSystem.backgroundSecondary)
+                            .listRowBackground(DesignSystem.contentSurface)
                             .accessibilityIdentifier("settings-health-status-row")
 
                             if status.needsAttention {
                                 Button(action: { showHealthVerification = true }) {
                                     Label("What's wrong?", systemImage: "questionmark.circle")
                                 }
-                                .listRowBackground(DesignSystem.backgroundSecondary)
+                                .listRowBackground(DesignSystem.contentSurface)
                             }
                         }
 
@@ -584,7 +608,7 @@ struct SettingsView: View {
                                     .foregroundColor(DesignSystem.textMuted)
                             }
                         }
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
                         
                         if let lastSync = healthSync.lastSyncDate {
                             HStack {
@@ -593,17 +617,17 @@ struct SettingsView: View {
                                 Text(lastSync.formatted(date: .abbreviated, time: .shortened))
                                     .foregroundColor(DesignSystem.textSecondary)
                             }
-                            .listRowBackground(DesignSystem.backgroundSecondary)
+                            .listRowBackground(DesignSystem.contentSurface)
                         }
                         
                         if healthSync.isSyncing || !healthSync.syncSteps.isEmpty || healthSync.syncPhase == .failed {
                             HealthSyncProgressView(healthSync: healthSync, style: .full)
-                                .listRowBackground(DesignSystem.backgroundSecondary)
+                                .listRowBackground(DesignSystem.contentSurface)
                         } else if let message = healthSync.syncMessage {
                             Text(message)
                                 .font(.system(size: 12, design: .default))
                                 .foregroundColor(DesignSystem.textSecondary)
-                                .listRowBackground(DesignSystem.backgroundSecondary)
+                                .listRowBackground(DesignSystem.contentSurface)
                         }
                         
                         Button(action: {
@@ -626,12 +650,12 @@ struct SettingsView: View {
                             }
                         }
                         .disabled(healthSync.isSyncing)
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
 
                         Button(action: openHealthApp) {
                             Label("Open Health app", systemImage: "heart.text.square.fill")
                         }
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
 
                         NavigationLink(destination: {
                             HealthTroubleshootingView(
@@ -642,7 +666,7 @@ struct SettingsView: View {
                         }, label: {
                             Label("Help with Watch data", systemImage: "lifepreserver")
                         })
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
                     }, header: {
                         Text("Health Data Sync")
                     }, footer: {
@@ -671,7 +695,7 @@ struct SettingsView: View {
                         }, label: {
                             Label("Cycle dashboard", systemImage: "calendar.circle")
                         })
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
 
                         Stepper("Cycle length: \(cyclePreferences.averageCycleLengthDays) days", value: Binding(
                             get: { cyclePreferences.averageCycleLengthDays },
@@ -680,7 +704,7 @@ struct SettingsView: View {
                                 CyclePreferencesStore.save(cyclePreferences)
                             }
                         ), in: 21...40)
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
 
                         Stepper("Period length: \(cyclePreferences.averagePeriodLengthDays) days", value: Binding(
                             get: { cyclePreferences.averagePeriodLengthDays },
@@ -689,7 +713,7 @@ struct SettingsView: View {
                                 CyclePreferencesStore.save(cyclePreferences)
                             }
                         ), in: 2...10)
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
 
                         DatePicker("Last period start", selection: Binding(
                             get: { cyclePreferences.lastPeriodStart ?? Date() },
@@ -698,7 +722,7 @@ struct SettingsView: View {
                                 CyclePreferencesStore.save(cyclePreferences)
                             }
                         ), displayedComponents: .date)
-                        .listRowBackground(DesignSystem.backgroundSecondary)
+                        .listRowBackground(DesignSystem.contentSurface)
                     }
                 }, header: {
                     Text("Cycle tracking")
@@ -755,7 +779,7 @@ struct SettingsView: View {
                                 .foregroundColor(DesignSystem.textMuted)
                         }
                     }
-                    .listRowBackground(DesignSystem.backgroundSecondary)
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Widgets & Lock Screen")
                 }, footer: {
@@ -811,7 +835,7 @@ struct SettingsView: View {
                     HStack {
                         Text("AI Engine")
                         Spacer()
-                        Text("GLM 5.2")
+                        Text("GLM 5.3")
                             .foregroundColor(DesignSystem.textMuted)
                     }
                 }, header: {
@@ -845,6 +869,7 @@ struct SettingsView: View {
                                 HealthStatusBanner(
                                     status: status,
                                     style: .full,
+                                    isSyncing: healthSync.isSyncing,
                                     onPrimaryAction: {
                                         HealthStatusActionHandler.perform(
                                             status.primaryAction,
@@ -873,6 +898,7 @@ struct SettingsView: View {
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Done") { showHealthVerification = false }
+                                .foregroundStyle(DesignSystem.accentPrimary)
                         }
                     }
                 }
@@ -914,12 +940,10 @@ struct SettingsView: View {
 
     private func voicePickerLabel(_ voice: AVSpeechSynthesisVoice) -> String {
         var quality = ""
-        if #available(iOS 16.0, *) {
-            switch voice.quality {
-            case .premium: quality = " · Premium"
-            case .enhanced: quality = " · Enhanced"
-            default: break
-            }
+        switch voice.quality {
+        case .premium: quality = " · Premium"
+        case .enhanced: quality = " · Enhanced"
+        default: break
         }
         return "\(voice.name) (\(voice.language))\(quality)"
     }

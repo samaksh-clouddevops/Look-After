@@ -28,6 +28,23 @@ function required(name: string, value: string | undefined): string {
   return value.trim();
 }
 
+/**
+ * Dev Bearer `dev:<uid>` is local-only. Refuse when NODE_ENV=production (or
+ * LOOKAFTER_FORCE_SECURE_AUTH=true) even if AUTH_DEV_ALLOW_INSECURE=true.
+ */
+export function resolveAllowInsecureDevAuth(env: NodeJS.ProcessEnv = process.env): boolean {
+  const requested = env.AUTH_DEV_ALLOW_INSECURE === "true";
+  if (!requested) return false;
+  const productionLike =
+    env.NODE_ENV === "production" || env.LOOKAFTER_FORCE_SECURE_AUTH === "true";
+  if (productionLike) {
+    throw new Error(
+      "AUTH_DEV_ALLOW_INSECURE=true is forbidden when NODE_ENV=production or LOOKAFTER_FORCE_SECURE_AUTH=true"
+    );
+  }
+  return true;
+}
+
 export function loadConfig(): AppConfig {
   const firebaseProjectId =
     process.env.FIREBASE_PROJECT_ID?.trim() ||
@@ -48,7 +65,7 @@ export function loadConfig(): AppConfig {
     rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE || 30),
     authRateLimitPerMinute: Number(process.env.AUTH_RATE_LIMIT_PER_MINUTE || 60),
     dailyTokenBudget: Number(process.env.DAILY_TOKEN_BUDGET || 200_000),
-    allowInsecureDevAuth: process.env.AUTH_DEV_ALLOW_INSECURE === "true",
+    allowInsecureDevAuth: resolveAllowInsecureDevAuth(process.env),
     productKeysJson: process.env.PRODUCT_KEYS_JSON?.trim() || undefined,
   };
 }

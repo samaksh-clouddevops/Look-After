@@ -65,9 +65,9 @@ public struct ElevatedSurfaceModifier: ViewModifier {
 
     private var fillColor: Color {
         switch emphasis {
-        case .prominent: return DesignSystem.backgroundSecondary
-        case .standard: return DesignSystem.backgroundSecondary
-        case .subtle: return DesignSystem.backgroundSecondary.opacity(0.6)
+        case .prominent: return DesignSystem.contentSurfaceElevated
+        case .standard: return DesignSystem.contentSurface
+        case .subtle: return DesignSystem.contentSurfaceSubtle
         }
     }
 }
@@ -146,11 +146,11 @@ public struct DestinationTile: View {
         .padding(DesignSystem.spacingLG)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusSurface, style: .continuous)
-                .fill(emphasis == .prominent ? DesignSystem.backgroundElevated.opacity(0.72) : DesignSystem.backgroundSecondary)
+                .fill(emphasis == .prominent ? DesignSystem.contentSurfaceElevated : DesignSystem.contentSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.radiusSurface, style: .continuous)
-                .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                .stroke(DesignSystem.border, lineWidth: 1)
         )
     }
 }

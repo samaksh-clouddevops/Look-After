@@ -57,7 +57,7 @@ struct StructuredLifeProfileEditor: View {
                 .frame(minHeight: minSectionHeight)
                 .padding(12)
                 .scrollContentBackground(.hidden)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceSubtle))
                 .foregroundColor(DesignSystem.textPrimary)
                 .overlay(alignment: .topLeading) {
                     if LifeProfileComposer.value(in: sections, for: section).isEmpty {
@@ -94,7 +94,7 @@ struct StructuredLifeProfileEditor: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
         })
         .buttonStyle(.plain)
         .disabled(isOrganizing || !sections.hasContent)
@@ -108,7 +108,7 @@ struct StructuredLifeProfileEditor: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
         }
         .buttonStyle(.plain)
         .disabled(!sections.hasContent)

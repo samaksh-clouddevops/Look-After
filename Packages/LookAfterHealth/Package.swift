@@ -1,11 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "LookAfterHealth",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14)
+        .iOS(.v26),
+        .macOS(.v26)
     ],
     products: [
         .library(name: "LookAfterHealth", targets: ["LookAfterHealth"])
@@ -17,12 +17,14 @@ let package = Package(
         .target(
             name: "LookAfterHealth",
             dependencies: ["LookAfterCore"],
-            path: "Sources/LookAfterHealth"
+            path: "Sources/LookAfterHealth",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "LookAfterHealthTests",
             dependencies: ["LookAfterHealth"],
-            path: "Tests/LookAfterHealthTests"
+            path: "Tests/LookAfterHealthTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         )
     ]
 )

@@ -5,17 +5,18 @@ import LookAfterCore
 public enum InitiationScriptBuilder {
 
     public static func build(task: LifeTask, deferralCount: Int) -> InitiationScript {
-        let duration = deferralCount >= DeferralRecoveryThresholds.microChunkThreshold ? 5 : 2
+        let duration = TaskDurationPolicy.microStartSessionMinutes(for: task)
+        let durationPhrase = TaskDurationPolicy.microStartDurationPhrase(for: task)
         let firstStep = firstActionStep(for: task)
         let steps = [firstStep, "Set a timer for \(duration) minutes", "Stop when the timer ends — progress counts"]
         let message: String
         switch deferralCount {
         case 0...1:
-            message = "Let's make \"\(task.title)\" tiny — \(duration) minutes is enough to start."
+            message = "Let's make \"\(task.title)\" tiny — \(durationPhrase) is enough to start."
         case 2...3:
-            message = "You've postponed \"\(task.title)\" \(deferralCount) times. A \(duration)-minute micro-start breaks the loop."
+            message = "You've postponed \"\(task.title)\" \(deferralCount) times. A micro-start (\(durationPhrase)) breaks the loop."
         default:
-            message = "No judgment — \"\(task.title)\" has waited \(deferralCount) times. Two minutes, then decide."
+            message = "No judgment — \"\(task.title)\" has waited \(deferralCount) times. Try \(durationPhrase), then decide."
         }
         return InitiationScript(
             taskID: task.id,

@@ -40,16 +40,7 @@ public final class CalendarBaselineAnalyzer {
         now: Date = Date(),
         calendar: Calendar = .current
     ) async throws -> (seeded: Bool, profile: RhythmProfile, eventCount: Int) {
-        let granted: Bool
-        if #available(iOS 17.0, *) {
-            granted = try await eventStore.requestFullAccessToEvents()
-        } else {
-            granted = try await withCheckedThrowingContinuation { cont in
-                eventStore.requestAccess(to: .event) { ok, error in
-                    if let error { cont.resume(throwing: error) } else { cont.resume(returning: ok) }
-                }
-            }
-        }
+        let granted = try await eventStore.requestFullAccessToEvents()
         guard granted else { throw AnalyzeError.accessDenied }
 
         let end = now

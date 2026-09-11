@@ -331,14 +331,17 @@ final class EnvironmentContextProviderTests: XCTestCase {
 
     func testConcurrentReads() async {
         let provider = makeProvider()
+        let snapshot = snapshot()
+        let health = healthSummary()
+        let morning = morningDate!
 
         await withTaskGroup(of: EnvironmentContextResult.self) { group in
             for _ in 0..<50 {
                 group.addTask {
                     await provider.currentContext(
-                        cognitiveSnapshot: self.snapshot(),
-                        healthSummary: self.healthSummary(),
-                        at: self.morningDate
+                        cognitiveSnapshot: snapshot,
+                        healthSummary: health,
+                        at: morning
                     )
                 }
             }

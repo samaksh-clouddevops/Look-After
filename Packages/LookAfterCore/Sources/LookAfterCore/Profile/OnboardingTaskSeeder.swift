@@ -30,11 +30,11 @@ public enum OnboardingTaskSeeder {
 
     private static let dailyMealAndHygieneSlots: [RoutineSlot] = [
         RoutineSlot(title: "Breakfast", hour: 8, minute: 0, durationMinutes: 20, lifeArea: .health),
-        RoutineSlot(title: "Brush teeth — morning", hour: 7, minute: 30, durationMinutes: 5, lifeArea: .personal),
+        RoutineSlot(title: "Brush teeth after waking", hour: 7, minute: 30, durationMinutes: 5, lifeArea: .personal),
         RoutineSlot(title: "Lunch", hour: 12, minute: 30, durationMinutes: 30, lifeArea: .health),
         RoutineSlot(title: "Snacks", hour: 16, minute: 0, durationMinutes: 10, lifeArea: .health),
         RoutineSlot(title: "Dinner", hour: 19, minute: 0, durationMinutes: 45, lifeArea: .health),
-        RoutineSlot(title: "Brush teeth — evening", hour: 21, minute: 30, durationMinutes: 5, lifeArea: .personal),
+        RoutineSlot(title: "Brush teeth before bed", hour: 21, minute: 30, durationMinutes: 5, lifeArea: .personal),
     ]
 
     private static let dailyActivityRoutineSlots: [RoutineSlot] = [
@@ -108,23 +108,24 @@ public enum OnboardingTaskSeeder {
     }
 
     /// Lowercased, whitespace-normalized title for series dedupe across templates and occurrences.
+    /// Hygiene aliases (`Brush teeth — morning` ↔ `Brush teeth after waking`) share one key.
     public static func normalizedRoutineTitle(_ title: String) -> String {
-        normalizedTitle(title)
+        TaskTitleDisplay.seriesKey(title)
     }
 
     /// True when `title` matches a seeded daily meal/hygiene slot or flexible routine.
     public static func isKnownDailyRoutineTitle(_ title: String) -> Bool {
-        let key = normalizedTitle(title)
-        if dailyMealAndHygieneSlots.contains(where: { normalizedTitle($0.title) == key }) {
+        let key = normalizedRoutineTitle(title)
+        if dailyMealAndHygieneSlots.contains(where: { normalizedRoutineTitle($0.title) == key }) {
             return true
         }
-        if dailyActivityRoutineSlots.contains(where: { normalizedTitle($0.title) == key }) {
+        if dailyActivityRoutineSlots.contains(where: { normalizedRoutineTitle($0.title) == key }) {
             return true
         }
         if activityRoutineKeywords.contains(where: { key.contains($0) }) {
             return true
         }
-        return dailyFlexibleRoutines.contains { normalizedTitle($0.title) == key }
+        return dailyFlexibleRoutines.contains { normalizedRoutineTitle($0.title) == key }
     }
 
     /// Activity routines (Gym, Workout) — preferred anchor but shiftable on conflict.
@@ -153,9 +154,9 @@ public enum OnboardingTaskSeeder {
         on day: Date,
         calendar: Calendar = .current
     ) -> (start: Date, durationMinutes: Int)? {
-        let key = normalizedTitle(title)
+        let key = normalizedRoutineTitle(title)
         let allSlots = dailyMealAndHygieneSlots + dailyActivityRoutineSlots
-        if let slot = allSlots.first(where: { normalizedTitle($0.title) == key }) {
+        if let slot = allSlots.first(where: { normalizedRoutineTitle($0.title) == key }) {
             return routineSlotTime(slot, on: day, calendar: calendar)
         }
         if activityRoutineKeywords.contains(where: { key.contains($0) }),

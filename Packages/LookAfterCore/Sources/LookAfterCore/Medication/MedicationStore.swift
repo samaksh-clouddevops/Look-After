@@ -1,39 +1,67 @@
 import Foundation
+import Synchronization
 
 /// Single source of truth for the user's medication schedule.
+/// PHI is stored in Application Support with Data Protection (not UserDefaults).
 public enum MedicationStore {
     public static let userDefaultsKey = "lifeos_medications_list"
-    /// Avoids repeated UserDefaults JSON decode on hot paths (refreshContext, notifications).
-    private static var cachedMedications: [Medication]?
+    private static let fileName = "medications.json"
+    private static let resetDateKey = "lifeos_medications_last_reset"
+    /// Avoids repeated JSON decode on hot paths (refreshContext, notifications).
+    private static let cachedMedications = Mutex<[Medication]?>(nil)
 
     public static func load() -> [Medication] {
-        if let cachedMedications { return cachedMedications }
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+        if let cached = cachedMedications.withLock({ $0 }) { return cached }
+        migrateFromUserDefaultsIfNeeded()
+        guard let data = try? Data(contentsOf: fileURL()),
               let medications = try? JSONDecoder().decode([Medication].self, from: data) else {
-            cachedMedications = []
+            cachedMedications.withLock { $0 = [] }
             return []
         }
-        cachedMedications = medications
+        cachedMedications.withLock { $0 = medications }
         return medications
     }
 
     public static func save(_ medications: [Medication]) {
-        if let data = try? JSONEncoder().encode(medications) {
-            UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        do {
+            let data = try JSONEncoder().encode(medications)
+            try writeProtected(data)
+            UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+        } catch {
+            #if DEBUG
+            print("[MedicationStore] save failed: \(error)")
+            #endif
         }
-        cachedMedications = medications
+        cachedMedications.withLock { $0 = medications }
+    }
+
+    /// Reset taken flags at the start of a new day. Safe to call on every timeline rebuild.
+    @discardableResult
+    public static func resetDailyIfNeeded(now: Date = Date(), calendar: Calendar = .current) -> [Medication] {
+        let today = calendar.startOfDay(for: now)
+        let lastReset = UserDefaults.standard.object(forKey: resetDateKey) as? Date ?? .distantPast
+        let lastResetDay = calendar.startOfDay(for: lastReset)
+        var medications = load()
+        guard lastResetDay < today else { return medications }
+        for index in medications.indices {
+            medications[index].isTaken = false
+        }
+        UserDefaults.standard.set(today, forKey: resetDateKey)
+        save(medications)
+        return medications
     }
 
     /// Clears persistence and the in-memory cache.
     public static func reset() {
-        cachedMedications = nil
+        cachedMedications.withLock { $0 = nil }
         UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+        try? FileManager.default.removeItem(at: fileURL())
     }
 
-    /// Drops the in-memory cache so the next `load()` re-reads UserDefaults.
-    /// Call after bulk UserDefaults wipes (factory reset) that bypass `reset()`.
+    /// Drops the in-memory cache so the next `load()` re-reads disk.
+    /// Call after bulk wipes (factory reset) that bypass `reset()`.
     public static func invalidateCache() {
-        cachedMedications = nil
+        cachedMedications.withLock { $0 = nil }
     }
 
     /// Prompt block for semantic analysis and planning — never invent times outside this list.
@@ -68,5 +96,33 @@ public enum MedicationStore {
         lines.append("- consequenceOfDelay=medicalRisk for time-sensitive medications.")
         lines.append("- Never invent evening doses unless explicitly in the task title.")
         return lines.joined(separator: "\n")
+    }
+
+    private static func migrateFromUserDefaultsIfNeeded() {
+        guard !FileManager.default.fileExists(atPath: fileURL().path),
+              let data = UserDefaults.standard.data(forKey: userDefaultsKey) else { return }
+        do {
+            try writeProtected(data)
+            UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+        } catch {
+            #if DEBUG
+            print("[MedicationStore] migrate failed: \(error)")
+            #endif
+        }
+    }
+
+    private static func writeProtected(_ data: Data) throws {
+        let url = fileURL()
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    private static func fileURL() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LookAfter", isDirectory: true)
+        return base.appendingPathComponent(fileName)
     }
 }

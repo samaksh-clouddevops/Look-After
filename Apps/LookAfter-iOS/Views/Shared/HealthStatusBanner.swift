@@ -1,4 +1,9 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 import LookAfterCore
 import LookAfterHealth
 
@@ -6,6 +11,7 @@ import LookAfterHealth
 struct HealthStatusBanner: View {
     let status: HealthConnectionStatus
     var style: Style = .full
+    var isSyncing: Bool = false
     var onPrimaryAction: () -> Void
     var onSeeDetails: (() -> Void)?
     var onLearnMore: (() -> Void)?
@@ -63,51 +69,94 @@ struct HealthStatusBanner: View {
                     .padding(.leading, 32)
             }
 
-            HStack(spacing: DesignSystem.spacingSM) {
-                if status.primaryAction != .none, !status.primaryActionLabel.isEmpty {
+            if status.primaryAction != .none, !status.primaryActionLabel.isEmpty {
+                VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
                     Button(action: onPrimaryAction) {
-                        Text(status.primaryActionLabel)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(DesignSystem.accentOnPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(DesignSystem.accentPrimary))
+                        HStack(spacing: 6) {
+                            if showsSyncingState {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(DesignSystem.accentOnPrimary)
+                            }
+                            Text(primaryActionTitle)
+                                .font(.dsBody(weight: .semibold))
+                                .foregroundStyle(DesignSystem.accentOnPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: DesignSystem.minTouchTarget)
                     }
-                    .buttonStyle(.plain)
-                }
+                    .buttonStyle(.glassProminent)
+                    .tint(LookAfterChrome.accentTint)
+                    .disabled(showsSyncingState)
+                    .accessibilityLabel(primaryActionTitle)
 
-                if let onSeeDetails {
-                    Button(action: onSeeDetails) {
-                        Text("See details")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                    }
-                    .buttonStyle(.plain)
-                }
+                    HStack(spacing: DesignSystem.spacingMD) {
+                        if let onSeeDetails {
+                            Button(action: onSeeDetails) {
+                                Text("See details")
+                                    .font(.dsCaption(weight: .semibold))
+                                    .foregroundColor(DesignSystem.accentPrimary)
+                                    .frame(minHeight: DesignSystem.minTouchTarget)
+                            }
+                            .buttonStyle(.plain)
+                        }
 
-                if let onLearnMore {
-                    Button(action: onLearnMore) {
-                        Text("Learn more")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(DesignSystem.textSecondary)
+                        if let onLearnMore {
+                            Button(action: onLearnMore) {
+                                Text("Learn more")
+                                    .font(.dsCaption(weight: .semibold))
+                                    .foregroundColor(DesignSystem.textSecondary)
+                                    .frame(minHeight: DesignSystem.minTouchTarget)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
+                }
+            } else {
+                HStack(spacing: DesignSystem.spacingMD) {
+                    if let onSeeDetails {
+                        Button(action: onSeeDetails) {
+                            Text("See details")
+                                .font(.dsCaption(weight: .semibold))
+                                .foregroundColor(DesignSystem.accentPrimary)
+                                .frame(minHeight: DesignSystem.minTouchTarget)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if let onLearnMore {
+                        Button(action: onLearnMore) {
+                            Text("Learn more")
+                                .font(.dsCaption(weight: .semibold))
+                                .foregroundColor(DesignSystem.textSecondary)
+                                .frame(minHeight: DesignSystem.minTouchTarget)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
-            .padding(.leading, style == .full ? 32 : 0)
-            .padding(.top, 2)
         }
         .padding(DesignSystem.spacingMD)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(Color.white.opacity(0.05))
+                .fill(DesignSystem.contentSurfaceSubtle)
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                        .stroke(iconColor.opacity(0.35), lineWidth: 1)
+                        .stroke(DesignSystem.border, lineWidth: 1)
                 )
         )
         .accessibilityIdentifier("health-status-banner")
+    }
+
+    private var showsSyncingState: Bool {
+        isSyncing && (status.primaryAction == .syncNow || status.primaryAction == .connect)
+    }
+
+    private var primaryActionTitle: String {
+        showsSyncingState ? "Syncing…" : status.primaryActionLabel
     }
 
     private var iconName: String {
@@ -143,7 +192,11 @@ enum HealthStatusActionHandler {
             onSync()
         case .openHealth:
             if let url = HealthAppLinks.healthAppURL {
+                #if os(iOS)
                 UIApplication.shared.open(url)
+                #elseif os(macOS)
+                NSWorkspace.shared.open(url)
+                #endif
             }
         case .openAppSettings:
             onOpenSettings()

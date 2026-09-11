@@ -72,14 +72,14 @@ enum SnapshotEngine {
 
 /// Navigation catalog for all 47 documented screens (S01–S47).
 enum ScreenNavigator {
-    struct ScreenSpec {
+    struct ScreenSpec: Sendable {
         let id: String
         let identifier: String
         let platform: String // "ios" | "widget" | "mac"
-        let navigate: (XCUIApplication) -> Bool
+        let navigate: @Sendable (XCUIApplication) -> Bool
     }
 
-    static let allScreens: [ScreenSpec] = [
+    nonisolated(unsafe) static let allScreens: [ScreenSpec] = [
         ScreenSpec(id: "S01", identifier: "screen-root", platform: "ios") { app in
             app.otherElements["screen-root"].waitForExistence(timeout: 8)
                 || app.otherElements["screen-briefing"].waitForExistence(timeout: 8)
@@ -159,11 +159,9 @@ enum ScreenNavigator {
         },
         ScreenSpec(id: "S21", identifier: "screen-settings", platform: "ios") { app in
             tapTab(app, "you")
-            if app.buttons["Settings"].exists {
-                app.buttons["Settings"].tap()
-            } else if app.buttons["nav-open-settings"].exists {
-                app.buttons["nav-open-settings"].tap()
-            }
+            softTap(app.buttons["nav-open-settings"])
+            softTap(app.buttons["Settings"])
+            softTap(app.buttons["gearshape"])
             return wait(app, "screen-settings") || wait(app, "screen-you") || wait(app, "screen-executive-profile")
         },
         ScreenSpec(id: "S22", identifier: "screen-api-keys", platform: "ios") { app in
@@ -257,26 +255,108 @@ enum ScreenNavigator {
     ]
 
     static func navigate(to screenId: String, app: XCUIApplication) -> Bool {
+        dismissBlockingOverlays(app)
         guard let screen = allScreens.first(where: { $0.id == screenId }) else { return false }
         return screen.navigate(app)
     }
 
+    /// Closes Auth / Capture / sleep prompts that otherwise freeze every later screenshot on one sheet.
+    static func dismissBlockingOverlays(_ app: XCUIApplication) {
+        for label in [
+            "Continue as Guest (Try Offline)",
+            "Not now",
+            "capture-dismiss-fab",
+            "Close",
+            "Collapse planning assistant",
+            "Done",
+        ] {
+            let button = app.buttons[label]
+            if button.exists { softTap(button) }
+        }
+        if app.otherElements["screen-capture"].exists || app.otherElements["capture-composer"].exists {
+            if app.buttons["capture-dismiss-fab"].exists {
+                softTap(app.buttons["capture-dismiss-fab"])
+            } else {
+                app.swipeDown()
+            }
+        }
+        if app.otherElements["screen-auth"].exists,
+           app.buttons["Continue as Guest (Try Offline)"].exists {
+            softTap(app.buttons["Continue as Guest (Try Offline)"])
+        }
+        if app.navigationBars["Settings"].exists {
+            softTap(app.buttons["Done"])
+            softTap(app.navigationBars.buttons["Done"])
+        }
+        // Pop task list / pushed stacks so Capture and tab-bar shots aren't All Tasks.
+        if app.otherElements["screen-task-list"].exists
+            || app.staticTexts["All Tasks"].exists
+            || app.staticTexts["Focus Stack"].exists {
+            softTap(app.navigationBars.buttons.element(boundBy: 0))
+            softTap(app.buttons["Close"])
+            softTap(app.buttons["Done"])
+            if app.otherElements["screen-task-list"].exists {
+                app.swipeDown()
+            }
+        }
+    }
+
     private static func tapTab(_ app: XCUIApplication, _ name: String) {
+        dismissBlockingOverlays(app)
         let button = app.buttons["tab-\(name.lowercased())"]
-        if button.waitForExistence(timeout: 5) { button.tap() }
+        softTap(button)
+    }
+
+    private static func softTap(_ element: XCUIElement) {
+        guard element.waitForExistence(timeout: 0.8) else { return }
+        for attempt in 0..<3 {
+            dismissSystemPermissionAlertsIfNeeded()
+            guard element.exists else { return }
+            let query = element
+            // Prefer coordinate tap — survives permission interruption better than element.tap().
+            let coord = query.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            coord.tap()
+            if attempt == 0 { return }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+    }
+
+    /// Speech / mic prompts otherwise invalidate tab taps mid-gesture.
+    private static func dismissSystemPermissionAlertsIfNeeded() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for label in ["Allow", "OK", "Don’t Allow", "Don't Allow", "While Using the App"] {
+            let button = springboard.alerts.buttons[label]
+            if button.exists { button.tap(); return }
+        }
+        let appAlertAllow = XCUIApplication().alerts.buttons["Allow"]
+        if appAlertAllow.exists { appAlertAllow.tap() }
     }
 
     private static func openTaskList(_ app: XCUIApplication) -> Bool {
         tapTab(app, "today")
-        if app.buttons["nav-all-tasks"].waitForExistence(timeout: 5) {
-            app.buttons["nav-all-tasks"].tap()
+        // All tasks lives in Today overflow (Menu) — identifier on Menu rows is unreliable.
+        let overflow = app.buttons["nav-today-overflow"]
+        if overflow.waitForExistence(timeout: 3) {
+            softTap(overflow)
+            let allTasks = app.buttons["All tasks"]
+            if allTasks.waitForExistence(timeout: 2) {
+                softTap(allTasks)
+            } else {
+                softTap(app.menuItems["All tasks"])
+            }
+        } else {
+            softTap(app.buttons["nav-all-tasks"])
         }
         return wait(app, "screen-task-list")
     }
 
     private static func wait(_ app: XCUIApplication, _ identifier: String) -> Bool {
-        app.otherElements[identifier].waitForExistence(timeout: 8)
-            || app.buttons[identifier].waitForExistence(timeout: 8)
-            || app.staticTexts[identifier].waitForExistence(timeout: 8)
+        softTap(app.buttons["Not now"])
+        dismissSystemPermissionAlertsIfNeeded()
+
+        return app.otherElements[identifier].waitForExistence(timeout: 8)
+            || app.buttons[identifier].waitForExistence(timeout: 3)
+            || app.staticTexts[identifier].waitForExistence(timeout: 2)
+            || app.navigationBars[identifier].waitForExistence(timeout: 2)
     }
 }

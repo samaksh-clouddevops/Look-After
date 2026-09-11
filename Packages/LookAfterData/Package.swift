@@ -1,11 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "LookAfterData",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14)
+        .iOS(.v26),
+        .macOS(.v26)
     ],
     products: [
         .library(name: "LookAfterData", targets: ["LookAfterData"])
@@ -14,7 +14,8 @@ let package = Package(
         .package(path: "../LookAfterCore"),
         .package(path: "../LookAfterAI"),
         .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "11.0.0"),
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0")
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+        .package(url: "https://github.com/google/GoogleSignIn-iOS.git", from: "8.0.0")
     ],
     targets: [
         .target(
@@ -24,9 +25,15 @@ let package = Package(
                 "LookAfterAI",
                 .product(name: "FirebaseAuth", package: "firebase-ios-sdk"),
                 .product(name: "FirebaseFirestore", package: "firebase-ios-sdk"),
-                .product(name: "GRDB", package: "GRDB.swift")
+                .product(name: "GRDB", package: "GRDB.swift"),
+                .product(
+                    name: "GoogleSignIn",
+                    package: "GoogleSignIn-iOS",
+                    condition: .when(platforms: [.iOS])
+                )
             ],
-            path: "Sources/LookAfterData"
+            path: "Sources/LookAfterData",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "LookAfterDataTests",
@@ -34,17 +41,20 @@ let package = Package(
                 "LookAfterData",
                 .product(name: "LookAfterAI", package: "LookAfterAI")
             ],
-            path: "Tests/LookAfterDataTests"
+            path: "Tests/LookAfterDataTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "BehaviorMemoryStoreTests",
             dependencies: ["LookAfterData"],
-            path: "Tests/BehaviorMemoryStoreTests"
+            path: "Tests/BehaviorMemoryStoreTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "EnvironmentContextProviderTests",
             dependencies: ["LookAfterData"],
-            path: "Tests/EnvironmentContextProviderTests"
+            path: "Tests/EnvironmentContextProviderTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         )
     ]
 )

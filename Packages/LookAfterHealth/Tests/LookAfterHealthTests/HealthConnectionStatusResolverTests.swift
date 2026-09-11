@@ -113,4 +113,24 @@ final class HealthConnectionStatusResolverTests: XCTestCase {
         XCTAssertEqual(status.kind, .syncStale)
         XCTAssertEqual(status.primaryAction, .syncNow)
     }
+
+    func testAllGoodWhenHRVMissingButCoreMetricsPresent() {
+        let input = HealthConnectionStatusInput(
+            isHealthEnabled: true,
+            isHealthKitAvailable: true,
+            isSignedIn: true,
+            lastSyncDate: now,
+            authorizationGranted: true,
+            hasSleepData: true,
+            hasActivityData: true,
+            hasHeartRateData: true,
+            hasHRVData: false,
+            hasAnyImportedMetrics: true,
+            now: now
+        )
+        let status = HealthConnectionStatusResolver.resolve(input)
+        XCTAssertEqual(status.kind, .allGood)
+        XCTAssertFalse(status.needsAttention)
+        XCTAssertEqual(status.primaryAction, .none)
+    }
 }

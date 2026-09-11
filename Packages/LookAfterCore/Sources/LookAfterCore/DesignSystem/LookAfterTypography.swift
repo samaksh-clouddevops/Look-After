@@ -1,7 +1,12 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
-// MARK: - Typography v2.1 (ADHD cognitive ease)
+// MARK: - Typography v2.2 (ADHD cognitive ease + Dynamic Type)
 
+/// Design tokens for type. Point sizes are the **default** Dynamic Type size;
+/// `Font.ds*` APIs scale with the user's Larger Text setting.
 public enum LookAfterTypography {
     public static let screenTitleSize: CGFloat = 25
     public static let userNameSize: CGFloat = 25
@@ -11,7 +16,9 @@ public enum LookAfterTypography {
     public static let bodySize: CGFloat = 14
     public static let sectionLabelSize: CGFloat = 12.5
     public static let captionSize: CGFloat = 11
-    public static let tabLabelSize: CGFloat = 10
+    /// S04-03: slightly above caption2 default so five tab labels stay readable next to icons.
+    public static let tabLabelSize: CGFloat = 11
+    public static let iconLargeSize: CGFloat = 44
 
     public static let screenTitleLineSpacing: CGFloat = 7
     public static let userNameLineSpacing: CGFloat = 7
@@ -28,64 +35,184 @@ public enum LookAfterTypography {
     public static let captionTracking: CGFloat = 0.2
 
     public static let radiusCard: CGFloat = 24
+
+    /// Maps Look After roles → system text styles for Dynamic Type scaling.
+    public enum TextRole {
+        case screenTitle
+        case userName
+        case briefingSalutation
+        case briefingUserName
+        case cardTitle
+        case body
+        case sectionLabel
+        case caption
+        case tabLabel
+        case icon
+        case iconLarge
+
+        public var textStyle: Font.TextStyle {
+            switch self {
+            case .screenTitle, .userName: return .title
+            case .briefingUserName: return .title2
+            case .briefingSalutation, .body: return .body
+            case .cardTitle, .icon: return .headline
+            case .sectionLabel: return .caption
+            case .caption, .tabLabel: return .caption2
+            case .iconLarge: return .largeTitle
+            }
+        }
+
+        public var pointSize: CGFloat {
+            switch self {
+            case .screenTitle: return LookAfterTypography.screenTitleSize
+            case .userName: return LookAfterTypography.userNameSize
+            case .briefingSalutation: return LookAfterTypography.briefingSalutationSize
+            case .briefingUserName: return LookAfterTypography.briefingUserNameSize
+            case .cardTitle, .icon: return LookAfterTypography.cardTitleSize
+            case .body: return LookAfterTypography.bodySize
+            case .sectionLabel: return LookAfterTypography.sectionLabelSize
+            case .caption: return LookAfterTypography.captionSize
+            case .tabLabel: return LookAfterTypography.tabLabelSize
+            case .iconLarge: return LookAfterTypography.iconLargeSize
+            }
+        }
+
+        #if canImport(UIKit)
+        var uiTextStyle: UIFont.TextStyle {
+            switch self {
+            case .screenTitle, .userName: return .title1
+            case .briefingUserName: return .title2
+            case .briefingSalutation, .body: return .body
+            case .cardTitle, .icon: return .headline
+            case .sectionLabel: return .caption1
+            case .caption, .tabLabel: return .caption2
+            case .iconLarge: return .largeTitle
+            }
+        }
+        #endif
+    }
 }
 
 public extension Font {
+    /// Scaled system font anchored to a Look After typography role.
+    static func ds(
+        _ role: LookAfterTypography.TextRole,
+        weight: Font.Weight = .regular,
+        design: Font.Design = .default
+    ) -> Font {
+        #if canImport(UIKit)
+        // UIFontMetrics → AXCoreUtilities. When called from a Swift Task / concurrent
+        // context, iOS 26 logs unsafeForcedSync faults. Prefer semantic styles there.
+        let inSwiftTask = withUnsafeCurrentTask { $0 != nil }
+        if inSwiftTask {
+            return .system(role.textStyle, design: design).weight(weight)
+        }
+        let base = UIFont.preferredLookAfterFont(
+            size: role.pointSize,
+            weight: weight,
+            design: design
+        )
+        let scaled = UIFontMetrics(forTextStyle: role.uiTextStyle).scaledFont(for: base)
+        return Font(scaled)
+        #else
+        // macOS SPM / AppKit: semantic styles still track system text size.
+        return .system(role.textStyle, design: design).weight(weight)
+        #endif
+    }
+
     static func dsScreenTitle() -> Font {
-        .system(size: LookAfterTypography.screenTitleSize, weight: .bold, design: .default)
+        ds(.screenTitle, weight: .bold)
     }
 
     static func dsUserName() -> Font {
-        .system(size: LookAfterTypography.userNameSize, weight: .semibold, design: .serif)
+        ds(.userName, weight: .semibold, design: .serif)
     }
 
     static func dsBriefingSalutation() -> Font {
-        .system(size: LookAfterTypography.briefingSalutationSize, weight: .regular, design: .default)
+        ds(.briefingSalutation, weight: .regular)
     }
 
     static func dsBriefingUserName() -> Font {
-        .system(size: LookAfterTypography.briefingUserNameSize, weight: .semibold, design: .serif)
+        ds(.briefingUserName, weight: .semibold, design: .serif)
     }
 
     static func dsCardTitle() -> Font {
-        .system(size: LookAfterTypography.cardTitleSize, weight: .semibold, design: .default)
+        ds(.cardTitle, weight: .semibold)
     }
 
     static func dsBody(weight: Font.Weight = .regular) -> Font {
-        .system(size: LookAfterTypography.bodySize, weight: weight, design: .default)
+        ds(.body, weight: weight)
     }
 
     static func dsSectionLabel() -> Font {
-        .system(size: LookAfterTypography.sectionLabelSize, weight: .semibold, design: .default)
+        ds(.sectionLabel, weight: .semibold)
     }
 
     static func dsCaption(weight: Font.Weight = .medium) -> Font {
-        .system(size: LookAfterTypography.captionSize, weight: weight, design: .default)
+        ds(.caption, weight: weight)
     }
 
     static func dsTabLabel(weight: Font.Weight = .medium) -> Font {
-        .system(size: LookAfterTypography.tabLabelSize, weight: weight, design: .default)
+        ds(.tabLabel, weight: weight)
     }
 
-    /// SF Symbol sizing aligned to v2.1 tokens (use instead of raw `.system(size:)`).
     static func dsIcon(weight: Font.Weight = .semibold) -> Font {
-        .system(size: LookAfterTypography.cardTitleSize, weight: weight, design: .default)
+        ds(.icon, weight: weight)
     }
 
     static func dsIconLarge(weight: Font.Weight = .regular) -> Font {
-        .system(size: 44, weight: weight, design: .default)
+        ds(.iconLarge, weight: weight)
     }
 
     static func dsDisplay() -> Font { dsScreenTitle() }
     static func dsLargeTitle() -> Font { dsScreenTitle() }
     static func dsTitle() -> Font { dsCardTitle() }
     static func dsHeadline(weight: Font.Weight = .semibold) -> Font {
-        .system(size: LookAfterTypography.cardTitleSize, weight: weight, design: .default)
+        ds(.cardTitle, weight: weight)
     }
     static func dsSecondary(weight: Font.Weight = .regular) -> Font { dsBody(weight: weight) }
     static func dsMetadata(weight: Font.Weight = .regular) -> Font { dsCaption(weight: weight) }
     static func dsChip(weight: Font.Weight = .medium) -> Font { dsCaption(weight: weight) }
 }
+
+#if canImport(UIKit)
+private extension UIFont {
+    static func preferredLookAfterFont(
+        size: CGFloat,
+        weight: Font.Weight,
+        design: Font.Design
+    ) -> UIFont {
+        let uiWeight = uiFontWeight(weight)
+        var descriptor = UIFont.systemFont(ofSize: size, weight: uiWeight).fontDescriptor
+        switch design {
+        case .serif:
+            if let serif = descriptor.withDesign(.serif) { descriptor = serif }
+        case .rounded:
+            if let rounded = descriptor.withDesign(.rounded) { descriptor = rounded }
+        case .monospaced:
+            if let mono = descriptor.withDesign(.monospaced) { descriptor = mono }
+        default:
+            break
+        }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+
+    static func uiFontWeight(_ weight: Font.Weight) -> UIFont.Weight {
+        switch weight {
+        case .ultraLight: return .ultraLight
+        case .thin: return .thin
+        case .light: return .light
+        case .regular: return .regular
+        case .medium: return .medium
+        case .semibold: return .semibold
+        case .bold: return .bold
+        case .heavy: return .heavy
+        case .black: return .black
+        default: return .regular
+        }
+    }
+}
+#endif
 
 public struct LookAfterTextStyle: ViewModifier {
     let font: Font

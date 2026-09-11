@@ -110,7 +110,7 @@ struct TodayEndOfDayJournalCard: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                    .fill(DesignSystem.backgroundSecondary.opacity(0.5))
+                    .fill(DesignSystem.contentSurfaceSubtle)
             )
         }
     }
@@ -133,7 +133,7 @@ struct TodayEndOfDayJournalCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                        .fill(DesignSystem.backgroundSecondary.opacity(0.65))
+                        .fill(DesignSystem.contentSurface)
                 )
 
                 journalMicButton
@@ -172,14 +172,10 @@ struct TodayEndOfDayJournalCard: View {
         Button(action: toggleVoiceCapture) {
             Image(systemName: speechManager.isListening ? "stop.circle.fill" : "mic.fill")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(speechManager.isListening ? DesignSystem.error : DesignSystem.accentPrimary)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(DesignSystem.backgroundSecondary.opacity(0.85))
-                )
+                .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
+        .tint(speechManager.isListening ? DesignSystem.error : LookAfterChrome.accentTint)
         .accessibilityLabel(speechManager.isListening ? "Stop recording" : "Voice capture")
     }
 

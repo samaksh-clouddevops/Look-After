@@ -5,13 +5,33 @@
 
 Pre-release gate checklist for App Store / TestFlight GA.
 
+**OS floor (iOS 26 revamp):** minimum **iOS 26 / macOS 26**. See [ios26-ship.md](../releases/ios26-ship.md), [screenshot shot list](../releases/ios26-screenshot-shot-list.md), [review notes](../releases/app-store-review-notes-ios26.md).
+
+---
+
+## iOS 26 / Liquid Glass ship gate (QA-IOS26)
+
+- [ ] Deployment target **26.0** in `project.yml` / Xcode (iOS + macOS + widget)
+- [ ] Archive built with **Xcode 26** + iOS 26 SDK (upload floor satisfied)
+- [ ] App Store Connect **Minimum iOS Version** shows 26.0 (or “Requires iOS 26” in listing)
+- [ ] Review notes pasted from [app-store-review-notes-ios26.md](../releases/app-store-review-notes-ios26.md) (demo credentials filled)
+- [ ] Screenshots / preview follow [ios26-screenshot-shot-list.md](../releases/ios26-screenshot-shot-list.md) — physical device glass
+- [ ] Visual V1–V10 signed on device ([ios26-revamp-plan.md](ios26-revamp-plan.md) §5)
+- [ ] Completing NOW restamps widgets + pin (T-42 / Phase G4)
+- [ ] Control Center Capture + Start Focus installable (Phase G3)
+- [ ] Reduce Transparency: glass chrome solid; Reduce Motion: no morph/zoom/bounce loops (Phases F + I)
+- [ ] VoiceOver P0: tabs, Capture, NOW/LATE, assistant collapse, emergency exit (Phase I)
+- [ ] Hit targets ≥ 44 pt on tab Capture and glass chrome (Phase I5)
+- [ ] Privacy nutrition labels match Health / Calendar / Microphone / Speech
+- [x] `PrivacyInfo.xcprivacy` present **or** explicit waiver logged for this build
+
 ---
 
 ## Build & Infrastructure
 
 - [ ] Version and build number incremented in `Apps/LookAfter-iOS/Info.plist`
 - [ ] `xcodegen generate` run if `project.yml` changed
-- [ ] iOS build succeeds: `xcodebuild -scheme LookAfter-iOS -destination 'platform=iOS Simulator,name=iPhone 17' build`
+- [ ] iOS build succeeds: `xcodebuild -scheme LookAfter-iOS -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build`
 - [ ] macOS build succeeds: `xcodebuild -scheme LookAfter-macOS -destination 'platform=macOS' build`
 - [ ] Signing verified on physical device (Team ID, App Groups, entitlements)
 - [ ] `./Scripts/reconfigure-signing.sh` run on non-owner Macs if needed
@@ -82,10 +102,11 @@ Pre-release gate checklist for App Store / TestFlight GA.
 
 ## Accessibility
 
-- [ ] VoiceOver walkthrough: onboarding + hero + task complete
-- [ ] Dynamic Type XXXL on TodayView, TaskListView, OnboardingView
-- [ ] Reduce Motion on experience mode switch and focus timer
-- [ ] All LO-IOS-A11Y **P0** cases pass
+- [ ] VoiceOver walkthrough: onboarding + hero + task complete + Capture + NOW/LATE
+- [ ] Dynamic Type XXXL on Briefing, TodayView, Capture, TaskListView, OnboardingView
+- [ ] Reduce Motion: Capture zoom off, Focus breathe static, tab bounce off
+- [ ] Reduce Transparency: tab bar / toasts / dock / assistant solid
+- [ ] All LO-IOS-A11Y **P0** cases pass ([10-accessibility-checklist.md](10-accessibility-checklist.md))
 
 ---
 
@@ -125,6 +146,7 @@ Pre-release gate checklist for App Store / TestFlight GA.
 - [ ] [Documentation/qa/](README.md) framework version noted in release notes
 - [ ] Known issues list published (if any P3/waived S3)
 - [ ] Runbook for GLM key setup for testers
+- [ ] iOS 26 ship package linked from release notes ([ios26-ship.md](../releases/ios26-ship.md))
 
 ---
 

@@ -23,7 +23,6 @@ struct DailyBriefingView: View {
     var onOpenCoach: () -> Void
     var onOpenDailyPlan: () -> Void
     var onOpenSettings: () -> Void
-    var onCapture: () -> Void
     var onStartTask: (LifeTask) -> Void
     var onReplanDay: (() -> Void)?
     var onPostWake: (() -> Void)?
@@ -32,16 +31,18 @@ struct DailyBriefingView: View {
 
     @State private var showCustomization = false
     @State private var showHealthConnectSheet = false
+    @State private var showHealthSyncSheet = false
     @State private var showHealthVerification = false
     @State private var showHealthTroubleshooting = false
     @State private var showCycleLog = false
     @State private var showCycleDashboard = false
     @State private var scrollOffset: CGFloat = 0
+    @State private var hasUserScrolled = false
 
     private let chaptersAnchorID = "briefing-chapters-start"
 
     private var showsScrollHint: Bool {
-        scrollOffset < 40
+        !hasUserScrolled && scrollOffset < 24
     }
 
     var body: some View {
@@ -56,8 +57,14 @@ struct DailyBriefingView: View {
                             .id(AppFeatureTourAnchorID.briefingScrollTop.rawValue)
 
                         firstViewport(onContinue: {
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                proxy.scrollTo(chaptersAnchorID, anchor: .top)
+                            Task { @MainActor in
+                                let ok = await briefingVM.startMyDay(
+                                    tasksVM: tasksVM,
+                                    userId: userId
+                                )
+                                guard ok else { return }
+                                hasUserScrolled = true
+                                onOpenToday()
                             }
                         })
                         scrollChapters
@@ -72,15 +79,23 @@ struct DailyBriefingView: View {
                     )
                 }
                 .coordinateSpace(name: "briefingScroll")
-                .onPreferenceChange(BriefingScrollOffsetKey.self) { scrollOffset = $0 }
+                .scrollEdgeEffectStyle(.soft, for: .bottom)
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.contentOffset.y
+                } action: { _, newOffset in
+                    scrollOffset = newOffset
+                    if newOffset > 12 {
+                        hasUserScrolled = true
+                    }
+                }
+                .onPreferenceChange(BriefingScrollOffsetKey.self) { value in
+                    scrollOffset = value
+                    if value > 12 {
+                        hasUserScrolled = true
+                    }
+                }
                 .refreshable {
                     await reload()
-                }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if showsScrollHint {
-                        scrollHintOverlay
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
                     guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
@@ -101,6 +116,7 @@ struct DailyBriefingView: View {
                     }
                 }
             }
+
         }
         .animation(.easeOut(duration: 0.25), value: showsScrollHint)
         .task(id: refreshToken) {
@@ -113,7 +129,11 @@ struct DailyBriefingView: View {
             DailyBriefingCustomizationView(briefingVM: briefingVM)
         }
         .sheet(isPresented: $showHealthConnectSheet) {
-            HealthConnectSheet(healthSync: healthSync, userId: userId)
+            HealthConnectSheet(healthSync: healthSync, userId: userId, mode: .connect)
+                .environmentObject(shell)
+        }
+        .sheet(isPresented: $showHealthSyncSheet) {
+            HealthConnectSheet(healthSync: healthSync, userId: userId, mode: .refresh)
                 .environmentObject(shell)
         }
         .sheet(isPresented: $showCycleLog) {
@@ -139,6 +159,7 @@ struct DailyBriefingView: View {
                             HealthStatusBanner(
                                 status: status,
                                 style: .full,
+                                isSyncing: healthSync.isSyncing,
                                 onPrimaryAction: { handleHealthPrimaryAction(status.primaryAction) },
                                 onLearnMore: { showHealthTroubleshooting = true }
                             )
@@ -175,68 +196,70 @@ struct DailyBriefingView: View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
             VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
                 headerBar
-                // Time greeting only — Chief narrative is the body (no chat/mic here).
+                // Wave C type rule: serif = greeting name only — do not remove or restyle here.
                 BriefingGreetingHeader(greeting: briefingVM.greeting)
             }
 
             // Hero — bullet summary lines (body size), same as main.
             LAExecutiveBriefingCard(
                 summaryLines: briefingVM.dayHeroSummaryLines,
-                buttonTitle: "Continue to today",
-                isLoading: briefingVM.isLoadingDayHeroSummary,
+                buttonTitle: briefingVM.isStartingDay ? "Checking…" : "Start my day",
+                isLoading: briefingVM.isLoadingDayHeroSummary || briefingVM.isStartingDay,
                 onContinue: onContinue
             )
             .featureTourAnchor(.briefingHero, cornerRadius: DesignSystem.radiusLG)
             .id(AppFeatureTourAnchorID.briefingHero.rawValue)
+            .disabled(briefingVM.isStartingDay)
+
+            DayAuditCheckCard(briefingVM: briefingVM, tasksVM: tasksVM, userId: userId)
 
             if isPostWake, let onPostWake {
                 postWakeCard(onReplan: onPostWake, onDismiss: onDismissPostWake)
             }
 
+            // U3: Glance lives in the first fold — no dead white void.
             todayAtAGlanceSection
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
         .safeAreaPadding(.top, DesignSystem.spacingMD)
-        .padding(.bottom, DesignSystem.spacingSM)
-    }
-
-    private var scrollHintOverlay: some View {
-        Text("↓ Scroll for more")
-            .textStyleCaption(color: DesignSystem.textSecondary)
-            .padding(.horizontal, DesignSystem.spacingMD)
-            .padding(.vertical, DesignSystem.spacingSM)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .shadow(
-                        color: DesignSystem.shadowElevated.opacity(0.12),
-                        radius: 12,
-                        y: 4
-                    )
-            )
-            .padding(.bottom, DesignSystem.spacingMD)
-            .accessibilityLabel("Scroll for more")
-            .accessibilityHint("Scroll down to see sleep, tasks, and health")
+        .padding(.bottom, DesignSystem.spacingMD)
     }
 
     @ViewBuilder
     private var todayAtAGlanceSection: some View {
-        BriefingSectionCard(title: "Today at a Glance") {
-            if glanceEvents.isEmpty {
-                Text("Nothing fixed on the calendar yet.")
-                    .textStyleCaption()
-            } else {
-                VStack(spacing: DesignSystem.spacingSM) {
-                    ForEach(glanceEvents) { event in
-                        LABriefingGlanceRow(
-                            title: event.title,
-                            timeRange: event.timeRange,
-                            dotColor: event.dotColor,
-                            action: onOpenToday
-                        )
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            BriefingSectionCard(title: "Today at a Glance") {
+                if glanceEvents.isEmpty {
+                    Text("Nothing fixed on the calendar yet.")
+                        .textStyleCaption()
+                } else {
+                    ZStack(alignment: .leading) {
+                        // One spine behind all glance rows (dots sit on this line).
+                        if glanceEvents.count > 1 {
+                            Rectangle()
+                                .fill(DesignSystem.focus.opacity(0.35))
+                                .frame(width: 2)
+                                .padding(.leading, DesignSystem.spacingMD + 5)
+                                .padding(.vertical, 28)
+                        }
+                        VStack(spacing: DesignSystem.spacingSM) {
+                            ForEach(Array(glanceEvents.enumerated()), id: \.element.id) { _, event in
+                                LABriefingGlanceRow(
+                                    title: event.title,
+                                    timeRange: event.timeRange,
+                                    dotColor: event.dotColor,
+                                    showsRailAbove: false,
+                                    showsRailBelow: false,
+                                    action: onOpenToday
+                                )
+                            }
+                        }
                     }
                 }
             }
+
+            // Caption tax: no permanent scroll tutor in the first fold.
         }
         .padding(.top, DesignSystem.spacingSM)
         .accessibilityIdentifier("briefing-today-at-glance")
@@ -250,28 +273,46 @@ struct DailyBriefingView: View {
     }
 
     private var glanceEvents: [GlanceEvent] {
-        shell.timelineService.snapshot.today
+        let now = Date()
+        let candidates = shell.timelineService.snapshot.today
             .filter(\.isImportantCommitment)
             .sorted { $0.date < $1.date }
-            .prefix(3)
-            .map { event in
-                GlanceEvent(
-                    id: event.id,
-                    title: event.title,
-                    timeRange: event.scheduleRangeLabel,
-                    dotColor: glanceColor(for: event.kind)
-                )
-            }
+
+        var seenKeys = Set<String>()
+        var unique: [LifeTimelineEvent] = []
+        for event in candidates {
+            let key = OnboardingTaskSeeder.normalizedRoutineTitle(event.title)
+            guard seenKeys.insert(key).inserted else { continue }
+            unique.append(event)
+        }
+
+        let startIndex = unique.firstIndex { $0.date >= now.addingTimeInterval(-15 * 60) } ?? 0
+        var window = Array(unique[startIndex...].prefix(2))
+        if window.count < 2 {
+            window = Array(unique.prefix(2))
+        }
+
+        return window.map { event in
+            GlanceEvent(
+                id: event.id,
+                title: TaskTitleDisplay.humanized(event.title),
+                timeRange: event.scheduleRangeLabel,
+                dotColor: glanceColor(for: event.kind)
+            )
+        }
     }
 
+    /// Glance dots map to the same life-area DesignSystem tokens as Today (not ad-hoc pink).
     private func glanceColor(for kind: LifeTimelineEventKind) -> Color {
         switch kind {
         case .work, .meeting: return DesignSystem.focus
         case .health, .medication, .exercise, .recovery: return DesignSystem.health
-        case .creative, .personal: return DesignSystem.reflection
-        case .finance, .bill, .shopping: return DesignSystem.learning
+        case .creative: return DesignSystem.learning
+        case .personal: return DesignSystem.reflection
+        case .finance, .bill, .shopping: return DesignSystem.finance
         case .travel: return DesignSystem.travel
-        case .habit, .relationship: return DesignSystem.relationships
+        case .relationship: return DesignSystem.relationships
+        case .habit: return DesignSystem.accentPrimary
         }
     }
 
@@ -301,8 +342,10 @@ struct DailyBriefingView: View {
                 Text("Replan my day")
                     .font(.dsCaption(weight: .semibold))
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.spacingSM)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
+            .tint(LookAfterChrome.accentTint)
         }
         .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
         .accessibilityIdentifier("briefing-post-wake-card")
@@ -324,6 +367,7 @@ struct DailyBriefingView: View {
                         HealthStatusBanner(
                             status: status,
                             style: .compact,
+                            isSyncing: healthSync.isSyncing,
                             onPrimaryAction: { handleHealthPrimaryAction(status.primaryAction) },
                             onSeeDetails: { showHealthVerification = true },
                             onLearnMore: { showHealthTroubleshooting = true }
@@ -384,7 +428,7 @@ struct DailyBriefingView: View {
                 isLoading: briefingVM.isLoadingModuleInsights
             )
 
-            Color.clear.frame(height: DesignSystem.BriefingViewport.scrollHintHeight)
+            Color.clear.frame(height: DesignSystem.BriefingViewport.scrollBottomClearance)
         }
         .padding(.bottom, DesignSystem.spacingMD)
     }
@@ -570,7 +614,7 @@ struct DailyBriefingView: View {
     // MARK: - Header
 
     private var headerBar: some View {
-        HStack(alignment: .center, spacing: DesignSystem.spacingSM) {
+        HStack(alignment: .center, spacing: LAChromeMetrics.toolbarGap) {
             Circle()
                 .fill(DesignSystem.accentPrimary)
                 .frame(width: 8, height: 8)
@@ -580,7 +624,7 @@ struct DailyBriefingView: View {
                 .foregroundColor(DesignSystem.textMuted)
                 .lineLimit(1)
 
-            Spacer()
+            Spacer(minLength: DesignSystem.spacingSM)
 
             if brainVM.isLoading {
                 ProgressView()
@@ -588,32 +632,27 @@ struct DailyBriefingView: View {
                     .scaleEffect(0.8)
             }
 
-            Button(action: onCapture) {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(DesignSystem.backgroundElevated))
-            }
-            .accessibilityLabel("Capture a thought")
+            // Capture lives on the tab FAB. One gear menu: Customize + Settings (no dual circles).
+            Menu {
+                Button("Customize Briefing", systemImage: "slider.horizontal.3") {
+                    showCustomization = true
+                }
+                .accessibilityIdentifier("nav-briefing-customize")
 
-            Button(action: { showCustomization = true }) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(DesignSystem.backgroundElevated))
-            }
-            .accessibilityLabel("Customize briefing")
-
-            Button(action: onOpenSettings) {
+                Button("Settings", systemImage: "gearshape", action: onOpenSettings)
+                    .accessibilityIdentifier("nav-briefing-settings")
+            } label: {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(DesignSystem.backgroundElevated))
+                    .font(.system(size: LAChromeMetrics.iconPointSize, weight: LAChromeMetrics.iconWeight))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(DesignSystem.textPrimary)
+                    .frame(width: DesignSystem.iconButtonSize, height: DesignSystem.iconButtonSize)
+                    .contentShape(Rectangle())
             }
-            .accessibilityLabel("Settings")
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings and briefing options")
+            .accessibilityHint("Customize briefing layout or open app settings")
+            .accessibilityIdentifier("nav-briefing-overflow")
         }
     }
 
@@ -637,11 +676,7 @@ struct DailyBriefingView: View {
 
     private func syncHealthNow() {
         guard enableHealth else { return }
-        Task {
-            let resolvedId = FirebaseManager.shared.resolvedUserId.isEmpty ? userId : FirebaseManager.shared.resolvedUserId
-            await healthSync.syncHealthData(userId: resolvedId)
-            healthSync.refreshConnectionStatus(userId: resolvedId, healthSummary: brainVM.healthSummary)
-        }
+        showHealthSyncSheet = true
     }
 
     private func handleHealthPrimaryAction(_ action: HealthStatusAction) {

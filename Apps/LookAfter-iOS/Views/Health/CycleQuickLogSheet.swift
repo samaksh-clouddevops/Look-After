@@ -27,13 +27,13 @@ struct CycleQuickLogSheet: View {
                     TextField("Mood (optional)", text: $mood)
                         .textFieldStyle(.plain)
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
 
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(2...4)
                         .textFieldStyle(.plain)
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
 
                     Text(UserFacingCopy.medicalDisclaimerWithProvider)
                         .font(.system(size: 11))
@@ -53,6 +53,8 @@ struct CycleQuickLogSheet: View {
                         save()
                         dismiss()
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(LookAfterChrome.accentTint)
                 }
             }
         }
@@ -74,7 +76,7 @@ struct CycleQuickLogSheet: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(
-                                Capsule().fill(flow == level ? DesignSystem.accentPrimary.opacity(0.25) : DesignSystem.backgroundElevated)
+                                Capsule().fill(flow == level ? DesignSystem.accentPrimary.opacity(0.25) : DesignSystem.contentSurfaceElevated)
                             )
                     })
                     .buttonStyle(.plain)
@@ -102,7 +104,7 @@ struct CycleQuickLogSheet: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(
-                                Capsule().fill(selectedSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.backgroundElevated)
+                                Capsule().fill(selectedSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.contentSurfaceElevated)
                             )
                     })
                     .buttonStyle(.plain)

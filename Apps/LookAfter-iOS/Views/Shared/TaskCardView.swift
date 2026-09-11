@@ -59,31 +59,36 @@ struct TaskCardView: View {
 
     private var isCompleted: Bool { task.isCompleted }
 
+    /// Trailing disclosure only when the row has expandable content — otherwise
+    /// context menu / swipe cover actions without a third competing affordance.
+    private var showsListExpandControl: Bool {
+        !task.description.isEmpty
+            || !task.steps.isEmpty
+            || isDecomposing
+            || isLoadingTimeDisplay
+            || isExpanded
+    }
+
     private var listMetadataLine: String? {
         var parts: [String] = []
         if let timeDisplayLabel {
             parts.append(timeDisplayLabel)
-        } else {
-            parts.append("Estimated time \(task.estimatedMinutes) min")
+        } else if task.estimatedMinutes > 0 {
+            parts.append("\(task.estimatedMinutes)m")
         }
-        if parts.isEmpty { return nil }
-
+        if task.isFixedTimeEvent, let start = task.scheduledTime {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "h:mm a"
+            parts.insert(formatter.string(from: start), at: 0)
+        }
+        parts.append(task.priority.label)
         if task.isRecurring {
             parts.append(task.recurrenceRule.rawValue)
-        }
-        if task.isFixedTimeEvent {
-            if let start = task.scheduledTime {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "h:mm a"
-                parts.append(formatter.string(from: start))
-            } else {
-                parts.append("Fixed")
-            }
         }
         if task.isOverdue {
             parts.append("Overdue")
         }
-        return parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     var body: some View {
@@ -104,26 +109,22 @@ struct TaskCardView: View {
 
                 Button(action: onOpen) {
                     VStack(alignment: .leading, spacing: 3) {
+                        Text(TaskTitleDisplay.humanized(task.title))
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundColor(DesignSystem.textPrimary)
+                            .strikethrough(isCompleted)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
                         HStack(spacing: 6) {
-                            Image(systemName: task.lifeArea.icon)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(DesignSystem.accentPrimary.opacity(0.85))
-                                .frame(width: 14)
-
-                            Text(task.title)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .foregroundColor(DesignSystem.textPrimary)
-                                .strikethrough(isCompleted)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-
-                        if let meta = listMetadataLine {
-                            Text(meta)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundColor(DesignSystem.textMuted)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.85)
+                            LACategoryChip(task.lifeArea.shortLabel)
+                            if let meta = listMetadataLine {
+                                Text(meta)
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundColor(DesignSystem.textMuted)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -132,13 +133,14 @@ struct TaskCardView: View {
                 .accessibilityLabel("Open task details")
                 .accessibilityIdentifier("task-card-\(task.id)")
 
-                HStack(spacing: 4) {
-                    if task.priority == .high || task.priority == .critical {
-                        Circle()
-                            .fill(Color(hex: task.priority.colorHex))
-                            .frame(width: 7, height: 7)
-                            .accessibilityLabel("\(task.priority.label) priority")
-                    }
+                if task.priority == .high || task.priority == .critical {
+                    Circle()
+                        .fill(Color(hex: task.priority.colorHex))
+                        .frame(width: 7, height: 7)
+                        .accessibilityLabel("\(task.priority.label) priority")
+                }
+
+                if showsListExpandControl {
                     expandButton
                 }
             }
@@ -150,7 +152,7 @@ struct TaskCardView: View {
 
             if isExpanded {
                 Divider()
-                    .overlay(DesignSystem.borderGlass)
+                    .overlay(DesignSystem.border)
                     .padding(.top, 10)
 
                 expandedDetails
@@ -172,7 +174,7 @@ struct TaskCardView: View {
             }
 
             Button(action: onOpen) {
-                Text(task.title)
+                Text(TaskTitleDisplay.humanized(task.title))
                     .font(.dsTitle())
                     .foregroundColor(DesignSystem.textPrimary)
                     .multilineTextAlignment(.center)
@@ -196,7 +198,7 @@ struct TaskCardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(DesignSystem.contentSurfaceSubtle)
                 )
             }
 
@@ -220,7 +222,7 @@ struct TaskCardView: View {
         Button(action: isCompleted ? onMarkIncomplete : onComplete) {
             Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 20, weight: .regular))
-                .foregroundColor(isCompleted ? DesignSystem.success : Color.white.opacity(0.28))
+                .foregroundColor(isCompleted ? DesignSystem.success : DesignSystem.textMuted)
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
@@ -256,7 +258,7 @@ struct TaskCardView: View {
                 .padding(.vertical, DesignSystem.spacingXS)
             }
 
-            MetadataTagRow(tags: task.metadataTags(timeLabel: timeDisplayLabel ?? "Estimated time \(task.estimatedMinutes) min"))
+            MetadataTagRow(tags: task.metadataTags(timeLabel: timeDisplayLabel ?? (task.estimatedMinutes > 0 ? "\(task.estimatedMinutes)m" : nil)))
 
             if isLoadingTimeDisplay {
                 HStack(spacing: 6) {
@@ -331,7 +333,7 @@ struct CompactTaskRowView: View {
                 .frame(width: 14)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(task.title)
+                Text(TaskTitleDisplay.humanized(task.title))
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundColor(DesignSystem.textPrimary)
                     .lineLimit(1)
@@ -369,13 +371,12 @@ private struct PrimaryCapsuleButton: View {
                 Image(systemName: icon)
             }
             .font(.dsBody(weight: .bold))
-            .foregroundColor(.white)
             .padding(.horizontal, DesignSystem.spacingXL)
             .padding(.vertical, DesignSystem.spacingMD)
-            .background(Capsule(style: .continuous).fill(tint))
             .dsChipText()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassProminent)
+        .tint(tint)
         .minTouchTarget()
     }
 }
@@ -393,13 +394,12 @@ private struct SecondaryCapsuleButton: View {
                 Text(title)
             }
             .font(.dsBody(weight: .bold))
-            .foregroundColor(tint)
             .padding(.horizontal, DesignSystem.spacingLG)
             .padding(.vertical, DesignSystem.spacingMD)
-            .background(Capsule(style: .continuous).fill(tint.opacity(0.15)))
             .dsChipText()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
+        .tint(tint)
         .minTouchTarget()
     }
 }

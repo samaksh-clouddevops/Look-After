@@ -18,10 +18,11 @@ struct ChiefOfStaffBriefingHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
             Text(displayNarrative)
-                .font(BriefingTypeScale.headerFont) // 27pt = floor(17 × φ)
+                .font(BriefingTypeScale.headerFont)
                 .foregroundColor(DesignSystem.textPrimary)
                 .multilineTextAlignment(.leading)
                 .lineSpacing(4)
+                .minimumScaleFactor(0.85)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineLimit(8)
                 .opacity(revealed ? 1 : 0.35)
@@ -78,6 +79,7 @@ struct ChiefOfStaffBriefingHeader: View {
 
 private struct SnapshotChipView: View {
     let chip: BriefingSnapshotChip
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
@@ -88,8 +90,10 @@ private struct SnapshotChipView: View {
                 .font(BriefingTypeScale.chipFont)
                 .foregroundColor(DesignSystem.textSecondary)
             Text(chip.value)
-                .font(.system(size: 13, weight: .semibold, design: .default))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(DesignSystem.textPrimary)
+                .contentTransition(.numericText())
+                .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: chip.value)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

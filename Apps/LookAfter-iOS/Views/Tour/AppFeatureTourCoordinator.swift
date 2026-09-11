@@ -140,7 +140,7 @@ final class AppFeatureTourCoordinator: ObservableObject {
     }
 
     private static let tabBarAnchorIDs: Set<AppFeatureTourAnchorID> = [
-        .tabBriefing, .tabToday, .tabReview, .tabCapture, .tabBrain, .tabYou
+        .tabBriefing, .tabToday, .tabCapture, .tabBrain, .tabYou
     ]
 
     private func pruneAnchorsForCurrentStep() {
@@ -285,13 +285,8 @@ final class AppFeatureTourCoordinator: ObservableObject {
             preferred.append(side)
         }
 
-        let assistantFrame = anchors[.todayAssistant]?.frame ?? .null
-        let bottomSheet: CGRect = {
-            guard currentStep.anchor != .todayAssistant,
-                  anchors[.todayAssistant]?.isValid == true,
-                  assistantFrame.isValidObstacle else { return .null }
-            return assistantFrame
-        }()
+        // Plan lives in the Today header toolbar — not a bottom dock obstacle.
+        let bottomSheet: CGRect = .null
 
         let layoutWidth = min(
             DesignSystem.readableMaxWidth,

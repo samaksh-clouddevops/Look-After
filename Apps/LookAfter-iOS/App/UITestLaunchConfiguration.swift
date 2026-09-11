@@ -42,9 +42,10 @@ enum UITestLaunchConfiguration {
         }
 
         MainActor.assumeIsolated {
-            FirebaseManager.shared.currentUserId = userId
-            FirebaseManager.shared.isAuthenticated = true
-            FirebaseManager.shared.userEmail = "uitest@lookafter.test"
+            FirebaseManager.shared.seedUITestSession(
+                userId: userId,
+                email: "uitest@lookafter.test"
+            )
         }
 
         if ProcessInfo.processInfo.arguments.contains("-SimulateOffline") {
@@ -60,6 +61,21 @@ enum UITestLaunchConfiguration {
         }
         if ProcessInfo.processInfo.arguments.contains("-ReduceMotion") {
             UserDefaults.standard.set(true, forKey: "uitest_reduce_motion")
+        }
+        // Avoid blocking Briefing behind the manual sleep prompt during automated captures.
+        ManualSleepLogStore.dismissForToday()
+        if let style = argumentValue(prefix: "-UIPreferredInterfaceStyle")?.lowercased() {
+            switch style {
+            case "dark":
+                UserDefaults.standard.set(AppAppearanceMode.dark.rawValue, forKey: AppAppearanceMode.storageKey)
+            case "light":
+                UserDefaults.standard.set(AppAppearanceMode.light.rawValue, forKey: AppAppearanceMode.storageKey)
+            default:
+                break
+            }
+        } else {
+            // Force light for default captures so simulator Dark Appearance doesn't tint every shot.
+            UserDefaults.standard.set(AppAppearanceMode.light.rawValue, forKey: AppAppearanceMode.storageKey)
         }
         if let mockHealthStatus = argumentValue(prefix: "-MockHealthStatus") {
             UserDefaults.standard.set(mockHealthStatus, forKey: "uitest_mock_health_status")

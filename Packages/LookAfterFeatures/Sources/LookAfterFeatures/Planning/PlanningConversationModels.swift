@@ -179,6 +179,95 @@ public struct PlanningNegotiation: Codable, Sendable, Equatable {
     }
 }
 
+/// Pending AI schedule changes awaiting explicit user approval (P1).
+public struct PendingPlanApproval: Identifiable, Sendable, Equatable {
+    public var id: String
+    public var reason: String
+    public var changeSummaries: [String]
+    public var mutations: [PlanMutation]
+    public var userMessage: String?
+    public var touchesUserPlaced: Bool
+
+    public init(
+        id: String = UUID().uuidString,
+        reason: String,
+        changeSummaries: [String],
+        mutations: [PlanMutation],
+        userMessage: String? = nil,
+        touchesUserPlaced: Bool = false
+    ) {
+        self.id = id
+        self.reason = reason
+        self.changeSummaries = changeSummaries
+        self.mutations = mutations
+        self.userMessage = userMessage
+        self.touchesUserPlaced = touchesUserPlaced
+    }
+
+    public static func make(
+        mutations: [PlanMutation],
+        reply: String,
+        userMessage: String?,
+        tasks: [LifeTask]
+    ) -> PendingPlanApproval {
+        let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        var touchesUserPlaced = false
+        let summaries: [String] = mutations.map { mutation in
+            if let id = mutation.taskID, let task = byID[id], task.userPlacedScheduleAt != nil {
+                touchesUserPlaced = true
+            }
+            return mutation.approvalSummary(taskLookup: byID)
+        }
+        let reason = mutations.compactMap(\.reason).first(where: { !$0.isEmpty })
+            ?? (reply.isEmpty ? "Suggested schedule updates" : String(reply.prefix(180)))
+        return PendingPlanApproval(
+            reason: reason,
+            changeSummaries: summaries,
+            mutations: mutations,
+            userMessage: userMessage,
+            touchesUserPlaced: touchesUserPlaced
+        )
+    }
+}
+
+extension PlanMutation {
+    /// One-line change description for the approval card.
+    public func approvalSummary(taskLookup: [String: LifeTask]) -> String {
+        let title = self.title
+            ?? taskID.flatMap { taskLookup[$0]?.title }
+            ?? "Task"
+        switch kind {
+        case .createTask:
+            if let h = startHour, let m = startMinute {
+                return "Create \"\(title)\" at \(String(format: "%d:%02d", h, m))"
+            }
+            return "Create \"\(title)\""
+        case .rescheduleTask:
+            if deferToTomorrow { return "Move \"\(title)\" to tomorrow" }
+            if let h = startHour, let m = startMinute {
+                return "Reschedule \"\(title)\" to \(String(format: "%d:%02d", h, m))"
+            }
+            return "Reschedule \"\(title)\""
+        case .deferTask:
+            return "Defer \"\(title)\""
+        case .completeTask:
+            return "Complete \"\(title)\""
+        case .createMultiDayTask:
+            return "Schedule multi-day \"\(title)\""
+        case .reuseTask:
+            return "Reuse existing \"\(title)\""
+        case .markMedicationTaken:
+            return "Mark medication taken"
+        case .addShoppingItem:
+            return "Add shopping: \(shoppingItemName ?? title)"
+        case .captureNote:
+            return "Add note"
+        case .removeFromToday:
+            return "Remove \"\(title)\" from today"
+        }
+    }
+}
+
 // MARK: - Multi-day planning
 
 public enum MultiDayPlanningPhase: String, Codable, Sendable {
@@ -484,6 +573,8 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
     public var isCompleted: Bool
     /// Scheduled window ended but user has not checked the task off.
     public var isPast: Bool
+    /// NOW row whose window already ended.
+    public var isLate: Bool
     /// Underlying LifeTask id when this row represents a completable task.
     public var taskId: String?
     public var estimatedMinutes: Int?
@@ -495,17 +586,19 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
     /// Display-only slot from planner when task could not be persisted (overcommitted day).
     public var isSuggestedSlot: Bool = false
     public var suggestedStart: Date?
-    /// Flexible task with no user-set clock slot — rail shows a gap-anchor time.
+    /// Real task id for a suggested slot row (`taskId` stays nil until Add to day).
+    public var suggestedSourceTaskId: String?
+    /// Flexible task with no user-set clock slot — sort may use a gap-anchor; never paint it as wall clock.
     public var isUnslottedFlexible: Bool = false
 
     public var canReschedule: Bool {
-        guard taskId != nil, !isCompleted else { return false }
+        guard taskId != nil, !isCompleted, !isSuggestedSlot else { return false }
         if isFixedEvent || timeConstraint == .anchored, !isPast { return false }
         return timeConstraint.isSchedulerMovable
     }
 
     public var canRemoveFromTimeline: Bool {
-        guard taskId != nil, !isCompleted else { return false }
+        guard taskId != nil, !isCompleted, !isSuggestedSlot else { return false }
         if isFixedEvent || timeConstraint == .anchored { return false }
         return timeConstraint.isSchedulerMovable
     }
@@ -527,6 +620,7 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         isConflict: Bool = false,
         isCompleted: Bool = false,
         isPast: Bool = false,
+        isLate: Bool = false,
         taskId: String? = nil,
         estimatedMinutes: Int? = nil,
         completedAt: Date? = nil,
@@ -535,6 +629,7 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         scheduleKind: TimelineScheduleKind = .fixedWindow,
         isSuggestedSlot: Bool = false,
         suggestedStart: Date? = nil,
+        suggestedSourceTaskId: String? = nil,
         isUnslottedFlexible: Bool = false
     ) {
         self.id = id
@@ -555,6 +650,7 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         self.isConflict = isConflict
         self.isCompleted = isCompleted
         self.isPast = isPast
+        self.isLate = isLate
         self.taskId = taskId
         self.estimatedMinutes = estimatedMinutes
         self.completedAt = completedAt
@@ -563,6 +659,7 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         self.scheduleKind = scheduleKind
         self.isSuggestedSlot = isSuggestedSlot
         self.suggestedStart = suggestedStart
+        self.suggestedSourceTaskId = suggestedSourceTaskId
         self.isUnslottedFlexible = isUnslottedFlexible
     }
 }

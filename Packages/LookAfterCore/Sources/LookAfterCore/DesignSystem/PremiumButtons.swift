@@ -3,9 +3,9 @@ import SwiftUI
 // MARK: - Shared button chrome
 
 private enum PremiumButtonMetrics {
-    static let minHeight: CGFloat = 52
-    static let horizontalPadding: CGFloat = 24
-    static let verticalPadding: CGFloat = 14
+    /// Locked primary height — grow via Dynamic Type, not extra chrome padding.
+    static let minHeight: CGFloat = DesignSystem.minTouchTarget
+    static let horizontalPadding: CGFloat = 18
     static let cornerRadius: CGFloat = DesignSystem.radiusButton
 }
 
@@ -29,15 +29,14 @@ private struct PremiumButtonLabel: View {
                     .font(.system(size: 15, weight: .semibold))
             }
             Text(title)
-                .font(.dsHeadline())
+                .font(.dsBody(weight: .semibold))
                 .lineLimit(allowsWrap ? 2 : 1)
                 .minimumScaleFactor(allowsWrap ? 1 : 0.85)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: allowsWrap)
         }
-        .foregroundColor(foreground)
+        .foregroundStyle(foreground)
         .padding(.horizontal, PremiumButtonMetrics.horizontalPadding)
-        .padding(.vertical, PremiumButtonMetrics.verticalPadding)
         .frame(minHeight: PremiumButtonMetrics.minHeight)
     }
 }
@@ -67,8 +66,8 @@ public struct PremiumPrimaryButton: View {
             PremiumButtonLabel(title: title, icon: icon, foreground: DesignSystem.accentOnPrimary, allowsWrap: true)
                 .frame(maxWidth: fillsWidth ? .infinity : nil)
                 .background(
-                RoundedRectangle(cornerRadius: DesignSystem.radiusFloating, style: .continuous)
-                    .fill(DesignSystem.accentPrimary)
+                    Capsule(style: .continuous)
+                        .fill(DesignSystem.accentPrimary)
                 )
         }
         .buttonStyle(PremiumPressStyle())
@@ -84,13 +83,12 @@ public struct PremiumPrimaryButtonStyle: ButtonStyle {
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.dsHeadline())
-            .foregroundColor(DesignSystem.accentOnPrimary)
+            .font(.dsBody(weight: .semibold))
+            .foregroundStyle(DesignSystem.accentOnPrimary)
             .padding(.horizontal, PremiumButtonMetrics.horizontalPadding)
-            .padding(.vertical, PremiumButtonMetrics.verticalPadding)
             .frame(minHeight: PremiumButtonMetrics.minHeight)
             .background(
-                RoundedRectangle(cornerRadius: DesignSystem.radiusFloating, style: .continuous)
+                Capsule(style: .continuous)
                     .fill(configuration.isPressed ? DesignSystem.accentPressed : DesignSystem.accentPrimary)
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
@@ -244,6 +242,8 @@ public struct PremiumToolbarItem: Identifiable {
 }
 
 public struct PremiumToolbarCluster: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     let leading: PremiumToolbarItem?
     let items: [PremiumToolbarItem]
 
@@ -261,25 +261,41 @@ public struct PremiumToolbarCluster: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 2) {
-                ForEach(items) { item in
-                    PremiumIconButton(item.icon, action: item.action)
-                        .accessibilityLabel(item.accessibilityLabel)
+            GlassEffectContainer(spacing: 2) {
+                HStack(spacing: 2) {
+                    ForEach(items) { item in
+                        PremiumIconButton(item.icon, action: item.action)
+                            .accessibilityLabel(item.accessibilityLabel)
+                    }
                 }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .modifier(PremiumToolbarChrome(reduceTransparency: reduceTransparency))
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .background(Capsule(style: .continuous).fill(DesignSystem.backgroundElevated.opacity(0.55)))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(DesignSystem.border, lineWidth: 1)
-            )
         }
         .padding(.horizontal, DesignSystem.screenHorizontal)
         .frame(minHeight: DesignSystem.minTouchTarget)
+    }
+}
+
+private struct PremiumToolbarChrome: ViewModifier {
+    let reduceTransparency: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(DesignSystem.contentSurfaceElevated)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(DesignSystem.border, lineWidth: 1)
+                )
+        } else {
+            content
+                .glassEffect(.regular, in: .capsule)
+        }
     }
 }

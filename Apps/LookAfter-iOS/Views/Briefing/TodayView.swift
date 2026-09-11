@@ -2,8 +2,11 @@ import SwiftUI
 import Combine
 import LookAfterCore
 import LookAfterFeatures
+#if canImport(UIKit)
+import UIKit
+#endif
 
-/// Today — full timeline with collapsible Executive Assistant bottom sheet.
+/// Today — full timeline; planning opens from the header Plan control as a sheet.
 struct TodayView: View {
     private enum TimelineDaySelection: String, CaseIterable, Identifiable {
         case today = "Today"
@@ -33,6 +36,8 @@ struct TodayView: View {
     var onRefresh: () async -> Void
     var onPlanningSubmit: (_ text: String, _ startedWithVoice: Bool) -> Void
     var onNegotiationSelect: (String) -> Void
+    var onApprovePendingPlan: () -> Void = {}
+    var onRejectPendingPlan: () -> Void = {}
     var onProactiveBannerAppear: (ProactiveAction) -> Void = { _ in }
     var onRedesignWithAI: (String) -> Void = { _ in }
     var onOpenSleepDetail: () -> Void = {}
@@ -52,26 +57,20 @@ struct TodayView: View {
     @State private var selectedCalendarDate = Calendar.current.startOfDay(for: Date())
     @State private var expandedPriorityId: String?
     @State private var timelineBlockScrollDisabled = false
+    @State private var showPlanningAssistant = false
+    @State private var planningSheetDetent: PresentationDetent = .medium
+    @State private var showDayControls = false
 
     var body: some View {
         timelineSection
-            .overlay(alignment: .bottom) {
-                ExecutiveAssistantSheet(
-                    planningVM: planningVM,
-                    speechManager: speechManager,
-                    speechSynthesizer: speechSynthesizer,
-                    onSubmit: onPlanningSubmit,
-                    onNegotiationSelect: onNegotiationSelect,
-                    onRedesignWithAI: onRedesignWithAI,
-                    onPostWake: onPostWake,
-                    onGoingOut: onGoingOut
-                )
-            }
             .onAppear {
             planningVM.bootstrapTimeline(from: lifeTimelineEvents)
             planningVM.bootstrapTomorrowTimeline(from: tomorrowLifeTimelineEvents)
             refreshPreWindowFitIfNeeded()
             planningVM.seedProactiveSuggestionsIfNeeded(from: briefingVM.proactiveActions)
+            Task {
+                await briefingVM.refreshDayAudit(tasksVM: tasksVM)
+            }
         }
         .onChange(of: briefingVM.proactiveActions.count) { _, _ in
             refreshProactiveIfNeeded()
@@ -83,6 +82,30 @@ struct TodayView: View {
                 capacity: briefingVM.executiveCapacity,
                 weatherSnapshot: weatherSnapshot
             )
+        }
+        .sheet(isPresented: $showPlanningAssistant) {
+            ExecutiveAssistantSheet(
+                planningVM: planningVM,
+                speechManager: speechManager,
+                speechSynthesizer: speechSynthesizer,
+                onSubmit: onPlanningSubmit,
+                onNegotiationSelect: onNegotiationSelect,
+                onApprovePendingPlan: onApprovePendingPlan,
+                onRejectPendingPlan: onRejectPendingPlan,
+                onRedesignWithAI: onRedesignWithAI,
+                onPostWake: onPostWake,
+                onGoingOut: onGoingOut
+            )
+            .presentationDetents([.medium, .large], selection: $planningSheetDetent)
+            .presentationDragIndicator(.visible)
+            .presentationCompactAdaptation(.sheet)
+            .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+            .onAppear { planningSheetDetent = .medium }
+            #if canImport(UIKit)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                planningSheetDetent = .large
+            }
+            #endif
         }
         .accessibilityIdentifier("screen-today")
         .onChange(of: selectedDay) { _, _ in
@@ -104,11 +127,7 @@ struct TodayView: View {
             cachedProactiveAction = nil
             return
         }
-        cachedProactiveAction = briefingVM.proactiveActions.first {
-            $0.surface == .banner || $0.surface == .autoApplyPreview
-        } ?? briefingVM.proactiveActions.first {
-            $0.severity == .high || $0.severity == .medium
-        }
+        cachedProactiveAction = TodayCoachSlot.pickCoachAction(from: briefingVM.proactiveActions)
     }
 
     private var metricsInput: TodayMetricsInput {
@@ -166,30 +185,56 @@ struct TodayView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: DesignSystem.spacingLG, pinnedViews: []) {
                     todayHeader
-                    LAWeekDateStrip(
-                        days: weekDays,
-                        selectedDate: $selectedCalendarDate
-                    )
-                    .onChange(of: selectedCalendarDate) { _, newDate in
-                        syncSelectedDay(from: newDate)
+
+                    if showDayControls {
+                        dayControlsPanel
                     }
 
                     if isSelectedToday {
                         TodayMultiDayBanner(planningVM: planningVM, tasksVM: tasksVM)
-                        TodayPreWindowFitSection(
+                        // Critical coach only above hero (overcommit / transition). Micro-start goes below.
+                        // Hide when Plan sheet is open so Open plan isn't duplicated (LAY-P2).
+                        if !showPlanningAssistant {
+                            TodayCoachSlot(
+                                tasksVM: tasksVM,
+                                briefingVM: briefingVM,
+                                cachedFit: $cachedPreWindowFit,
+                                cachedAction: $cachedProactiveAction,
+                                placement: .aboveHero,
+                                onReplan: onReplanDay,
+                                onSelectOption: onNegotiationSelect,
+                                onBannerAppear: onProactiveBannerAppear
+                            )
+                            // Avoid stacking negotiation with the coach card (same message twice).
+                            if cachedPreWindowFit?.isOvercommitted != true,
+                               cachedProactiveAction.map({ TodayCoachSlot.isTransitionKind($0.kind) }) != true {
+                                TodayInlineNegotiationSection(
+                                    planningVM: planningVM,
+                                    onSelectOption: onNegotiationSelect
+                                )
+                            }
+                        }
+                        TodayDoThisNowSection(
                             tasksVM: tasksVM,
-                            cachedFit: $cachedPreWindowFit,
-                            onReplan: onReplanDay
+                            planningVM: planningVM,
+                            onStartTask: onStartTask
                         )
-                        TodayProactiveSuggestionSection(
-                            briefingVM: briefingVM,
-                            tasksVM: tasksVM,
-                            cachedAction: $cachedProactiveAction,
-                            onSelectOption: onNegotiationSelect,
-                            onBannerAppear: onProactiveBannerAppear
-                        )
+                        .id(Self.todayHeroScrollID)
+                        if !showPlanningAssistant {
+                            TodayCoachSlot(
+                                tasksVM: tasksVM,
+                                briefingVM: briefingVM,
+                                cachedFit: $cachedPreWindowFit,
+                                cachedAction: $cachedProactiveAction,
+                                placement: .belowHero,
+                                onReplan: onReplanDay,
+                                onSelectOption: onNegotiationSelect,
+                                onBannerAppear: onProactiveBannerAppear
+                            )
+                        }
                         TodayPrioritiesSection(
                             tasksVM: tasksVM,
+                            planningVM: planningVM,
                             expandedPriorityId: $expandedPriorityId,
                             onOpenTasks: onOpenTasks,
                             onStartTask: onStartTask,
@@ -212,12 +257,12 @@ struct TodayView: View {
                             onEditTask: onEditTask,
                             onCapture: onCapture
                         )
-                        TodayEndOfDayJournalCard(
+                        // V5: Gate full EOD journal until evening; keep a quiet expand earlier.
+                        TodayEndOfDayGate(
                             modulesVM: modulesVM,
                             tasksVM: tasksVM,
                             speechManager: speechManager
                         )
-                        viewFullTimelineLink
                     } else if isSelectedTomorrow {
                         tomorrowHeadsUpCard
                         TodayScheduleSection(
@@ -247,9 +292,29 @@ struct TodayView: View {
             }
             .scrollDisabled(timelineBlockScrollDisabled)
             .scrollViewScrollLock(timelineBlockScrollDisabled)
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             .onPreferenceChange(TimelineBlockScrollDisabledKey.self) { timelineBlockScrollDisabled = $0 }
             .refreshable {
                 await onRefresh()
+            }
+            .onAppear {
+                scrollTodayToHero(using: proxy, animated: false)
+                // Second pass after LazyVStack / hero resolve (FLOW-T1).
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    scrollTodayToHero(using: proxy, animated: false)
+                }
+            }
+            .onChange(of: showPlanningAssistant) { _, isOpen in
+                if !isOpen { scrollTodayToHero(using: proxy) }
+            }
+            .onChange(of: selectedDay) { _, _ in
+                scrollTodayToHero(using: proxy)
+            }
+            .onChange(of: planningVM.nowTaskId) { _, _ in
+                scrollTodayToHero(using: proxy, animated: false)
+            }
+            .onChange(of: planningVM.timelineRows.map { "\($0.id):\($0.isNow):\($0.isLate)" }.joined(separator: "|")) { _, _ in
+                scrollTodayToHero(using: proxy, animated: false)
             }
             .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
                 guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
@@ -259,10 +324,24 @@ struct TodayView: View {
                     }
                 } else if raw == AppFeatureTourAnchorID.todayAssistant.rawValue {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .top)
+                        proxy.scrollTo(AppFeatureTourAnchorID.todayAssistant.rawValue, anchor: .top)
                     }
                 }
             }
+        }
+    }
+
+    private static let todayHeroScrollID = "today-hero-top"
+
+    private func scrollTodayToHero(using proxy: ScrollViewProxy, animated: Bool = true) {
+        guard isSelectedToday else { return }
+        let scroll = {
+            proxy.scrollTo(Self.todayHeroScrollID, anchor: .top)
+        }
+        if animated {
+            withAnimation(.easeInOut(duration: 0.28), scroll)
+        } else {
+            scroll()
         }
     }
 
@@ -274,18 +353,37 @@ struct TodayView: View {
                 isSelectedTomorrow: isSelectedTomorrow,
                 formattedSelectedDate: formattedSelectedDate,
                 isPlanningTomorrow: isPlanningTomorrow,
+                showDayControls: $showDayControls,
                 onOpenTasks: onOpenTasks,
+                onOpenPlan: { showPlanningAssistant = true },
                 onReplanDay: onReplanDay,
                 onPlanTomorrow: onPlanTomorrow,
                 onSettings: onSettings
             )
+            if !showDayControls {
+                Text(formattedSelectedDate)
+                    .textStyleCaption()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var dayControlsPanel: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            Text(formattedSelectedDate)
+                .textStyleCaption()
+            LAWeekDateStrip(
+                days: weekDays,
+                selectedDate: $selectedCalendarDate
+            )
+            .onChange(of: selectedCalendarDate) { _, newDate in
+                syncSelectedDay(from: newDate)
+            }
             if isSelectedToday {
                 TodayContextQuickActions(onPostWake: onPostWake, onGoingOut: onGoingOut)
             }
-            Text(formattedSelectedDate)
-                .textStyleCaption()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("today-day-controls")
     }
 
     private static let selectedDateFormatter: DateFormatter = {
@@ -323,18 +421,9 @@ struct TodayView: View {
         }
     }
 
-    private var viewFullTimelineLink: some View {
-        Button(action: onViewTimeline) {
-            Text("View full timeline")
-                .textStyleCaption(color: DesignSystem.focus)
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Clears the executive assistant sheet so content is fully scrollable.
+    /// Extra scroll clearance above the floating tab bar so End of day isn’t clipped.
     private var scrollBottomInset: CGFloat {
-        ExecutiveAssistantMetrics.collapsedBottomPadding + DesignSystem.spacingMD
+        DesignSystem.BriefingViewport.scrollBottomClearance
     }
 
     private var timelineDayPicker: some View {
@@ -368,26 +457,31 @@ private struct TodayContextQuickActions: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DesignSystem.spacingSM) {
-                quickChip(title: "I just woke up", icon: "sun.max.fill", action: onPostWake)
-                quickChip(title: "Going out", icon: "figure.walk", action: onGoingOut)
+                quietContextButton(title: "I just woke up", icon: "sun.max.fill", action: onPostWake)
+                quietContextButton(title: "Going out", icon: "figure.walk", action: onGoingOut)
             }
         }
     }
 
-    private func quickChip(title: String, icon: String, action: @escaping () -> Void) -> some View {
+    /// Quieter than toolbar glass — secondary context only.
+    private func quietContextButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
                 Text(title)
-                    .font(.dsCaption(weight: .semibold))
+                    .font(.dsCaption(weight: .medium))
             }
-            .foregroundColor(DesignSystem.textSecondary)
+            .foregroundStyle(DesignSystem.textSecondary)
             .padding(.horizontal, DesignSystem.spacingSM)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(DesignSystem.backgroundElevated))
+            .frame(minHeight: DesignSystem.minTouchTarget)
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(DesignSystem.border, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 }
 
@@ -397,83 +491,180 @@ private struct TodayHeaderBar: View {
     let isSelectedTomorrow: Bool
     let formattedSelectedDate: String
     let isPlanningTomorrow: Bool
+    @Binding var showDayControls: Bool
     var onOpenTasks: () -> Void
+    var onOpenPlan: () -> Void
     var onReplanDay: () -> Void
     var onPlanTomorrow: () -> Void
     var onSettings: () -> Void
 
     var body: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: LAChromeMetrics.toolbarGap) {
             Text(isSelectedToday ? "Today" : isSelectedTomorrow ? "Tomorrow" : formattedSelectedDate)
                 .textStyleScreenTitle()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: DesignSystem.spacingSM)
 
             if isSelectedToday {
-                Button(action: onOpenTasks) {
-                    Label("All tasks", systemImage: "checklist")
+                Button(action: onOpenPlan) {
+                    Label("Plan", systemImage: "sparkles")
                         .font(.dsCaption(weight: .semibold))
-                        .foregroundColor(DesignSystem.textSecondary)
+                        .foregroundStyle(DesignSystem.accentPrimary)
+                        .frame(minHeight: DesignSystem.minTouchTarget)
                         .padding(.horizontal, DesignSystem.spacingSM)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(DesignSystem.backgroundElevated))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("nav-all-tasks")
+                .accessibilityLabel("Plan")
+                .accessibilityIdentifier("nav-plan-assistant")
+                .featureTourAnchor(.todayAssistant, cornerRadius: 18)
+                .id(AppFeatureTourAnchorID.todayAssistant.rawValue)
+
+                Menu {
+                    Button(
+                        showDayControls ? "Hide day controls" : "Day controls",
+                        systemImage: showDayControls ? "calendar.badge.checkmark" : "calendar"
+                    ) {
+                        showDayControls.toggle()
+                    }
+                    .accessibilityIdentifier("nav-day-controls")
+
+                    Button("All tasks", systemImage: "checklist", action: onOpenTasks)
+                        .accessibilityIdentifier("nav-all-tasks")
+                    Button("Refresh timeline", systemImage: "arrow.triangle.2.circlepath") {
+                        onReplanDay()
+                    }
+                    .disabled(planningVM.isReplanning || planningVM.isProcessing)
+                    Button("Settings", systemImage: "gearshape", action: onSettings)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.dsIcon())
+                        .foregroundStyle(DesignSystem.textPrimary)
+                        .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("More")
+                .accessibilityIdentifier("nav-today-overflow")
                 .featureTourAnchor(.todayAllTasks, cornerRadius: 18)
                 .id(AppFeatureTourAnchorID.todayAllTasks.rawValue)
-            }
-
-            if isSelectedToday {
-                Button(action: onReplanDay) {
-                    Group {
-                        if planningVM.isReplanning {
-                            ProgressView()
-                                .scaleEffect(0.75)
-                                .tint(DesignSystem.accentPrimary)
-                        } else {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(DesignSystem.textSecondary)
-                        }
-                    }
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(DesignSystem.backgroundElevated))
-                }
-                .buttonStyle(.plain)
-                .disabled(planningVM.isReplanning || planningVM.isProcessing)
-                .accessibilityLabel("Refresh timeline")
             } else if isSelectedTomorrow {
                 Button(action: onPlanTomorrow) {
                     Group {
                         if isPlanningTomorrow {
                             ProgressView()
                                 .scaleEffect(0.75)
-                                .tint(DesignSystem.accentPrimary)
                         } else {
                             Label("Plan", systemImage: "sparkles")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(DesignSystem.accentPrimary)
+                                .font(.dsCaption(weight: .semibold))
                         }
                     }
-                    .frame(height: 36)
+                    .frame(height: DesignSystem.minTouchTarget)
                     .padding(.horizontal, DesignSystem.spacingSM)
-                    .background(Capsule().fill(DesignSystem.backgroundElevated))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassProminent)
+                .tint(LookAfterChrome.accentTint)
                 .disabled(isPlanningTomorrow)
                 .accessibilityLabel("Plan tomorrow with AI")
-            }
 
-            Button(action: onSettings) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(DesignSystem.textSecondary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(DesignSystem.backgroundElevated))
+                LAToolbarIconButton(
+                    systemName: "gearshape",
+                    accessibilityLabel: "Settings",
+                    action: onSettings
+                )
+            } else {
+                LAToolbarIconButton(
+                    systemName: "gearshape",
+                    accessibilityLabel: "Settings",
+                    action: onSettings
+                )
             }
-            .accessibilityLabel("Settings")
         }
+    }
+}
+
+/// Negotiation chips stay in the scroll when Plan sheet is closed — never a second dock.
+private struct TodayInlineNegotiationSection: View {
+    @ObservedObject var planningVM: ExecutivePlanningViewModel
+    let onSelectOption: (String) -> Void
+
+    var body: some View {
+        Group {
+            if let negotiation = planningVM.negotiation {
+                negotiationCard(negotiation)
+            } else if let multiDay = planningVM.multiDayPlanning {
+                negotiationCard(multiDay)
+            }
+        }
+    }
+
+    private func negotiationCard(_ negotiation: PlanningNegotiation) -> some View {
+        // V2 on Today: never a filled primary above the hero — prefer quiet Open plan.
+        let primary: String? = {
+            if let openPlan = negotiation.options.first(where: { $0.localizedCaseInsensitiveContains("open plan") }) {
+                return openPlan
+            }
+            return negotiation.options.first
+        }()
+        let secondary = negotiation.options.filter { $0 != primary }
+
+        return VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            Text(negotiation.question)
+                .font(.dsCaption())
+                .foregroundStyle(DesignSystem.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: DesignSystem.spacingSM) {
+                if let primary {
+                    Button {
+                        HapticManager.impact(.medium)
+                        onSelectOption(primary)
+                    } label: {
+                        Text(primary)
+                            .font(.dsCaption(weight: .semibold))
+                            .foregroundStyle(DesignSystem.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .padding(.horizontal, DesignSystem.spacingMD)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(DesignSystem.border, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                if !secondary.isEmpty {
+                    Menu {
+                        ForEach(secondary, id: \.self) { option in
+                            Button(option) {
+                                HapticManager.impact(.medium)
+                                onSelectOption(option)
+                            }
+                        }
+                    } label: {
+                        Text("More")
+                            .font(.dsCaption(weight: .semibold))
+                            .foregroundStyle(DesignSystem.textSecondary)
+                            .padding(.horizontal, DesignSystem.spacingMD)
+                            .frame(minWidth: 72)
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(DesignSystem.border, lineWidth: 1)
+                            )
+                    }
+                    .accessibilityLabel("More planning options")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
+        .accessibilityIdentifier("banner-inline-negotiation")
     }
 }
 
@@ -508,30 +699,19 @@ private struct TodayMultiDayBanner: View {
 
 // MARK: - Scroll performance: isolate @ObservedObject to leaf sections
 
-private struct TodayPreWindowFitSection: View {
+/// Single coach surface: overcommit > transition above hero; micro-start below hero.
+private struct TodayCoachSlot: View {
+    enum Placement {
+        case aboveHero
+        case belowHero
+    }
+
     @ObservedObject var tasksVM: TasksViewModel
-    @Binding var cachedFit: PreWindowFitAnalyzer.Result?
-    let onReplan: () -> Void
-
-    var body: some View {
-        Group {
-            if let fit = cachedFit, fit.isOvercommitted {
-                PreWindowFitBanner(result: fit, onReplan: onReplan)
-            }
-        }
-        .onAppear { refresh() }
-        .onChange(of: tasksVM.tasksContentRevision) { _, _ in refresh() }
-    }
-
-    private func refresh() {
-        cachedFit = PreWindowFitAnalyzer.analyze(tasks: tasksVM.schedulingContext)
-    }
-}
-
-private struct TodayProactiveSuggestionSection: View {
     @ObservedObject var briefingVM: DailyBriefingViewModel
-    @ObservedObject var tasksVM: TasksViewModel
+    @Binding var cachedFit: PreWindowFitAnalyzer.Result?
     @Binding var cachedAction: ProactiveAction?
+    var placement: Placement = .aboveHero
+    let onReplan: () -> Void
     let onSelectOption: (String) -> Void
     let onBannerAppear: (ProactiveAction) -> Void
 
@@ -539,18 +719,42 @@ private struct TodayProactiveSuggestionSection: View {
 
     var body: some View {
         Group {
-            if let action = cachedAction {
-                ProactiveActionBanner(action: action, onSelectOption: onSelectOption)
+            switch placement {
+            case .aboveHero:
+                if let fit = cachedFit, fit.isOvercommitted {
+                    PreWindowFitBanner(result: fit, onReplan: onReplan)
+                } else if let action = coachAction, Self.isTransitionKind(action.kind) {
+                    ProactiveActionBanner(
+                        action: action,
+                        emphasizesPrimary: false,
+                        onSelectOption: onSelectOption
+                    )
+                }
+            case .belowHero:
+                if cachedFit?.isOvercommitted != true,
+                   let action = coachAction,
+                   Self.isMicroStartKind(action.kind) {
+                    ProactiveActionBanner(
+                        action: action,
+                        emphasizesPrimary: false,
+                        onSelectOption: onSelectOption
+                    )
+                }
             }
         }
         .onAppear { refresh() }
         .onChange(of: tasksVM.tasksContentRevision) { _, _ in refresh() }
         .onChange(of: briefingVM.proactiveActions.count) { _, _ in refresh() }
-        .onChange(of: announcementKey(for: cachedAction)) { _, key in
-            guard let action = cachedAction, let key, key != lastAnnouncedKey else { return }
+        .onChange(of: announcementKey(for: coachAction)) { _, key in
+            guard let action = coachAction, let key, key != lastAnnouncedKey else { return }
             lastAnnouncedKey = key
             onBannerAppear(action)
         }
+    }
+
+    private var coachAction: ProactiveAction? {
+        guard cachedFit?.isOvercommitted != true else { return nil }
+        return cachedAction
     }
 
     private func announcementKey(for action: ProactiveAction?) -> String? {
@@ -559,54 +763,190 @@ private struct TodayProactiveSuggestionSection: View {
     }
 
     private func refresh() {
-        cachedAction = briefingVM.proactiveActions.first {
-            $0.surface == .banner || $0.surface == .autoApplyPreview
-        } ?? briefingVM.proactiveActions.first {
-            $0.severity == .high || $0.severity == .medium
+        cachedFit = PreWindowFitAnalyzer.analyze(tasks: tasksVM.schedulingContext)
+        cachedAction = Self.pickCoachAction(from: briefingVM.proactiveActions)
+    }
+
+    /// Prefer transition / time-critical, then micro-start; skip generic schedule noise.
+    static func pickCoachAction(from actions: [ProactiveAction]) -> ProactiveAction? {
+        let candidates = actions.filter { $0.surface == .banner || $0.surface == .autoApplyPreview || $0.severity == .high || $0.severity == .medium }
+        let pool = candidates.isEmpty ? actions : candidates
+
+        if let transition = pool.first(where: { isTransitionKind($0.kind) }) {
+            return transition
         }
+        if let micro = pool.first(where: { isMicroStartKind($0.kind) }) {
+            return micro
+        }
+        return nil
+    }
+
+    static func isTransitionKind(_ kind: ProactiveAction.Kind) -> Bool {
+        switch kind {
+        case .transitionShield, .calendarChange, .overwhelmCircuitBreaker, .hyperfocusBreak:
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func isMicroStartKind(_ kind: ProactiveAction.Kind) -> Bool {
+        switch kind {
+        case .initiationBridge, .waitingMode:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+private struct TodayDoThisNowSection: View {
+    @ObservedObject var tasksVM: TasksViewModel
+    @ObservedObject var planningVM: ExecutivePlanningViewModel
+    var onStartTask: (LifeTask) -> Void
+
+    /// Live rail NOW — do not cache in @State (F05 race: tasks/timeline land after first appear).
+    private var heroTask: LifeTask? {
+        if let nowId = planningVM.nowTaskId,
+           let resolved = tasksVM.resolveTimelineTask(id: nowId),
+           resolved.status.isActive {
+            return resolved
+        }
+        if let nowRow = planningVM.timelineRows.first(where: { $0.isNow && !$0.isCompleted }),
+           let id = nowRow.taskId,
+           let resolved = tasksVM.resolveTimelineTask(id: id),
+           resolved.status.isActive {
+            return resolved
+        }
+        if let lateRow = planningVM.timelineRows.first(where: { $0.isLate && !$0.isCompleted }),
+           let id = lateRow.taskId,
+           let resolved = tasksVM.resolveTimelineTask(id: id),
+           resolved.status.isActive {
+            return resolved
+        }
+        return TaskListSorter.sortByNextActionableThenPriority(tasksVM.activeTasks).first
+    }
+
+    var body: some View {
+        Group {
+            if let task = heroTask {
+                TodayRecommendedHeroCard(
+                    content: Self.heroContent(for: task, isLate: isLate(for: task)),
+                    durationLabel: Self.durationLabel(for: task),
+                    onPrimaryAction: { onStartTask(task) }
+                )
+                .accessibilityIdentifier("today-do-this-now")
+            }
+        }
+    }
+
+    private func isLate(for task: LifeTask) -> Bool {
+        planningVM.timelineRows.first(where: { $0.taskId == task.id })?.isLate == true
+    }
+
+    private static func heroContent(for task: LifeTask, isLate: Bool) -> CalmHeroContent {
+        let minutes = TaskDurationPolicy.microStartSessionMinutes(for: task)
+        let supporting = Self.supportingLine(for: task, isLate: isLate)
+        return CalmHeroContent(
+            title: TaskTitleDisplay.humanized(task.title),
+            supportingLine: supporting,
+            metadataLine: nil,
+            primaryActionTitle: TaskDurationPolicy.microStartOptionLabel(for: task),
+            disclosure: CalmHeroDisclosure(
+                narrative: nil,
+                whyLines: [
+                    isLate
+                        ? "This block is overdue — still your timeline NOW until you finish or reschedule it."
+                        : "This is your timeline NOW (clocks, not the AI review).",
+                    "\(minutes)-min start matches this task’s estimate."
+                ]
+            )
+        )
+    }
+
+    private static func durationLabel(for task: LifeTask) -> String {
+        let minutes = TaskDurationPolicy.microStartSessionMinutes(for: task)
+        return "\(minutes)m focus"
+    }
+
+    private static let scheduleFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
+    private static func supportingLine(for task: LifeTask, isLate: Bool) -> String {
+        var parts: [String] = []
+        if isLate {
+            parts.append("Overdue")
+        }
+        let day = Calendar.current.startOfDay(for: Date())
+        switch TaskScheduleInterval.displaySchedule(for: task, on: day) {
+        case .unslottedFlexible:
+            parts.append("Flexible today")
+        case .window(let start, _, _):
+            parts.append(scheduleFormatter.string(from: start))
+        case .noSchedule:
+            break
+        }
+        if task.estimatedMinutes > 0 {
+            parts.append(task.estimatedMinutes.durationString)
+        }
+        parts.append(task.lifeArea.shortLabel)
+        return parts.joined(separator: " · ")
     }
 }
 
 private struct TodayPrioritiesSection: View {
     @ObservedObject var tasksVM: TasksViewModel
+    @ObservedObject var planningVM: ExecutivePlanningViewModel
     @Binding var expandedPriorityId: String?
     var onOpenTasks: () -> Void
     var onStartTask: (LifeTask) -> Void
     var onEditTask: (LifeTask) -> Void
     var onCompleteTimelineTask: (String) -> Void
 
-    @State private var cachedTopTasks: [LifeTask] = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var topTasks: [LifeTask] {
+        let heroId = planningVM.nowTaskId
+            ?? planningVM.timelineRows.first(where: { ($0.isNow || $0.isLate) && !$0.isCompleted })?.taskId
+        let sorted = TaskListSorter.sortByNextActionableThenPriority(tasksVM.activeTasks)
+        return Array(sorted.filter { $0.id != heroId }.prefix(2))
+    }
 
     var body: some View {
-        LASectionCard(title: "Top Priorities", icon: "star.fill") {
-            if cachedTopTasks.isEmpty {
+        LASectionCard(title: "Up next", icon: "star.fill") {
+            if topTasks.isEmpty {
                 VStack(spacing: DesignSystem.spacingSM) {
                     Text("Nothing urgent. Add a task or capture a thought.")
                         .textStyleCaption()
                     Button(action: onOpenTasks) {
                         Text("Add a task")
-                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .font(.dsCaption(weight: .semibold))
                             .foregroundColor(DesignSystem.accentPrimary)
                     }
                     .buttonStyle(.plain)
                 }
             } else {
                 VStack(spacing: DesignSystem.spacingSM) {
-                    ForEach(cachedTopTasks) { task in
+                    ForEach(topTasks) { task in
                         LAPriorityRow(
-                            title: task.title,
-                            category: task.lifeArea.rawValue,
+                            title: TaskTitleDisplay.humanized(task.title),
+                            category: task.lifeArea.shortLabel,
                             detail: priorityDetail(for: task),
-                            ringColor: priorityColor(for: task.lifeArea),
+                            ringColor: DesignSystem.textSecondary,
                             isComplete: task.status == .completed,
                             isActionsExpanded: expandedPriorityId == task.id,
                             onToggle: {
                                 if task.status != .completed {
-                                    onCompleteTimelineTask(task.id)
+                                    withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
+                                        onCompleteTimelineTask(task.id)
+                                    }
                                 }
                             },
                             onToggleActions: {
-                                withAnimation(.easeInOut(duration: 0.22)) {
+                                withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                                     expandedPriorityId = expandedPriorityId == task.id ? nil : task.id
                                 }
                             },
@@ -623,7 +963,7 @@ private struct TodayPrioritiesSection: View {
 
                     Button(action: onOpenTasks) {
                         Text("View all tasks →")
-                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .font(.dsCaption(weight: .semibold))
                             .foregroundColor(DesignSystem.accentPrimary)
                     }
                     .buttonStyle(.plain)
@@ -633,16 +973,6 @@ private struct TodayPrioritiesSection: View {
             }
         }
         .accessibilityIdentifier("top-priorities")
-        .onAppear { refreshTopTasks() }
-        .onChange(of: tasksVM.tasksContentRevision) { _, _ in refreshTopTasks() }
-    }
-
-    private func refreshTopTasks() {
-        cachedTopTasks = Array(
-            tasksVM.activeTasks
-                .sorted { $0.priority > $1.priority }
-                .prefix(3)
-        )
     }
 
     private static let scheduleFormatter: DateFormatter = {
@@ -662,9 +992,9 @@ private struct TodayPrioritiesSection: View {
         let day = Calendar.current.startOfDay(for: Date())
         switch TaskScheduleInterval.displaySchedule(for: task, on: day) {
         case .unslottedFlexible:
-            parts.append("Flexible today")
+            parts.append("Flexible")
         case .window(let start, _, _):
-            parts.append("Start \(Self.scheduleFormatter.string(from: start))")
+            parts.append(Self.scheduleFormatter.string(from: start))
         case .noSchedule:
             if let scheduled = task.scheduledDate {
                 parts.append(Self.dayFormatter.string(from: scheduled))
@@ -675,18 +1005,6 @@ private struct TodayPrioritiesSection: View {
         }
         parts.append(task.priority.label)
         return parts.joined(separator: " · ")
-    }
-
-    private func priorityColor(for area: LifeArea) -> Color {
-        switch area {
-        case .work: return DesignSystem.focus
-        case .health, .medication, .hydration: return DesignSystem.health
-        case .learning, .creativity: return DesignSystem.learning
-        case .finance, .shopping: return DesignSystem.finance
-        case .relationships: return DesignSystem.relationships
-        case .travel: return DesignSystem.travel
-        case .reflection, .personal, .home: return DesignSystem.reflection
-        }
     }
 }
 
@@ -708,6 +1026,8 @@ private struct TodayScheduleSection: View {
 
     @AppStorage(TimelineDragHint.dismissedKey) private var dragHintDismissed = false
 
+    private static let previewRowLimit = 2
+
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
             LASectionCard(
@@ -725,19 +1045,38 @@ private struct TodayScheduleSection: View {
                     .textStyleCaption(color: DesignSystem.textSecondary)
                     .accessibilityIdentifier("timeline-drag-hint")
             }
+
+            if !isTomorrow, !previewRows.isEmpty {
+                Button(action: onViewTimeline) {
+                    Text(hasMoreThanPreview ? "Full timeline →" : "View full timeline")
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundColor(DesignSystem.accentPrimary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("today-schedule-full-timeline")
+            }
         }
     }
 
     private var scheduleSubtitle: String {
         if isTomorrow { return "Preview for tomorrow" }
-        if planningVM.timelineRows.contains(where: \.isUnslottedFlexible) {
-            return "Hold a task to move it on the timeline"
-        }
-        return "Tap a task to start or edit"
+        return "Next on your day"
+    }
+
+    private var previewRows: [ExecutivePlanningTimelineRow] {
+        Array(planningVM.timelineRows.filter { !$0.isCompleted }.prefix(Self.previewRowLimit))
+    }
+
+    private var hasMoreThanPreview: Bool {
+        planningVM.timelineRows.filter { !$0.isCompleted }.count > Self.previewRowLimit
+    }
+
+    private var hasMovableRows: Bool {
+        planningVM.timelineRows.contains(where: \.canReschedule)
     }
 
     private var showsDragHint: Bool {
-        !isTomorrow && !dragHintDismissed && !planningVM.timelineRows.isEmpty
+        !isTomorrow && !dragHintDismissed && hasMovableRows
     }
 
     @ViewBuilder
@@ -757,48 +1096,102 @@ private struct TodayScheduleSection: View {
             )
         } else {
             ExecutiveLiveTimelineView(
-                rows: planningVM.timelineRows,
+                rows: previewRows,
                 thinkingStep: planningVM.visibleThinkingStep,
                 isProcessing: planningVM.isProcessing,
                 title: "",
                 emptyMessage: "Your day fills in as you add tasks and commitments.",
+                maxVisibleRows: Self.previewRowLimit,
                 onViewAll: onViewTimeline,
                 onCapture: onCapture,
                 onCompleteTask: onCompleteTimelineTask,
                 onUncompleteTask: onUncompleteTimelineTask,
                 onStartTask: { taskId in
-                    if let task = task(for: taskId) { onStartTask(task) }
+                    Task { await startResolvedTask(id: taskId) }
                 },
                 onEditTask: { taskId in
-                    if let task = task(for: taskId) { onEditTask(task) }
+                    Task { await editResolvedTask(id: taskId) }
                 },
                 onRescheduleTask: onRescheduleTimelineTask,
                 onRemoveFromTimelineTask: onRemoveFromTimelineTask,
+                onAddSuggestedTask: { sourceId, start in
+                    Task { await addSuggestedSlot(sourceId: sourceId, start: start) }
+                },
                 onPersistScheduleChange: { task in
-                    let userId = task.userId.isEmpty
-                        ? (tasksVM.tasks.first?.userId ?? "")
-                        : task.userId
-                    guard !userId.isEmpty else { return }
-                    Task {
-                        await tasksVM.scheduleMutation.persist(
-                            task,
-                            userId: userId,
-                            userPlaced: true
-                        )
-                    }
+                    Task { await persistResolvedSchedule(task) }
                 },
                 onScheduleDragCommitted: {
                     dragHintDismissed = true
                 },
-                taskForID: task(for:),
-                parentScrollDisabled: $timelineScrollDisabled
+                taskForID: { id in tasksVM.resolveTimelineTask(id: id) },
+                parentScrollDisabled: $timelineScrollDisabled,
+                calendarEventsProvider: tasksVM.calendarEventsProvider
             )
         }
     }
 
-    private func task(for id: String) -> LifeTask? {
-        tasksVM.tasks.first { $0.id == id }
-            ?? tasksVM.completedToday.first { $0.id == id }
+    private func startResolvedTask(id: String) async {
+        guard var task = tasksVM.resolveTimelineTask(id: id) else { return }
+        let userId = task.userId.isEmpty
+            ? (tasksVM.tasks.first?.userId ?? "")
+            : task.userId
+        if id.hasPrefix("proj-"), !userId.isEmpty {
+            do {
+                task = try await tasksVM.materializeTimelineTask(task, userId: userId)
+            } catch {
+                return
+            }
+        }
+        onStartTask(task)
+    }
+
+    private func editResolvedTask(id: String) async {
+        guard var task = tasksVM.resolveTimelineTask(id: id) else { return }
+        let userId = task.userId.isEmpty
+            ? (tasksVM.tasks.first?.userId ?? "")
+            : task.userId
+        if id.hasPrefix("proj-"), !userId.isEmpty {
+            do {
+                task = try await tasksVM.materializeTimelineTask(task, userId: userId)
+            } catch {
+                return
+            }
+        }
+        onEditTask(task)
+    }
+
+    private func persistResolvedSchedule(_ task: LifeTask) async {
+        var toSave = task
+        let userId = task.userId.isEmpty
+            ? (tasksVM.tasks.first?.userId ?? "")
+            : task.userId
+        guard !userId.isEmpty else { return }
+        if task.id.hasPrefix("proj-")
+            || !tasksVM.tasks.contains(where: { $0.id == task.id }) {
+            do {
+                toSave = try await tasksVM.materializeTimelineTask(task, userId: userId)
+            } catch {
+                return
+            }
+        }
+        await tasksVM.scheduleMutation.persist(
+            toSave,
+            userId: userId,
+            userPlaced: true
+        )
+    }
+
+    private func addSuggestedSlot(sourceId: String, start: Date) async {
+        guard let resolved = tasksVM.resolveTimelineTask(id: sourceId) else { return }
+        let userId = resolved.userId.isEmpty
+            ? (tasksVM.tasks.first?.userId ?? "")
+            : resolved.userId
+        guard !userId.isEmpty else { return }
+        _ = await tasksVM.scheduleMutation.placeSuggestedSlot(
+            taskID: sourceId,
+            start: start,
+            userId: userId
+        )
     }
 }
 
@@ -818,9 +1211,10 @@ private struct TodayGreetingHeader: View {
             }
             if !parts.name.isEmpty {
                 Text(parts.name)
-                    .font(.system(size: 36, weight: .bold, design: .default))
+                    .font(.largeTitle.weight(.bold))
                     .foregroundColor(DesignSystem.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -864,87 +1258,53 @@ private struct TodayRecommendedHeroCard: View {
 
     var body: some View {
         ElevatedSurface(padding: DesignSystem.spacingLG, emphasis: .prominent) {
-            HStack(alignment: .top, spacing: DesignSystem.spacingMD) {
-                VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-                    Label("RECOMMENDED FOR NOW", systemImage: "star.fill")
-                        .font(.dsMetadata(weight: .semibold))
-                        .foregroundColor(DesignSystem.accentPrimary)
-                        .labelStyle(.titleAndIcon)
+            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+                Label("DO THIS NOW", systemImage: "star.fill")
+                    .font(.dsMetadata(weight: .semibold))
+                    .foregroundColor(DesignSystem.accentPrimary)
+                    .labelStyle(.titleAndIcon)
 
-                    Text(content.title)
-                        .font(.system(size: 22, weight: .bold, design: .default))
-                        .foregroundColor(DesignSystem.textPrimary)
+                Text(content.title)
+                    .font(.dsHeadline(weight: .bold))
+                    .foregroundColor(DesignSystem.textPrimary)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let supporting = content.supportingLine, !supporting.isEmpty {
+                    Text(supporting)
+                        .font(.dsCaption())
+                        .foregroundColor(
+                            supporting.hasPrefix("Overdue")
+                                ? DesignSystem.late
+                                : DesignSystem.textSecondary
+                        )
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    if let supporting = content.supportingLine, !supporting.isEmpty {
-                        Text(supporting)
-                            .font(.dsCaption())
-                            .foregroundColor(DesignSystem.textSecondary)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if let durationLabel, !durationLabel.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock")
-                                .font(.system(size: 11, weight: .medium))
-                            Text(durationLabel)
-                                .font(.dsMetadata())
-                        }
-                        .foregroundColor(DesignSystem.accentPrimary)
-                    }
-
-                    PremiumPrimaryButton(
-                        content.primaryActionTitle.isEmpty ? "Continue" : content.primaryActionTitle,
-                        icon: "arrow.right",
-                        action: onPrimaryAction
-                    )
-
-                    if content.disclosure?.hasContent == true {
-                        TodayWhyAffordance(content: content)
-                    }
                 }
 
-                Spacer(minLength: 0)
+                if let durationLabel, !durationLabel.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.dsCaption())
+                        Text(durationLabel)
+                            .font(.dsMetadata())
+                    }
+                    .foregroundColor(DesignSystem.accentPrimary)
+                }
 
-                TodayHeroIllustration()
-                    .frame(width: 72)
+                PremiumPrimaryButton(
+                    content.primaryActionTitle.isEmpty ? "Continue" : content.primaryActionTitle,
+                    icon: "arrow.right",
+                    action: onPrimaryAction
+                )
+
+                if content.disclosure?.hasContent == true {
+                    TodayWhyAffordance(content: content)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-}
-
-private struct TodayHeroIllustration: View {
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(DesignSystem.accentPrimary.opacity(0.12))
-                .frame(width: 56, height: 56)
-                .blur(radius: 8)
-
-            VStack(spacing: 6) {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(DesignSystem.accentGradient)
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.accentPrimary.opacity(0.85))
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(DesignSystem.accentPrimary.opacity(0.7))
-            }
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(DesignSystem.backgroundSecondary.opacity(0.6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(DesignSystem.accentPrimary.opacity(0.15), lineWidth: 1)
-                    )
-            )
-        }
-        .accessibilityHidden(true)
     }
 }
 
@@ -967,6 +1327,8 @@ private struct TodayWhyAffordance: View {
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(DesignSystem.textMuted)
+                .frame(minHeight: DesignSystem.minTouchTarget)
+                .contentShape(Rectangle())
             })
             .buttonStyle(.plain)
 
@@ -1115,7 +1477,7 @@ private struct TodayTimelineSection: View {
                 .padding(DesignSystem.spacingSM)
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
-                        .fill(DesignSystem.backgroundSecondary.opacity(0.85))
+                        .fill(DesignSystem.contentSurface)
                 )
             }
         }
@@ -1142,6 +1504,8 @@ private struct TodayTimelineSection: View {
 
 private struct ProactiveActionBanner: View {
     let action: ProactiveAction
+    /// When false, primary uses quiet glass so hero Start remains the loudest CTA.
+    var emphasizesPrimary: Bool = true
     let onSelectOption: (String) -> Void
 
     var body: some View {
@@ -1157,15 +1521,72 @@ private struct ProactiveActionBanner: View {
                 .font(.dsCaption())
                 .foregroundColor(DesignSystem.textSecondary)
                 .dsPrimaryText(lineLimit: 4)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DesignSystem.spacingSM) {
-                    ForEach(action.options, id: \.self) { option in
-                        Button(option) { onSelectOption(option) }
-                            .font(.dsCaption(weight: .semibold))
-                            .buttonStyle(.bordered)
+
+            // Quiet coach (V2): prefer "Open plan" as the visible outline CTA.
+            // Loud / sheet surfaces keep options[0] (V3: "I'm ready") as filled primary.
+            let primary: String? = {
+                if !emphasizesPrimary,
+                   let openPlan = action.options.first(where: { $0.localizedCaseInsensitiveContains("open plan") }) {
+                    return openPlan
+                }
+                return action.options.first
+            }()
+            let secondary = action.options.filter { $0 != primary }
+
+            HStack(spacing: DesignSystem.spacingSM) {
+                if let primary {
+                    if emphasizesPrimary {
+                        Button(action: { onSelectOption(primary) }) {
+                            Text(primary)
+                                .font(.dsBody(weight: .semibold))
+                                .foregroundStyle(DesignSystem.accentOnPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .padding(.horizontal, DesignSystem.spacingMD)
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: DesignSystem.minTouchTarget)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .tint(LookAfterChrome.accentTint)
+                    } else {
+                        Button(action: { onSelectOption(primary) }) {
+                            Text(primary)
+                                .font(.dsCaption(weight: .semibold))
+                                .foregroundStyle(DesignSystem.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .padding(.horizontal, DesignSystem.spacingMD)
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: DesignSystem.minTouchTarget)
+                                .overlay(
+                                    Capsule(style: .continuous)
+                                        .stroke(DesignSystem.border, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
+                if !secondary.isEmpty {
+                    Menu {
+                        ForEach(secondary, id: \.self) { option in
+                            Button(option) { onSelectOption(option) }
+                        }
+                    } label: {
+                        Text("More")
+                            .font(.dsCaption(weight: .semibold))
+                            .foregroundStyle(DesignSystem.textSecondary)
+                            .padding(.horizontal, DesignSystem.spacingMD)
+                            .frame(minWidth: 72)
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(DesignSystem.border, lineWidth: 1)
+                            )
+                    }
+                    .accessibilityLabel("More options")
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
         .accessibilityIdentifier("banner-proactive-suggestion")
@@ -1215,8 +1636,10 @@ private struct PreWindowFitBanner: View {
                 Text("Replan with AI")
                     .font(.dsCaption(weight: .semibold))
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.spacingSM)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
+            .tint(LookAfterChrome.accentTint)
         }
         .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
         .accessibilityIdentifier("banner-pre-window-fit")

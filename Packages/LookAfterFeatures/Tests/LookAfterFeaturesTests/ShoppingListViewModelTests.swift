@@ -3,9 +3,9 @@ import XCTest
 import LookAfterCore
 import LookAfterData
 
-@MainActor
 final class ShoppingListViewModelTests: XCTestCase {
 
+    @MainActor
     func testAddShoppingItemRejectsEmptyName() async {
         let vm = LifeModulesViewModel(shoppingRepo: ShoppingRepository())
         let success = await vm.addShoppingItem(name: "   ", category: "General")
@@ -13,6 +13,7 @@ final class ShoppingListViewModelTests: XCTestCase {
         XCTAssertEqual(vm.error, "Enter an item name before creating.")
     }
 
+    @MainActor
     func testAddShoppingItemPersistsLocally() async {
         let repo = ShoppingRepository()
         let vm = LifeModulesViewModel(shoppingRepo: repo)
@@ -24,6 +25,7 @@ final class ShoppingListViewModelTests: XCTestCase {
         XCTAssertFalse(vm.isAddingShoppingItem)
     }
 
+    @MainActor
     func testIsAddingShoppingItemResetsAfterFailure() async {
         let vm = LifeModulesViewModel(shoppingRepo: ShoppingRepository())
         _ = await vm.addShoppingItem(name: "   ", category: "General")

@@ -67,7 +67,7 @@ struct LifeGapsCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundElevated)
+                .fill(DesignSystem.contentSurfaceElevated)
                 .shadow(
                     color: DesignSystem.shadowElevated.opacity(DesignSystem.shadowOpacity(for: colorScheme) * 0.5),
                     radius: 8,

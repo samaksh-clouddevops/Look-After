@@ -58,11 +58,14 @@ public enum AIScheduleSlotService {
     }
 
     /// Applies suggestions to tasks — preserves flexible/fluid constraints (does not anchor).
+    /// Each suggestion must clear OccupiedDay + SchedulePlacementGuard (W1).
     public static func applySuggestions(
         _ suggestions: [DayScheduleSuggestion],
         to tasks: inout [LifeTask],
         on day: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        calendarEvents: [BriefingCalendarEvent] = [],
+        model: LifeModel? = LifeModelStore.load()
     ) -> Set<String> {
         let dayStart = calendar.startOfDay(for: day)
         var changed = Set<String>()
@@ -71,8 +74,9 @@ public enum AIScheduleSlotService {
         for index in tasks.indices {
             guard let suggestion = byID[tasks[index].id] else { continue }
             guard tasks[index].isSchedulerMovable else { continue }
+            if tasks[index].timeConstraintValue == .anchored { continue }
 
-            guard let start = calendar.date(
+            guard let proposed = calendar.date(
                 bySettingHour: suggestion.startHour,
                 minute: suggestion.startMinute,
                 second: 0,
@@ -80,17 +84,40 @@ public enum AIScheduleSlotService {
             ) else { continue }
 
             let duration = max(tasks[index].estimatedMinutes, TaskDurationPolicy.minimumMinutes)
-            let end = start.addingTimeInterval(TimeInterval(duration * 60))
+            let neighbors = tasks.enumerated().compactMap { i, t -> LifeTask? in
+                guard i != index, t.status.isActive else { return nil }
+                return t
+            }
+            let occupied = OccupiedDay.build(
+                tasks: neighbors,
+                calendarEvents: calendarEvents,
+                model: model,
+                on: dayStart,
+                calendar: calendar,
+                excludingTaskID: tasks[index].id
+            ).occupiedForPlacement(excludingTaskID: tasks[index].id)
+            let placement = SchedulePlacementGuard.evaluate(
+                proposedStart: proposed,
+                durationMinutes: duration,
+                task: tasks[index],
+                occupied: occupied,
+                calendar: calendar,
+                mode: .searchInBox,
+                neighborTasks: neighbors
+            )
+            let start: Date
+            switch placement {
+            case .accepted(let date), .snapped(let date):
+                start = date
+            case .needsAI, .rejected:
+                continue
+            }
 
             var updated = tasks[index]
             updated.scheduledDate = dayStart
             updated.scheduledTime = start
-            updated.scheduledEndTime = end
+            updated.scheduledEndTime = start.addingTimeInterval(TimeInterval(duration * 60))
             updated.updatedAt = Date()
-            if updated.timeConstraintValue == .anchored {
-                // Auto-assign never flips user anchors; skip mutation.
-                continue
-            }
             tasks[index] = updated
             changed.insert(updated.id)
         }
@@ -170,17 +197,17 @@ public enum AIScheduleSlotService {
 
         let requests = ids.compactMap { id -> DaySlotAllocator.Request? in
             guard let task = taskByID[id], task.isSchedulerMovable else { return nil }
-            return DaySlotAllocator.Request(
-                id: id,
-                estimatedMinutes: max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes),
-                priority: task.priority,
+            return DaySlotAllocator.Request.makingSense(
+                of: task,
+                on: dayStart,
                 preferredStart: RoutineScheduleAnchorResolver.preferredStart(
                     for: task,
                     on: dayStart,
                     model: context.model,
                     profile: profile,
                     calendar: calendar
-                )
+                ),
+                calendar: calendar
             )
         }
 
@@ -197,7 +224,8 @@ public enum AIScheduleSlotService {
             windows: windows,
             on: dayStart,
             now: context.now,
-            calendar: calendar
+            calendar: calendar,
+            calendarEvents: [] // Caller should pass EventKit via context when available
         )
 
         return allocations.map { allocation in

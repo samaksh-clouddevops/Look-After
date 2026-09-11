@@ -5,6 +5,7 @@ import LookAfterCore
 public struct PhysiologicalResetView: View {
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scale: CGFloat = 0.6
     @State private var phaseText = "Inhale Deeply..."
     @State private var secondsRemaining = 60
@@ -25,6 +26,7 @@ public struct PhysiologicalResetView: View {
                             .font(.system(size: 24))
                             .foregroundColor(DesignSystem.textMuted)
                     }
+                    .accessibilityLabel("Dismiss")
                 }
                 .padding(.horizontal, 24)
 
@@ -42,7 +44,7 @@ public struct PhysiologicalResetView: View {
                         .blur(radius: 30)
 
                     Circle()
-                        .fill(DesignSystem.backgroundElevated)
+                        .fill(DesignSystem.contentSurfaceElevated)
                         .scaleEffect(scale)
                         .frame(width: 200, height: 200)
                         .overlay(
@@ -90,6 +92,10 @@ public struct PhysiologicalResetView: View {
     }
 
     private func startBreathingAnimation() {
+        guard !reduceMotion else {
+            scale = 1.0
+            return
+        }
         withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
             scale = 1.1
         }

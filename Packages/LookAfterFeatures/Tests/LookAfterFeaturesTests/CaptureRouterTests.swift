@@ -2,14 +2,15 @@ import XCTest
 @testable import LookAfterFeatures
 import LookAfterCore
 
-@MainActor
 final class CaptureRouterTests: XCTestCase {
 
-    override func tearDown() {
-        CaptureOfflineQueue.shared.clear()
-        super.tearDown()
+    @MainActor
+    override func tearDown() async throws {
+        await CaptureOfflineQueue.shared.clear()
+        try await super.tearDown()
     }
 
+    @MainActor
     func testOfflineQueueEnqueueAndDrain() async {
         let request = CaptureRequest(
             text: "Buy milk offline",
@@ -31,6 +32,7 @@ final class CaptureRouterTests: XCTestCase {
         XCTAssertTrue(CaptureOfflineQueue.shared.pendingRecords().isEmpty)
     }
 
+    @MainActor
     func testHeuristicRoutesEventWithTimeHint() {
         let request = CaptureRequest(
             text: "Dentist Tuesday at 3pm",
@@ -42,18 +44,21 @@ final class CaptureRouterTests: XCTestCase {
         XCTAssertGreaterThan(decision.confidence, 0.8)
     }
 
+    @MainActor
     func testAmbiguousTextFallsToTaskHeuristic() {
         let request = CaptureRequest(text: "maybe something later")
         let decision = CaptureIntentClassifier.heuristicDecision(for: request, forcedIntent: nil)
         XCTAssertEqual(decision.intent, .task)
     }
 
+    @MainActor
     func testMoodChipRoutesMoodIntent() {
         let request = CaptureRequest(text: "Feeling tired", hintedIntent: .mood)
         let decision = CaptureIntentClassifier.heuristicDecision(for: request, forcedIntent: .mood)
         XCTAssertEqual(decision.intent, .mood)
     }
 
+    @MainActor
     func testQueuedOfflineOutcomeMessage() {
         let outcome = CaptureOutcome.queuedOffline(preview: "Remember dentist")
         XCTAssertTrue(outcome.plainToastMessage.contains("offline"))

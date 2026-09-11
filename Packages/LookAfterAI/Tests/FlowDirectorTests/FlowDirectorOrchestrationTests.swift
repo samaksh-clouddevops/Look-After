@@ -36,9 +36,7 @@ private struct MockEnvironmentSource: EnvironmentContextProviding {
     ) async -> EnvironmentContextResult { result }
 }
 
-@MainActor
 final class FlowDirectorOrchestrationTests: XCTestCase {
-
     private var calendar: Calendar!
 
     override func setUp() {
@@ -47,6 +45,7 @@ final class FlowDirectorOrchestrationTests: XCTestCase {
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
     }
 
+    @MainActor
     private func makeDirector(
         tasks: [LifeTask],
         environment: EnvironmentContext = EnvironmentContext(energyScore: 0.7, timeOfDay: .morning),
@@ -73,6 +72,7 @@ final class FlowDirectorOrchestrationTests: XCTestCase {
         return (director, store)
     }
 
+    @MainActor
     func testOrchestrationPublishesSurface() async {
         let task = LifeTask(title: "API Review", status: .inProgress, estimatedMinutes: 18)
         let (director, _) = makeDirector(tasks: [task])
@@ -85,6 +85,7 @@ final class FlowDirectorOrchestrationTests: XCTestCase {
         XCTAssertTrue(director.surface.greeting.contains("Sam"))
     }
 
+    @MainActor
     func testOrchestrationUsesConfidenceEngine() async {
         let task = LifeTask(title: "Work")
         let (director, _) = makeDirector(
@@ -97,6 +98,7 @@ final class FlowDirectorOrchestrationTests: XCTestCase {
         XCTAssertLessThan(director.surface.confidence, 0.9)
     }
 
+    @MainActor
     func testHandleTaskCompletedRecordsAndReorchestrates() async {
         let task = LifeTask(title: "Done Task", status: .inProgress)
         let (director, store) = makeDirector(tasks: [task])
@@ -108,6 +110,7 @@ final class FlowDirectorOrchestrationTests: XCTestCase {
         XCTAssertTrue(recorded)
     }
 
+    @MainActor
     func testDirectorDoesNotConstructSurfaceManually() async {
         let task = LifeTask(title: "Focus")
         let (director, _) = makeDirector(tasks: [task])
@@ -117,6 +120,7 @@ final class FlowDirectorOrchestrationTests: XCTestCase {
         XCTAssertGreaterThan(director.surface.generatedAt, Date.distantPast)
     }
 
+    @MainActor
     func testConcurrentOrchestrationCalls() async {
         let task = LifeTask(title: "Stable")
         let (director, _) = makeDirector(tasks: [task])

@@ -136,12 +136,7 @@ public enum MultiDayTaskPlanner {
                 return calendar.isDate(scheduledDate, inSameDayAs: targetDay)
             }
 
-            let request = DaySlotAllocator.Request(
-                id: slice.id,
-                estimatedMinutes: slice.estimatedMinutes,
-                priority: .medium,
-                preferredStart: nil
-            )
+            let request = DaySlotAllocator.Request.makingSense(of: slice, on: targetDay, calendar: calendar)
             if let allocation = DaySlotAllocator.allocate(
                 requests: [request],
                 existingTasks: dayTasks,

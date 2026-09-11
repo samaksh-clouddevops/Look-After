@@ -27,6 +27,7 @@ struct HealthDetailView: View {
                         HealthStatusBanner(
                             status: status,
                             style: .full,
+                            isSyncing: healthSync.isSyncing,
                             onPrimaryAction: { handlePrimaryAction(status.primaryAction) },
                             onSeeDetails: nil
                         )
@@ -204,7 +205,7 @@ struct HealthDetailView: View {
             await healthSync.syncHealthData(userId: id)
             healthSync.refreshConnectionStatus(
                 userId: id,
-                healthSummary: shell.brainVM.rawHealthSummary ?? shell.brainVM.healthSummary ?? HealthStore.shared.latest
+                healthSummary: HealthStore.shared.latest
             )
         }
     }

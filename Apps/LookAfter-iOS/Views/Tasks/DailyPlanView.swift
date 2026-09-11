@@ -39,7 +39,10 @@ struct DailyPlanView: View {
                                 .foregroundColor(DesignSystem.textSecondary)
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.07)))
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(DesignSystem.contentSurface)
+                                )
                         }
 
                         if let error = viewModel.error {
@@ -73,8 +76,9 @@ struct DailyPlanView: View {
                     Button(action: { isShowingAddTask = true }, label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
-                            .foregroundColor(DesignSystem.textMuted)
                     })
+                    .buttonStyle(.glassProminent)
+                    .tint(LookAfterChrome.accentTint)
                     .accessibilityLabel("Add a task for today")
                 }
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -88,8 +92,8 @@ struct DailyPlanView: View {
                         .accessibilityLabel("Adjust schedule")
                     }, label: {
                         Image(systemName: "ellipsis.circle")
-                            .foregroundColor(DesignSystem.textSecondary)
                     })
+                    .buttonStyle(.glass)
                     .accessibilityLabel("Day planning actions")
                 }
             }
@@ -148,18 +152,18 @@ struct DailyPlanView: View {
                 Task { await proposeReplan() }
             }, label: {
                 HStack {
-                    if viewModel.isScheduling { ProgressView().tint(.white) }
+                    if viewModel.isScheduling { ProgressView() }
                     Image(systemName: "sparkles")
                     Text(viewModel.isScheduling ? "Planning…" : "Adjust schedule")
                     Spacer()
                     Image(systemName: "arrow.right")
                 }
                 .font(.system(size: 16, weight: .bold, design: .default))
-                .foregroundColor(.white)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 15)
-                .background(Capsule().fill(DesignSystem.accentGradient))
             })
+            .buttonStyle(.glassProminent)
+            .tint(LookAfterChrome.accentTint)
             .disabled(viewModel.isScheduling || viewModel.todayTasks.isEmpty)
         }
         .elevatedSurface(padding: 20, cornerRadius: 24)
@@ -300,12 +304,6 @@ private struct VisualFocusTimer: View {
             ZStack {
                 PremiumBackground()
 
-                Circle()
-                    .fill(accent.opacity(0.28))
-                    .frame(width: geometry.size.width * 0.75)
-                    .blur(radius: 75)
-                    .offset(x: geometry.size.width * 0.28, y: -geometry.size.height * 0.30)
-
                 Group {
                     if geometry.size.width > geometry.size.height {
                         HStack(spacing: 56) { timerRing; taskControls }
@@ -331,7 +329,7 @@ private struct VisualFocusTimer: View {
 
     private var timerRing: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.15), lineWidth: 20)
+            Circle().stroke(DesignSystem.border, lineWidth: 20)
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(
@@ -384,7 +382,7 @@ private struct VisualFocusTimer: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 46, height: 46)
-                        .background(Circle().stroke(Color.white.opacity(0.45), lineWidth: 1))
+                        .background(Circle().stroke(DesignSystem.border, lineWidth: 1))
                 })
                 .accessibilityLabel("Close timer")
             }

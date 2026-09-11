@@ -84,7 +84,8 @@ public enum UserFacingCopy {
     }
 
     public static func microActionMessage(deferralCount: Int) -> String {
-        "You've put this off \(deferralCount) times. Five minutes now?"
+        let times = deferralCount == 1 ? "once" : "\(max(0, deferralCount)) times"
+        return "You've put this off \(times). Five minutes now?"
     }
 
     // MARK: - Focus windows
@@ -261,7 +262,7 @@ public enum UserFacingCopy {
         guard !result.isEmpty else { return result }
 
         result = result
-            .replacingOccurrences(of: " — ", with: ". ")
+            .replacingOccurrences(of: " — ", with: ", ")
             .replacingOccurrences(of: " – ", with: ", ")
             .replacingOccurrences(of: "—", with: ", ")
             .replacingOccurrences(of: "–", with: ", ")

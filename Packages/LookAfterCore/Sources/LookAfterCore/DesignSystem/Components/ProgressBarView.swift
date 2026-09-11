@@ -18,7 +18,7 @@ public struct ProgressBarView: View {
 
     public var body: some View {
         Capsule(style: .continuous)
-            .fill(Color.white.opacity(0.1))
+            .fill(DesignSystem.contentSurfaceElevated)
             .overlay(alignment: .leading) {
                 GeometryReader { geo in
                     Capsule(style: .continuous)

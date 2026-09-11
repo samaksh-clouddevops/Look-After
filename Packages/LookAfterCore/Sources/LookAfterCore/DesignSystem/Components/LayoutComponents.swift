@@ -45,12 +45,12 @@ public struct FilterChipView: View {
             Text(title)
                 .font(.dsChip())
                 .dsChipText()
-                .foregroundColor(isSelected ? DesignSystem.backgroundPrimary : DesignSystem.textMuted)
+                .foregroundColor(isSelected ? DesignSystem.backgroundPrimary : DesignSystem.textSecondary)
                 .padding(.horizontal, DesignSystem.spacingMD)
                 .padding(.vertical, DesignSystem.spacingSM)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(isSelected ? DesignSystem.accentPrimary : Color.white.opacity(0.06))
+                        .fill(isSelected ? DesignSystem.accentPrimary : DesignSystem.contentSurfaceSubtle)
                 )
         }
         .buttonStyle(.plain)
@@ -70,7 +70,7 @@ public struct PriorityBadgeView: View {
         Image(systemName: priority.icon)
             .font(.system(size: 14, weight: .semibold))
             .foregroundColor(Color(hex: priority.colorHex))
-            .minTouchTarget(32)
+            .minTouchTarget(DesignSystem.minTouchTarget)
             .accessibilityLabel("\(priority.label) priority")
     }
 }

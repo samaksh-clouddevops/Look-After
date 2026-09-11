@@ -4,11 +4,11 @@ import XCTest
 import LookAfterCore
 import LookAfterData
 
-@MainActor
 final class ContextualDayReplanTests: XCTestCase {
     private let calendar = TestCalendarFixtures.calendar
     private var today: Date { TestCalendarFixtures.today }
 
+    @MainActor
     func testPostWakeLocalFallbackDefersMissedFlexibleTasks() async {
         let nine = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
         let now = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: today)!
@@ -45,6 +45,7 @@ final class ContextualDayReplanTests: XCTestCase {
         XCTAssertTrue(deferred?.deferToTomorrow == true)
     }
 
+    @MainActor
     func testFreedSlotLocalFallbackFillsOpenWindow() async {
         let slotStart = calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
         let slotEnd = calendar.date(bySettingHour: 15, minute: 0, second: 0, of: today)!
@@ -81,6 +82,7 @@ final class ContextualDayReplanTests: XCTestCase {
         XCTAssertNil(result?.scheduleChanges.first { $0.taskID == tooLong.id })
     }
 
+    @MainActor
     func testGoingOutLocalFallbackAvoidsAwayWindow() async {
         let departure = calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
         let end = calendar.date(bySettingHour: 16, minute: 0, second: 0, of: today)!
@@ -112,6 +114,7 @@ final class ContextualDayReplanTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func makeContext(
         tasks: [LifeTask],
         trigger: DayReplanTrigger,
@@ -155,6 +158,7 @@ final class ContextualDayReplanTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func offlineGLM() -> GLMService {
         let glm = GLMService.makeForTesting(keyManager: GLMKeyManager(
             secretStore: InMemorySecretStore(),

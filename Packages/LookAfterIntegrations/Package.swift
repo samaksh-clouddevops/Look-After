@@ -1,11 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "LookAfterIntegrations",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14)
+        .iOS(.v26),
+        .macOS(.v26)
     ],
     products: [
         .library(name: "LookAfterIntegrations", targets: ["LookAfterIntegrations"])
@@ -19,12 +19,14 @@ let package = Package(
         .target(
             name: "LookAfterIntegrations",
             dependencies: ["LookAfterCore", "LookAfterAI", "LookAfterData"],
-            path: "Sources/LookAfterIntegrations"
+            path: "Sources/LookAfterIntegrations",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "LookAfterIntegrationsTests",
             dependencies: ["LookAfterIntegrations"],
-            path: "Tests/LookAfterIntegrationsTests"
+            path: "Tests/LookAfterIntegrationsTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         )
     ]
 )

@@ -132,6 +132,33 @@ final class IdealSleepPlannerTests: XCTestCase {
         XCTAssertTrue(result!.line.contains("9:00 PM"))
     }
 
+    func testTomorrowTaskScheduledTimeOnWrongCalendarDayStillCombines() {
+        let today = makeDate(year: 2026, month: 8, day: 2, hour: 18, minute: 0)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: today))!
+        let wrongDayTime = makeDate(year: 2026, month: 8, day: 2, hour: 8, minute: 30)
+
+        let task = LifeTask(
+            title: "Office",
+            scheduledDate: tomorrow,
+            scheduledTime: wrongDayTime,
+            schedulingMode: .fixedTime
+        )
+
+        let result = IdealSleepPlanner.recommend(
+            IdealSleepPlanner.Input(
+                now: today,
+                targetSleepHours: 8,
+                tasks: [task],
+                calendar: calendar
+            )
+        )
+
+        XCTAssertNotNil(result)
+        let bedtimeHour = calendar.component(.hour, from: result!.bedtime)
+        XCTAssertEqual(bedtimeHour, 23)
+        XCTAssertEqual(calendar.component(.minute, from: result!.bedtime), 45)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int, minute: Int) -> Date {
         var components = DateComponents()
         components.year = year

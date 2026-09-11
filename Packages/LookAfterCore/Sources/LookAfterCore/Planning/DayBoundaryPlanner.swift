@@ -66,24 +66,24 @@ public enum DayBoundaryPlanner {
         return nil
     }
 
-    /// Sleep / wind-down row for the life timeline — fixed anchor at end of day.
+    /// Sleep / wind-down row for the life timeline — hidden until evening so NOW cannot land here at noon.
     public static func sleepTimelineEvent(
         on day: Date,
         now: Date = Date(),
         calendar: Calendar = .current,
         context: Context = Context()
     ) -> LifeTimelineEvent? {
+        let hour = calendar.component(.hour, from: now)
+        guard hour >= 17 else { return nil }
         let bedtime = actionableDayEnd(on: day, now: now, calendar: calendar, context: context)
         guard calendar.isDate(bedtime, inSameDayAs: day) else { return nil }
 
         let label = ScheduleTimeFormatting.timeLabel(bedtime, calendar: calendar)
-        let hour = calendar.component(.hour, from: now)
-        let subtitle = hour >= 17 ? "Ideal by \(label)" : "Tonight · ideal by \(label)"
         return LifeTimelineEvent(
             id: "sleep-boundary-\(Int(day.timeIntervalSince1970))",
             kind: .recovery,
             title: "Wind down · Sleep",
-            subtitle: subtitle,
+            subtitle: "Ideal by \(label)",
             date: bedtime,
             estimatedMinutes: 30,
             isFixed: true

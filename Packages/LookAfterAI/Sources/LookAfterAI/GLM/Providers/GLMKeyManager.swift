@@ -327,6 +327,153 @@ public final class GLMKeyManager: @unchecked Sendable {
         } catch {}
     }
 
+    /// Syncs GLM key from `~/ADHD/credentials` (creates or updates "Developer credentials").
+    @discardableResult
+    public func syncDeveloperCredentials(
+        credentialsURL: URL? = nil
+    ) -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        for key in [GLMConfiguration.apiKeyEnvVar, GLMConfiguration.legacyEnvVar] {
+            if let value = env[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+                return upsertNamedKey(name: "Environment (\(key))", secret: value, makeDefault: true)
+            }
+        }
+
+        let url = credentialsURL ?? Self.defaultDeveloperCredentialsURL()
+        guard
+            let url,
+            let text = try? String(contentsOf: url, encoding: .utf8),
+            let secret = Self.credentialValue(from: text, keys: ["glm_api_key", "GLM_API_KEY"])
+        else {
+            return false
+        }
+
+        return upsertNamedKey(name: "Developer credentials", secret: secret, makeDefault: true)
+    }
+
+    /// Seeds a Keychain key from `~/ADHD/credentials` when no keys exist.
+    @discardableResult
+    public func seedFromDeveloperCredentialsIfNeeded(
+        credentialsURL: URL? = nil
+    ) -> Bool {
+        lock.lock()
+        let hasRecords = !records.isEmpty
+        lock.unlock()
+        if hasRecords {
+            return syncDeveloperCredentials(credentialsURL: credentialsURL)
+        }
+        return syncDeveloperCredentials(credentialsURL: credentialsURL)
+    }
+
+    @discardableResult
+    private func upsertNamedKey(name: String, secret: String, makeDefault: Bool) -> Bool {
+        let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        lock.lock()
+        let existing = records.first(where: { $0.name == name })
+        lock.unlock()
+
+        do {
+            if let existing {
+                try updateKey(id: existing.id, isDefault: makeDefault ? true : nil, secret: trimmed)
+            } else {
+                _ = try addKey(name: name, secret: trimmed, isDefault: makeDefault)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func defaultDeveloperCredentialsURL() -> URL? {
+        var candidates: [URL] = []
+        #if targetEnvironment(simulator)
+        if let hostHome = ProcessInfo.processInfo.environment["SIMULATOR_HOST_HOME"], !hostHome.isEmpty {
+            candidates.append(URL(fileURLWithPath: hostHome).appendingPathComponent("ADHD/credentials"))
+        }
+        #endif
+        #if os(macOS)
+        candidates.append(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("ADHD/credentials"))
+        #endif
+        candidates.append(URL(fileURLWithPath: "/Users/samaksh/ADHD/credentials"))
+
+        for candidate in candidates {
+            if FileManager.default.isReadableFile(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    static func credentialValue(from text: String, keys: [String]) -> String? {
+        let lowered = Set(keys.map { $0.lowercased() })
+        for line in text.split(whereSeparator: \.isNewline) {
+            let raw = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let colon = raw.firstIndex(of: ":") else { continue }
+            let key = String(raw[..<colon]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard lowered.contains(key) else { continue }
+            let value = String(raw[raw.index(after: colon)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty { return value }
+        }
+        return nil
+    }
+
+    /// Syncs OpenAI key from env/`~/ADHD/credentials` into Keychain for cloud TTS.
+    @discardableResult
+    public func syncOpenAIDeveloperCredentials(credentialsURL: URL? = nil) -> Bool {
+        if let key = Self.resolveOpenAIAPIKey(credentialsURL: credentialsURL, preferKeychain: false) {
+            return storeOpenAIAPIKey(key)
+        }
+        let existing = loadOpenAIAPIKey()
+        let configured = !(existing?.isEmpty ?? true)
+        SpeechVoiceSettings.isOpenAIKeyConfigured = configured
+        return configured
+    }
+
+    @discardableResult
+    public func storeOpenAIAPIKey(_ secret: String) -> Bool {
+        let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            SpeechVoiceSettings.isOpenAIKeyConfigured = false
+            return false
+        }
+        do {
+            try secretStore.save(trimmed, account: Self.openAIKeychainAccount)
+            SpeechVoiceSettings.isOpenAIKeyConfigured = true
+            return true
+        } catch {
+            SpeechVoiceSettings.isOpenAIKeyConfigured = false
+            return false
+        }
+    }
+
+    public func loadOpenAIAPIKey() -> String? {
+        guard let raw = try? secretStore.load(account: Self.openAIKeychainAccount) else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static let openAIKeychainAccount = "openai_api_key"
+
+    /// OpenAI key from Keychain → env → credentials file (for direct cloud TTS).
+    public static func resolveOpenAIAPIKey(
+        credentialsURL: URL? = nil,
+        preferKeychain: Bool = true
+    ) -> String? {
+        if preferKeychain, let stored = shared.loadOpenAIAPIKey() {
+            return stored
+        }
+
+        let env = ProcessInfo.processInfo.environment
+        if let value = env["OPENAI_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+            return value
+        }
+        let url = credentialsURL ?? defaultDeveloperCredentialsURL()
+        guard let url, let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return credentialValue(from: text, keys: ["openai_api_key", "OPENAI_API_KEY"])
+    }
+
     private static func maskedSuffix(for secret: String) -> String {
         let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 4 else { return "****" }

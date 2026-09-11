@@ -421,7 +421,7 @@ public struct PremiumModal<Content: View>: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignSystem.radiusHero, style: .continuous)
-                        .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                        .stroke(DesignSystem.border, lineWidth: 1)
                 )
                 .screenPadding()
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
@@ -484,7 +484,7 @@ public struct PremiumAlert: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.radiusHero, style: .continuous)
-                .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                .stroke(DesignSystem.border, lineWidth: 1)
         )
     }
 }

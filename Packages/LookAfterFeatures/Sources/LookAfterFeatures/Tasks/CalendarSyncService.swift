@@ -120,10 +120,7 @@ public final class CalendarSyncService {
     // MARK: - Private
 
     private func requestCalendarAccess() async throws -> Bool {
-        if #available(iOS 17.0, macOS 14.0, *) {
-            return try await eventStore.requestFullAccessToEvents()
-        }
-        return try await eventStore.requestAccess(to: .event)
+        try await eventStore.requestFullAccessToEvents()
     }
 
     private func resolveLookAfterCalendar() throws -> EKCalendar {
@@ -190,5 +187,45 @@ public final class CalendarSyncService {
             guard event.notes?.contains("Blocked by Look After") == true else { continue }
             removeEvent(identifier: id)
         }
+    }
+
+    /// Today's Apple Calendar events for the live timeline (excludes Look After busy blocks).
+    public func briefingEvents(on day: Date = Date(), calendar: Calendar = .current) -> [BriefingCalendarEvent] {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        let authorized = status == .fullAccess || status == .writeOnly
+        guard authorized else { return [] }
+
+        let dayStart = calendar.startOfDay(for: day)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return [] }
+        let predicate = eventStore.predicateForEvents(withStart: dayStart, end: dayEnd, calendars: nil)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+
+        return eventStore.events(matching: predicate)
+            .filter { event in
+                event.calendar?.title != Self.lookAfterCalendarTitle
+                    && event.notes?.contains("Blocked by Look After") != true
+            }
+            .sorted { $0.startDate < $1.startDate }
+            .map { event in
+                let busy: Bool
+                switch event.availability {
+                case .free, .tentative:
+                    busy = false
+                default:
+                    busy = true
+                }
+                return BriefingCalendarEvent(
+                    id: event.eventIdentifier ?? UUID().uuidString,
+                    title: event.title ?? "Event",
+                    startDate: event.startDate,
+                    timeLabel: event.isAllDay ? "All day" : formatter.string(from: event.startDate),
+                    endDate: event.endDate,
+                    isAllDay: event.isAllDay,
+                    isBusy: busy
+                )
+            }
     }
 }

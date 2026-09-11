@@ -13,6 +13,8 @@ struct ExecutivePlanningConversationView: View {
     var maxPanelHeight: CGFloat?
     var onSubmit: (_ text: String, _ startedWithVoice: Bool) -> Void
     var onNegotiationSelect: (String) -> Void
+    var onApprovePendingPlan: () -> Void = {}
+    var onRejectPendingPlan: () -> Void = {}
     var onRedesignWithAI: (String) -> Void = { _ in }
     var onExpand: () -> Void = {}
     var onStartVoice: () -> Void = {}
@@ -36,25 +38,32 @@ struct ExecutivePlanningConversationView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
             panelHeader
             contextualQuickActions
             scrollableMiddleSection
             inputArea
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .frame(maxHeight: maxPanelHeight, alignment: .top)
         .padding(.horizontal, DesignSystem.screenHorizontal)
         .padding(.bottom, DesignSystem.spacingSM)
+        .scrollDismissesKeyboard(.interactively)
         .accessibilityIdentifier("screen-planning-conversation")
     }
 
     // MARK: - Header
 
     private var contextualQuickActions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DesignSystem.spacingSM) {
-                quickActionChip("I just woke up", icon: "sun.max.fill", action: onPostWake)
-                quickActionChip("Going out", icon: "figure.walk", action: onGoingOut)
+        // Avoid duplicating Today header chips once negotiation/chat is active.
+        Group {
+            if planningVM.turns.isEmpty, planningVM.negotiation == nil {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DesignSystem.spacingSM) {
+                        quickActionChip("I just woke up", icon: "sun.max.fill", action: onPostWake)
+                        quickActionChip("Going out", icon: "figure.walk", action: onGoingOut)
+                    }
+                }
             }
         }
     }
@@ -70,7 +79,7 @@ struct ExecutivePlanningConversationView: View {
             .foregroundColor(DesignSystem.textSecondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Capsule().fill(DesignSystem.backgroundPrimary.opacity(0.7)))
+            .background(Capsule().fill(DesignSystem.contentSurfaceSubtle))
         }
         .buttonStyle(.plain)
     }
@@ -78,11 +87,12 @@ struct ExecutivePlanningConversationView: View {
     private var panelHeader: some View {
         HStack(alignment: .center) {
             HStack(spacing: DesignSystem.spacingSM) {
-                Text("🧠")
-                    .font(.system(size: 20))
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(DesignSystem.accentPrimary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Plan With Me")
-                        .font(.dsHeadline())
+                        .font(.title3.weight(.bold))
                         .foregroundColor(DesignSystem.textPrimary)
                     Text("Executive Assistant")
                         .font(.dsCaption())
@@ -104,7 +114,7 @@ struct ExecutivePlanningConversationView: View {
             modalityButton(.voice, icon: "waveform", label: "Voice")
         }
         .padding(3)
-        .background(Capsule().fill(DesignSystem.backgroundPrimary.opacity(0.6)))
+        .background(Capsule().fill(DesignSystem.contentSurfaceElevated))
     }
 
     private func modalityButton(_ target: PlanningInputMode, icon: String, label: String) -> some View {
@@ -206,6 +216,10 @@ struct ExecutivePlanningConversationView: View {
 
             if let negotiation = planningVM.negotiation {
                 negotiationStrip(negotiation, action: onNegotiationSelect)
+            }
+
+            if let approval = planningVM.pendingApproval {
+                pendingApprovalCard(approval)
             }
 
             if let multiDayPlanning = planningVM.multiDayPlanning {
@@ -318,29 +332,114 @@ struct ExecutivePlanningConversationView: View {
 
     // MARK: - Negotiation
 
-    private func negotiationStrip(_ negotiation: PlanningNegotiation, action: @escaping (String) -> Void) -> some View {
+    private func pendingApprovalCard(_ approval: PendingPlanApproval) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Text(negotiation.question)
+            Text("Suggested changes")
+                .font(.dsBody(weight: .semibold))
+                .foregroundStyle(DesignSystem.textPrimary)
+            Text(approval.reason)
                 .font(.dsCaption())
-                .foregroundColor(DesignSystem.textPrimary)
+                .foregroundStyle(DesignSystem.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("After you approve")
+                    .font(.dsCaption(weight: .semibold))
+                    .foregroundStyle(DesignSystem.textSecondary)
+                ForEach(Array(approval.changeSummaries.prefix(3).enumerated()), id: \.offset) { _, line in
+                    Text("• \(line)")
+                        .font(.dsCaption())
+                        .foregroundStyle(DesignSystem.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityIdentifier("plan-approval-schedule-preview")
+            if approval.touchesUserPlaced {
+                Text("Includes times you placed manually — approving will override them.")
+                    .font(.dsCaption())
+                    .foregroundStyle(DesignSystem.textSecondary)
+            }
+            HStack(spacing: DesignSystem.spacingSM) {
+                Button(action: {
+                    HapticManager.impact(.medium)
+                    onApprovePendingPlan()
+                }) {
+                    Text("Approve")
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundStyle(DesignSystem.accentOnPrimary)
+                        .padding(.horizontal, DesignSystem.spacingMD)
+                        .frame(minHeight: DesignSystem.minTouchTarget)
+                }
+                .buttonStyle(.glassProminent)
+                .tint(LookAfterChrome.accentTint)
+                .accessibilityIdentifier("plan-approve-changes")
+
+                Button(action: {
+                    HapticManager.impact(.light)
+                    onRejectPendingPlan()
+                }) {
+                    Text("Keep my plan")
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundStyle(DesignSystem.textSecondary)
+                        .padding(.horizontal, DesignSystem.spacingMD)
+                        .frame(minHeight: DesignSystem.minTouchTarget)
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(DesignSystem.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("plan-reject-changes")
+            }
+        }
+        .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
+        .accessibilityIdentifier("plan-pending-approval")
+    }
+
+    private func negotiationStrip(_ negotiation: PlanningNegotiation, action: @escaping (String) -> Void) -> some View {
+        let questionAlreadyShown = planningVM.turns
+            .last(where: { $0.role == .assistant })
+            .map { UserFacingCopy.isDuplicateCopy($0.text, negotiation.question)
+                || $0.text.localizedCaseInsensitiveContains(negotiation.question) }
+            ?? false
+
+        return VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            if !questionAlreadyShown {
+                Text(negotiation.question)
+                    .font(.dsCaption())
+                    .foregroundColor(DesignSystem.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DesignSystem.spacingSM) {
-                    ForEach(negotiation.options, id: \.self) { option in
-                        Button(option) {
+                    // V3: one filled primary (options[0] = I'm ready for transitions); rest in More.
+                    if let primary = negotiation.options.first {
+                        LAActionChipButton(primary, isEmphasized: true) {
                             HapticManager.impact(.medium)
-                            action(option)
+                            action(primary)
                         }
-                        .font(.dsCaption())
-                        .foregroundColor(DesignSystem.textPrimary)
-                        .padding(.horizontal, DesignSystem.spacingMD)
-                        .padding(.vertical, DesignSystem.spacingSM)
-                        .background(
-                            Capsule()
-                                .fill(DesignSystem.accentPrimary.opacity(0.12))
-                                .overlay(Capsule().stroke(DesignSystem.accentPrimary.opacity(0.35)))
-                        )
+                    }
+                    let secondary = Array(negotiation.options.dropFirst())
+                    if !secondary.isEmpty {
+                        Menu {
+                            ForEach(secondary, id: \.self) { option in
+                                Button(option) {
+                                    HapticManager.impact(.medium)
+                                    action(option)
+                                }
+                            }
+                        } label: {
+                            Text("More")
+                                .font(.dsCaption(weight: .semibold))
+                                .foregroundStyle(DesignSystem.textSecondary)
+                                .padding(.horizontal, DesignSystem.spacingMD)
+                                .frame(minHeight: DesignSystem.minTouchTarget)
+                                .overlay(
+                                    Capsule(style: .continuous)
+                                        .stroke(DesignSystem.border, lineWidth: 1)
+                                )
+                        }
+                        .accessibilityLabel("More planning options")
                     }
                 }
             }
@@ -360,7 +459,7 @@ struct ExecutivePlanningConversationView: View {
                     .foregroundColor(DesignSystem.textSecondary)
                     .padding(.horizontal, DesignSystem.spacingMD)
                     .padding(.vertical, DesignSystem.spacingSM)
-                    .background(Capsule().fill(DesignSystem.backgroundPrimary.opacity(0.5)))
+                    .background(Capsule().fill(DesignSystem.contentSurfaceSubtle))
                 }
             }
         }

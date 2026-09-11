@@ -14,6 +14,7 @@ Architecture and contributor guides for the LifeOS monorepo.
 | [architecture/macOS-shared-views.md](architecture/macOS-shared-views.md) | Why macOS compiles iOS views |
 | [architecture/adr/](architecture/adr/) | Architecture decision records |
 | [ATTENTION_OS_SPEC.md](ATTENTION_OS_SPEC.md) | Attention OS product spec |
+| [design/ios26-chrome.md](design/ios26-chrome.md) | Liquid Glass chrome vs opaque content (V5) |
 | [future-work.md](future-work.md) | Deferred improvements |
 
 ## Repository layout

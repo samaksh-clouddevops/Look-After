@@ -106,7 +106,8 @@ struct OnboardingView: View {
                         .frame(maxWidth: 420)
 
                     Button("Get started") { step = .name }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.glassProminent)
+                        .tint(LookAfterChrome.accentTint)
                         .padding(.top, DesignSystem.spacingSM)
 
                     Spacer(minLength: max(24, geo.size.height * 0.10))
@@ -124,7 +125,7 @@ struct OnboardingView: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(DesignSystem.backgroundElevated)
+                        .fill(DesignSystem.contentSurfaceElevated)
                         .frame(height: 4)
                     Capsule()
                         .fill(DesignSystem.accentPrimary)
@@ -206,7 +207,7 @@ struct OnboardingView: View {
                 .textContentType(.givenName)
                 .autocorrectionDisabled()
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
                 .foregroundColor(DesignSystem.textPrimary)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -228,7 +229,7 @@ struct OnboardingView: View {
                     .foregroundColor(DesignSystem.textSecondary)
                 TextField("e.g. Finish project proposal", text: $userKeyGoals)
                     .padding(14)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
                     .foregroundColor(DesignSystem.textPrimary)
             }
         }
@@ -263,7 +264,7 @@ struct OnboardingView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(selectedGender == gender
                                       ? DesignSystem.accentPrimary.opacity(0.15)
-                                      : DesignSystem.backgroundElevated)
+                                      : DesignSystem.contentSurfaceElevated)
                         )
                     })
                     .buttonStyle(.plain)
@@ -318,7 +319,7 @@ struct OnboardingView: View {
             TextField("Daily standup 10:00 AM, Gym 7 PM", text: $fixedScheduleNotes, axis: .vertical)
                 .lineLimit(3...6)
                 .padding(12)
-                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
                 .foregroundColor(DesignSystem.textPrimary)
 
             Text("One per line or separated by commas. We’ll turn these into tasks when you finish.")
@@ -378,7 +379,7 @@ struct OnboardingView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
                     })
                     .buttonStyle(.plain)
 
@@ -462,7 +463,7 @@ struct OnboardingView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 7)
                                 .background(
-                                    Capsule().fill(selectedCycleSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.backgroundElevated)
+                                    Capsule().fill(selectedCycleSymptoms.contains(symptom) ? DesignSystem.accentPrimary.opacity(0.2) : DesignSystem.contentSurfaceElevated)
                                 )
                         })
                         .buttonStyle(.plain)
@@ -533,7 +534,7 @@ struct OnboardingView: View {
                     .foregroundColor(DesignSystem.textPrimary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.backgroundElevated))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("onboarding-enable-notifications")
@@ -578,7 +579,7 @@ struct OnboardingView: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.backgroundElevated))
+        .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.contentSurfaceElevated))
         .accessibilityIdentifier("onboarding-ready-step")
     }
 
@@ -610,13 +611,15 @@ struct OnboardingView: View {
                 .foregroundColor(DesignSystem.textSecondary)
 
                 Button("Continue") { goForward() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
+                    .tint(LookAfterChrome.accentTint)
             } else if step == .notifications {
                 Button("Skip for now") { step = .ready }
                     .foregroundColor(DesignSystem.textSecondary)
 
                 Button("Continue") { step = .ready }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
+                    .tint(LookAfterChrome.accentTint)
             } else if step == .ready {
                 Button("Start planning") {
                     Task { @MainActor in await prepareTasksForReview() }
@@ -631,7 +634,8 @@ struct OnboardingView: View {
             } else {
                 Button("Continue") { goForward() }
                     .disabled(!canContinue)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
+                    .tint(LookAfterChrome.accentTint)
             }
         }
         .padding(.top, 8)

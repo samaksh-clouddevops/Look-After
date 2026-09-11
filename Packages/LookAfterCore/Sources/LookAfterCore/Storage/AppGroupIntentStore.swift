@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Actions queued by Siri, Shortcuts, widgets, or Live Activity when the app is not foreground-ready.
 public enum PendingShortcutAction: String, Codable, Sendable, CaseIterable {
@@ -10,6 +11,8 @@ public enum PendingShortcutAction: String, Codable, Sendable, CaseIterable {
     case pauseFocus
     case completeFocus
     case startHeroTask
+    /// Opens the Capture UI (no text payload) — Control Center / Shortcuts.
+    case openCapture
 }
 
 public struct PendingShortcutRequest: Codable, Sendable, Identifiable, Equatable {
@@ -35,7 +38,7 @@ public struct PendingShortcutRequest: Codable, Sendable, Identifiable, Equatable
 public enum AppGroupIntentStore {
     private static let fileName = "pending-shortcut-actions.json"
 
-    private static var inMemoryFallback: [PendingShortcutRequest] = []
+    private static let inMemoryFallback = Mutex<[PendingShortcutRequest]>([])
 
     public static var isAvailable: Bool {
         AppGroupWidgetStore.isAvailable
@@ -78,13 +81,13 @@ public enum AppGroupIntentStore {
     }
 
     public static func clear() {
-        inMemoryFallback = []
+        inMemoryFallback.withLock { $0 = [] }
         save([])
     }
 
     private static func loadAll() -> [PendingShortcutRequest] {
         if usesInMemoryFallback {
-            return inMemoryFallback
+            return inMemoryFallback.withLock { $0 }
         }
         guard let url = fileURL,
               let data = try? Data(contentsOf: url),
@@ -96,7 +99,7 @@ public enum AppGroupIntentStore {
 
     private static func save(_ queue: [PendingShortcutRequest]) {
         if usesInMemoryFallback {
-            inMemoryFallback = queue
+            inMemoryFallback.withLock { $0 = queue }
             return
         }
         guard let url = fileURL else { return }

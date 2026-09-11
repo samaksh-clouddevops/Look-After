@@ -86,7 +86,9 @@ struct DailyBriefingCustomizationView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
-                        .foregroundColor(DesignSystem.accentPrimary)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DesignSystem.accentPrimary)
+                        .buttonStyle(.plain)
                 }
             }
         }

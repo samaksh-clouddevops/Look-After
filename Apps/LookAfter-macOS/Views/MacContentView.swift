@@ -170,6 +170,8 @@ struct MacContentView: View {
                 }
             }
         }
+        // System glass window chrome; no iPhone TabView on Mac.
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
         .task {
             if !firebase.isAuthenticated {
                 try? await firebase.signInAnonymously()

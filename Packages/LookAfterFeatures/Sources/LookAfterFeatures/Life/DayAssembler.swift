@@ -50,15 +50,24 @@ public enum DayAssembler {
             let tag = model.commitmentID(for: commitment.title)
             let seriesKey = "recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(commitment.title))"
             let alreadyExists = all.contains { task in
-                if task.tags.contains(tag) { return true }
-                let onDay = task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } ?? true
+                let onDay = task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } ?? false
+                if task.tags.contains(tag), onDay || task.scheduledDate == nil {
+                    return task.status.isActive || task.status == .completed || onDay
+                }
                 if TaskScheduleQuery.seriesKey(for: task) == seriesKey,
                    task.status.isActive || task.status == .completed,
                    onDay {
                     return true
                 }
-                return normalized(task.title) == normalized(commitment.title)
-                    && task.scheduledDate.map { calendar.isDate($0, inSameDayAs: date) } == true
+                if normalized(task.title) == normalized(commitment.title) {
+                    if onDay { return true }
+                    // Unscheduled commitment row still counts — avoid Gym/Dinner twins.
+                    if task.tags.contains(LifeModel.commitmentTaskTag),
+                       task.status.isActive || task.status == .completed {
+                        return true
+                    }
+                }
+                return false
             }
 
             if alreadyExists {
@@ -123,9 +132,7 @@ public enum DayAssembler {
         calendar: Calendar,
         existingTasks: [LifeTask]
     ) -> LifeTask? {
-        let block = commitment.preferredBlockLabel.flatMap { model.block(matching: $0) }
-            ?? model.creativeBlocks().first
-            ?? model.timeBlocks.first { $0.label.lowercased().contains("gym") }
+        let block = resolvedBlock(for: commitment, model: model)
 
         guard let block else { return makeFlexibleCommitmentTask(commitment, model: model, userId: userId, date: dayStart) }
 
@@ -138,7 +145,12 @@ public enum DayAssembler {
         let endMinutes = block.startMinutesFromMidnight + commitment.defaultMinutes
         let endHour = endMinutes / 60
         let endMinute = endMinutes % 60
-        let end = calendar.date(bySettingHour: min(endHour, 23), minute: endMinute, second: 0, of: dayStart)
+        let end: Date?
+        if endHour >= 24 {
+            end = start.addingTimeInterval(TimeInterval(commitment.defaultMinutes * 60))
+        } else {
+            end = calendar.date(bySettingHour: endHour, minute: endMinute, second: 0, of: dayStart)
+        }
 
         // Block-backed commitments are fixed anchors — AI must not reschedule them.
         let isFixed = commitment.isNonNegotiable
@@ -162,6 +174,28 @@ public enum DayAssembler {
         )
         task.userId = userId
         return task
+    }
+
+    /// Prefer the commitment's own block. Never fall back to gym or creative for the wrong life area.
+    private static func resolvedBlock(for commitment: LifeCommitment, model: LifeModel) -> ProtectedTimeBlock? {
+        if let label = commitment.preferredBlockLabel, let block = model.block(matching: label) {
+            return block
+        }
+
+        let title = commitment.title.lowercased()
+        if commitment.lifeArea == .health || title.contains("gym") || title.contains("workout") || title.contains("exercise") {
+            return model.timeBlocks.first { $0.label.lowercased().contains("gym") }
+        }
+        if commitment.lifeArea == .creativity {
+            return model.creativeBlocks().first
+        }
+        if commitment.lifeArea == .work {
+            return model.timeBlocks.first { block in
+                let label = block.label.lowercased()
+                return label.contains("office") || label.contains("work")
+            }
+        }
+        return nil
     }
 
     private static func makeFlexibleCommitmentTask(

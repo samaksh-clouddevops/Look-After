@@ -118,10 +118,21 @@ public final class AuthProxyClient: @unchecked Sendable {
             let speed: Double?
             let model: String
         }
-        var request = try await authorizedRequest(path: "/v1/ai/speech", method: "POST")
-        request.httpBody = try JSONEncoder().encode(
+        let bodyData = try JSONEncoder().encode(
             Body(input: input, voice: voice, speed: speed, model: model)
         )
+        var request = try await authorizedRequest(path: "/v1/ai/speech", method: "POST", forceRefresh: false)
+        request.httpBody = bodyData
+        do {
+            return try await performSpeech(request)
+        } catch AuthProxyError.httpStatus(let code, _) where code == 401 {
+            var retry = try await authorizedRequest(path: "/v1/ai/speech", method: "POST", forceRefresh: true)
+            retry.httpBody = bodyData
+            return try await performSpeech(retry)
+        }
+    }
+
+    private func performSpeech(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw AuthProxyError.httpStatus(-1, "Invalid response")
@@ -139,8 +150,8 @@ public final class AuthProxyClient: @unchecked Sendable {
 
     // MARK: - HTTP
 
-    private func authorizedRequest(path: String, method: String) async throws -> URLRequest {
-        guard let token = try await tokenProvider.idToken(forceRefresh: false), !token.isEmpty else {
+    private func authorizedRequest(path: String, method: String, forceRefresh: Bool = false) async throws -> URLRequest {
+        guard let token = try await tokenProvider.idToken(forceRefresh: forceRefresh), !token.isEmpty else {
             throw AuthProxyError.missingToken
         }
         let base = configuration.baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -157,14 +168,24 @@ public final class AuthProxyClient: @unchecked Sendable {
     }
 
     private func getJSON<T: Decodable>(path: String) async throws -> T {
-        let request = try await authorizedRequest(path: path, method: "GET")
-        return try await decode(request)
+        try await performJSON(path: path, method: "GET", bodyData: nil)
     }
 
     private func postJSON<Body: Encodable, T: Decodable>(path: String, body: Body) async throws -> T {
-        var request = try await authorizedRequest(path: path, method: "POST")
-        request.httpBody = try JSONEncoder().encode(body)
-        return try await decode(request)
+        let bodyData = try JSONEncoder().encode(body)
+        return try await performJSON(path: path, method: "POST", bodyData: bodyData)
+    }
+
+    private func performJSON<T: Decodable>(path: String, method: String, bodyData: Data?) async throws -> T {
+        var request = try await authorizedRequest(path: path, method: method, forceRefresh: false)
+        request.httpBody = bodyData
+        do {
+            return try await decode(request)
+        } catch AuthProxyError.httpStatus(let code, _) where code == 401 {
+            var retry = try await authorizedRequest(path: path, method: method, forceRefresh: true)
+            retry.httpBody = bodyData
+            return try await decode(retry)
+        }
     }
 
     private func decode<T: Decodable>(_ request: URLRequest) async throws -> T {

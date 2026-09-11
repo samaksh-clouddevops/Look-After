@@ -40,14 +40,15 @@ public enum LookAfterPrompts {
     """
 
     public static let briefingDayHeroSummarySystem = """
-    You write a 3-line morning briefing for an ADHD user inside Look After.
+    You write a 1–2 line morning briefing for an ADHD user inside Look After.
     Sound like a calm friend texting, not a corporate assistant or AI.
     Use short sentences. Say "you" and "your". No em dashes, en dashes, semicolons, or bullet points.
     No words like: leverage, optimize, utilize, on deck, heads up, momentum, capacity mode.
-    Line 1: how they're doing today (sleep, energy, pace of the day).
-    Line 2: what's on the task list — how many, what's done, what matters most.
-    Line 3: one gentle suggestion for what to do next.
-    Return JSON only: {"lines":["line1","line2","line3"]}
+    Do not greet or use the user's name — the UI already greets them.
+    Prefer 2 short lines (under ~90 characters each). Never more than 2.
+    Line 1: how they're doing (sleep, energy, or pace) in one breath.
+    Line 2: one next move (start this, or N left — start with X). Skip line 2 only if the day is empty.
+    Return JSON only: {"lines":["line1","line2"]}
     """
 
     /// Immutable Chief of Staff voice for Payload-to-Prompt briefing.
@@ -453,6 +454,68 @@ public enum LookAfterPrompts {
             "dependencies": [],
             "consequenceOfDelay": "<consequence>",
             "confidence": <0.0-1.0>
+        }
+        """
+    }
+
+    // MARK: - Placement sense (when deterministic semantics cannot decide)
+
+    public static func placementSensePrompt(
+        task: LifeTask,
+        proposedStart: Date,
+        durationMinutes: Int,
+        neighborTasks: [LifeTask],
+        calendar: Calendar = .current
+    ) -> String {
+        let profile = task.resolvedSemanticProfile
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm"
+        let proposed = formatter.string(from: proposedStart)
+        let window = TaskSemanticScheduler.currentTimeWindow(at: proposedStart, calendar: calendar)
+        let neighbors = neighborTasks
+            .filter { $0.id != task.id && $0.status.isActive }
+            .prefix(12)
+            .map { neighbor -> String in
+                let start = neighbor.scheduledTime.map { formatter.string(from: $0) } ?? "unslotted"
+                let minutes = max(neighbor.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+                return "- \(neighbor.title) (\(neighbor.resolvedSemanticProfile.semanticType.rawValue), \(start), \(minutes)m)"
+            }
+            .joined(separator: "\n")
+
+        return """
+        You are the placement judge for Look After. Deterministic semantics could not decide whether this clock makes sense.
+        Decide if this task belongs at this time, with this duration, given the rest of the day.
+        Do NOT invent a new task. Do NOT ignore medical constraints.
+
+        Task title: "\(task.title)"
+        Description: "\(task.description)"
+        Semantic type: \(profile.semanticType.rawValue)
+        Subtype: \(profile.subtype)
+        Preferred windows: \(profile.preferredTimeWindows.map(\.rawValue).joined(separator: ", "))
+        Forbidden windows: \(profile.forbiddenTimeWindows.map(\.rawValue).joined(separator: ", "))
+        Constraints: \(profile.schedulingConstraints.map(\.rawValue).joined(separator: ", "))
+        Flexibility: \(profile.flexibility.rawValue)
+
+        Proposed start: \(proposed) (\(window.rawValue))
+        Proposed duration minutes: \(durationMinutes)
+
+        Other tasks already on this day:
+        \(neighbors.isEmpty ? "- none" : neighbors)
+
+        Rules:
+        1. Reject if the type of work does not belong at that hour (meals, meds, errands, deep work, sleep).
+        2. Reject if duration does not fit before the next real commitment.
+        3. Allow unusual clocks only when the title and day context make them reasonable (e.g. packing before a dawn flight).
+        4. If rejected, suggest a better startHour/startMinute on the same day, or null if it should stay untimed.
+
+        Respond as JSON only:
+        {
+            "allowed": <true|false>,
+            "reason": "<one short sentence>",
+            "suggestedStartHour": <0-23 or null>,
+            "suggestedStartMinute": <0-59 or null>
         }
         """
     }

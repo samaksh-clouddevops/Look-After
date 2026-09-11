@@ -5,7 +5,7 @@
 
 Performance targets, measurement protocol, and Instruments profiles for LifeOS.
 
-**Reference device:** iPhone 15 class or newer (A16+), iOS 17+, low power mode **off** unless noted.
+**Reference device:** iPhone 15 class or newer (A16+), **iOS 26+**, low power mode **off** unless noted.
 
 ---
 

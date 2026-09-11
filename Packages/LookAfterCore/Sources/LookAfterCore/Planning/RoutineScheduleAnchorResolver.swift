@@ -28,24 +28,7 @@ public enum RoutineScheduleAnchorResolver {
         let enriched = TaskEphemeralityDefaults.enrich(task)
         let title = task.title.lowercased()
 
-        if let routine = OnboardingTaskSeeder.routineAnchorTime(forTitle: task.title, on: day, calendar: calendar) {
-            let end = routine.start.addingTimeInterval(TimeInterval(routine.durationMinutes * 60))
-            let treatAsFixed = !OnboardingTaskSeeder.isMealRoutineTitle(task.title)
-                && !OnboardingTaskSeeder.isActivityRoutineTitle(task.title)
-            return ResolvedAnchor(start: routine.start, end: end, treatAsFixed: treatAsFixed)
-        }
-
-        if !profile.fixedScheduleNotes.isEmpty,
-           let fixed = OnboardingTaskSeeder.fixedTimeAnchor(
-            matchingTitle: task.title,
-            fixedNotes: profile.fixedScheduleNotes,
-            on: day,
-            calendar: calendar
-           ) {
-            let end = fixed.start.addingTimeInterval(TimeInterval(fixed.durationMinutes * 60))
-            return ResolvedAnchor(start: fixed.start, end: end, treatAsFixed: true)
-        }
-
+        // Life-model blocks first so gym stays at the user's evening slot, not a seeder default.
         if let commitmentAnchor = commitmentBlockAnchor(
             for: task,
             model: model,
@@ -74,6 +57,24 @@ public enum RoutineScheduleAnchorResolver {
             calendar: calendar
         ) {
             return keywordAnchor
+        }
+
+        if !profile.fixedScheduleNotes.isEmpty,
+           let fixed = OnboardingTaskSeeder.fixedTimeAnchor(
+            matchingTitle: task.title,
+            fixedNotes: profile.fixedScheduleNotes,
+            on: day,
+            calendar: calendar
+           ) {
+            let end = fixed.start.addingTimeInterval(TimeInterval(fixed.durationMinutes * 60))
+            return ResolvedAnchor(start: fixed.start, end: end, treatAsFixed: true)
+        }
+
+        if let routine = OnboardingTaskSeeder.routineAnchorTime(forTitle: task.title, on: day, calendar: calendar) {
+            let end = routine.start.addingTimeInterval(TimeInterval(routine.durationMinutes * 60))
+            // Meals yield on conflict. Gym / workouts keep their evening clock.
+            let treatAsFixed = !OnboardingTaskSeeder.isMealRoutineTitle(task.title)
+            return ResolvedAnchor(start: routine.start, end: end, treatAsFixed: treatAsFixed)
         }
 
         let windows = SchedulingWindows.from(profile: profile, lifeModel: model)
@@ -146,6 +147,11 @@ public enum RoutineScheduleAnchorResolver {
         let enriched = TaskEphemeralityDefaults.enrich(task)
         if let box = enriched.temporalBoundingBox, !box.contains(start: current, calendar: calendar) {
             return true
+        }
+
+        // Meals often sit inside a wide evening fence after a bad `now` park — snap to anchor.
+        if OnboardingTaskSeeder.isMealRoutineTitle(task.title) {
+            return abs(current.timeIntervalSince(anchor.start)) > 20 * 60
         }
 
         if anchor.treatAsFixed {

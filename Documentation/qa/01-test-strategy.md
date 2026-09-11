@@ -26,7 +26,7 @@ Ensure LifeOS is **production ready** by validating every feature, interaction, 
 
 | Area | Details |
 |------|---------|
-| **Platforms** | iOS 17+ (iPhone primary, iPad layouts), macOS productivity monitor |
+| **Platforms** | iOS 26+ (iPhone primary, iPad layouts), macOS 26 productivity monitor |
 | **Targets** | LookAfter-iOS, LookAfter-macOS, LookAfterWidget, Focus Live Activity |
 | **Packages** | LookAfterCore, LookAfterAI, LookAfterData, LookAfterFeatures, LookAfterHealth, ExecutiveBrain |
 | **Intelligence** | ExecutiveBrainEngine (deterministic), FlowDirector, ContextOrchestrator, GLMService |
@@ -111,7 +111,7 @@ flowchart TD
 
 ```bash
 xcodebuild -scheme LookAfter-iOS \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
   build test
 ```
 
@@ -134,7 +134,7 @@ xcodebuild -scheme LookAfter-iOS \
 
 ## 1.7 Entry Criteria
 
-- Branch builds on iPhone 17 simulator  
+- Branch builds on iPhone 17 simulator (iOS 26)  
 - All Tier 1 regression tests pass ([11-regression-suite.md](11-regression-suite.md))  
 - Test environment configured (Firebase, optional GLM key)  
 - Test devices available for P0 physical checks (HealthKit, Live Activity)  

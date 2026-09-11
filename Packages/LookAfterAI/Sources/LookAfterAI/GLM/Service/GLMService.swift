@@ -10,7 +10,7 @@ public final class GLMService: @unchecked Sendable {
     private let usageLogger: GLMUsageLogger
     private let session: URLSession
 
-    /// When set and license is active, chat/complete go through the Azure proxy (no local API keys).
+    /// When set, unused — AI calls use on-device GLM API keys directly (proxy optional / skipped).
     public var authProxyClient: AuthProxyClient?
     public var licenseStatusProvider: (any LicenseStatusProviding)?
 
@@ -43,20 +43,14 @@ public final class GLMService: @unchecked Sendable {
 
     public var keyManagerAccess: GLMKeyManager { keyManager }
 
-    /// True when the licensed auth proxy is ready for AI calls.
+    /// True when a local GLM API key (Keychain / env / bundled) can be used.
     public var hasConfiguredAPIKey: Bool {
-        usesLicensedProxy
+        !keyManager.attemptableKeyPairs().isEmpty
     }
 
+    /// Licensed Azure proxy path — retained for compatibility; chat uses direct keys.
     public var usesLicensedProxy: Bool {
-        authProxyClient != nil && (licenseStatusProvider?.isLicensed == true)
-    }
-
-    private func requireLicensedProxy() throws -> AuthProxyClient {
-        guard authProxyClient != nil else { throw GLMServiceError.proxyNotConfigured }
-        guard licenseStatusProvider?.isLicensed == true else { throw GLMServiceError.licenseRequired }
-        guard let proxy = authProxyClient else { throw GLMServiceError.proxyNotConfigured }
-        return proxy
+        false
     }
 
 #if DEBUG
@@ -80,29 +74,26 @@ public final class GLMService: @unchecked Sendable {
             return try await debugSendMessageHandler(message, systemPrompt, history, tier)
         }
 #endif
-        let proxy = try requireLicensedProxy()
         let config = configurationStore.load()
         var lastError: Error?
+
         for attemptTier in config.fallbackTiers(startingAt: tier) {
             do {
-                let historyPayload = history.map { msg -> [String: String] in
-                    let role = msg.role == .assistant ? "assistant" : (msg.role == .system ? "system" : "user")
-                    return ["role": role, "content": msg.content]
-                }
-                let result = try await proxy.chat(
-                    message: message,
-                    systemPrompt: systemPrompt,
-                    history: historyPayload,
-                    model: config.model(for: attemptTier),
-                    maxTokens: maxTokens
+                let response = try await chatCompletion(
+                    messages: buildMessages(message: message, systemPrompt: systemPrompt, history: history),
+                    temperature: 0.7,
+                    maxTokens: maxTokens,
+                    tier: attemptTier
                 )
-                let text = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { continue }
-                return result.content
+                guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    continue
+                }
+                return response.content
             } catch {
                 lastError = error
             }
         }
+
         throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 
@@ -117,24 +108,27 @@ public final class GLMService: @unchecked Sendable {
             return try await debugCompleteHandler(prompt, tier)
         }
 #endif
-        let proxy = try requireLicensedProxy()
-        let config = configurationStore.load()
         let system = systemPrompt ?? LookAfterPrompts.structuredOutputSystem
+        let config = configurationStore.load()
         var lastError: Error?
+
         for attemptTier in config.fallbackTiers(startingAt: tier) {
             do {
-                let result = try await proxy.complete(
-                    prompt: prompt,
-                    systemPrompt: system,
-                    model: config.model(for: attemptTier)
+                let response = try await chatCompletion(
+                    messages: buildMessages(message: prompt, systemPrompt: system, history: []),
+                    temperature: 0.3,
+                    maxTokens: 8192,
+                    tier: attemptTier
                 )
-                let text = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { continue }
-                return result.content
+                guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    continue
+                }
+                return response.content
             } catch {
                 lastError = error
             }
         }
+
         throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 
@@ -148,14 +142,74 @@ public final class GLMService: @unchecked Sendable {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let text = try await self.sendMessage(
-                        message,
-                        systemPrompt: systemPrompt,
-                        history: history,
-                        tier: tier
-                    )
-                    continuation.yield(text)
-                    continuation.finish()
+                    let config = self.configurationStore.load()
+                    guard config.streamingEnabled else {
+                        let text = try await self.sendMessage(
+                            message,
+                            systemPrompt: systemPrompt,
+                            history: history,
+                            tier: tier
+                        )
+                        continuation.yield(text)
+                        continuation.finish()
+                        return
+                    }
+
+                    let messages = self.buildMessages(message: message, systemPrompt: systemPrompt, history: history)
+                    let primaryModel = config.model(for: tier)
+                    let models = config.modelsToAttempt(primary: primaryModel)
+                    var lastError: Error?
+
+                    for model in models {
+                        do {
+                            try await self.executeWithRotation { apiKey, keyId in
+                                let started = Date()
+                                var promptTokens = 0
+                                var completionTokens = 0
+                                var resolvedModel = model
+
+                                for try await chunk in self.streamCompletion(
+                                    apiKey: apiKey,
+                                    configuration: config,
+                                    model: model,
+                                    messages: messages,
+                                    temperature: 0.7,
+                                    maxTokens: 4096
+                                ) {
+                                    if let token = chunk.content, !token.isEmpty {
+                                        continuation.yield(token)
+                                    }
+                                    if let m = chunk.model { resolvedModel = m }
+                                    promptTokens = chunk.promptTokens ?? promptTokens
+                                    completionTokens = chunk.completionTokens ?? completionTokens
+                                }
+
+                                let latency = Int(Date().timeIntervalSince(started) * 1000)
+                                self.keyManager.recordSuccess(keyId: keyId)
+                                self.usageLogger.log(GLMUsageRecord(
+                                    model: resolvedModel,
+                                    promptTokens: promptTokens,
+                                    completionTokens: completionTokens,
+                                    estimatedCostUSD: GLMUsageLogger.estimateCostUSD(
+                                        model: resolvedModel,
+                                        promptTokens: promptTokens,
+                                        completionTokens: completionTokens
+                                    ),
+                                    latencyMs: latency,
+                                    success: true
+                                ))
+                            }
+                            continuation.finish()
+                            return
+                        } catch {
+                            lastError = error
+                            guard model != models.last, Self.shouldAttemptModelFallback(after: error) else {
+                                throw error
+                            }
+                        }
+                    }
+
+                    throw lastError ?? GLMServiceError.parseError("Empty model response")
                 } catch {
                     continuation.finish(throwing: error)
                 }
@@ -313,25 +367,31 @@ public final class GLMService: @unchecked Sendable {
         temperature: Double,
         maxTokens: Int
     ) -> AsyncThrowingStream<StreamChunk, Error> {
-        AsyncThrowingStream { continuation in
+        let urlString = configuration.chatCompletionsURL
+        let body: [String: Any] = Self.chatCompletionBody(
+            model: model,
+            messages: messages,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            stream: true
+        )
+        let bodyData: Data
+        do {
+            bodyData = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            return AsyncThrowingStream { $0.finish(throwing: error) }
+        }
+        let session = self.session
+        return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let url = URL(string: configuration.chatCompletionsURL)!
+                    let url = URL(string: urlString)!
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
                     request.setValue("en-US,en", forHTTPHeaderField: "Accept-Language")
-
-                    let body: [String: Any] = [
-                        "model": model,
-                        "messages": messages,
-                        "temperature": temperature,
-                        "max_tokens": maxTokens,
-                        "stream": true,
-                        "thinking": ["type": "disabled"]
-                    ]
-                    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                    request.httpBody = bodyData
 
                     let (bytes, response) = try await session.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else {
@@ -360,10 +420,10 @@ public final class GLMService: @unchecked Sendable {
                         }
                         if let choices = json["choices"] as? [[String: Any]],
                            let delta = choices.first?["delta"] as? [String: Any] {
+                            // Prefer assistant content only — do not stream reasoning_content into callers
+                            // (GLM-5.3 always thinks; reasoning would corrupt JSON planners).
                             if let content = delta["content"] as? String, !content.isEmpty {
                                 chunk.content = content
-                            } else if let reasoning = delta["reasoning_content"] as? String, !reasoning.isEmpty {
-                                chunk.content = reasoning
                             }
                         }
                         continuation.yield(chunk)
@@ -400,10 +460,34 @@ public final class GLMService: @unchecked Sendable {
         return ["429", "quota", "rate limit", "too many requests"].contains { message.contains($0) }
     }
 
-    /// Retry with glm-4.7-flash unless the API key itself is invalid.
+    /// Retry with glm-5.3-flash unless the API key itself is invalid.
     static func shouldAttemptModelFallback(after error: Error) -> Bool {
         if case GLMServiceError.invalidAPIKey = error { return false }
         return true
+    }
+
+    /// Builds chat body with model-aware thinking policy (GLM-5.3+ requires thinking enabled).
+    static func chatCompletionBody(
+        model: String,
+        messages: [[String: Any]],
+        temperature: Double,
+        maxTokens: Int,
+        stream: Bool
+    ) -> [String: Any] {
+        var body: [String: Any] = [
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": maxTokens,
+            "stream": stream
+        ]
+        if GLMConfiguration.requiresMandatoryThinking(model) {
+            body["thinking"] = ["type": "enabled"]
+            body["reasoning_effort"] = GLMConfiguration.defaultReasoningEffort
+        } else {
+            body["thinking"] = ["type": "disabled"]
+        }
+        return body
     }
 }
 
@@ -434,14 +518,13 @@ private struct GLMHTTPClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("en-US,en", forHTTPHeaderField: "Accept-Language")
 
-        let body: [String: Any] = [
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": maxTokens,
-            "stream": false,
-            "thinking": ["type": "disabled"]
-        ]
+        let body: [String: Any] = GLMService.chatCompletionBody(
+            model: model,
+            messages: messages,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            stream: false
+        )
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await session.data(for: request)

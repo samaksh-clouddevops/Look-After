@@ -38,7 +38,7 @@ struct TaskActionButton: View {
                 if isLoading {
                     ProgressView()
                         .scaleEffect(0.85)
-                        .tint(foregroundColor)
+                        .tint(progressTint)
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 15, weight: .semibold))
@@ -52,54 +52,61 @@ struct TaskActionButton: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 56)
+            .frame(minHeight: DesignSystem.minTouchTarget)
             .padding(.horizontal, 6)
-            .padding(.vertical, 8)
-            .foregroundColor(foregroundColor)
-            .background(background)
-            .overlay(border)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous))
+            .padding(.vertical, 6)
         }
-        .buttonStyle(.plain)
+        .modifier(TaskActionButtonChrome(style: style))
         .disabled(isDisabled || isLoading)
         .opacity(isDisabled && !isLoading ? 0.55 : 1)
         .accessibilityLabel(isLoading ? "Loading" : title)
     }
 
-    private var foregroundColor: Color {
+    private var progressTint: Color {
         switch style {
-        case .primary: return .white
+        case .primary: return DesignSystem.accentOnPrimary
         case .secondary: return DesignSystem.accentPrimary
         case .destructive: return DesignSystem.error
         }
     }
+}
+
+private struct TaskActionButtonChrome: ViewModifier {
+    let style: TaskActionButton.Style
 
     @ViewBuilder
-    private var background: some View {
+    func body(content: Content) -> some View {
         switch style {
         case .primary:
-            RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
-                .fill(DesignSystem.accentGradient)
+            content
+                .buttonStyle(.glassProminent)
+                .tint(LookAfterChrome.accentTint)
         case .secondary:
-            RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+            content
+                .foregroundColor(DesignSystem.accentPrimary)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
+                        .fill(DesignSystem.contentSurfaceSubtle)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
+                        .stroke(DesignSystem.accentPrimary.opacity(0.45), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous))
+                .buttonStyle(.plain)
         case .destructive:
-            RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
-                .fill(DesignSystem.error.opacity(0.12))
-        }
-    }
-
-    @ViewBuilder
-    private var border: some View {
-        switch style {
-        case .primary:
-            EmptyView()
-        case .secondary:
-            RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
-                .stroke(DesignSystem.accentPrimary.opacity(0.45), lineWidth: 1)
-        case .destructive:
-            RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
-                .stroke(DesignSystem.error.opacity(0.45), lineWidth: 1)
+            content
+                .foregroundColor(DesignSystem.error)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
+                        .fill(DesignSystem.contentSurfaceSubtle)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
+                        .stroke(DesignSystem.error.opacity(0.45), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous))
+                .buttonStyle(.plain)
         }
     }
 }

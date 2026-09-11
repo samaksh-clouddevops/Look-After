@@ -7,6 +7,8 @@ public struct TaskCardStackView: View {
     
     @ObservedObject var tasksVM: TasksViewModel
     @ObservedObject var adhdVM: ADHDViewModel
+    var taskZoomNamespace: Namespace.ID?
+    var zoomEnabled: Bool
     var onTaskDeferred: ((LifeTask) -> Void)?
     var onUndoRequested: ((String) -> Void)?
 
@@ -16,11 +18,15 @@ public struct TaskCardStackView: View {
     public init(
         tasksVM: TasksViewModel,
         adhdVM: ADHDViewModel,
+        taskZoomNamespace: Namespace.ID? = nil,
+        zoomEnabled: Bool = false,
         onTaskDeferred: ((LifeTask) -> Void)? = nil,
         onUndoRequested: ((String) -> Void)? = nil
     ) {
         self.tasksVM = tasksVM
         self.adhdVM = adhdVM
+        self.taskZoomNamespace = taskZoomNamespace
+        self.zoomEnabled = zoomEnabled
         self.onTaskDeferred = onTaskDeferred
         self.onUndoRequested = onUndoRequested
     }
@@ -107,7 +113,18 @@ public struct TaskCardStackView: View {
             }
         }
         .sheet(item: $editingTask) { task in
-            TaskFormSheet(tasksVM: tasksVM, mode: .edit(task))
+            Group {
+                if let taskZoomNamespace, zoomEnabled {
+                    TaskFormSheet(tasksVM: tasksVM, mode: .edit(task))
+                        .lookAfterZoomDestination(
+                            sourceID: task.id,
+                            in: taskZoomNamespace,
+                            enabled: true
+                        )
+                } else {
+                    TaskFormSheet(tasksVM: tasksVM, mode: .edit(task))
+                }
+            }
         }
         .undoToast(
             isShowing: Binding(
@@ -123,7 +140,7 @@ public struct TaskCardStackView: View {
 
     @ViewBuilder
     private func focusCard(for task: LifeTask) -> some View {
-        TaskCardView(
+        let card = TaskCardView(
             task: task,
             style: .focusStack,
             onOpen: { editingTask = task },
@@ -140,6 +157,15 @@ public struct TaskCardStackView: View {
             onDelete: { deleteTask(task) },
             onDefer: { deferTask(task) }
         )
+        if let taskZoomNamespace {
+            card.lookAfterZoomSource(
+                id: task.id,
+                in: taskZoomNamespace,
+                enabled: zoomEnabled
+            )
+        } else {
+            card
+        }
     }
     
     private func showUndo(_ message: String) {
@@ -148,10 +174,9 @@ public struct TaskCardStackView: View {
     
     private func deleteTask(_ task: LifeTask) {
         HapticManager.notification(.warning)
-        withAnimation(.easeOut(duration: 0.3)) {
+        withAnimation(.easeOut(duration: 0.3), completionCriteria: .logicallyComplete) {
             offset = CGSize(width: 0, height: -500)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        } completion: {
             Task {
                 if await tasksVM.deleteTask(task) != nil {
                     showUndo("Task deleted • Undo")
@@ -163,10 +188,9 @@ public struct TaskCardStackView: View {
     
     private func completeTask(_ task: LifeTask) {
         HapticManager.notification(.success)
-        withAnimation(.easeOut(duration: 0.3)) {
+        withAnimation(.easeOut(duration: 0.3), completionCriteria: .logicallyComplete) {
             offset = CGSize(width: 500, height: 0)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        } completion: {
             Task {
                 if await tasksVM.completeTask(task) != nil {
                     showUndo("Task completed • Undo")
@@ -178,11 +202,10 @@ public struct TaskCardStackView: View {
     
     private func deferTask(_ task: LifeTask) {
         HapticManager.impact(.medium)
-        withAnimation(.easeOut(duration: 0.3)) {
+        withAnimation(.easeOut(duration: 0.3), completionCriteria: .logicallyComplete) {
             offset = CGSize(width: -500, height: 0)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            Task {
+        } completion: {
+            Task { @MainActor in
                 if let idx = tasksVM.tasks.firstIndex(where: { $0.id == task.id }) {
                     let item = tasksVM.tasks.remove(at: idx)
                     tasksVM.tasks.append(item)

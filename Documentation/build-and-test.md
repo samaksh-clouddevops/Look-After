@@ -12,9 +12,11 @@ Run after any change to `project.yml` or top-level folder moves.
 
 ## iOS build
 
+Requires **Xcode 26** (iOS 26 / macOS 26 SDK).
+
 ```bash
 xcodebuild -scheme LookAfter-iOS \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
   build
 ```
 
@@ -30,7 +32,7 @@ xcodebuild -scheme LookAfter-macOS \
 
 ```bash
 xcodebuild -scheme LookAfter-iOS \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
   test
 ```
 
@@ -42,6 +44,16 @@ cd Packages/ExecutiveBrain && swift test
 cd Packages/LookAfterData && swift test
 cd Packages/LookAfterFeatures && swift test
 ```
+
+## UX agent screenshots
+
+Capture core screens for Cursor + `ui-ux-pro-max` review:
+
+```bash
+./Scripts/capture-ux-review.sh
+```
+
+See [qa/ux-agent-screenshot-pipeline.md](qa/ux-agent-screenshot-pipeline.md). Output: `screenshots/ux-agent/latest/`.
 
 ## Troubleshooting
 

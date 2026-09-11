@@ -18,6 +18,22 @@ public enum LifeArea: String, Codable, CaseIterable, Identifiable, Sendable {
     case personal = "Personal"
     
     public var id: String { rawValue }
+
+    /// Compact label for dense chips (priority rows, filters) — avoids truncating long raw values.
+    public var shortLabel: String {
+        switch self {
+        case .health: return "Health"
+        case .finance: return "Finance"
+        case .home: return "Home"
+        case .creativity: return "Creative"
+        case .learning: return "Learning"
+        case .shopping: return "Shopping"
+        case .hydration: return "Nutrition"
+        case .reflection: return "Journal"
+        case .work, .relationships, .travel, .medication, .personal:
+            return rawValue
+        }
+    }
     
     public var icon: String {
         switch self {

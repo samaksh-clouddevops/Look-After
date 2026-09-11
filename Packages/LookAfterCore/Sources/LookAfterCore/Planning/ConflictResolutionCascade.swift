@@ -102,14 +102,15 @@ public enum ConflictResolutionCascade {
         bufferMinutes: Int = defaultBufferMinutes,
         parkedQueue: ParkedTaskQueueStore? = nil,
         remainingTasks: [LifeTask] = [],
-        vaultFloorsByHash: [String: Int] = [:]
+        vaultFloorsByHash: [String: Int] = [:],
+        calendarEvents: [BriefingCalendarEvent] = []
     ) -> ConflictCascadeResult {
         let dayStart = calendar.startOfDay(for: day)
         // Full world for tomorrow-gap search (includes off-day tasks).
         let universe = remainingTasks.isEmpty ? tasks : remainingTasks
 
         var pool = tasks.filter { isActiveOnDay($0, day: dayStart, calendar: calendar) }
-        guard pool.count > 1 else {
+        guard !pool.isEmpty else {
             return ConflictCascadeResult(tasks: tasks)
         }
 
@@ -122,7 +123,14 @@ public enum ConflictResolutionCascade {
             return lhs.id < rhs.id
         }
 
-        var blocked: [TaskScheduleInterval] = []
+        let occupied = OccupiedDay.build(
+            tasks: [],
+            calendarEvents: calendarEvents,
+            model: model,
+            on: dayStart,
+            calendar: calendar
+        )
+        var blocked: [TaskScheduleInterval] = occupied.fixedIntervals
         var decisions: [ConflictCascadeDecision] = []
         var changed: Set<String> = []
         var parkedIDs: [String] = []
@@ -175,7 +183,7 @@ public enum ConflictResolutionCascade {
 
             let hash = BehavioralSemanticHash.make(for: task)
             let viableMin = task.minimumViableDurationValue(vaultFloorMinutes: vaultFloorsByHash[hash])
-            let allowShift = canMove(task) && shiftCount < maxDominoShifts
+            let allowShift = shiftCount < maxDominoShifts
             let policy = TaskEphemeralityDefaults.expiration(for: task)
 
             // Stage 1: shift later same day — capped by temporal bounding box.
@@ -321,16 +329,7 @@ public enum ConflictResolutionCascade {
                 continue
             }
 
-            // Stage 5: park + recovery queue (fluid / flexible only).
-            // True anchored immovables keep their clock when no shift path exists.
-            if task.timeConstraintValue == .anchored {
-                blocked.append(interval)
-                blocked.sort { $0.start < $1.start }
-                decisions.append(.init(taskID: task.id, action: .keep, reason: "anchored_overlap_preserved"))
-                byID[task.id] = task
-                continue
-            }
-
+            // Stage 5: park + recovery queue. Never keep two tasks on the same clock.
             task.scheduledTime = nil
             task.scheduledEndTime = nil
             task.applyTimeConstraint(.fluid)

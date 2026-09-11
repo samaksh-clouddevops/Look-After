@@ -327,6 +327,13 @@ final class HealthSyncService: ObservableObject {
     /// Full sync for Settings or explicit refresh. Does not block app navigation.
     func syncHealthData(userId: String) async {
         backgroundSyncTask?.cancel()
+        if isSyncing || isConnectingForSetup {
+            await waitUntilIdle()
+            if let last = lastSyncDate, Date().timeIntervalSince(last) < 15 {
+                refreshConnectionStatus(userId: userId, healthSummary: HealthStore.shared.latest)
+                return
+            }
+        }
         await performFullSync(userId: userId, triggeredFromSetup: false)
     }
     
@@ -434,7 +441,7 @@ final class HealthSyncService: ObservableObject {
             currentStepLabel = "Reading Apple Health…"
             
             var summary = try await HealthSyncLogger.measure("Reading health data") {
-                try await withTimeout(seconds: Self.fetchTimeoutSeconds) {
+                try await AsyncTimeout.withTimeout(seconds: Self.fetchTimeoutSeconds) {
                     try await self.healthManager.fetchTodaysSummary { [weak self] event in
                         self?.handleFetchEvent(event)
                     }
@@ -464,7 +471,7 @@ final class HealthSyncService: ObservableObject {
             
             let summaryToSave = summary
             try await HealthSyncLogger.measure("Uploading to \(UserFacingCopy.productName)") {
-                try await withTimeout(seconds: Self.saveTimeoutSeconds) {
+                try await AsyncTimeout.withTimeout(seconds: Self.saveTimeoutSeconds) {
                     try await self.healthRepo.save(summaryToSave)
                 }
             }
@@ -504,9 +511,9 @@ final class HealthSyncService: ObservableObject {
                 object: nil,
                 userInfo: ["reason": AnalyticsDataChangeReason.healthSyncCompleted.rawValue]
             )
-        } catch is HealthSyncTimeoutError {
+        } catch is AsyncTimeout.TimeoutError {
             handleSyncFailure(
-                error: HealthSyncTimeoutError(),
+                error: AsyncTimeout.TimeoutError(),
                 userMessage: "Sync timed out. Check your connection and try again.",
                 stepId: activeStep?.id ?? "save"
             )
@@ -527,30 +534,6 @@ final class HealthSyncService: ObservableObject {
             healthManager.resetAuthorizationPrompt()
         }
         return try await healthManager.requestAuthorization()
-    }
-    
-    private struct HealthSyncTimeoutError: Error, LocalizedError {
-        var errorDescription: String? { "The operation timed out." }
-    }
-    
-    private func withTimeout<T>(
-        seconds: TimeInterval,
-        operation: @escaping @Sendable () async throws -> T
-    ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                try await operation()
-            }
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                throw HealthSyncTimeoutError()
-            }
-            defer { group.cancelAll() }
-            guard let value = try await group.next() else {
-                throw HealthSyncTimeoutError()
-            }
-            return value
-        }
     }
     
     private func markCancelled() {

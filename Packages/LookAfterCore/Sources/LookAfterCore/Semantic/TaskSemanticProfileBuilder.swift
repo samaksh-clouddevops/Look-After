@@ -40,8 +40,20 @@ public enum TaskSemanticProfileBuilder {
         if let communication = communicationProfile(task: task, corpus: corpus) {
             return communication
         }
+        if let appointment = appointmentProfile(task: task, corpus: corpus) {
+            return appointment
+        }
+        if let creative = creativeProfile(task: task, corpus: corpus) {
+            return creative
+        }
+        if let learning = learningProfile(task: task, corpus: corpus) {
+            return learning
+        }
         if let integration = integrationProfile(task: task, corpus: corpus) {
             return integration
+        }
+        if let byArea = lifeAreaProfile(task: task) {
+            return byArea
         }
 
         return genericProfile(task: task)
@@ -110,7 +122,6 @@ public enum TaskSemanticProfileBuilder {
     private static func mealRoutineProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
         let mealTerms = ["breakfast", "lunch", "dinner", "supper", "snack", "brunch", "coffee"]
         guard mealTerms.contains(where: { corpus.contains($0) }) else { return nil }
-        guard task.tags.contains("daily-routine") || task.recurrenceRule != .none else { return nil }
 
         let preferred: [TimeWindowPreference]
         if corpus.contains("breakfast") || corpus.contains("coffee") || corpus.contains("brunch") {
@@ -292,6 +303,112 @@ public enum TaskSemanticProfileBuilder {
             confidence: 0.78,
             source: .deterministic
         )
+    }
+
+    private static func appointmentProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+        let terms = ["appointment", "dentist", "doctor", "clinic", "interview", "office hours"]
+        guard terms.contains(where: { corpus.contains($0) }) else { return nil }
+
+        return TaskSemanticProfile(
+            semanticType: .errand,
+            subtype: "Appointment",
+            schedulingConstraints: [.requiresStoreOpen],
+            requiredConditions: ["Business hours"],
+            preferredTimeWindows: [.morning, .midday, .afternoon],
+            forbiddenTimeWindows: [.night],
+            estimatedDuration: max(task.estimatedMinutes, 30),
+            flexibility: .low,
+            splittable: false,
+            interruptionTolerance: 0.2,
+            energyRequirement: .low,
+            cognitiveRequirement: .light,
+            locationRequirement: "away",
+            consequenceOfDelay: .high,
+            confidence: 0.86,
+            source: .deterministic
+        )
+    }
+
+    private static func creativeProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+        let terms = ["write", "writing", "compose", "paint", "draw", "music", "song", "studio", "rehearse", "creative"]
+        let isCreativeArea = task.lifeArea == .creativity
+        guard isCreativeArea || terms.contains(where: { corpus.contains($0) }) else { return nil }
+        if corpus.contains("email") || corpus.contains("invoice") { return nil }
+
+        return TaskSemanticProfile(
+            semanticType: .creative,
+            subtype: "Creative work",
+            schedulingConstraints: [.requiresUninterruptedBlock],
+            preferredTimeWindows: [.morning, .afternoon, .evening],
+            forbiddenTimeWindows: [],
+            estimatedDuration: max(task.estimatedMinutes, 30),
+            flexibility: .moderate,
+            splittable: task.estimatedMinutes >= 60,
+            interruptionTolerance: 0.3,
+            energyRequirement: .moderate,
+            cognitiveRequirement: .moderate,
+            consequenceOfDelay: .low,
+            confidence: isCreativeArea ? 0.8 : 0.76,
+            source: .deterministic
+        )
+    }
+
+    private static func learningProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+        let terms = ["study", "learn", "course", "lecture", "reading", "chapter", "practice problems", "homework"]
+        let isLearningArea = task.lifeArea == .learning
+        guard isLearningArea || terms.contains(where: { corpus.contains($0) }) else { return nil }
+
+        return TaskSemanticProfile(
+            semanticType: .learning,
+            subtype: "Learning",
+            schedulingConstraints: [.requiresUninterruptedBlock],
+            preferredTimeWindows: [.morning, .afternoon],
+            forbiddenTimeWindows: [.night],
+            estimatedDuration: max(task.estimatedMinutes, 25),
+            flexibility: .moderate,
+            splittable: true,
+            interruptionTolerance: 0.25,
+            energyRequirement: .moderate,
+            cognitiveRequirement: .deepFocus,
+            consequenceOfDelay: .moderate,
+            confidence: isLearningArea ? 0.82 : 0.78,
+            source: .deterministic
+        )
+    }
+
+    private static func lifeAreaProfile(task: LifeTask) -> TaskSemanticProfile? {
+        switch task.lifeArea {
+        case .finance:
+            return TaskSemanticProfile(
+                semanticType: .administrative,
+                subtype: "Finance",
+                preferredTimeWindows: [.midday, .afternoon],
+                forbiddenTimeWindows: [.night],
+                estimatedDuration: task.estimatedMinutes,
+                flexibility: .high,
+                energyRequirement: .low,
+                cognitiveRequirement: .light,
+                consequenceOfDelay: .moderate,
+                confidence: 0.7,
+                source: .deterministic
+            )
+        case .home:
+            return TaskSemanticProfile(
+                semanticType: .administrative,
+                subtype: "Home",
+                preferredTimeWindows: [.morning, .afternoon, .evening],
+                estimatedDuration: task.estimatedMinutes,
+                flexibility: .high,
+                energyRequirement: .low,
+                cognitiveRequirement: .light,
+                confidence: 0.68,
+                source: .deterministic
+            )
+        case .shopping:
+            return errandProfile(task: task, corpus: "shopping")
+        default:
+            return nil
+        }
     }
 
     private static func integrationProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {

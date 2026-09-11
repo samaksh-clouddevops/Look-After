@@ -1,12 +1,13 @@
 import Foundation
 
 /// Runs an async operation with a maximum duration; cancels the loser when one finishes.
-enum AsyncTimeout {
-    struct TimeoutError: Error, LocalizedError {
-        var errorDescription: String? { "Operation timed out." }
+public enum AsyncTimeout {
+    public struct TimeoutError: Error, LocalizedError {
+        public var errorDescription: String? { "The operation timed out." }
+        public init() {}
     }
 
-    static func withTimeout<T>(
+    public static func withTimeout<T: Sendable>(
         seconds: TimeInterval,
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {

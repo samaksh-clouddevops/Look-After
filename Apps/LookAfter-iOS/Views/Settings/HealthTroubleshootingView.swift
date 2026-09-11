@@ -22,6 +22,7 @@ struct HealthTroubleshootingView: View {
                     HealthStatusBanner(
                         status: status,
                         style: .full,
+                        isSyncing: healthSync.isSyncing,
                         onPrimaryAction: { handlePrimaryAction(status.primaryAction) }
                     )
                 }
@@ -84,7 +85,7 @@ struct HealthTroubleshootingView: View {
         .padding(DesignSystem.spacingMD)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundSecondary)
+                .fill(DesignSystem.contentSurface)
         )
     }
 
@@ -169,7 +170,7 @@ struct HealthTroubleshootingView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundSecondary.opacity(0.6))
+                .fill(DesignSystem.contentSurface)
         )
     }
 

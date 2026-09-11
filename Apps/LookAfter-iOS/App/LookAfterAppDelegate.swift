@@ -18,14 +18,18 @@ final class LookAfterAppDelegate: NSObject, UIApplicationDelegate, UNUserNotific
         LookAfterFirebaseConfiguration.configureIfNeeded()
         UNUserNotificationCenter.current().delegate = self
         // BG tasks must register before app finishes launching.
+        BackgroundNotificationRefreshTask.register()
         BehavioralTelemetryBackgroundTask.register()
         BehavioralTelemetryBackgroundTask.scheduleNext()
         // Starvation protocol: catch up if vault older than 48h (BGTask is best-effort).
         TelemetrySynthesizerService.shared.catchUpIfStarved()
+        // Speech voice APIs must not run inside a Swift Task (iOS 26 AXCoreUtilities
+        // unsafeForcedSync). Bootstrap hops to GCD main itself.
+        AppleSpeechVoiceBootstrap.startIfNeeded()
         Task { @MainActor in
+            AppleCredentialMonitor.startIfNeeded()
             NotificationCoordinator.shared.configureOnLaunch()
             await NotificationPermissionService.shared.refreshStatus()
-            AppleSpeechVoiceBootstrap.startIfNeeded()
             if PushCapabilities.hasRemotePushEntitlement {
                 FirebaseMessagingService.shared.configureIfAvailable()
             }

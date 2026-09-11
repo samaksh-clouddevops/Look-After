@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import LookAfterCore
+import LookAfterData
 
 // MARK: - ViewModel
 
@@ -8,6 +9,7 @@ import LookAfterCore
 public final class LearningViewModel: ObservableObject {
     @Published public var nodes: [KnowledgeNote] = []
     private let persistenceKey = "lifeos_learning_notes"
+    private let filename = "learning_notes"
     
     public init() {
         loadFromDisk()
@@ -29,15 +31,20 @@ public final class LearningViewModel: ObservableObject {
     }
     
     private func saveToDisk() {
-        if let data = try? JSONEncoder().encode(nodes) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
-        }
+        LocalPersistenceManager.shared.save(nodes, filename: filename)
+        UserDefaults.standard.removeObject(forKey: persistenceKey)
     }
     
     private func loadFromDisk() {
+        let fileNotes: [KnowledgeNote] = LocalPersistenceManager.shared.load([KnowledgeNote].self, filename: filename)
+        if !fileNotes.isEmpty {
+            nodes = fileNotes
+            return
+        }
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
            let saved = try? JSONDecoder().decode([KnowledgeNote].self, from: data) {
             nodes = saved
+            if !nodes.isEmpty { saveToDisk() }
         }
     }
 }
@@ -134,7 +141,7 @@ public struct LearningKnowledgeView: View {
                                 }
                                 .padding()
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.white.opacity(0.05))
+                                .background(DesignSystem.contentSurface)
                                 .cornerRadius(16)
                                 .padding(.horizontal)
                                 .contextMenu {

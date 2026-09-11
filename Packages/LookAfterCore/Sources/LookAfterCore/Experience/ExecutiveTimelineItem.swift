@@ -6,12 +6,28 @@ public struct BriefingCalendarEvent: Identifiable, Sendable {
     public let title: String
     public let startDate: Date
     public let timeLabel: String
+    public let endDate: Date?
+    /// All-day EventKit events occupy flex placement only when `isBusy` (C2).
+    public let isAllDay: Bool
+    /// Free / transparent events do not occupy.
+    public let isBusy: Bool
 
-    public init(id: String, title: String, startDate: Date, timeLabel: String) {
+    public init(
+        id: String,
+        title: String,
+        startDate: Date,
+        timeLabel: String,
+        endDate: Date? = nil,
+        isAllDay: Bool = false,
+        isBusy: Bool = true
+    ) {
         self.id = id
         self.title = title
         self.startDate = startDate
         self.timeLabel = timeLabel
+        self.endDate = endDate
+        self.isAllDay = isAllDay
+        self.isBusy = isBusy
     }
 }
 

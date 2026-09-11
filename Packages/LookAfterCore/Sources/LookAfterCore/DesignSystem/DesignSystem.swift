@@ -1,29 +1,48 @@
 import SwiftUI
 
-/// Look After Design System V4 — semantic tokens, calm Apple-quality hierarchy.
+/// Look After Design System **V5** — chrome uses Liquid Glass; content stays opaque and calm.
+///
+/// Rules (see `Documentation/design/ios26-chrome.md`):
+/// - **Chrome:** tab bar, toolbars, Capture, floating docks, transient toasts — real `.glassEffect` / `.buttonStyle(.glass*)`.
+/// - **Content:** cards, lists, timeline rows, briefing sections — opaque `contentSurface*` only. Never glass wallpaper.
+/// - **Accent (`5A9E3F`):** tint on glass-prominent controls, not a flood fill on content cards.
 public struct DesignSystem {
 
-    // MARK: - Adaptive semantic backgrounds (V4)
+    // MARK: - Content backgrounds (opaque)
 
     public static let backgroundPrimary = Color.adaptive(light: "F8F8F6", dark: "111315")
     public static let backgroundSecondary = Color.adaptive(light: "FFFFFF", dark: "191C1F")
     public static let backgroundElevated = Color.adaptive(light: "ECEEF1", dark: "2B3036")
 
-    public static let surfaceGlass = backgroundSecondary.opacity(0.92)
+    /// Opaque card / list-row fill. Prefer this over any translucent “fake glass”.
+    public static let contentSurface = backgroundSecondary
+    /// Quieter nested surfaces (subtle cards) — still fully opaque.
+    public static let contentSurfaceSubtle = Color.adaptive(light: "F3F4F2", dark: "15181B")
+    /// Raised content (tiles, prominent cards).
+    public static let contentSurfaceElevated = backgroundElevated
+
+    /// - Warning: Deprecated V4 fake glass. Resolves to opaque `contentSurface`.
+    @available(*, deprecated, renamed: "contentSurface", message: "V5: content is opaque. Use contentSurface / ElevatedSurface — not opacity hacks.")
+    public static let surfaceGlass = contentSurface
+
+    /// - Warning: Use `border` for content strokes. Glass chrome uses system materials.
+    @available(*, deprecated, renamed: "border", message: "V5: content borders use DesignSystem.border.")
     public static let borderGlass = border
 
     // MARK: - Text
 
     public static let textPrimary = Color.adaptive(light: "1C1C1E", dark: "F4F4F4")
-    public static let textSecondary = Color.adaptive(light: "6B7280", dark: "B7BDC6")
-    public static let textMuted = Color.adaptive(light: "9CA3AF", dark: "8D939C")
+    /// Body/supporting copy — light ~6.5:1 on white; dark unchanged for glass/cards.
+    public static let textSecondary = Color.adaptive(light: "575F6B", dark: "C5CAD1")
+    /// Captions/meta — light ≥~4.5:1 on white (was ~2.5:1); dark modestly brighter for captions.
+    public static let textMuted = Color.adaptive(light: "667084", dark: "B8BFC8")
 
     // MARK: - Surfaces & borders
 
     public static let border = Color.adaptive(light: "E5E7EB", dark: "31353A")
     public static let divider = Color.adaptive(light: "ECECEC", dark: "2A2E33")
 
-    // MARK: - Accent (primary action — ~5% of UI)
+    // MARK: - Accent (tint on chrome — ~5% of UI)
 
     public static let accentPrimary = Color(hex: "5A9E3F")
     public static let accentHover = Color(hex: "6BB34A")
@@ -45,9 +64,11 @@ public struct DesignSystem {
     public static let travel = Color(hex: "4DD0E1")
     public static let success = Color(hex: "7FD37F")
     public static let warning = Color(hex: "F6C453")
+    /// Timeline LATE chip / rail — warm amber, distinct from lime NOW.
+    public static let late = Color(hex: "E8A04A")
     public static let error = Color(hex: "F87171")
 
-    // MARK: - Gradients
+    // MARK: - Gradients (flat stops — no decorative rainbow)
 
     public static let accentGradient = LinearGradient(
         colors: [accentPrimary, accentPrimary],
@@ -74,7 +95,7 @@ public struct DesignSystem {
         endPoint: .bottom
     )
 
-    // MARK: - Spacing (V4 scale)
+    // MARK: - Spacing (V5 scale — same numbers as V4)
 
     public static let spacingXXS: CGFloat = 4
     public static let spacingXS: CGFloat = 8
@@ -91,7 +112,7 @@ public struct DesignSystem {
     public static let sectionGap: CGFloat = 48
     public static let heroGap: CGFloat = 24
 
-    // MARK: - Radius (V4)
+    // MARK: - Radius
 
     public static let radiusSM: CGFloat = 12
     public static let radiusMD: CGFloat = 18
@@ -116,14 +137,20 @@ public struct DesignSystem {
         public static let hero: CGFloat = 0.55
         public static let preview: CGFloat = 0.15
         public static let footer: CGFloat = 0.20
-        /// Tighter horizontal inset so section cards read wider on briefing.
         public static let sectionHorizontal: CGFloat = 20
         public static let chapterSpacing: CGFloat = 12
         public static let heroSpacerCap: CGFloat = 32
         public static let scrollHintHeight: CGFloat = 56
+        /// Extra bottom pad so chapter content clears the tab bar after safeAreaInset.
+        public static let scrollBottomClearance: CGFloat = 96
+        /// Space under glance / first-fold content so it isn’t clipped by the dock.
+        public static let firstFoldBottomClearance: CGFloat = 28
+        /// Path-to-10 F1: first viewport min height so glance stays below the fold.
+        public static let gateMinHeight: CGFloat = 640
+        public static let gateSpacerHeight: CGFloat = 96
     }
 
-    // MARK: - Shadows
+    // MARK: - Shadows (content only — glass chrome carries its own depth)
 
     public static let shadowElevated = Color.adaptive(
         light: "000000",
@@ -136,6 +163,30 @@ public struct DesignSystem {
 
     public static let shadowRadius: CGFloat = 12
     public static let shadowYOffset: CGFloat = 4
+}
+
+// MARK: - Chrome (Liquid Glass)
+
+/// Tokens and helpers for **interactive chrome only** — not content cards.
+public enum LookAfterChrome {
+    /// Tint for `.buttonStyle(.glassProminent)` / `.glass(.regular.tint(...))`.
+    public static let accentTint = DesignSystem.accentPrimary
+
+    /// Dim plate under `.glass(.clear)` when the backdrop is bright or busy.
+    public static let clearGlassDimming = Color.black.opacity(0.28)
+
+    /// Soft scrim for custom overlays that must not fight system sheet glass.
+    public static let overlayScrim = Color.black.opacity(0.22)
+
+    public static let tabBarCornerRadius: CGFloat = 0
+    public static let floatingCornerRadius: CGFloat = DesignSystem.radiusLG
+    public static let capsuleChrome = Capsule(style: .continuous)
+
+    /// Prefer `.regular` for tab bars and floating docks; `.clear` only with dimming.
+    public enum GlassKind: Sendable {
+        case regular
+        case clear
+    }
 }
 
 // MARK: - Motion
@@ -155,6 +206,11 @@ public enum PremiumMotion {
         .easeOut(duration: fadeDuration)
     }
 
+    /// Responsive spring for discrete UI updates (numeric text, toggles).
+    public static var snappy: Animation {
+        .snappy
+    }
+
     public static func appear(delay: Double = 0, reduceMotion: Bool = false) -> Animation {
         if reduceMotion {
             return .linear(duration: 0.01).delay(delay)
@@ -166,9 +222,14 @@ public enum PremiumMotion {
         if reduceMotion { return .linear(duration: 0.01) }
         return pressSpring
     }
+
+    public static func snappy(reduceMotion: Bool = false) -> Animation {
+        if reduceMotion { return .linear(duration: 0.01) }
+        return .snappy
+    }
 }
 
-// Typography v2.1 → LookAfterTypography.swift
+// Typography → LookAfterTypography.swift
 
 // MARK: - View layout helpers
 
@@ -199,6 +260,13 @@ public extension View {
 
     func lookAfterScreenBackground() -> some View {
         background(DesignSystem.backgroundPrimary.ignoresSafeArea())
+    }
+
+    /// Dim plate for clear Liquid Glass over bright content. Apply **under** the glass control.
+    func lookAfterClearGlassDimming(in shape: some Shape = Capsule(style: .continuous)) -> some View {
+        background {
+            shape.fill(LookAfterChrome.clearGlassDimming)
+        }
     }
 }
 

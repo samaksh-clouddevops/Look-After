@@ -11,6 +11,7 @@ struct HealthSyncProgressView: View {
         case full
     }
     
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ObservedObject var healthSync: HealthSyncService
     var style: Style = .full
     
@@ -123,14 +124,7 @@ struct HealthSyncProgressView: View {
             }
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(DesignSystem.accentPrimary.opacity(0.35), lineWidth: 1)
-                )
-        )
+        .modifier(HealthSyncCompactChrome(reduceTransparency: reduceTransparency))
     }
     
     // MARK: - Full (Settings checklist)
@@ -169,8 +163,8 @@ struct HealthSyncProgressView: View {
                     Label("Retry Sync", systemImage: "arrow.clockwise")
                         .font(.system(size: 13, weight: .semibold, design: .default))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(DesignSystem.accentPrimary)
+                .buttonStyle(.glassProminent)
+                .tint(LookAfterChrome.accentTint)
             }
             
             if healthSync.totalStepCount > 0 {
@@ -247,10 +241,37 @@ struct HealthSyncProgressView: View {
     }
 }
 
+private struct HealthSyncCompactChrome: ViewModifier {
+    let reduceTransparency: Bool
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(shape.fill(DesignSystem.contentSurfaceElevated))
+                .overlay(shape.stroke(DesignSystem.border, lineWidth: 1))
+        } else {
+            content
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .overlay(shape.stroke(LookAfterChrome.accentTint.opacity(0.35), lineWidth: 1))
+        }
+    }
+}
+
 /// Presents HealthKit authorization from a sheet so the system dialog appears above the app UI.
 struct HealthConnectSheet: View {
+    enum Mode {
+        case connect
+        case refresh
+    }
+
     @ObservedObject var healthSync: HealthSyncService
     let userId: String
+    var mode: Mode = .connect
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var shell: AppShellState
@@ -260,7 +281,7 @@ struct HealthConnectSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-                    Text("Apple Health will ask which data \(UserFacingCopy.productName) can read. Turn on Sleep, Steps, and Heart Rate for the best plan.")
+                    Text(introCopy)
                         .font(.system(size: 14))
                         .foregroundColor(DesignSystem.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -274,30 +295,30 @@ struct HealthConnectSheet: View {
 
                         if healthSync.syncPhase == .failed, healthSync.verificationReport == nil {
                             Button(action: {
-                                Task { await runConnect() }
+                                Task { await runSync() }
                             }, label: {
-                                Label("Retry Connection", systemImage: "arrow.clockwise")
+                                Label(retryLabel, systemImage: "arrow.clockwise")
                                     .frame(maxWidth: .infinity)
                             })
-                            .buttonStyle(.borderedProminent)
-                            .tint(DesignSystem.accentPrimary)
+                            .buttonStyle(.glassProminent)
+                            .tint(LookAfterChrome.accentTint)
                         } else if healthSync.syncPhase == .complete,
                                   let report = healthSync.verificationReport,
                                   !report.hasUsableData {
                             Button(action: {
-                                Task { await runConnect() }
+                                Task { await runSync() }
                             }, label: {
                                 Label("Retry After Fixing Issues", systemImage: "arrow.clockwise")
                                     .frame(maxWidth: .infinity)
                             })
-                            .buttonStyle(.borderedProminent)
-                            .tint(DesignSystem.accentPrimary)
+                            .buttonStyle(.glassProminent)
+                            .tint(LookAfterChrome.accentTint)
                         }
                     }
                 }
                 .padding(DesignSystem.spacingLG)
             }
-            .navigationTitle("Connect Health")
+            .navigationTitle(mode == .connect ? "Connect Health" : "Sync Health")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -307,22 +328,44 @@ struct HealthConnectSheet: View {
             .task {
                 guard !didStart, !userId.isEmpty else { return }
                 didStart = true
-                await runConnect()
+                await runSync()
             }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 
-    private func runConnect() async {
+    private var introCopy: String {
+        switch mode {
+        case .connect:
+            return "Apple Health will ask which data \(UserFacingCopy.productName) can read. Turn on Sleep, Steps, and Heart Rate for the best plan."
+        case .refresh:
+            return "Pulling the latest sleep, steps, and heart rate from the Health app on this iPhone."
+        }
+    }
+
+    private var retryLabel: String {
+        mode == .connect ? "Retry Connection" : "Retry Sync"
+    }
+
+    private func runSync() async {
         let resolvedId = FirebaseManager.shared.resolvedUserId.isEmpty ? userId : FirebaseManager.shared.resolvedUserId
         guard !resolvedId.isEmpty else { return }
 
-        await healthSync.connectHealthDuringSetup(
+        switch mode {
+        case .connect:
+            await healthSync.connectHealthDuringSetup(
+                userId: resolvedId,
+                forceAuthorizationPrompt: true
+            )
+        case .refresh:
+            await healthSync.syncHealthData(userId: resolvedId)
+        }
+        healthSync.refreshConnectionStatus(
             userId: resolvedId,
-            forceAuthorizationPrompt: true
+            healthSummary: HealthStore.shared.latest
         )
-        guard healthSync.syncPhase == .complete else { return }
+        guard healthSync.syncPhase == .complete || HealthStore.shared.latest != nil else { return }
         await shell.refreshContext(
             userId: resolvedId,
             userName: UserLifeProfileStore.resolvedDisplayName(),
@@ -365,7 +408,7 @@ struct HealthVerificationReportView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.05))
+                .fill(DesignSystem.contentSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(borderColor.opacity(0.35), lineWidth: 1)

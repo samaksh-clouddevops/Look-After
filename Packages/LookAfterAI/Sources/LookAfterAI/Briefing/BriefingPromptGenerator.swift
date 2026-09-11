@@ -57,7 +57,7 @@ public enum BriefingPromptGenerator {
         cache: BriefingNarrativeCache = .shared,
         dayKey: String = TelemetryLogRotation.dayKey(),
         forceRefresh: Bool = false,
-        complete: ((String, String) async throws -> String)? = nil
+        complete: (@Sendable (String, String) async throws -> String)? = nil
     ) async -> ChiefOfStaffBriefingSynthesizer.Result {
         let compiled = compile(payload)
         // Bridge into existing synthesizer/cache via a synthetic full payload fingerprint.
@@ -74,16 +74,22 @@ public enum BriefingPromptGenerator {
             somedayDecayCount: payload.decayedTaskCount
         )
 
+        let glmComplete: (@Sendable (String, String) async throws -> String)?
+        if let completion = complete {
+            let system = compiled.system
+            let user = compiled.user
+            glmComplete = { _, _ in
+                try await completion(system, user)
+            }
+        } else {
+            glmComplete = nil
+        }
         return await ChiefOfStaffBriefingSynthesizer.synthesize(
             payload: bridge,
             userName: "",
             cache: cache,
             forceRefresh: forceRefresh,
-            glmComplete: complete.map { completion in
-                { _, _ in
-                    try await completion(compiled.system, compiled.user)
-                }
-            }
+            glmComplete: glmComplete
         )
     }
 }

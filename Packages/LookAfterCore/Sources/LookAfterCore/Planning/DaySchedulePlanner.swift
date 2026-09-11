@@ -29,12 +29,17 @@ public enum DaySchedulePlanner {
         profile: UserLifeProfile = UserLifeProfileStore.load(),
         structure: DayStructure? = nil,
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        calendarEvents: [BriefingCalendarEvent] = []
     ) -> PlanResult {
         let dayStart = calendar.startOfDay(for: day)
         let compiled = structure ?? DayStructureCompiler.compile(profile: profile, model: model, calendar: calendar)
         var slots: [PlannedSlot] = []
-        var occupied: [TaskScheduleInterval] = []
+        var occupied: [TaskScheduleInterval] = OccupiedDay.calendarIntervals(
+            from: calendarEvents,
+            on: dayStart,
+            calendar: calendar
+        )
 
         let active = tasks.filter { task in
             guard task.status.isActive else { return false }
@@ -69,22 +74,6 @@ public enum DaySchedulePlanner {
                 calendar: calendar
             ), resolved.treatAsFixed {
                 appendSlot(taskID: task.id, start: resolved.start, end: resolved.end, to: &slots, occupied: &occupied)
-            } else if let resolved = RoutineScheduleAnchorResolver.resolve(
-                for: task,
-                on: dayStart,
-                model: model,
-                profile: profile,
-                calendar: calendar
-            ), OnboardingTaskSeeder.isMealRoutineTitle(task.title) {
-                // Preferred meal anchor — include for cascade even when it overlaps a fixed block.
-                appendSlot(
-                    taskID: task.id,
-                    start: resolved.start,
-                    end: resolved.end,
-                    to: &slots,
-                    occupied: &occupied,
-                    allowOverlap: true
-                )
             }
         }
 
@@ -93,17 +82,17 @@ public enum DaySchedulePlanner {
         let remaining = active.filter { !slottedIDs.contains($0.id) && $0.isSchedulerMovable }
         let windows = SchedulingWindows.from(profile: profile, lifeModel: model)
         let requests = remaining.map { task in
-            DaySlotAllocator.Request(
-                id: task.id,
-                estimatedMinutes: max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes),
-                priority: task.priority,
+            DaySlotAllocator.Request.makingSense(
+                of: task,
+                on: dayStart,
                 preferredStart: RoutineScheduleAnchorResolver.preferredStart(
                     for: task,
                     on: dayStart,
                     model: model,
                     profile: profile,
                     calendar: calendar
-                )
+                ),
+                calendar: calendar
             )
         }
 
@@ -116,7 +105,8 @@ public enum DaySchedulePlanner {
             windows: windows,
             on: dayStart,
             now: now,
-            calendar: calendar
+            calendar: calendar,
+            calendarEvents: calendarEvents
         )
 
         for allocation in allocations {
@@ -140,7 +130,8 @@ public enum DaySchedulePlanner {
             on: dayStart,
             model: model,
             now: now,
-            calendar: calendar
+            calendar: calendar,
+            calendarEvents: calendarEvents
         )
 
         slots = cascade.tasks.compactMap { task in

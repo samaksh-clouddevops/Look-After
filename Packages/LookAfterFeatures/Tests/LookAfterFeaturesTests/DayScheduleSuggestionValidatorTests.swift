@@ -2,6 +2,7 @@ import XCTest
 @testable import LookAfterFeatures
 
 final class DayScheduleSuggestionValidatorTests: XCTestCase {
+    @MainActor
     func testFiltersUnknownTaskIDs() {
         let raw = [
             DayScheduleSuggestion(id: "known", startHour: 9, startMinute: 0, reason: "Morning"),
@@ -14,6 +15,7 @@ final class DayScheduleSuggestionValidatorTests: XCTestCase {
         XCTAssertEqual(result.first?.id, "known")
     }
 
+    @MainActor
     func testDeduplicatesTaskIDsAndTimeSlots() {
         let raw = [
             DayScheduleSuggestion(id: "a", startHour: 9, startMinute: 0),

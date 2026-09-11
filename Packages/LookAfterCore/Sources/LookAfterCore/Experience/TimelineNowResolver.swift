@@ -25,27 +25,60 @@ public enum TimelineNowResolver {
         now: Date,
         calendar: Calendar = .current
     ) -> Int? {
+        func isEligible(_ event: LifeTimelineEvent) -> Bool {
+            !event.isCompleted
+                && !event.id.hasPrefix("suggested-")
+                && !TimelineDisplaySort.isSleepBoundary(event)
+        }
+
         for (index, event) in events.enumerated() {
-            guard !event.isCompleted, !TimelineDisplaySort.isUnslottedFlexible(event) else { continue }
+            guard isEligible(event), !TimelineDisplaySort.isUnslottedFlexible(event) else { continue }
             let end = event.resolvedEndDate(calendar: calendar)
             if event.date <= now, now <= end { return index }
         }
 
+        var latestOverdue: (index: Int, end: Date)?
+        for (index, event) in events.enumerated() {
+            guard isEligible(event), !TimelineDisplaySort.isUnslottedFlexible(event) else { continue }
+            let end = event.resolvedEndDate(calendar: calendar)
+            guard end < now, event.date < now else { continue }
+            if latestOverdue == nil || end > latestOverdue!.end {
+                latestOverdue = (index, end)
+            }
+        }
+        if let latestOverdue { return latestOverdue.index }
+
         if TimelineDisplaySort.isInSchedulingGap(now: now, among: events, calendar: calendar),
            let gapIndex = events.firstIndex(where: {
-               !$0.isCompleted && TimelineDisplaySort.isUnslottedFlexible($0)
+               isEligible($0) && TimelineDisplaySort.isUnslottedFlexible($0)
            }) {
             return gapIndex
         }
 
         if let upcoming = events.firstIndex(where: {
-            !$0.isCompleted && !TimelineDisplaySort.isUnslottedFlexible($0) && $0.date > now
+            isEligible($0)
+                && !TimelineDisplaySort.isUnslottedFlexible($0)
+                && $0.date > now
         }) {
             return upcoming
         }
 
+        let hour = calendar.component(.hour, from: now)
+        let hasIncompleteWork = events.contains {
+            !$0.isCompleted
+                && !TimelineDisplaySort.isSleepBoundary($0)
+                && $0.kind != .recovery
+                && !$0.id.hasPrefix("suggested-")
+        }
+        if hour >= 17, !hasIncompleteWork,
+           let sleep = events.firstIndex(where: {
+               TimelineDisplaySort.isSleepBoundary($0) && !$0.isCompleted
+           }) {
+            return sleep
+        }
+
         return events.firstIndex(where: {
-            !$0.isCompleted && TimelineDisplaySort.isUnslottedFlexible($0)
+            isEligible($0) && TimelineDisplaySort.isUnslottedFlexible($0)
         })
     }
 

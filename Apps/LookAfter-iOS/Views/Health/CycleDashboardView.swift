@@ -45,14 +45,14 @@ struct CycleDashboardView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.contentSurface))
     }
 
     private var headerSection: some View {
         HStack(spacing: 20) {
             ZStack {
                 Circle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 10)
+                    .stroke(DesignSystem.border, lineWidth: 10)
                     .frame(width: 88, height: 88)
                 Circle()
                     .trim(from: 0, to: phaseProgress)
@@ -86,7 +86,7 @@ struct CycleDashboardView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.contentSurface))
     }
 
     private var phaseProgress: CGFloat {
@@ -111,7 +111,7 @@ struct CycleDashboardView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.contentSurface))
         }
     }
 
@@ -138,7 +138,7 @@ struct CycleDashboardView: View {
             .foregroundColor(DesignSystem.textMuted)
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.contentSurface))
     }
 
     private var stripDays: [Date] {
@@ -154,7 +154,7 @@ struct CycleDashboardView: View {
         if viewModel.predictedPeriodDays.contains(day) {
             return DesignSystem.accentPrimary.opacity(0.25)
         }
-        return Color.white.opacity(0.08)
+        return DesignSystem.contentSurfaceSubtle
     }
 
     private func legendDot(color: Color, label: String) -> some View {
@@ -184,7 +184,7 @@ struct CycleDashboardView: View {
                 }
             }
             .padding(16)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: 14).fill(DesignSystem.contentSurface))
         }
     }
 
@@ -196,7 +196,8 @@ struct CycleDashboardView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
         })
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.glassProminent)
+        .tint(LookAfterChrome.accentTint)
     }
 
     private var disclaimer: some View {

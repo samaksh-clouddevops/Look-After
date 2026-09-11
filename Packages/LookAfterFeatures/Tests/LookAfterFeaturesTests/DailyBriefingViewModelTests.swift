@@ -4,9 +4,9 @@ import XCTest
 import LookAfterCore
 import LookAfterData
 
-@MainActor
 final class DailyBriefingViewModelTests: XCTestCase {
 
+    @MainActor
     func testVisibleCardsRespectsHiddenAndPinned() {
         let vm = DailyBriefingViewModel()
         vm.resetCardLayout()
@@ -17,6 +17,7 @@ final class DailyBriefingViewModelTests: XCTestCase {
         XCTAssertEqual(vm.visibleCards.first, .dailySummary)
     }
 
+    @MainActor
     func testRefreshBuildsGreetingAndMission() async {
         let vm = DailyBriefingViewModel()
         let glm = mockGLMService()
@@ -57,6 +58,7 @@ final class DailyBriefingViewModelTests: XCTestCase {
         XCTAssertEqual(vm.progress.completedCount, 1)
     }
 
+    @MainActor
     func testRefreshBuildsLiveHealthSnapshotWithoutOvernightSleep() async {
         let vm = DailyBriefingViewModel()
         let brain = ExecutiveBrain(glmService: mockGLMService())
@@ -84,6 +86,7 @@ final class DailyBriefingViewModelTests: XCTestCase {
         XCTAssertEqual(vm.healthSnapshot.readinessScore, 74)
     }
 
+    @MainActor
     func testRefreshTaskProgressRebuildsHealthSnapshot() async {
         let vm = DailyBriefingViewModel()
         let brain = ExecutiveBrain(glmService: mockGLMService())
@@ -121,6 +124,7 @@ final class DailyBriefingViewModelTests: XCTestCase {
         XCTAssertEqual(vm.healthSnapshot.recoveryPercent, 71)
     }
 
+    @MainActor
     func testGreetingDoesNotDuplicateUserNameWhenHeroBriefingIncludesName() async {
         let vm = DailyBriefingViewModel()
         let brain = ExecutiveBrain(glmService: mockGLMService())
@@ -146,6 +150,7 @@ final class DailyBriefingViewModelTests: XCTestCase {
         XCTAssertTrue(vm.greeting.userName.isEmpty)
     }
 
+    @MainActor
     func testGreetingDoesNotDuplicateUserNameWhenFlowGreetingIncludesName() async {
         let vm = DailyBriefingViewModel()
         let brain = ExecutiveBrain(glmService: mockGLMService())
@@ -166,6 +171,7 @@ final class DailyBriefingViewModelTests: XCTestCase {
         XCTAssertTrue(vm.greeting.userName.isEmpty, "userName should be empty to prevent duplication in UI view")
     }
 
+    @MainActor
     func testToggleHabitPersistsForToday() {
         UserDefaults.standard.removeObject(forKey: "briefingHabitCompletions")
         let vm = DailyBriefingViewModel()
@@ -186,6 +192,7 @@ final class DailyBriefingViewModelTests: XCTestCase {
     }
 }
 
+@MainActor
 private func mockGLMService(stub: String = "") -> GLMService {
     let glm = GLMService.makeForTesting(keyManager: GLMKeyManager(
         secretStore: InMemorySecretStore(),

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Structured life context the planner uses for scheduling and tone.
 public struct UserLifeProfile: Codable, Sendable, Equatable {
@@ -137,17 +138,17 @@ public enum UserLifeProfileStore {
     public static let storageKey = "lifeos.userLifeProfile"
     private static let userNameDefaultsKey = "userName"
     /// Avoids repeated UserDefaults JSON decode on hot paths (refreshContext, context loop).
-    private static var cachedProfile: UserLifeProfile?
+    private static let cachedProfile = Mutex<UserLifeProfile?>(nil)
 
     public static func load() -> UserLifeProfile {
-        if let cachedProfile { return cachedProfile }
+        if let cached = cachedProfile.withLock({ $0 }) { return cached }
         guard let data = UserDefaults.standard.data(forKey: storageKey),
               let profile = try? JSONDecoder().decode(UserLifeProfile.self, from: data) else {
             let migrated = migratedLegacyProfile()
-            cachedProfile = migrated
+            cachedProfile.withLock { $0 = migrated }
             return migrated
         }
-        cachedProfile = profile
+        cachedProfile.withLock { $0 = profile }
         return profile
     }
 
@@ -160,7 +161,7 @@ public enum UserLifeProfileStore {
         }
         UserDefaults.standard.set(updated.peakStartHour, forKey: "peakStartHour")
         UserDefaults.standard.set(updated.peakEndHour, forKey: "peakEndHour")
-        cachedProfile = updated
+        cachedProfile.withLock { $0 = updated }
         syncUserNameFromProfileIfNeeded(profile: updated)
     }
 
@@ -223,14 +224,14 @@ public enum UserLifeProfileStore {
     }
 
     public static func reset() {
-        cachedProfile = nil
+        cachedProfile.withLock { $0 = nil }
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
 
     /// Drops the in-memory cache so the next `load()` re-reads UserDefaults.
     /// Call after bulk UserDefaults wipes (factory reset) that bypass `reset()`.
     public static func invalidateCache() {
-        cachedProfile = nil
+        cachedProfile.withLock { $0 = nil }
     }
 
     public static func loadUserProfile(displayName: String = "User") -> UserProfile {

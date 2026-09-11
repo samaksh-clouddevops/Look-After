@@ -18,6 +18,10 @@ struct ContentView: View {
             .environmentObject(shell)
             .lookAfterThemed()
             .preferredColorScheme(appearance.colorScheme)
+            .onOpenURL { url in
+                if GoogleSignInCoordinator.handleOpenURL(url) { return }
+                LookAfterDeepLink.handle(url)
+            }
     }
 }
 

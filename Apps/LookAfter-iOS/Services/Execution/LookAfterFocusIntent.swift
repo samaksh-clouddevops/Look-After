@@ -6,11 +6,10 @@ import LookAfterCore
 /// Users configure this once in Settings → Focus → [Mode] → Focus Filters → Look After.
 /// When our filter is active for a Focus, iOS applies that Focus when we request the filter
 /// representation; clearing the filter restores the previous Focus state.
-@available(iOS 17.0, *)
 struct LookAfterFocusIntent: SetFocusFilterIntent {
 
-    static var title: LocalizedStringResource = "Look After Focus"
-    static var description = IntentDescription(
+    static let title: LocalizedStringResource = "Look After Focus"
+    static let description = IntentDescription(
         "Applies a Look After workspace while a focus block is active — deep work, recovery, health, or admin."
     )
 
@@ -69,7 +68,6 @@ struct LookAfterFocusIntent: SetFocusFilterIntent {
 
 // MARK: - AppEnum bridge
 
-@available(iOS 17.0, *)
 enum FocusFilterCategoryAppEnum: String, AppEnum {
     case deepWork
     case recovery
@@ -79,9 +77,9 @@ enum FocusFilterCategoryAppEnum: String, AppEnum {
     case social
     case fluidGap
 
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Focus Category")
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Focus Category")
 
-    static var caseDisplayRepresentations: [FocusFilterCategoryAppEnum: DisplayRepresentation] = [
+    static let caseDisplayRepresentations: [FocusFilterCategoryAppEnum: DisplayRepresentation] = [
         .deepWork: "Deep Work",
         .recovery: "Recovery",
         .admin: "Admin",

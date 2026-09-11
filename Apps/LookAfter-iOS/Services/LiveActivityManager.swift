@@ -1,5 +1,5 @@
 import Foundation
-import ActivityKit
+@preconcurrency import ActivityKit
 import LookAfterCore
 
 /// Manages pinned Live Activities on Lock Screen and Dynamic Island.
@@ -75,7 +75,7 @@ final class LiveActivityManager {
             do {
                 self.focusActivity = try Activity.request(
                     attributes: attributes,
-                    content: .init(state: state, staleDate: nil),
+                    content: .init(state: state, staleDate: Self.staleDate(for: sessionEndDate)),
                     pushType: nil
                 )
             } catch {
@@ -120,7 +120,7 @@ final class LiveActivityManager {
                 isPaused: isPaused,
                 progressFraction: progressFraction
             )
-            await focusActivity.update(.init(state: state, staleDate: nil))
+            await focusActivity.update(.init(state: state, staleDate: Self.staleDate(for: sessionEndDate)))
         }
     }
 
@@ -158,7 +158,7 @@ final class LiveActivityManager {
         if let focusActivity, isExecutionDriven {
             enqueueFocusOperation(deferStartup: false) { [weak self] in
                 guard let self, let current = self.focusActivity, current.id == focusActivity.id else { return }
-                await current.update(.init(state: state, staleDate: nil))
+                await current.update(.init(state: state, staleDate: Self.staleDate(for: snapshot.windowEnd)))
             }
             return
         }
@@ -177,7 +177,7 @@ final class LiveActivityManager {
             do {
                 self.focusActivity = try Activity.request(
                     attributes: attributes,
-                    content: .init(state: state, staleDate: nil),
+                    content: .init(state: state, staleDate: Self.staleDate(for: snapshot.windowEnd)),
                     pushType: nil
                 )
                 self.isExecutionDriven = true
@@ -316,7 +316,7 @@ final class LiveActivityManager {
         do {
             nowPinActivity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: state, staleDate: nil),
+                content: .init(state: state, staleDate: Self.staleDate(for: snapshot.pinWindowEnd)),
                 pushType: nil
             )
             PinNowLogger.info("Live Activity started id=\(nowPinActivity?.id ?? "nil")")
@@ -339,9 +339,15 @@ final class LiveActivityManager {
         }
 
         let state = Self.nowPinContentState(from: snapshot, title: title)
-        await nowPinActivity.update(ActivityContent(state: state, staleDate: nil))
+        await nowPinActivity.update(ActivityContent(state: state, staleDate: Self.staleDate(for: snapshot.pinWindowEnd)))
         PinNowLogger.info("Updated Now Pin Live Activity for \"\(title)\"")
         return PinNowResult.ok("Updated pinned task")
+    }
+
+    /// Marks the activity stale shortly after the intended window so Lock Screen doesn't keep a dead timer.
+    private static func staleDate(for end: Date?, fallbackMinutes: TimeInterval = 30 * 60) -> Date {
+        let candidate = end ?? Date().addingTimeInterval(fallbackMinutes)
+        return max(candidate, Date().addingTimeInterval(60))
     }
 
     private static func nowPinContentState(from snapshot: WidgetSnapshot, title: String) -> NowPinActivityAttributes.ContentState {

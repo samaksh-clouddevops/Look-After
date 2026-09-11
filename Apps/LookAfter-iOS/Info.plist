@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>AuthProxyBaseURL</key>
+	<string>https://lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.samaksh.flowos.app.notification-refresh</string>
@@ -20,23 +22,45 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0-alpha</string>
+	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.samaksh.flowos.app.lookafter</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>lookafter</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.samaksh.flowos.app.firebase-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-36164607296-ios-4c41b48bef64b912d72ea5</string>
+				<string>com.googleusercontent.apps.36164607296-ahtmjo7pnthd83ejlfpn88cr795dth3n</string>
+			</array>
+		</dict>
+	</array>
+	<key>GIDClientID</key>
+	<string>36164607296-ahtmjo7pnthd83ejlfpn88cr795dth3n.apps.googleusercontent.com</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Look After reads your calendar to find free blocks and meeting-aware scheduling windows.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>Look After needs access to your calendar to add scheduled tasks and sync events.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Look After reads sleep, heart rate, HRV, steps, and workout data from Apple Health (including Apple Watch) to estimate your energy levels and personalize task recommendations.</string>
+	<string>Look After reads sleep, heart rate, HRV, steps, active energy, exercise and stand time, workouts, blood oxygen, mindful minutes, water intake, and menstrual-cycle data from Apple Health (including Apple Watch) to estimate energy and personalize scheduling. Cycle data is used only when that feature is enabled.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Look After uses your location only to show local weather on Today when you open that chip.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Look After uses the microphone for voice capture and speech-to-text transcription.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Look After transcribes your spoken thoughts into tasks, journal entries, and notes.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
-	<key>AuthProxyBaseURL</key>
-	<string>https://lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

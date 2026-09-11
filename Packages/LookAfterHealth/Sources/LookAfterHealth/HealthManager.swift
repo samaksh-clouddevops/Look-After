@@ -106,9 +106,14 @@ public final class HealthManager: ObservableObject {
             let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
             let startOfDay = Calendar.current.startOfDay(for: Date())
             let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
-            if let stats = try await fetchStatistics(type: stepsType, predicate: predicate, options: .cumulativeSum) {
+            if let stats = try await fetchStatistics(
+                type: stepsType,
+                predicate: predicate,
+                options: .cumulativeSum,
+                unit: .count()
+            ) {
                 canQuery = true
-                let steps = Int(stats.sumQuantity()?.doubleValue(for: .count()) ?? 0)
+                let steps = Int(stats.sum ?? 0)
                 if steps > 0 { hasData = true }
             }
         } catch {
@@ -176,40 +181,32 @@ public final class HealthManager: ObservableObject {
         }
 
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
-        let samples: [HKCategorySample] = try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [
-                NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-            ]) { _, results, error in
+        let calendar = Calendar.current
+        return try await runQuery(timeout: queryTimeoutSeconds) { finish in
+            HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [
+                    NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+                ]
+            ) { _, results, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    finish(.failure(error))
                     return
                 }
-                continuation.resume(returning: (results as? [HKCategorySample]) ?? [])
+                let samples = results as? [HKCategorySample] ?? []
+                let logs = samples.compactMap { sample -> CycleDayLog? in
+                    let flow = mapMenstrualFlowValue(sample.value)
+                    guard flow != .none else { return nil }
+                    return CycleDayLog(
+                        day: calendar.startOfDay(for: sample.startDate),
+                        flow: flow,
+                        source: .healthKit
+                    )
+                }
+                finish(.success(logs))
             }
-            healthStore.execute(query)
-        }
-
-        let calendar = Calendar.current
-        return samples.compactMap { sample in
-            let flow = mapMenstrualFlow(sample.value)
-            guard flow != .none else { return nil }
-            return CycleDayLog(
-                day: calendar.startOfDay(for: sample.startDate),
-                flow: flow,
-                source: .healthKit
-            )
-        }
-    }
-
-    private func mapMenstrualFlow(_ value: Int) -> CycleFlowLevel {
-        guard let flow = HKCategoryValueMenstrualFlow(rawValue: value) else { return .none }
-        switch flow {
-        case .unspecified: return .light
-        case .light: return .light
-        case .medium: return .medium
-        case .heavy: return .heavy
-        case .none: return .none
-        @unknown default: return .spotting
         }
     }
     
@@ -387,7 +384,7 @@ public final class HealthManager: ObservableObject {
         let predicate = HKQuery.predicateForSamples(withStart: windowStart, end: now, options: [])
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
-        let samples: [HKCategorySample] = try await runQuery(timeout: queryTimeoutSeconds) { finish in
+        let inputs: [SleepSampleInput] = try await runQuery(timeout: queryTimeoutSeconds) { finish in
             HKSampleQuery(
                 sampleType: sleepType,
                 predicate: predicate,
@@ -397,19 +394,18 @@ public final class HealthManager: ObservableObject {
                 if let error {
                     finish(.failure(error))
                 } else {
-                    finish(.success(results as? [HKCategorySample] ?? []))
+                    let samples = results as? [HKCategorySample] ?? []
+                    finish(.success(samples.map { sample in
+                        SleepSampleInput(
+                            start: sample.startDate,
+                            end: sample.endDate,
+                            categoryValue: sample.value,
+                            sourceBundleId: sample.sourceRevision.source.bundleIdentifier,
+                            sourceName: sample.sourceRevision.source.name
+                        )
+                    }))
                 }
             }
-        }
-
-        let inputs = samples.map { sample in
-            SleepSampleInput(
-                start: sample.startDate,
-                end: sample.endDate,
-                categoryValue: sample.value,
-                sourceBundleId: sample.sourceRevision.source.bundleIdentifier,
-                sourceName: sample.sourceRevision.source.name
-            )
         }
 
         let aggregated = SleepNightAggregator.aggregate(samples: inputs, now: now, calendar: calendar)
@@ -440,8 +436,11 @@ public final class HealthManager: ObservableObject {
         
         // Resting heart rate
         let restingType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
-        if let restingSample = try await fetchLatestQuantity(type: restingType) {
-            result.resting = restingSample.doubleValue(for: HKUnit(from: "count/min"))
+        if let resting = try await fetchLatestQuantity(
+            type: restingType,
+            unit: HKUnit(from: "count/min")
+        ) {
+            result.resting = resting
         }
         
         // Average heart rate today
@@ -449,8 +448,13 @@ public final class HealthManager: ObservableObject {
         let startOfDay = Calendar.current.startOfDay(for: Date())
         let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
         
-        if let stats = try await fetchStatistics(type: hrType, predicate: predicate, options: .discreteAverage) {
-            result.average = stats.averageQuantity()?.doubleValue(for: HKUnit(from: "count/min"))
+        if let stats = try await fetchStatistics(
+            type: hrType,
+            predicate: predicate,
+            options: .discreteAverage,
+            unit: HKUnit(from: "count/min")
+        ) {
+            result.average = stats.average
         }
         
         return result
@@ -460,8 +464,7 @@ public final class HealthManager: ObservableObject {
     
     private func fetchHRVData() async throws -> Double? {
         let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
-        guard let sample = try await fetchLatestQuantity(type: hrvType) else { return nil }
-        return sample.doubleValue(for: HKUnit.secondUnit(with: .milli))
+        return try await fetchLatestQuantity(type: hrvType, unit: HKUnit.secondUnit(with: .milli))
     }
     
     // MARK: - Activity
@@ -500,8 +503,13 @@ public final class HealthManager: ObservableObject {
 
         for options: HKQueryOptions in [.strictStartDate, .strictEndDate, []] {
             let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: options)
-            if let stats = try? await fetchStatistics(type: stepsType, predicate: predicate, options: .cumulativeSum),
-               let sum = stats.sumQuantity()?.doubleValue(for: .count()), sum > 0 {
+            if let stats = try? await fetchStatistics(
+                type: stepsType,
+                predicate: predicate,
+                options: .cumulativeSum,
+                unit: .count()
+            ),
+               let sum = stats.sum, sum > 0 {
                 return Int(sum.rounded())
             }
         }
@@ -518,10 +526,14 @@ public final class HealthManager: ObservableObject {
 
         for options: HKQueryOptions in [.strictStartDate, .strictEndDate, []] {
             let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: options)
-            if let stats = try? await fetchStatistics(type: type, predicate: predicate, options: .cumulativeSum),
-               let quantity = stats.sumQuantity() {
-                let value = quantity.doubleValue(for: unit)
-                if value > 0 { return value }
+            if let stats = try? await fetchStatistics(
+                type: type,
+                predicate: predicate,
+                options: .cumulativeSum,
+                unit: unit
+            ),
+               let quantity = stats.sum {
+                if quantity > 0 { return quantity }
             }
         }
         return 0
@@ -529,7 +541,7 @@ public final class HealthManager: ObservableObject {
     
     // MARK: - Workouts
     
-    private struct WorkoutInfo {
+    private struct WorkoutInfo: Sendable {
         var count: Int = 0
         var types: [String] = []
     }
@@ -538,7 +550,7 @@ public final class HealthManager: ObservableObject {
         let startOfDay = Calendar.current.startOfDay(for: Date())
         let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
         
-        let workouts: [HKWorkout] = try await runQuery(timeout: queryTimeoutSeconds) { finish in
+        return try await runQuery(timeout: queryTimeoutSeconds) { finish in
             HKSampleQuery(
                 sampleType: HKObjectType.workoutType(),
                 predicate: predicate,
@@ -548,23 +560,28 @@ public final class HealthManager: ObservableObject {
                 if let error {
                     finish(.failure(error))
                 } else {
-                    finish(.success(results as? [HKWorkout] ?? []))
+                    let workouts = results as? [HKWorkout] ?? []
+                    finish(.success(WorkoutInfo(
+                        count: workouts.count,
+                        types: workouts.map { $0.workoutActivityType.name }
+                    )))
                 }
             }
         }
-        
-        return WorkoutInfo(
-            count: workouts.count,
-            types: workouts.map { $0.workoutActivityType.name }
-        )
     }
     
     // MARK: - Helpers
+
+    private struct QuantityStats: Sendable {
+        var sum: Double?
+        var average: Double?
+    }
     
-    private func fetchLatestQuantity(type: HKQuantityType) async throws -> HKQuantity? {
+    private func fetchLatestQuantity(type: HKQuantityType, unit: HKUnit) async throws -> Double? {
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        let unitString = unit.unitString
         
-        let quantity: HKQuantity? = try await runQuery(timeout: queryTimeoutSeconds) { finish in
+        return try await runQuery(timeout: queryTimeoutSeconds) { finish in
             HKSampleQuery(
                 sampleType: type,
                 predicate: nil,
@@ -575,19 +592,21 @@ public final class HealthManager: ObservableObject {
                     finish(.failure(error))
                 } else {
                     let sample = (results as? [HKQuantitySample])?.first
-                    finish(.success(sample?.quantity))
+                    let value = sample?.quantity.doubleValue(for: HKUnit(from: unitString))
+                    finish(.success(value))
                 }
             }
         }
-        return quantity
     }
     
     private func fetchStatistics(
         type: HKQuantityType,
         predicate: NSPredicate,
-        options: HKStatisticsOptions
-    ) async throws -> HKStatistics? {
-        try await runQuery(timeout: queryTimeoutSeconds) { finish in
+        options: HKStatisticsOptions,
+        unit: HKUnit
+    ) async throws -> QuantityStats? {
+        let unitString = unit.unitString
+        return try await runQuery(timeout: queryTimeoutSeconds) { finish in
             HKStatisticsQuery(
                 quantityType: type,
                 quantitySamplePredicate: predicate,
@@ -595,55 +614,84 @@ public final class HealthManager: ObservableObject {
             ) { _, statistics, error in
                 if let error {
                     finish(.failure(error))
+                } else if let statistics {
+                    let resolved = HKUnit(from: unitString)
+                    finish(.success(QuantityStats(
+                        sum: statistics.sumQuantity()?.doubleValue(for: resolved),
+                        average: statistics.averageQuantity()?.doubleValue(for: resolved)
+                    )))
                 } else {
-                    finish(.success(statistics))
+                    finish(.success(nil))
                 }
             }
         }
     }
     
     /// Runs a HealthKit query with a timeout so continuations always complete.
-    private func runQuery<T>(
+    private func runQuery<T: Sendable>(
         timeout seconds: TimeInterval,
-        _ makeQuery: @escaping (@escaping (Result<T, Error>) -> Void) -> HKQuery
+        _ makeQuery: (@escaping @Sendable (Result<T, Error>) -> Void) -> HKQuery
     ) async throws -> T {
-        let queryBox = HealthKitQueryBox()
-
-        return try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask { @MainActor in
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
-                    var finished = false
-                    let complete: (Result<T, Error>) -> Void = { result in
-                        guard !finished else { return }
-                        finished = true
-                        continuation.resume(with: result)
-                    }
-                    let query = makeQuery(complete)
-                    queryBox.query = query
-                    self.healthStore.execute(query)
-                }
+        let store = healthStore
+        return try await withCheckedThrowingContinuation { continuation in
+            let box = HealthKitResumeBox<T>(continuation: continuation)
+            let query = makeQuery { result in
+                box.resume(result)
             }
-            group.addTask {
+            box.query = query
+            store.execute(query)
+            Task {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                throw HealthManagerError.queryTimeout
-            }
-            defer {
-                group.cancelAll()
-                if let query = queryBox.query {
-                    self.healthStore.stop(query)
+                box.fail(HealthManagerError.queryTimeout) { query in
+                    store.stop(query)
                 }
             }
-            guard let value = try await group.next() else {
-                throw HealthManagerError.queryTimeout
-            }
-            return value
         }
     }
 }
 
-/// Holds a running HealthKit query so it can be stopped on timeout.
-private final class HealthKitQueryBox: @unchecked Sendable {
+/// Resumes a HealthKit continuation once — from the query callback or a timeout task.
+private final class HealthKitResumeBox<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T, Error>?
     var query: HKQuery?
+
+    init(continuation: CheckedContinuation<T, Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ result: Result<T, Error>) {
+        lock.lock()
+        let cont = continuation
+        continuation = nil
+        lock.unlock()
+        cont?.resume(with: result)
+    }
+
+    func fail(_ error: Error, stop: (HKQuery) -> Void) {
+        lock.lock()
+        let cont = continuation
+        continuation = nil
+        let running = query
+        lock.unlock()
+        guard let cont else { return }
+        if let running {
+            stop(running)
+        }
+        cont.resume(throwing: error)
+    }
+}
+
+private func mapMenstrualFlowValue(_ value: Int) -> CycleFlowLevel {
+    guard let flow = HKCategoryValueMenstrualFlow(rawValue: value) else { return .none }
+    switch flow {
+    case .unspecified: return .light
+    case .light: return .light
+    case .medium: return .medium
+    case .heavy: return .heavy
+    case .none: return .none
+    @unknown default: return .spotting
+    }
 }
 
 // MARK: - HKWorkoutActivityType Name Extension

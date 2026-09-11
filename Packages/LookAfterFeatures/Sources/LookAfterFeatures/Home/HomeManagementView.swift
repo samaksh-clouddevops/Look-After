@@ -196,11 +196,11 @@ struct MaintenanceTaskCard: View {
             Spacer()
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(DesignSystem.contentSurface)
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                .stroke(DesignSystem.border, lineWidth: 1)
         )
     }
 }
@@ -230,11 +230,15 @@ struct InventoryItemCard: View {
                 .foregroundColor(DesignSystem.textMuted)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(Color.white.opacity(0.1))
+                .background(DesignSystem.contentSurfaceSubtle)
                 .cornerRadius(8)
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(DesignSystem.contentSurface)
         .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(DesignSystem.border, lineWidth: 1)
+        )
     }
 }

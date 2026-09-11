@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import LookAfterAI
 import LookAfterCore
 
 // MARK: - Protocol
@@ -19,6 +20,8 @@ protocol SpeechSynthesizing: AnyObject, ObservableObject {
 final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthesizing {
     @Published private(set) var isSpeaking = false
     @Published private(set) var activeVoiceName: String = ""
+    /// Last cloud TTS failure (cleared on successful speak). Shown in Settings preview.
+    @Published private(set) var lastError: String?
 
     private let appleSynthesizer = AVSpeechSynthesizer()
     private let cloudPlayer = CloudSpeechPlayer()
@@ -31,7 +34,10 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
             self?.isSpeaking = false
             VoiceSessionKeepAlive.end("speech-synthesis")
         }
-        refreshActiveVoiceLabel()
+        // Resolve voice labels on the main queue outside any caller Task frame.
+        DispatchQueue.main.async { [weak self] in
+            self?.refreshActiveVoiceLabel()
+        }
     }
 
     func speak(_ text: String) {
@@ -42,10 +48,11 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         }
 
         stop()
+        lastError = nil
 
         VoiceSessionKeepAlive.begin("speech-synthesis")
 
-        if SpeechVoiceSettings.isCloudTTSAvailable {
+        if SpeechVoiceSettings.provider == .cloud {
             speakCloud(prepared)
             return
         }
@@ -65,6 +72,8 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
     }
 
     func previewSample() {
+        // Ensure OpenAI key is synced before preview (simulator/device credentials).
+        _ = GLMKeyManager.shared.syncOpenAIDeveloperCredentials()
         speak("Here's how I sound. Calm, clear, and ready to help you plan the day.")
     }
 
@@ -75,14 +84,19 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         activeVoiceName = SpeechVoiceSettings.cloudVoices.first(where: { $0.id == voice })?.label ?? voice
         isSpeaking = true
 
-        cloudTask = Task {
+        cloudTask = Task { @MainActor in
             do {
+                // Refresh key from credentials/Keychain right before the request.
+                _ = GLMKeyManager.shared.syncOpenAIDeveloperCredentials()
                 let mp3 = try await OpenAICloudTTSService.synthesizeMP3(text: text)
                 guard !Task.isCancelled else { return }
                 try cloudPlayer.play(data: mp3)
+                lastError = nil
             } catch {
                 guard !Task.isCancelled else { return }
-                print("[Speech] Cloud TTS failed: \(error.localizedDescription) — falling back to Apple")
+                let message = error.localizedDescription
+                lastError = message
+                print("[Speech] Cloud TTS failed: \(message) — falling back to Apple")
                 speakApple(text)
             }
         }
@@ -124,7 +138,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
     }
 
     private func refreshActiveVoiceLabel() {
-        if SpeechVoiceSettings.isCloudTTSAvailable {
+        if SpeechVoiceSettings.provider == .cloud {
             let voice = SpeechVoiceSettings.cloudVoice
             activeVoiceName = SpeechVoiceSettings.cloudVoices.first(where: { $0.id == voice })?.label ?? voice
         } else {
@@ -153,9 +167,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
                 }
             }
 
-            let english = AVSpeechSynthesisVoice.speechVoices().filter {
-                $0.language.lowercased().hasPrefix("en")
-            }
+            let english = AppleSpeechVoiceCatalog.englishVoices()
             let ranked = english.sorted { lhs, rhs in
                 voiceScore(lhs) > voiceScore(rhs)
             }
@@ -165,8 +177,8 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         }
 
         if provider == .appleStandard,
-           let english = AVSpeechSynthesisVoice.speechVoices().first(where: {
-               $0.language.lowercased().hasPrefix("en") && !isCompactVoice($0)
+           let english = AppleSpeechVoiceCatalog.englishVoices().first(where: {
+               !isCompactVoice($0)
            }) {
             return english
         }
@@ -186,14 +198,10 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         let id = voice.identifier.lowercased()
         let name = voice.name.lowercased()
 
-        if #available(iOS 16.0, macOS 13.0, *) {
-            switch voice.quality {
-            case .enhanced: score += 40
-            case .premium: score += 60
-            default: score += 5
-            }
-        } else {
-            if id.contains("enhanced") || id.contains("premium") { score += 40 }
+        switch voice.quality {
+        case .enhanced: score += 40
+        case .premium: score += 60
+        default: score += 5
         }
 
         if id.contains("compact") || name.contains("compact") { score -= 80 }
@@ -216,8 +224,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
     }
 
     static func availableEnglishVoices() -> [AVSpeechSynthesisVoice] {
-        AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.lowercased().hasPrefix("en") }
+        AppleSpeechVoiceCatalog.englishVoices()
             .sorted {
                 if voiceScore($0) != voiceScore($1) { return voiceScore($0) > voiceScore($1) }
                 return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending

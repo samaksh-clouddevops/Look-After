@@ -1,12 +1,13 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "LookAfterCore",
+    defaultLocalization: "en",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14),
-        .watchOS(.v10)
+        .iOS(.v26),
+        .macOS(.v26),
+        .watchOS(.v26)
     ],
     products: [
         .library(name: "LookAfterCore", targets: ["LookAfterCore"])
@@ -15,17 +16,21 @@ let package = Package(
         .target(
             name: "LookAfterCore",
             dependencies: [],
-            path: "Sources/LookAfterCore"
+            path: "Sources/LookAfterCore",
+            resources: [.process("Resources")],
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "LookAfterCoreTests",
             dependencies: ["LookAfterCore"],
-            path: "Tests/LookAfterCoreTests"
+            path: "Tests/LookAfterCoreTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "FlowSchedulingTests",
             dependencies: ["LookAfterCore"],
-            path: "Tests/FlowSchedulingTests"
+            path: "Tests/FlowSchedulingTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         )
     ]
 )

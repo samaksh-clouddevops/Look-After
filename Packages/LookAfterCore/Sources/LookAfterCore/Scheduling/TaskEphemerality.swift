@@ -224,7 +224,10 @@ public enum TaskReaper {
             }
         case .strictWindow(let minutes):
             if let start = task.scheduledTime {
-                let deadline = start.addingTimeInterval(TimeInterval(minutes * 60))
+                let day = task.scheduledDate.map { calendar.startOfDay(for: $0) }
+                    ?? calendar.startOfDay(for: start)
+                let combined = calendar.combine(date: day, timeFrom: start) ?? start
+                let deadline = combined.addingTimeInterval(TimeInterval(minutes * 60))
                 if now > deadline { return .expire }
             }
         }

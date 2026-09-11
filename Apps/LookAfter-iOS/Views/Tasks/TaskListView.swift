@@ -13,6 +13,9 @@ struct TaskListView: View {
     let userId: String
     let initialFilter: TaskFilter
     
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var showCreateTask = false
     @State private var showImportTasks = false
     @State private var editingTask: LifeTask?
@@ -22,12 +25,15 @@ struct TaskListView: View {
     @State private var isCardStackMode = false
     @StateObject private var plannerVM = DailyPlannerViewModel()
     @State private var showReschedulePreview = false
+    @Namespace private var taskZoomNamespace
 
     // Performance optimization: Cache filtered/sorted tasks to avoid recomputation on every render
     @State private var cachedFilteredTasks: [LifeTask] = []
     @State private var lastFilterApplied: TaskFilter
     @State private var lastTasksHash: Int = 0
     @State private var timeDisplayRefreshTask: Task<Void, Never>?
+
+    private var taskZoomEnabled: Bool { !reduceMotion }
 
     init(
         tasksVM: TasksViewModel,
@@ -50,74 +56,87 @@ struct TaskListView: View {
             PremiumBackground()
             
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text(isCardStackMode ? "Focus Stack" : listTitle)
-                        .font(.dsLargeTitle())
-                        .foregroundColor(DesignSystem.textPrimary)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        HapticManager.impact(.light)
-                        withAnimation(.spring()) {
-                            isCardStackMode.toggle()
-                        }
-                    }) {
-                        Image(systemName: isCardStackMode ? "list.bullet" : "square.stack.3d.up.fill")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(isCardStackMode ? DesignSystem.accentPrimary : DesignSystem.textMuted)
-                            .padding(DesignSystem.spacingSM)
-                            .background(Circle().fill(DesignSystem.backgroundElevated))
+                // Header: title row, then trailing actions (avoids crushing the title).
+                VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+                    HStack(spacing: LAChromeMetrics.toolbarGap) {
+                        LAToolbarIconButton(
+                            systemName: "xmark",
+                            accessibilityLabel: "Close",
+                            action: { dismiss() }
+                        )
+                        Text(isCardStackMode ? "Focus Stack" : listTitle)
+                            .font(.dsLargeTitle())
+                            .foregroundColor(DesignSystem.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .layoutPriority(1)
+                        Spacer(minLength: 0)
                     }
-                    .minTouchTarget()
-                    
-                    Button(action: { showImportTasks = true }) {
-                        Image(systemName: "square.and.arrow.down.on.square")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                            .padding(DesignSystem.spacingSM)
-                            .background(Circle().fill(DesignSystem.backgroundElevated))
-                    }
-                    .minTouchTarget()
-                    .accessibilityLabel("Import tasks from file")
-                    
-                    Button(action: { showCreateTask.toggle() }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(DesignSystem.textMuted)
-                    }
-                    .minTouchTarget()
 
-                    Menu(content: {
-                        Button(action: {
-                            Task { await proposeReplan() }
-                        }, label: {
-                            Label("Adjust schedule", systemImage: "sparkles")
-                        })
-                        .disabled(plannerVM.isScheduling)
-                        .accessibilityLabel("Adjust schedule")
+                    HStack(spacing: LAChromeMetrics.toolbarGap) {
+                        Spacer(minLength: 0)
 
-                        Button(action: {
-                            Task { await proposeTomorrowPlan() }
+                        LAToolbarIconButton(
+                            systemName: "plus",
+                            prominence: .primary,
+                            accessibilityLabel: "Add task",
+                            action: { showCreateTask.toggle() }
+                        )
+
+                        Menu(content: {
+                            Button(action: { showImportTasks = true }, label: {
+                                Label("Import tasks", systemImage: "square.and.arrow.down.on.square")
+                            })
+
+                            Button(action: {
+                                HapticManager.impact(.light)
+                                withAnimation(.spring()) {
+                                    isCardStackMode.toggle()
+                                }
+                            }, label: {
+                                Label(
+                                    isCardStackMode ? "Show list" : "Show focus stack",
+                                    systemImage: isCardStackMode ? "list.bullet" : "square.stack.3d.up.fill"
+                                )
+                            })
+
+                            Divider()
+
+                            Button(action: {
+                                Task { await proposeReplan() }
+                            }, label: {
+                                Label("Adjust schedule", systemImage: "sparkles")
+                            })
+                            .disabled(plannerVM.isScheduling)
+
+                            Button(action: {
+                                Task { await proposeTomorrowPlan() }
+                            }, label: {
+                                Label("Plan tomorrow", systemImage: "sunrise")
+                            })
+                            .disabled(plannerVM.isScheduling)
                         }, label: {
-                            Label("Plan Tomorrow", systemImage: "sunrise")
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: LAChromeMetrics.iconPointSize, weight: LAChromeMetrics.iconWeight))
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(DesignSystem.textPrimary)
+                                .frame(width: DesignSystem.iconButtonSize, height: DesignSystem.iconButtonSize)
+                                .contentShape(Rectangle())
                         })
-                        .disabled(plannerVM.isScheduling)
-                    }, label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 22))
-                            .foregroundColor(DesignSystem.textSecondary)
-                    })
-                    .minTouchTarget()
-                    .accessibilityLabel("Task actions")
+                        .buttonStyle(.glass)
+                        .tint(DesignSystem.textSecondary)
+                        .accessibilityLabel("More task actions")
+                    }
                 }
-                .padding(DesignSystem.spacingLG)
+                .padding(.horizontal, DesignSystem.spacingLG)
+                .padding(.vertical, DesignSystem.spacingMD)
                 
                 if isCardStackMode {
                     TaskCardStackView(
                         tasksVM: tasksVM,
                         adhdVM: adhdVM,
+                        taskZoomNamespace: taskZoomNamespace,
+                        zoomEnabled: taskZoomEnabled,
                         onTaskDeferred: { task in
                             guard FlowDirectorFeature.isEnabled, let brainVM else { return }
                             Task { await brainVM.handleTaskDeferred(task, userId: userId) }
@@ -153,6 +172,8 @@ struct TaskListView: View {
                                 isDecomposing: tasksVM.isDecomposing(taskId: task.id),
                                 timeDisplayLabel: tasksVM.timeDisplay(for: task).lineLabel,
                                 isLoadingTimeDisplay: tasksVM.isLoadingTimeDisplay(taskId: task.id),
+                                taskZoomNamespace: taskZoomNamespace,
+                                zoomEnabled: taskZoomEnabled,
                                 editingTask: $editingTask,
                                 onComplete: handleComplete,
                                 onDelete: handleDelete,
@@ -167,8 +188,13 @@ struct TaskListView: View {
                             )
                         }
                     }
+                    #if os(iOS)
                     .listStyle(.insetGrouped)
+                    #else
+                    .listStyle(.inset)
+                    #endif
                     .scrollContentBackground(.hidden)
+                    .scrollEdgeEffectStyle(.soft, for: .bottom)
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: cachedFilteredTasks.map(\.id))
                     .onAppear { updateFilteredTasksIfNeeded() }
                     .onChange(of: selectedFilter) { _, _ in
@@ -195,9 +221,19 @@ struct TaskListView: View {
                 task: task,
                 onMoreOptions: { fullEditTask = $0 }
             )
+            .lookAfterZoomDestination(
+                sourceID: task.id,
+                in: taskZoomNamespace,
+                enabled: taskZoomEnabled
+            )
         }
         .sheet(item: $fullEditTask) { task in
             TaskFormSheet(tasksVM: tasksVM, mode: .edit(task))
+                .lookAfterZoomDestination(
+                    sourceID: task.id,
+                    in: taskZoomNamespace,
+                    enabled: taskZoomEnabled
+                )
         }
         .task {
             if tasksVM.tasks.isEmpty, tasksVM.completedToday.isEmpty {
@@ -240,7 +276,8 @@ struct TaskListView: View {
             ReschedulePreviewSheet(
                 plannerVM: plannerVM,
                 proposal: proposal,
-                userId: userId
+                userId: userId,
+                tasksViewModel: tasksVM
             )
         }
     }
@@ -309,8 +346,11 @@ struct TaskListView: View {
             }, label: {
                 Label("Plan", systemImage: "sparkles")
                     .font(.system(size: 13, weight: .semibold, design: .default))
+                    .padding(.horizontal, DesignSystem.spacingSM)
+                    .padding(.vertical, 8)
             })
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
+            .tint(LookAfterChrome.accentTint)
             .disabled(plannerVM.isScheduling)
         }
         .padding(.horizontal, DesignSystem.spacingLG)
@@ -342,7 +382,7 @@ struct TaskListView: View {
         let context = tasksVM.schedulingContext
         switch selectedFilter {
         case .all:
-            return TaskListSorter.sortByPriorityThenSchedule(
+            return TaskListSorter.sortForToday(
                 TaskScheduleQuery.uniqueActiveTasks(
                     from: tasksVM.tasks,
                     context: context,
@@ -523,7 +563,9 @@ struct TaskFormSheet: View {
                     Section("Time Estimate") {
                         HStack(spacing: 12) {
                             TextField("Minutes", text: $estimatedMinutesText)
+                                #if os(iOS)
                                 .keyboardType(.numberPad)
+                                #endif
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 72)
                                 .onSubmit(commitEstimatedMinutesText)
@@ -536,6 +578,15 @@ struct TaskFormSheet: View {
 
                             Stepper("", value: $estimatedMinutes, in: 1...240)
                                 .labelsHidden()
+                        }
+                        if let warning = DaySupervisorContinuity.createDurationWarning(
+                            estimatedMinutes: estimatedMinutes,
+                            remainingFlexMinutes: tasksVM.dayRemainingFlexMinutes()
+                        ), !mode.isEditing {
+                            Text(warning)
+                                .font(.system(size: 12, design: .default))
+                                .foregroundColor(DesignSystem.warning)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     
@@ -737,9 +788,13 @@ struct WeekdaySelectionView: View {
                             .font(.system(size: 13, weight: .bold, design: .default))
                             .frame(width: 34, height: 34)
                             .background(
-                                Circle().fill(isSelected ? DesignSystem.accentPrimary.opacity(0.35) : Color.white.opacity(0.08))
+                                Circle().fill(
+                                    isSelected
+                                        ? DesignSystem.accentPrimary
+                                        : DesignSystem.contentSurfaceSubtle
+                                )
                             )
-                            .foregroundColor(isSelected ? DesignSystem.textPrimary : DesignSystem.textMuted)
+                            .foregroundColor(isSelected ? DesignSystem.accentOnPrimary : DesignSystem.textMuted)
                     })
                     .buttonStyle(.plain)
                 }

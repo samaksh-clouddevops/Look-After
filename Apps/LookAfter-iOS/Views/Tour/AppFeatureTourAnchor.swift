@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Preference payload for tour anchor discovery (global frame + corner radius).
-struct AppFeatureTourAnchorPayload: Equatable {
+nonisolated struct AppFeatureTourAnchorPayload: Equatable, Sendable {
     var frame: CGRect
     var cornerRadius: CGFloat
 }

@@ -48,9 +48,9 @@ public struct TagChipView: View {
 
     private var backgroundColor: Color {
         switch style {
-        case .neutral: return Color.white.opacity(0.06)
+        case .neutral: return DesignSystem.contentSurfaceSubtle
         case .accent: return DesignSystem.accentGlow
-        case .tinted: return Color.white.opacity(0.06)
+        case .tinted: return DesignSystem.contentSurfaceSubtle
         case .status(let color): return color.opacity(0.85)
         }
     }
@@ -105,22 +105,20 @@ public enum TagBuilder {
 }
 
 public extension LifeTask {
-    /// One-line metadata for compact task rows.
+    /// One-line metadata for compact task rows: `time · duration · priority`.
     var compactMetadataLine: String? {
         var parts: [String] = []
-        parts.append("Estimated time \(estimatedMinutes) min")
-
+        if isFixedTimeEvent, let start = scheduledTime {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "h:mm a"
+            parts.append(formatter.string(from: start))
+        }
+        if estimatedMinutes > 0 {
+            parts.append("\(estimatedMinutes)m")
+        }
+        parts.append(priority.label)
         if isRecurring {
             parts.append(recurrenceRule.rawValue)
-        }
-        if isFixedTimeEvent {
-            if let start = scheduledTime {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "h:mm a"
-                parts.append(formatter.string(from: start))
-            } else {
-                parts.append("Fixed")
-            }
         }
         if isOverdue {
             parts.append("Overdue")
@@ -131,9 +129,14 @@ public extension LifeTask {
     /// Standard metadata chips for task cards.
     func metadataTags(timeLabel: String? = nil) -> [TagChipView] {
         var tags: [TagChipView] = [
-            TagChipView(lifeArea.rawValue, icon: lifeArea.icon, style: .neutral),
-            TagChipView(timeLabel ?? "Estimated time \(estimatedMinutes) min")
+            TagChipView(lifeArea.shortLabel, icon: lifeArea.icon, style: .neutral)
         ]
+        if let timeLabel, !timeLabel.isEmpty {
+            tags.append(TagChipView(timeLabel))
+        } else if estimatedMinutes > 0 {
+            tags.append(TagChipView("\(estimatedMinutes)m"))
+        }
+        tags.append(TagChipView(priority.label))
         if isRecurring {
             tags.append(TagChipView(recurrenceRule.rawValue, icon: "repeat", style: .accent))
         }

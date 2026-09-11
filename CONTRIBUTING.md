@@ -26,7 +26,7 @@ Quick rules:
 ## Pull request checklist
 
 1. Run `xcodegen generate` if you changed `project.yml` or moved top-level folders
-2. iOS build passes: `xcodebuild -scheme LookAfter-iOS -destination 'platform=iOS Simulator,name=iPhone 17' build`
+2. iOS build passes: `xcodebuild -scheme LookAfter-iOS -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' build`
 3. macOS build passes: `xcodebuild -scheme LookAfter-macOS -destination 'platform=macOS' build`
 4. Relevant package tests pass: `cd Packages/<Name> && swift test`
 5. No new circular package dependencies

@@ -45,6 +45,7 @@ struct BrainInspectorView: View {
                         Task { await shell.refreshContextFromInspector() }
                     }
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .buttonStyle(.glass)
                 }
             }
         }
@@ -65,12 +66,12 @@ struct BrainInspectorView: View {
                             .background(
                                 Capsule().fill(
                                     selectedSection == section
-                                        ? DesignSystem.success.opacity(0.25)
-                                        : DesignSystem.backgroundElevated
+                                        ? DesignSystem.accentPrimary
+                                        : DesignSystem.contentSurfaceElevated
                                 )
                             )
                             .foregroundColor(
-                                selectedSection == section ? DesignSystem.success : DesignSystem.textSecondary
+                                selectedSection == section ? DesignSystem.accentOnPrimary : DesignSystem.textSecondary
                             )
                     })
                     .buttonStyle(.plain)
@@ -110,7 +111,7 @@ struct BrainInspectorView: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 8).fill(DesignSystem.backgroundElevated))
+        .background(RoundedRectangle(cornerRadius: 8).fill(DesignSystem.contentSurfaceElevated))
     }
 
     @ViewBuilder
@@ -341,7 +342,7 @@ struct BrainInspectorView: View {
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(DesignSystem.border, lineWidth: 1)
-                .background(RoundedRectangle(cornerRadius: 8).fill(DesignSystem.backgroundSecondary))
+                .background(RoundedRectangle(cornerRadius: 8).fill(DesignSystem.contentSurface))
         )
     }
 

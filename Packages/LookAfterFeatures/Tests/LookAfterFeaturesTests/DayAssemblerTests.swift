@@ -4,6 +4,7 @@ import XCTest
 
 final class DayAssemblerTests: XCTestCase {
 
+    @MainActor
     func testCreatesGymAndMusicTasksForWeekday() {
         let markdown = """
         ### Gym
@@ -48,6 +49,7 @@ final class DayAssemblerTests: XCTestCase {
         XCTAssertTrue(music?.tags.contains(LifeModel.commitmentTaskTag) == true)
     }
 
+    @MainActor
     func testSkipsCreativeCommitmentWhenMultiDaySliceExists() {
         let markdown = """
         ### Creative Deep Work

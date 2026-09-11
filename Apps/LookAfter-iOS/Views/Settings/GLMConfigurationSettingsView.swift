@@ -19,7 +19,7 @@ struct GLMConfigurationSettingsView: View {
                         #endif
                         .autocorrectionDisabled()
                         .onSubmit { viewModel.save() }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
 
                     TextField("Standard model", text: $viewModel.standardModel)
                         .font(.system(size: 13, design: .monospaced))
@@ -28,7 +28,7 @@ struct GLMConfigurationSettingsView: View {
                         #endif
                         .autocorrectionDisabled()
                         .onSubmit { viewModel.save() }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
 
                     TextField("Economy model", text: $viewModel.economyModel)
                         .font(.system(size: 13, design: .monospaced))
@@ -37,11 +37,11 @@ struct GLMConfigurationSettingsView: View {
                         #endif
                         .autocorrectionDisabled()
                         .onSubmit { viewModel.save() }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
 
                     Toggle("Tiered routing", isOn: $viewModel.tieredRoutingEnabled)
                         .onChange(of: viewModel.tieredRoutingEnabled) { _, _ in viewModel.save() }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
 
                     Stepper(
                         "Timeout: \(Int(viewModel.timeoutSeconds))s",
@@ -50,11 +50,11 @@ struct GLMConfigurationSettingsView: View {
                         step: 15
                     )
                     .onChange(of: viewModel.timeoutSeconds) { _, _ in viewModel.save() }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     Toggle("Streaming", isOn: $viewModel.streamingEnabled)
                         .onChange(of: viewModel.streamingEnabled) { _, _ in viewModel.save() }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Model tiers")
                 }, footer: {
@@ -69,13 +69,13 @@ struct GLMConfigurationSettingsView: View {
                     }, label: {
                         Label("Usage & Cost", systemImage: "chart.bar.doc.horizontal")
                     })
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     Button("Reset to defaults") {
                         viewModel.resetToDefaults()
                     }
                     .foregroundColor(DesignSystem.warning)
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Developer")
                 })
@@ -161,7 +161,7 @@ struct GLMUsageSettingsView: View {
                     if summary.recentRecords.isEmpty {
                         Text("No GLM requests logged yet.")
                             .foregroundColor(DesignSystem.textMuted)
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.contentSurface)
                     } else {
                         ForEach(summary.recentRecords) { record in
                             VStack(alignment: .leading, spacing: 4) {
@@ -179,7 +179,7 @@ struct GLMUsageSettingsView: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(DesignSystem.textMuted)
                             }
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.contentSurface)
                         }
                     }
 
@@ -187,7 +187,7 @@ struct GLMUsageSettingsView: View {
                         GLMUsageLogger.shared.clear()
                         refresh()
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Recent Requests")
                 })
@@ -215,7 +215,7 @@ struct GLMUsageSettingsView: View {
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(DesignSystem.textSecondary)
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(DesignSystem.contentSurface)
     }
 
     private func tokenStatRow(
@@ -237,7 +237,7 @@ struct GLMUsageSettingsView: View {
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(DesignSystem.textSecondary)
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(DesignSystem.contentSurface)
     }
 
     private func refresh() {

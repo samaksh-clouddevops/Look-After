@@ -24,14 +24,19 @@ public enum InitiationBridgeDetector {
     }
 
     public static func proactiveAction(from result: Result, now: Date = Date(), calendar: Calendar = .current) -> ProactiveAction {
-        let micro = UserFacingCopy.microActionMessage(deferralCount: max(result.deferralCount, 1))
+        let times = result.deferralCount == 1 ? "once" : "\(max(result.deferralCount, 1)) times"
+        let duration = TaskDurationPolicy.microStartDurationPhrase(for: result.heroTask)
         let dayKey = ProactiveDailyBudget.dayKey(for: now, calendar: calendar)
         return ProactiveAction(
             id: "initiation-bridge.\(dayKey).\(result.heroTask.id)",
             kind: .initiationBridge,
             severity: .high,
-            message: "\(micro) Start with \"\(result.heroTask.title)\" for 2 minutes?",
-            options: ["Start 2-min focus", "Pick another task", "Not now"],
+            message: "You've put this off \(times). Start with \"\(result.heroTask.title)\" for \(duration)?",
+            options: [
+                TaskDurationPolicy.microStartOptionLabel(for: result.heroTask),
+                "Pick another task",
+                "Not now"
+            ],
             surface: .banner,
             relatedTaskIDs: [result.heroTask.id],
             expiresAt: Date().addingTimeInterval(20 * 60)

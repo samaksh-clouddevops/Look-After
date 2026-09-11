@@ -81,7 +81,7 @@ public enum DayStructureCompiler {
             anchors.append(anchor)
         }
 
-        for slot in ["Breakfast", "Lunch", "Dinner", "Brush teeth — morning", "Brush teeth — evening", "Snacks"] {
+        for slot in ["Breakfast", "Lunch", "Dinner", "Brush teeth after waking", "Brush teeth before bed", "Brush teeth — morning", "Brush teeth — evening", "Snacks"] {
             if let time = OnboardingTaskSeeder.routineAnchorTime(forTitle: slot, on: day, calendar: calendar) {
                 append(DayStructure.Anchor(
                     id: "routine.\(slot.lowercased().replacingOccurrences(of: " ", with: "-"))",

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Subsystem that participates in factory reset.
 public protocol ResettableSubsystem: Sendable {
@@ -22,24 +23,17 @@ public enum FactoryResetPreservation {
 
 /// Blocks Firestore merge / remote reload while factory reset cloud wipe is in progress.
 public enum FreshInstallGuard: Sendable {
-    private static let lock = NSLock()
-    private static var _isActive = false
+    private static let isActiveFlag = Mutex(false)
 
     public static var isActive: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return _isActive
+        isActiveFlag.withLock { $0 }
     }
 
     public static func enter() {
-        lock.lock()
-        _isActive = true
-        lock.unlock()
+        isActiveFlag.withLock { $0 = true }
     }
 
     public static func exit() {
-        lock.lock()
-        _isActive = false
-        lock.unlock()
+        isActiveFlag.withLock { $0 = false }
     }
 }

@@ -45,7 +45,7 @@ public struct EmailTriageItem: Identifiable, Sendable, Equatable {
 }
 
 /// Syncs unread Gmail threads via auth proxy or local mock for development.
-public final class GmailSyncService {
+public final class GmailSyncService: Sendable {
     public static let shared = GmailSyncService()
 
     public init() {}

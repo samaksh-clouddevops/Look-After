@@ -31,7 +31,7 @@ struct LifeProfileImportView: View {
                 .frame(minHeight: 160)
                 .padding(8)
                 .scrollContentBackground(.hidden)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceSubtle))
                 .foregroundColor(DesignSystem.textPrimary)
 
             HStack(spacing: 12) {
@@ -219,6 +219,6 @@ struct LifeModelSummaryView: View {
                 .foregroundColor(DesignSystem.textMuted)
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurface))
     }
 }

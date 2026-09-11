@@ -15,11 +15,11 @@ permissions:
 
 env:
   DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
-  SIM_DESTINATION_NAME: iPhone 16
+  SIM_DESTINATION_NAME: iPhone 17
 
 jobs:
   evp:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4

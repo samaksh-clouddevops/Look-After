@@ -36,6 +36,7 @@ enum BehavioralTelemetryBackgroundTask {
     private static func handle(_ task: BGProcessingTask) {
         scheduleNext()
 
+        let completion = BehavioralBGCompletion(task)
         let work = Task { @MainActor in
             let result = await TelemetrySynthesizerService.shared.synthesizeDailyTelemetry()
             logger.info(
@@ -46,14 +47,15 @@ enum BehavioralTelemetryBackgroundTask {
 
         task.expirationHandler = {
             work.cancel()
+            completion.finish(success: false)
         }
 
         Task {
             do {
                 _ = try await work.value
-                task.setTaskCompleted(success: true)
+                completion.finish(success: true)
             } catch {
-                task.setTaskCompleted(success: false)
+                completion.finish(success: false)
             }
         }
     }
@@ -69,5 +71,23 @@ enum BehavioralTelemetryBackgroundTask {
             return today3
         }
         return calendar.date(byAdding: .day, value: 1, to: today3) ?? now.addingTimeInterval(24 * 3600)
+    }
+}
+
+private final class BehavioralBGCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+    private let task: BGTask
+
+    init(_ task: BGTask) {
+        self.task = task
+    }
+
+    func finish(success: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !finished else { return }
+        finished = true
+        task.setTaskCompleted(success: success)
     }
 }

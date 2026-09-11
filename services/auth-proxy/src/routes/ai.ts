@@ -33,7 +33,7 @@ export function aiRouter(config: AppConfig, store: LicenseStore): Router {
       return;
     }
 
-    const model = String(req.body?.model ?? "glm-4.7-flash");
+    const model = String(req.body?.model ?? "glm-5.3-flash");
     const temperature =
       typeof req.body?.temperature === "number" ? req.body.temperature : defaults.temperature;
     const maxTokens =

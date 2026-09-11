@@ -4,6 +4,7 @@ import LookAfterCore
 
 final class AIScheduleSlotServiceTests: XCTestCase {
 
+    @MainActor
     func testApplySuggestionsSetsScheduledTimeWithoutAnchoring() {
         let day = Calendar.current.startOfDay(for: Date())
         var tasks = [
@@ -30,6 +31,7 @@ final class AIScheduleSlotServiceTests: XCTestCase {
         XCTAssertEqual(hour, 14)
     }
 
+    @MainActor
     func testApplySuggestionsSkipsAnchoredTasks() {
         let day = Calendar.current.startOfDay(for: Date())
         var tasks = [

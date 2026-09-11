@@ -70,7 +70,7 @@ public enum TransitionShieldBuilder {
             let prep: String
             switch transition.tier {
             case .three: prep = "Go now — close tabs and grab water."
-            case .eight: prep = "Transition in 8m — wrap up."
+            case .eight: prep = "Wrap up."
             case .fifteen: prep = "Heads up — start winding down."
             case .thirty: prep = "Anchor coming — glance at the plan."
             }
@@ -80,7 +80,8 @@ public enum TransitionShieldBuilder {
                 kind: .transitionShield,
                 severity: transition.tier.rawValue <= 8 ? .high : .medium,
                 message: "\"\(transition.title)\" in \(transition.minutesUntil)m — \(prep)",
-                options: ["Open plan", "Snooze 5m", "I'm ready"],
+                // V3: "I'm ready" is the single filled primary; Open plan / Snooze stay secondary.
+                options: ["I'm ready", "Open plan", "Snooze 5m"],
                 surface: .notification,
                 relatedTaskIDs: [transition.eventID],
                 expiresAt: transition.start,

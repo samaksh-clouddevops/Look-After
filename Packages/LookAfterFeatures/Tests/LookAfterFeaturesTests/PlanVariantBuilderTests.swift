@@ -5,6 +5,7 @@ import LookAfterCore
 
 final class PlanVariantBuilderTests: XCTestCase {
 
+    @MainActor
     func testBuildOfflineVariantsProducesThreeOptions() {
         let tasks = [
             LifeTask(title: "Deep work", priority: .high, estimatedMinutes: 60),
@@ -31,6 +32,7 @@ final class PlanVariantBuilderTests: XCTestCase {
         XCTAssertTrue(variants.contains(where: \.recommended))
     }
 
+    @MainActor
     func testNegotiationMapsOptionToVariantID() {
         let variants = [
             PlanVariant(id: "a", label: "Plan A", summary: "A"),
@@ -41,6 +43,7 @@ final class PlanVariantBuilderTests: XCTestCase {
         XCTAssertEqual(negotiation.variantID(forOption: "Plan B"), "b")
     }
 
+    @MainActor
     func testDayReplanResultEffectiveChangesUsesVariant() {
         let variant = PlanVariant(
             id: "v1",

@@ -2,7 +2,7 @@ import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
 
-/// Single-screen capture composer — voice/text first, optional type chips.
+/// Single-screen capture composer — field-first Notes-style compose.
 struct CaptureComposerView: View {
     @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
@@ -24,12 +24,82 @@ struct CaptureComposerView: View {
     private let chips: [CaptureIntent] = [.task, .note, .event, .mood, .insight]
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            DesignSystem.backgroundPrimary.ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
                 header
-                composerField
+
+                TextField("What's on your mind?", text: $text, axis: .vertical)
+                    .lineLimit(3...10)
+                    .focused($isFocused)
+                    .textStyleBody()
+                    .padding(DesignSystem.spacingMD)
+                    .frame(minHeight: 120, alignment: .topLeading)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                            .fill(DesignSystem.contentSurface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                                    .stroke(DesignSystem.border, lineWidth: 1)
+                            )
+                    )
+                    .accessibilityIdentifier("capture-text-field")
+                    .padding(.horizontal, DesignSystem.screenHorizontal)
+
+                // Field accessories: Speak + type menu (chips no longer ahead of content).
+                HStack(spacing: DesignSystem.spacingSM) {
+                    Button(action: toggleVoice) {
+                        Label(
+                            speechManager.isListening ? "Stop" : "Speak",
+                            systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.fill"
+                        )
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundStyle(speechManager.isListening ? DesignSystem.focus : DesignSystem.accentPrimary)
+                        .frame(minHeight: DesignSystem.minTouchTarget)
+                        .padding(.horizontal, DesignSystem.spacingSM)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("capture-mic")
+
+                    if speechManager.isListening {
+                        AudioWaveformView(levels: speechManager.audioLevels)
+                            .frame(maxWidth: 120)
+                    }
+
+                    Menu {
+                        Button("Auto") { selectedChip = nil }
+                        ForEach(chips, id: \.self) { intent in
+                            Button(chipLabel(intent)) { selectedChip = intent }
+                        }
+                    } label: {
+                        Label(selectedChipLabel, systemImage: "tag")
+                            .font(.dsCaption(weight: .semibold))
+                            .foregroundStyle(DesignSystem.textSecondary)
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .padding(.horizontal, DesignSystem.spacingSM)
+                    }
+                    .accessibilityIdentifier("capture-type-menu")
+                    .accessibilityLabel("Capture type, \(selectedChipLabel)")
+
+                    Spacer(minLength: 0)
+
+                    if let error = speechManager.errorMessage {
+                        Button("Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .font(.dsCaption(weight: .semibold))
+                        .foregroundStyle(DesignSystem.accentPrimary)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open Settings for microphone access")
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.warning)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, DesignSystem.screenHorizontal)
+
                 if selectedChip == .mood {
                     moodSlider
                 }
@@ -38,15 +108,61 @@ struct CaptureComposerView: View {
                         .datePickerStyle(.compact)
                         .padding(.horizontal, DesignSystem.screenHorizontal)
                 }
-                chipRow
-                saveButton
-                inboxFooterLink
+
+                if !canSave {
+                    Text("Type or speak to enable Save")
+                        .font(.dsCaption())
+                        .foregroundStyle(DesignSystem.textSecondary)
+                        .padding(.horizontal, DesignSystem.screenHorizontal)
+                        .accessibilityIdentifier("capture-save-helper")
+                }
+
                 Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: DesignSystem.spacingSM) {
+                    saveArea
+                    if canSave {
+                        inboxFooterLink
+                    }
+                }
+                .padding(.top, DesignSystem.spacingSM)
+                .padding(.bottom, DesignSystem.spacingSM)
+                .frame(maxWidth: .infinity)
+                .background(DesignSystem.backgroundPrimary.opacity(0.96))
+            }
+            .background(DesignSystem.backgroundPrimary.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: DesignSystem.spacingSM) {
+                        Menu {
+                            Button("View inbox", systemImage: "tray.full", action: onOpenInbox)
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(DesignSystem.textSecondary)
+                                .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                        }
+                        .accessibilityIdentifier("capture-overflow")
+                        .accessibilityLabel("More")
 
-            LADismissFAB { dismiss() }
-                .padding(.bottom, DesignSystem.spacingXXXL)
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(DesignSystem.textSecondary)
+                                .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("capture-dismiss-fab")
+                        .accessibilityLabel("Close")
+                    }
+                }
+            }
         }
+        .scrollDismissesKeyboard(.interactively)
         .accessibilityIdentifier("capture-composer")
         .onAppear {
             isFocused = true
@@ -67,63 +183,8 @@ struct CaptureComposerView: View {
             Text("Say or type anything — we'll put it in the right place.")
                 .textStyleBody(color: DesignSystem.textSecondary)
         }
-        .padding(.top, DesignSystem.spacingXL)
+        .padding(.top, DesignSystem.spacingMD)
         .padding(.horizontal, DesignSystem.screenHorizontal)
-    }
-
-    private var composerField: some View {
-        VStack(spacing: DesignSystem.spacingSM) {
-            TextField("What's on your mind?", text: $text, axis: .vertical)
-                .lineLimit(3...8)
-                .focused($isFocused)
-                .textStyleBody()
-                .padding(DesignSystem.spacingMD)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                        .fill(DesignSystem.backgroundSecondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                                .stroke(DesignSystem.border, lineWidth: 1)
-                        )
-                )
-                .accessibilityIdentifier("capture-text-field")
-                .padding(.horizontal, DesignSystem.screenHorizontal)
-
-            HStack(spacing: DesignSystem.spacingMD) {
-                Button(action: toggleVoice) {
-                    Label(
-                        speechManager.isListening ? "Stop" : "Speak",
-                        systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.circle.fill"
-                    )
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(speechManager.isListening ? DesignSystem.focus : DesignSystem.textSecondary)
-                }
-                .accessibilityIdentifier("capture-mic")
-
-                if speechManager.isListening {
-                    AudioWaveformView(levels: speechManager.audioLevels)
-                        .padding(.horizontal, DesignSystem.screenHorizontal)
-                }
-
-                Spacer()
-
-                if let error = speechManager.errorMessage {
-                    Button("Settings") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(DesignSystem.accentPrimary)
-                    .accessibilityLabel("Open Settings for microphone access")
-                    Text(error)
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.warning)
-                        .lineLimit(2)
-                }
-            }
-            .padding(.horizontal, DesignSystem.screenHorizontal)
-        }
     }
 
     private var moodSlider: some View {
@@ -137,58 +198,32 @@ struct CaptureComposerView: View {
         .padding(.horizontal, DesignSystem.screenHorizontal)
     }
 
-    private var chipRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chipButton(label: "Auto", intent: nil)
-                ForEach(chips, id: \.self) { intent in
-                    chipButton(label: chipLabel(intent), intent: intent)
-                }
-            }
-            .padding(.horizontal, DesignSystem.screenHorizontal)
-        }
+    private var selectedChipLabel: String {
+        guard let selectedChip else { return "Auto" }
+        return chipLabel(selectedChip)
     }
 
-    private func chipButton(label: String, intent: CaptureIntent?) -> some View {
-        let isSelected = selectedChip == intent
-        return Button {
-            HapticManager.impact(.light)
-            selectedChip = isSelected ? nil : intent
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(isSelected ? DesignSystem.accentOnPrimary : DesignSystem.textSecondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(isSelected ? DesignSystem.accentPrimary : DesignSystem.backgroundElevated)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(intent.map { "capture-chip-\($0.rawValue)" } ?? "capture-chip-auto")
-    }
-
-    private var saveButton: some View {
+    @ViewBuilder
+    private var saveArea: some View {
         Button(action: save) {
             HStack {
                 if isSaving {
-                    ProgressView().tint(DesignSystem.accentOnPrimary)
+                    ProgressView()
+                        .tint(canSave ? DesignSystem.accentOnPrimary : DesignSystem.textSecondary)
                 }
                 Text(isSaving ? "Saving…" : "Save")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.dsBody(weight: .semibold))
+                    .foregroundStyle(canSave ? DesignSystem.accentOnPrimary : DesignSystem.textPrimary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .foregroundColor(DesignSystem.accentOnPrimary)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                    .fill(canSave ? DesignSystem.accentPrimary : DesignSystem.textMuted.opacity(0.4))
-            )
+            .frame(minHeight: DesignSystem.minTouchTarget)
         }
+        .modifier(CaptureSaveChrome(isEnabled: canSave && !isSaving))
         .disabled(!canSave || isSaving)
-        .buttonStyle(.plain)
         .padding(.horizontal, DesignSystem.screenHorizontal)
-        .accessibilityIdentifier("capture-save")
+        .accessibilityIdentifier(canSave ? "capture-save" : "capture-save-disabled")
+        .accessibilityLabel(canSave ? "Save" : "Save unavailable")
+        .accessibilityHint(canSave ? "Saves your capture" : "Type or speak something first")
     }
 
     private var inboxFooterLink: some View {
@@ -300,5 +335,29 @@ struct ExecutiveCaptureSheet: View {
             onRouted: onRouted
         )
         .accessibilityIdentifier("screen-capture")
+    }
+}
+
+private struct CaptureSaveChrome: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .buttonStyle(.glassProminent)
+                .tint(LookAfterChrome.accentTint)
+        } else {
+            content
+                .buttonStyle(.plain)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(DesignSystem.contentSurface)
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(DesignSystem.border, lineWidth: 1)
+                        )
+                )
+        }
     }
 }

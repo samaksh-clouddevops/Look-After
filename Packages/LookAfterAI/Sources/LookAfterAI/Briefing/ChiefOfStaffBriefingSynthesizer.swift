@@ -88,7 +88,7 @@ public enum ChiefOfStaffBriefingSynthesizer {
         userName: String = "",
         cache: BriefingNarrativeCache = .shared,
         forceRefresh: Bool = false,
-        glmComplete: ((String, String) async throws -> String)? = nil
+        glmComplete: (@Sendable (String, String) async throws -> String)? = nil
     ) async -> Result {
         let chips = payload.snapshotChips()
         let fallback = payload.deterministicNarrative(userName: userName)

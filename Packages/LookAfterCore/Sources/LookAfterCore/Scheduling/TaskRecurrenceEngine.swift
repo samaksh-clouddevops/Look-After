@@ -362,7 +362,14 @@ public enum TaskRecurrenceEngine {
             return matchesRecurrenceSchedule(task, on: scheduledDate, in: allTasks, calendar: calendar)
         }
         guard let scheduledDate = task.scheduledDate,
-              calendar.isDate(scheduledDate, inSameDayAs: dayStart) else { return false }
+              calendar.isDate(scheduledDate, inSameDayAs: dayStart) else {
+            if task.scheduledDate == nil,
+               let time = task.scheduledTime,
+               calendar.isDate(time, inSameDayAs: dayStart) {
+                return true
+            }
+            return false
+        }
         return matchesRecurrenceSchedule(task, on: scheduledDate, in: allTasks, calendar: calendar)
     }
 

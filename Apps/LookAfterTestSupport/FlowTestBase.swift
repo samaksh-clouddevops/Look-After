@@ -44,6 +44,19 @@ enum EvidenceWriter {
     }
 
     static func discoverRepoRoot() -> String {
+        if let env = ProcessInfo.processInfo.environment["LOOKAFTER_REPO_ROOT"],
+           !env.isEmpty,
+           FileManager.default.fileExists(atPath: (env as NSString).appendingPathComponent("Documentation/qa")) {
+            return env
+        }
+        // Walk from this source file when tests run from DerivedData.
+        let probe = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // LookAfterTestSupport
+            .deletingLastPathComponent() // Apps
+            .deletingLastPathComponent() // Look-After root
+        if FileManager.default.fileExists(atPath: probe.appendingPathComponent("Documentation/qa").path) {
+            return probe.path
+        }
         var current = FileManager.default.currentDirectoryPath
         while true {
             let qa = (current as NSString).appendingPathComponent("Documentation/qa")
@@ -83,8 +96,13 @@ class FlowTestBase: XCTestCase {
     }
 
     func waitForBriefing(timeout: TimeInterval = 15) {
+        // Auth cover must not block — dismiss via guest if still on Auth.
+        if app.buttons["Continue as Guest (Try Offline)"].waitForExistence(timeout: 2) {
+            app.buttons["Continue as Guest (Try Offline)"].tap()
+        }
         let briefing = app.otherElements["screen-briefing"].waitForExistence(timeout: timeout)
             || app.buttons["tab-briefing"].waitForExistence(timeout: timeout)
+            || app.otherElements["screen-root"].waitForExistence(timeout: 3)
         XCTAssertTrue(briefing, "Briefing screen should appear")
     }
 

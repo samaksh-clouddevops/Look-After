@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import LookAfterCore
+import LookAfterData
 
 // MARK: - ViewModel
 
@@ -8,6 +9,7 @@ import LookAfterCore
 public final class CreativityViewModel: ObservableObject {
     @Published public var projects: [CreativeProject] = []
     private let persistenceKey = "lifeos_creative_projects"
+    private let filename = "creative_projects"
     
     public init() {
         loadFromDisk()
@@ -47,15 +49,20 @@ public final class CreativityViewModel: ObservableObject {
     }
     
     private func saveToDisk() {
-        if let data = try? JSONEncoder().encode(projects) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
-        }
+        LocalPersistenceManager.shared.save(projects, filename: filename)
+        UserDefaults.standard.removeObject(forKey: persistenceKey)
     }
     
     private func loadFromDisk() {
+        let fileProjects: [CreativeProject] = LocalPersistenceManager.shared.load([CreativeProject].self, filename: filename)
+        if !fileProjects.isEmpty {
+            projects = fileProjects
+            return
+        }
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
            let saved = try? JSONDecoder().decode([CreativeProject].self, from: data) {
             projects = saved
+            if !projects.isEmpty { saveToDisk() }
         }
     }
 }
@@ -169,7 +176,7 @@ public struct CreativityWorkspaceView: View {
                                     GeometryReader { geo in
                                         ZStack(alignment: .leading) {
                                             Capsule()
-                                                .fill(Color.white.opacity(0.1))
+                                                .fill(DesignSystem.contentSurfaceSubtle)
                                                 .frame(height: 6)
                                             
                                             Capsule()
@@ -180,7 +187,7 @@ public struct CreativityWorkspaceView: View {
                                     .frame(height: 6)
                                 }
                                 .padding()
-                                .background(Color.white.opacity(0.05))
+                                .background(DesignSystem.contentSurface)
                                 .cornerRadius(16)
                                 .padding(.horizontal)
                                 .contextMenu {

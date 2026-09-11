@@ -765,10 +765,10 @@ final class LifeTimelinePresenterTests: XCTestCase {
         )
 
         XCTAssertEqual(events.filter { $0.title == "Breakfast" }.count, 1)
-        XCTAssertEqual(events.filter { $0.id.hasPrefix("sleep-boundary") }.count, 1)
+        XCTAssertEqual(events.filter { $0.id.hasPrefix("sleep-boundary") }.count, 0)
     }
 
-    func testMorningTimelineIncludesSleepBoundary() {
+    func testMorningTimelineHidesSleepBoundary() {
         let now = makeDate(year: 2026, month: 8, day: 6, hour: 7, minute: 0)
         let day = calendar.startOfDay(for: now)
         let breakfast = LifeTask(
@@ -790,8 +790,8 @@ final class LifeTimelinePresenterTests: XCTestCase {
         )
 
         XCTAssertEqual(events.filter { $0.title == "Breakfast" }.count, 1)
-        XCTAssertEqual(events.filter { $0.id.hasPrefix("sleep-boundary") }.count, 1)
-        XCTAssertTrue(events.last?.id.hasPrefix("sleep-boundary") == true)
+        XCTAssertEqual(events.filter { $0.id.hasPrefix("sleep-boundary") }.count, 0)
+        XCTAssertFalse(events.last?.id.hasPrefix("sleep-boundary") == true)
     }
 
     func testTimelineSignatureStableAcrossShuffledTaskInput() {

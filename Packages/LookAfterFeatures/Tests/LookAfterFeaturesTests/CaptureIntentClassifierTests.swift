@@ -3,6 +3,7 @@ import XCTest
 import LookAfterCore
 
 final class CaptureIntentClassifierTests: XCTestCase {
+    @MainActor
     func testHeuristicTaskFromPrefix() {
         let request = CaptureRequest(text: "[Task] Buy milk")
         let decision = CaptureIntentClassifier.heuristicDecision(for: request, forcedIntent: nil)
@@ -10,12 +11,14 @@ final class CaptureIntentClassifierTests: XCTestCase {
         XCTAssertEqual(decision.title, "Buy milk")
     }
 
+    @MainActor
     func testHeuristicMoodFromHealthPrefix() {
         let request = CaptureRequest(text: "[Health] Mood: Low — tired")
         let decision = CaptureIntentClassifier.heuristicDecision(for: request, forcedIntent: nil)
         XCTAssertEqual(decision.intent, .mood)
     }
 
+    @MainActor
     func testForcedChipHint() {
         let request = CaptureRequest(text: "Remember dentist", hintedIntent: .event)
         let decision = CaptureIntentClassifier.heuristicDecision(for: request, forcedIntent: .event)
@@ -23,6 +26,7 @@ final class CaptureIntentClassifierTests: XCTestCase {
         XCTAssertGreaterThan(decision.confidence, 0.8)
     }
 
+    @MainActor
     func testOutcomeToastMessages() {
         let task = CaptureOutcome.taskCreated(taskId: "1", title: "Buy milk")
         XCTAssertTrue(task.plainToastMessage.contains("Buy milk"))

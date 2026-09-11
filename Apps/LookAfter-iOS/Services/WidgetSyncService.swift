@@ -82,7 +82,8 @@ final class WidgetSyncService {
         taskStore: TaskStore,
         healthStore: HealthStore = .shared,
         scheduleTasks: [LifeTask]? = nil,
-        timelineEvents: [LifeTimelineEvent]? = nil
+        timelineEvents: [LifeTimelineEvent]? = nil,
+        force: Bool = false
     ) {
         let snapshot = makeSnapshot(
             brainVM: brainVM,
@@ -91,38 +92,19 @@ final class WidgetSyncService {
             scheduleTasks: scheduleTasks,
             timelineEvents: timelineEvents
         )
-        let fingerprint = snapshotFingerprint(snapshot)
-        guard fingerprint != lastWidgetSnapshotFingerprint else { return }
+        let fingerprint = WidgetSyncFingerprint.compute(snapshot)
+        guard WidgetSyncFingerprint.shouldWrite(
+            force: force,
+            fingerprint: fingerprint,
+            lastFingerprint: lastWidgetSnapshotFingerprint
+        ) else { return }
         lastWidgetSnapshotFingerprint = fingerprint
         WidgetDataStore.save(snapshot)
-        scheduleWidgetTimelineReload(immediate: false)
+        scheduleWidgetTimelineReload(immediate: force)
 
         if isNowPinned {
             schedulePinRefresh(snapshot: snapshot)
         }
-    }
-
-    private func snapshotFingerprint(_ snapshot: WidgetSnapshot) -> String {
-        let progressBucket = Int((snapshot.pinProgressFraction * 100).rounded(.down) / 5)
-        let remainingBucket: String = {
-            guard let end = snapshot.pinWindowEnd else { return "na" }
-            let minutes = max(0, Int(end.timeIntervalSince(Date()) / 60))
-            return String(minutes)
-        }()
-        return [
-            snapshot.topTaskTitle ?? "",
-            String(snapshot.activeTaskCount),
-            String(snapshot.completedTodayCount),
-            String(snapshot.energyScore),
-            snapshot.heroTaskId ?? "",
-            snapshot.tasks.map(\.id).joined(separator: ","),
-            snapshot.recommendation,
-            snapshot.pinScheduleLabel,
-            snapshot.pinConstraintLabel,
-            String(progressBucket),
-            remainingBucket,
-            snapshot.pinNextUpSummary,
-        ].joined(separator: "|")
     }
 
     private func scheduleWidgetTimelineReload(immediate: Bool) {

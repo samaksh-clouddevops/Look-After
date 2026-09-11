@@ -3,6 +3,7 @@ import XCTest
 import LookAfterCore
 
 final class ProactiveBundleBuilderTests: XCTestCase {
+    @MainActor
     func testEndOfDayBundleDefersOpenTasks() {
         let task = LifeTask(id: "t1", title: "Open", userId: "u1")
         let action = ProactiveAction(
@@ -20,6 +21,7 @@ final class ProactiveBundleBuilderTests: XCTestCase {
         XCTAssertEqual(bundle.mutations.first?.kind, .deferTask)
     }
 
+    @MainActor
     func testBundleCodecRoundTrip() {
         let action = ProactiveAction(
             kind: .waitingMode,

@@ -8,6 +8,8 @@ struct TaskListRowView: View {
     let isDecomposing: Bool
     let timeDisplayLabel: String
     let isLoadingTimeDisplay: Bool
+    var taskZoomNamespace: Namespace.ID
+    var zoomEnabled: Bool
     @Binding var editingTask: LifeTask?
     let onComplete: (LifeTask) -> Void
     let onDelete: (LifeTask) -> Void
@@ -31,6 +33,7 @@ struct TaskListRowView: View {
             timeDisplayLabel: timeDisplayLabel,
             isLoadingTimeDisplay: isLoadingTimeDisplay
         )
+        .lookAfterZoomSource(id: task.id, in: taskZoomNamespace, enabled: zoomEnabled)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(

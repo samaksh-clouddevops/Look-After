@@ -33,7 +33,7 @@ struct TaskFocusStretchRefiner {
                 tier: .economy
             )
             guard let parsed = parseResponse(raw, fallbackMinutes: baseline) else { return nil }
-            let label = "Focus for \(parsed.minutes) min at a stretch"
+            let label = "\(estimatedMinutes)m"
             return TaskTimeDisplayInfo(
                 lineLabel: label,
                 chipLabel: label,

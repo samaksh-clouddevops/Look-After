@@ -2,15 +2,20 @@ import XCTest
 import LookAfterCore
 @testable import LookAfterFeatures
 
-@MainActor
 final class TimelineConstraintViewModelTests: XCTestCase {
 
-    private var spy: InteractionTelemetrySpy!
-    private var vm: TimelineConstraintViewModel!
-    private var updated: [LifeTask] = []
+    @MainActor private var spy: InteractionTelemetrySpy!
+    @MainActor private var vm: TimelineConstraintViewModel!
+    @MainActor private var updated: [LifeTask] = []
 
-    override func setUp() {
-        super.setUp()
+    @MainActor
+    override func setUp() async throws {
+        try await super.setUp()
+        await configureFixture()
+    }
+
+    @MainActor
+    private func configureFixture() {
         spy = InteractionTelemetrySpy()
         updated = []
         vm = TimelineConstraintViewModel(telemetry: spy) { [weak self] task in
@@ -24,6 +29,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         vm.seed(tasks: tasks)
     }
 
+    @MainActor
     func testHardenIntentMovesTowardAnchored() {
         vm.handle(.hardenConstraint(taskID: "c"))
         XCTAssertEqual(vm.constraint(for: "c"), .flexible)
@@ -40,6 +46,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertEqual(updated.last?.schedulingMode, .fixedTime)
     }
 
+    @MainActor
     func testSoftenIntentMovesTowardFluid() {
         vm.handle(.softenConstraint(taskID: "a"))
         XCTAssertEqual(vm.constraint(for: "a"), .flexible)
@@ -49,6 +56,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertEqual(spy.events.first?.from, .anchored)
     }
 
+    @MainActor
     func testAccessibilitySetConstraintLogsSystemSource() {
         vm.handle(.setConstraint(taskID: "b", .anchored))
         XCTAssertEqual(vm.constraint(for: "b"), .anchored)
@@ -57,11 +65,13 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertEqual(spy.events.last?.to, .anchored)
     }
 
+    @MainActor
     func testNoTelemetryWhenConstraintUnchanged() {
         vm.handle(.hardenConstraint(taskID: "a"))
         XCTAssertTrue(spy.events.isEmpty)
     }
 
+    @MainActor
     func testVerticalDragSessionFlags() {
         XCTAssertNil(vm.activeDragTaskID)
         vm.handle(.beginVerticalDrag(taskID: "b"))
@@ -70,6 +80,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertNil(vm.activeDragTaskID)
     }
 
+    @MainActor
     func testCommitOffsetSkippedForAnchored() {
         let before = Date(timeIntervalSince1970: 1_700_000_000)
         var task = LifeTask(
@@ -86,6 +97,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertTrue(updated.isEmpty)
     }
 
+    @MainActor
     func testCommitOffsetMovesFlexibleSchedule() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         var task = LifeTask(
@@ -104,6 +116,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertEqual(delta, 15 * 60, accuracy: 0.5)
     }
 
+    @MainActor
     func testCommitAbsoluteDragSetsUserPlacedStart() {
         let calendar = Calendar.current
         let start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!
@@ -125,6 +138,85 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertNotNil(updated[0].userPlacedScheduleAt)
     }
 
+    @MainActor
+    func testDinnerDragToMorningIsRejected() {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: Date())
+        let evening = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: Date())!
+        let morning = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: Date())!
+        var dinner = LifeTask(
+            id: "dinner",
+            title: "Dinner",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: evening,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        vm.upsert(task: dinner)
+        updated.removeAll()
+        vm.handle(.commitVerticalDrag(taskID: "dinner", proposedStart: morning))
+        XCTAssertTrue(updated.isEmpty)
+    }
+
+    @MainActor
+    func testGroceryDragToNightIsRejected() {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: Date())
+        let afternoon = calendar.date(bySettingHour: 14, minute: 0, second: 0, of: Date())!
+        let night = calendar.date(bySettingHour: 22, minute: 0, second: 0, of: Date())!
+        var grocery = LifeTask(
+            id: "grocery",
+            title: "Grocery shopping",
+            estimatedMinutes: 40,
+            scheduledDate: day,
+            scheduledTime: afternoon,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        vm.upsert(task: grocery)
+        updated.removeAll()
+        vm.handle(.commitVerticalDrag(taskID: "grocery", proposedStart: night))
+        XCTAssertTrue(updated.isEmpty)
+    }
+
+    @MainActor
+    func testGymDragRightAfterLunchIsRejected() {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: Date())
+        let lunchStart = calendar.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
+        let gymStart = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: Date())!
+        let tooSoon = calendar.date(bySettingHour: 12, minute: 40, second: 0, of: Date())!
+        var lunch = LifeTask(
+            id: "lunch",
+            title: "Lunch",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: lunchStart,
+            schedulingMode: .fixedTime,
+            timeConstraint: .anchored,
+            userId: "u"
+        )
+        lunch.scheduledEndTime = lunchStart.addingTimeInterval(45 * 60)
+        var gym = LifeTask(
+            id: "gym",
+            title: "Gym",
+            estimatedMinutes: 60,
+            scheduledDate: day,
+            scheduledTime: gymStart,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        vm.seed(tasks: [lunch, gym])
+        updated.removeAll()
+        vm.handle(.commitVerticalDrag(taskID: "gym", proposedStart: tooSoon))
+        XCTAssertTrue(updated.isEmpty)
+    }
+
+    @MainActor
     func testBeginVerticalDragExposesDurationForMeter() {
         var task = LifeTask(
             id: "b",
@@ -141,6 +233,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertNil(vm.proposedDragDurationMinutes)
     }
 
+    @MainActor
     func testScheduleDragCommittedCallbackFires() {
         let calendar = Calendar.current
         let start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!
@@ -161,6 +254,7 @@ final class TimelineConstraintViewModelTests: XCTestCase {
         XCTAssertEqual(commitCount, 1)
     }
 
+    @MainActor
     func testCommitAbsoluteDragForUnslottedTask() {
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: Date())

@@ -15,6 +15,7 @@ This folder contains the complete Quality Validation Framework for LifeOS. A ded
 
 **Related docs:**
 
+- [full-app-improvement-program.md](full-app-improvement-program.md) — whole-app improvement status (Q1–Q4 waves + canvas)
 - [ATTENTION_OS_SPEC.md](../ATTENTION_OS_SPEC.md) — product vision, UX strategy, accessibility
 - [build-and-test.md](../build-and-test.md) — automation commands
 - [architecture/dependencies.md](../architecture/dependencies.md) — package graph
@@ -32,6 +33,11 @@ This folder contains the complete Quality Validation Framework for LifeOS. A ded
 | 4 | [04-screen-test-cases.md](04-screen-test-cases.md) | Per-screen specs (45+ surfaces) + screen test cases |
 | 5 | [05-flow-test-cases.md](05-flow-test-cases.md) | 22 end-to-end flows with interruption variants |
 | 6 | [06-edge-cases.md](06-edge-cases.md) | Data, permission, network, device-state matrix |
+| — | [timeline-feature-audit.md](timeline-feature-audit.md) | Today timeline source of truth, NOW marker, overlap, meal physics |
+| — | [timeline-complete-fix-plan.md](timeline-complete-fix-plan.md) | Full fix plan T-01–T-37 including clock rail, cloud merge, briefing NOW |
+| — | [ios26-revamp-plan.md](ios26-revamp-plan.md) | **QA-IOS26-01** — migrate to iOS 26 / macOS 26, Liquid Glass chrome, motion language, testing plan |
+| — | [full-app-improvement-program.md](full-app-improvement-program.md) | Living whole-app backlog status (Q1–Q4, persistence, architecture, a11y, fake-glass) |
+| — | [ux-agent-screenshot-pipeline.md](ux-agent-screenshot-pipeline.md) | UI tests → `screenshots/ux-agent/` → Cursor UI/UX agent review |
 | 7 | [07-ai-validation.md](07-ai-validation.md) | GLM/LLM evaluation rubric and golden datasets |
 | 8 | [08-executive-brain-validation.md](08-executive-brain-validation.md) | Deterministic brain + FlowDirector validation |
 | 9 | [09-performance-benchmarks.md](09-performance-benchmarks.md) | Targets, measurement protocol, Instruments |

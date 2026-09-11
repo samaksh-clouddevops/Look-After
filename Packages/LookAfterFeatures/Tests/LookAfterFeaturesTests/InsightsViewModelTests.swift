@@ -3,9 +3,9 @@ import XCTest
 import LookAfterCore
 import LookAfterData
 
-@MainActor
 final class InsightsViewModelTests: XCTestCase {
 
+    @MainActor
     func testLoadInsightsPopulatesRealReport() async throws {
         let userId = "insights-vm-user-\(UUID().uuidString)"
         let taskStore = TaskStore(taskRepo: TaskRepository())
@@ -32,6 +32,7 @@ final class InsightsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.summary.personalizationPromptContext.contains("real data only"))
     }
 
+    @MainActor
     func testNoFakeEnergyScoreWhenNoHealthData() async {
         let engine = PersonalAnalyticsEngine(fetchBehaviorEvents: { [] })
         let viewModel = InsightsViewModel(

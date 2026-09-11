@@ -35,6 +35,18 @@ public enum TimeWindowPreference: String, Codable, Sendable, CaseIterable {
     case evening
     case night
     case anytime
+
+    /// Local hours this window covers. Night wraps midnight.
+    public var hours: Set<Int> {
+        switch self {
+        case .morning: return Set(5..<11)
+        case .midday: return Set(11..<14)
+        case .afternoon: return Set(14..<17)
+        case .evening: return Set(17..<21)
+        case .night: return Set(21..<24).union(0..<5)
+        case .anytime: return Set(0..<24)
+        }
+    }
 }
 
 public enum TaskFlexibility: String, Codable, Sendable, CaseIterable {

@@ -11,6 +11,7 @@ struct TodayCompactMetricsStrip: View {
 
     var onMetricTap: (TodayMetricKind) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
     @GestureState private var dragOffset: CGFloat = 0
 
@@ -28,7 +29,7 @@ struct TodayCompactMetricsStrip: View {
                     ))
             }
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: isExpanded)
+        .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: isExpanded)
     }
 
     // MARK: - Collapsed strip
@@ -60,13 +61,15 @@ struct TodayCompactMetricsStrip: View {
                 Text(metric.value)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
+                    .contentTransition(.numericText())
+                    .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: metric.value)
             }
             .foregroundColor(metric.isHighlighted ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
                 Capsule(style: .continuous)
-                    .fill(DesignSystem.backgroundElevated.opacity(0.85))
+                    .fill(DesignSystem.contentSurfaceElevated)
                     .overlay(
                         Capsule(style: .continuous)
                             .stroke(
@@ -89,8 +92,10 @@ struct TodayCompactMetricsStrip: View {
                 .frame(width: 28, height: 28)
                 .background(
                     Circle()
-                        .fill(DesignSystem.backgroundElevated.opacity(0.85))
+                        .fill(DesignSystem.contentSurfaceElevated)
                 )
+                .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isExpanded ? "Collapse capacity details" : "Expand capacity details")
@@ -158,7 +163,7 @@ struct TodayCompactMetricsStrip: View {
         .padding(.top, DesignSystem.spacingSM)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundElevated.opacity(0.5))
+                .fill(DesignSystem.contentSurfaceSubtle)
         )
         .gesture(
             DragGesture(minimumDistance: 12)

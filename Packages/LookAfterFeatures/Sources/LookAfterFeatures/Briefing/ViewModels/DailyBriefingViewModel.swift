@@ -16,6 +16,8 @@ public final class DailyBriefingViewModel: ObservableObject {
         static let pinnedCards = "briefingPinnedCards"
         static let habits = "briefingHabits"
         static let habitCompletions = "briefingHabitCompletions"
+        static let lastDayAuditDayKey = "daySupervisor.lastAuditDayKey"
+        static let dayAuditDismissedDayKey = "daySupervisor.dismissedQuestionsDayKey"
     }
 
     @Published public private(set) var greeting = BriefingGreeting(timeGreeting: "", userName: "", dateLine: "")
@@ -68,6 +70,14 @@ public final class DailyBriefingViewModel: ObservableObject {
     @Published public private(set) var cycleData = BriefingCycleData.disabled
     @Published public private(set) var moduleInsights: [BriefingModuleInsight] = []
     @Published public private(set) var isLoadingModuleInsights = false
+    /// Morning day-supervisor audit (sense / time / energy).
+    @Published public private(set) var dayAudit: DayAuditResult?
+    @Published public private(set) var isLoadingDayAudit = false
+    @Published public var selectedDayAuditPullIDs: Set<String> = []
+    @Published public var acceptedDayAuditFixIDs: Set<String> = []
+    @Published public var dayAuditQuestionAnswers: [String: String] = [:]
+    @Published public var skippedDayAuditQuestions = false
+    @Published public private(set) var isStartingDay = false
     @Published public var cardOrder: [BriefingCardKind] = BriefingCardKind.defaultOrder
     @Published public var hiddenCards: Set<BriefingCardKind> = []
     @Published public var pinnedCards: Set<BriefingCardKind> = []
@@ -218,6 +228,7 @@ public final class DailyBriefingViewModel: ObservableObject {
         refreshHabitCompletions()
         buildLifeGaps(tasksVM: tasksVM, userId: userId)
         buildCycleData(healthSummary: resolvedHealth)
+        await refreshDayAudit(tasksVM: tasksVM)
         await buildDayHeroSummary(userName: userName, tasksVM: tasksVM, lifeTimelineEvents: lifeTimelineEvents)
         await buildChiefOfStaffNarrative(userName: userName, tasksVM: tasksVM)
         await buildModuleInsights(userName: userName, tasksVM: tasksVM)
@@ -1271,6 +1282,137 @@ public final class DailyBriefingViewModel: ObservableObject {
             lifeTimelineEvents: lifeTimelineEvents
         )
         dayHeroSummaryLines = await BriefingDayHeroSummaryGenerator.generate(input)
+        // Prefer supervisor findings over vibe copy when the day has material faults.
+        if let audit = dayAudit, audit.hasMaterialFindings {
+            let auditLines = audit.summaryLines
+                .map { UserFacingCopy.humanizeBriefingLine($0) }
+                .filter { !$0.isEmpty }
+            if !auditLines.isEmpty {
+                dayHeroSummaryLines = Array(auditLines.prefix(BriefingDayHeroSummaryGenerator.maxHeroLines))
+            }
+        }
+    }
+
+    /// Runs the deterministic day supervisor audit (parked + yesterday + capacity).
+    public func refreshDayAudit(tasksVM: TasksViewModel, now: Date = Date(), calendar: Calendar = .current) async {
+        isLoadingDayAudit = true
+        defer { isLoadingDayAudit = false }
+
+        let dayKey = Self.dayKey(for: now, calendar: calendar)
+        let parked = ParkedTaskQueueStore.shared.candidatesForReintegration(limit: 8)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now))
+        let yesterdayIncomplete: [LifeTask] = {
+            guard let yesterday else { return [] }
+            return tasksVM.localAllTasks(userId: FirebaseManager.shared.resolvedUserId).filter { task in
+                guard task.status.isActive, let date = task.scheduledDate else { return false }
+                return calendar.isDate(date, inSameDayAs: yesterday)
+            }
+        }()
+
+        let result = DayAuditService.run(
+            DayAuditService.Input(
+                tasks: tasksVM.schedulingContext,
+                yesterdayIncomplete: yesterdayIncomplete,
+                parkedCandidates: parked,
+                energyPercent: energy.currentEnergyPercent,
+                capacityBandLabel: executiveCapacity.band.displayLabel,
+                referenceDate: now,
+                now: now,
+                calendar: calendar
+            )
+        )
+        dayAudit = result
+
+        // Reset interactive state once per calendar day.
+        let lastKey = UserDefaults.standard.string(forKey: StorageKey.lastDayAuditDayKey)
+        if lastKey != dayKey {
+            selectedDayAuditPullIDs = []
+            acceptedDayAuditFixIDs = Set(result.proposedFixes.map(\.id))
+            dayAuditQuestionAnswers = [:]
+            skippedDayAuditQuestions = UserDefaults.standard.string(forKey: StorageKey.dayAuditDismissedDayKey) == dayKey
+            UserDefaults.standard.set(dayKey, forKey: StorageKey.lastDayAuditDayKey)
+        }
+
+        // Re-apply audit lines onto hero when material.
+        if result.hasMaterialFindings {
+            let auditLines = result.summaryLines
+                .map { UserFacingCopy.humanizeBriefingLine($0) }
+                .filter { !$0.isEmpty }
+            if !auditLines.isEmpty {
+                dayHeroSummaryLines = Array(auditLines.prefix(BriefingDayHeroSummaryGenerator.maxHeroLines))
+            }
+        }
+    }
+
+    public var dayAuditQuestionsResolved: Bool {
+        guard let audit = dayAudit, audit.hasBlockingQuestions else { return true }
+        if skippedDayAuditQuestions { return true }
+        return audit.clarifyingQuestions.allSatisfy { dayAuditQuestionAnswers[$0.id] != nil }
+    }
+
+    public func answerDayAuditQuestion(id: String, option: String) {
+        dayAuditQuestionAnswers[id] = option
+    }
+
+    public func skipDayAuditQuestions(now: Date = Date(), calendar: Calendar = .current) {
+        skippedDayAuditQuestions = true
+        UserDefaults.standard.set(Self.dayKey(for: now, calendar: calendar), forKey: StorageKey.dayAuditDismissedDayKey)
+    }
+
+    public func toggleDayAuditPull(_ id: String) {
+        if selectedDayAuditPullIDs.contains(id) {
+            selectedDayAuditPullIDs.remove(id)
+        } else {
+            selectedDayAuditPullIDs.insert(id)
+        }
+    }
+
+    public func toggleDayAuditFix(_ id: String) {
+        if acceptedDayAuditFixIDs.contains(id) {
+            acceptedDayAuditFixIDs.remove(id)
+        } else {
+            acceptedDayAuditFixIDs.insert(id)
+        }
+    }
+
+    /// Returns true when navigation to Today should proceed.
+    @discardableResult
+    public func startMyDay(
+        tasksVM: TasksViewModel,
+        userId: String,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) async -> Bool {
+        isStartingDay = true
+        defer { isStartingDay = false }
+
+        if !userId.isEmpty {
+            await tasksVM.reconcileTodaySchedule(userId: userId, date: now, calendar: calendar)
+        }
+        await refreshDayAudit(tasksVM: tasksVM, now: now, calendar: calendar)
+
+        guard dayAuditQuestionsResolved else { return false }
+
+        let audit = dayAudit
+        let fixes = (audit?.proposedFixes ?? []).filter { acceptedDayAuditFixIDs.contains($0.id) }
+        let pulls = (audit?.possiblePulls ?? []).filter { selectedDayAuditPullIDs.contains($0.id) }
+
+        if !fixes.isEmpty || !pulls.isEmpty {
+            await DayAuditApplier.apply(
+                acceptedFixes: fixes,
+                selectedPulls: pulls,
+                tasksVM: tasksVM,
+                userId: userId,
+                now: now,
+                calendar: calendar
+            )
+        }
+        return true
+    }
+
+    private static func dayKey(for date: Date, calendar: Calendar) -> String {
+        let comps = calendar.dateComponents([.year, .month, .day], from: date)
+        return "\(comps.year ?? 0)-\(comps.month ?? 0)-\(comps.day ?? 0)"
     }
 
     /// Payload-to-Prompt Chief of Staff narrative — cached, sanitized, non-blocking.
@@ -1326,9 +1468,17 @@ public final class DailyBriefingViewModel: ObservableObject {
         snapshotChips = finalPayload.snapshotChips()
 
         // Instant fallback while AI may be in-flight (never looks broken).
-        if chiefNarrative.isEmpty {
+        if let audit = dayAudit, audit.hasMaterialFindings {
+            chiefNarrative = audit.summaryLines.joined(separator: " ")
+            chiefNarrativeSource = "day_audit"
+        } else if chiefNarrative.isEmpty {
             chiefNarrative = finalPayload.deterministicNarrative(userName: userName)
             chiefNarrativeSource = "deterministic"
+        }
+
+        // Supervisor findings already answered the morning — skip vibe LLM.
+        if dayAudit?.hasMaterialFindings == true {
+            return
         }
 
         let hasKey = GLMService.shared.hasConfiguredAPIKey
@@ -1337,19 +1487,25 @@ public final class DailyBriefingViewModel: ObservableObject {
         let routerPayload = BriefingRouterPayload(from: finalPayload)
         let compiled = BriefingPromptGenerator.compile(routerPayload)
 
+        let glmComplete: (@Sendable (String, String) async throws -> String)?
+        if hasKey {
+            let userPrompt = compiled.user
+            let systemPrompt = compiled.system
+            glmComplete = { _, _ in
+                try await GLMService.shared.complete(
+                    prompt: userPrompt,
+                    systemPrompt: systemPrompt,
+                    tier: .economy
+                )
+            }
+        } else {
+            glmComplete = nil
+        }
         let result = await ChiefOfStaffBriefingSynthesizer.synthesize(
             payload: finalPayload,
             userName: userName,
             forceRefresh: false,
-            glmComplete: hasKey
-                ? { _, _ in
-                    try await GLMService.shared.complete(
-                        prompt: compiled.user,
-                        systemPrompt: compiled.system,
-                        tier: .economy
-                    )
-                }
-                : nil
+            glmComplete: glmComplete
         )
         chiefNarrative = result.narrative
         chiefNarrativeSource = result.source

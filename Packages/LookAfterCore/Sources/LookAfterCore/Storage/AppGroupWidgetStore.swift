@@ -57,7 +57,7 @@ public enum AppGroupWidgetStore {
 
     private static func migrateLegacyUserDefaults() -> WidgetSnapshot? {
         guard
-            let defaults = cachedLegacyDefaults,
+            let defaults = legacySuiteDefaults(),
             let data = defaults.data(forKey: WidgetAppGroup.snapshotKey),
             let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
         else {
@@ -69,12 +69,12 @@ public enum AppGroupWidgetStore {
     }
 
     private static func clearLegacyUserDefaults() {
-        cachedLegacyDefaults?.removeObject(forKey: WidgetAppGroup.snapshotKey)
+        legacySuiteDefaults()?.removeObject(forKey: WidgetAppGroup.snapshotKey)
     }
 
-    /// Single lazy access — never call `UserDefaults(suiteName:)` on every read/write.
-    private static let cachedLegacyDefaults: UserDefaults? = {
+    /// One-time migration only — not on the widget snapshot hot path.
+    private static func legacySuiteDefaults() -> UserDefaults? {
         guard isAvailable else { return nil }
         return UserDefaults(suiteName: WidgetAppGroup.identifier)
-    }()
+    }
 }

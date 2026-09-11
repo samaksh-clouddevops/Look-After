@@ -9,6 +9,7 @@ import LookAfterHealth
 /// Shared view models and brain — identical data for Classic and AI Executive shells.
 @MainActor
 final class AppShellState: ObservableObject {
+    let composition: AppComposition
     let brain: ExecutiveBrain
     let brainVM: BrainViewModel
     let taskStore: TaskStore
@@ -39,13 +40,15 @@ final class AppShellState: ObservableObject {
     private var flowDirectorUserName: String = ""
     private let calendarSyncService = CalendarSyncService()
     private var calendarSyncDebounceTask: Task<Void, Never>?
+    private let surfaceSync: ShellSurfaceSync
 
-    init() {
-        let glm = GLMService.shared
+    init(composition: AppComposition = .live) {
+        self.composition = composition
+        let glm = composition.glm
         let executiveBrain = ExecutiveBrain(glmService: glm)
-        let taskStore = TaskStore.shared
-        let timelineService = TimelineService.shared
-        let healthStore = HealthStore.shared
+        let taskStore = composition.taskStore
+        let timelineService = composition.timelineService
+        let healthStore = composition.healthStore
         let accountIdentity = AccountIdentity.shared
         self.taskStore = taskStore
         self.timelineService = timelineService
@@ -53,13 +56,36 @@ final class AppShellState: ObservableObject {
         self.accountIdentity = accountIdentity
         brain = executiveBrain
         brainVM = BrainViewModel(brain: executiveBrain, taskStore: taskStore, healthStore: healthStore)
-        tasksVM = TasksViewModel(taskStore: taskStore, decomposer: TaskDecomposer(glmService: glm))
-        modulesVM = LifeModulesViewModel()
-        adhdVM = ADHDViewModel()
-        briefingVM = DailyBriefingViewModel()
-        inboxVM = InboxViewModel(glmService: glm)
-        contextOrchestrator = ContextOrchestrator(glmService: glm)
+        tasksVM = composition.makeTasksViewModel()
+        modulesVM = composition.makeModulesViewModel()
+        adhdVM = composition.makeADHDViewModel()
+        briefingVM = composition.makeBriefingViewModel()
+        inboxVM = composition.makeInboxViewModel()
+        contextOrchestrator = composition.makeContextOrchestrator()
         continueSession = ContinueSessionController()
+        surfaceSync = ShellSurfaceSync(
+            timelineService: timelineService,
+            tasksVM: tasksVM,
+            modulesVM: modulesVM,
+            brainVM: brainVM,
+            taskStore: taskStore,
+            healthStore: healthStore,
+            adhdVM: adhdVM,
+            calendarSyncService: calendarSyncService
+        )
+
+        tasksVM.calendarEventsProvider = { [calendarSyncService] day in
+            calendarSyncService.briefingEvents(on: day)
+        }
+        tasksVM.onScheduleWriteCommitted = { [weak self] in
+            self?.rebuildTimelineFromTasks(immediate: true)
+            self?.refreshWidgetData(rebuildTimeline: false, immediateTimelineRebuild: false)
+            self?.timelineService.projectNow()
+        }
+
+        surfaceSync.onPendingCalendarChange = { [weak self] change in
+            self?.pendingCalendarChange = change
+        }
 
         adhdVM.onFocusSessionDidStart = { [weak self] in
             guard let self else { return }
@@ -501,14 +527,11 @@ final class AppShellState: ObservableObject {
     private var hasCompletedBootstrap = false
     private var launchSignpostID: OSSignpostID?
 
-    private var timelineRebuildTask: Task<Void, Never>?
-    private var syncWidgetsAfterDebouncedRebuild = false
-    private static let timelineRebuildDebounceNs: UInt64 = 75_000_000
-
     /// Keeps brain/timeline fresh while the app is open. Capacity stays deterministic — no LLM polling.
     /// Performance: skips ticks while a refresh is already running or a focus session is active.
     func startContextLoop(userId: String) {
         contextLoopTask?.cancel()
+        timelineService.startNowClock()
         contextLoopTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
@@ -530,76 +553,39 @@ final class AppShellState: ObservableObject {
     }
 
     func requestDebouncedTimelineRebuild(reason: String = "") {
-        rebuildTimelineFromTasks(immediate: false)
+        surfaceSync.rebuildTimelineFromTasks(immediate: false)
     }
 
     func refreshWidgetData(rebuildTimeline: Bool = true, immediateTimelineRebuild: Bool = false) {
-        if rebuildTimeline {
-            if immediateTimelineRebuild {
-                rebuildTimelineFromTasks(immediate: true)
-                syncWidgetDataOnly()
-                syncExecutionEnvironment()
-            } else {
-                syncWidgetsAfterDebouncedRebuild = true
-                rebuildTimelineFromTasks(immediate: false)
-            }
-        } else {
-            syncWidgetDataOnly()
-            syncExecutionEnvironment()
-        }
-    }
-
-    private func syncWidgetDataOnly() {
-        WidgetSyncService.shared.sync(
-            brainVM: brainVM,
-            taskStore: taskStore,
-            healthStore: healthStore,
-            scheduleTasks: tasksVM.tasks + tasksVM.completedToday,
-            timelineEvents: timelineService.snapshot.today
+        surfaceSync.refreshWidgetData(
+            rebuildTimeline: rebuildTimeline,
+            immediateTimelineRebuild: immediateTimelineRebuild
         )
     }
 
+    private func syncWidgetDataOnly(force: Bool = false) {
+        surfaceSync.syncWidgetDataOnly(force: force)
+    }
+
     func refreshPinNow() {
-        guard WidgetSyncService.shared.isNowPinned else { return }
-        rebuildTimelineFromTasks(immediate: true)
-        Task {
-            await WidgetSyncService.shared.refreshPinNow(
-                brainVM: brainVM,
-                taskStore: taskStore,
-                healthStore: healthStore,
-                scheduleTasks: tasksVM.tasks + tasksVM.completedToday,
-                timelineEvents: timelineService.snapshot.today
-            )
-        }
+        surfaceSync.refreshPinNow()
     }
 
     /// Starts schedule-driven Focus Filters + Live Activities.
     func startExecutionEnvironment() {
-        let coordinator = ExecutionEnvironmentCoordinator.shared
-        coordinator.onPinRefreshNeeded = { [weak self] in
-            self?.refreshPinNow()
-        }
-        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
-        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
-        coordinator.start()
+        surfaceSync.startExecutionEnvironment()
     }
 
     func syncExecutionEnvironment() {
-        let coordinator = ExecutionEnvironmentCoordinator.shared
-        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
-        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
-        coordinator.refresh()
+        surfaceSync.syncExecutionEnvironment()
     }
 
     func prepareExecutionEnvironmentForBackground() {
-        let coordinator = ExecutionEnvironmentCoordinator.shared
-        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
-        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
-        coordinator.prepareForBackground()
+        surfaceSync.prepareExecutionEnvironmentForBackground()
     }
 
     func stopExecutionEnvironment() {
-        ExecutionEnvironmentCoordinator.shared.stop()
+        surfaceSync.stopExecutionEnvironment()
     }
 
     func orchestrateBrain(userId: String) async {
@@ -691,6 +677,7 @@ final class AppShellState: ObservableObject {
             await healthStore.refresh(userId: uid)
         }
         await orchestrateBrain(userId: uid)
+        timelineService.projectNow()
         await projectBriefingSurface(
             userId: uid,
             resolvedName: resolvedName,
@@ -841,39 +828,7 @@ final class AppShellState: ObservableObject {
 
     /// Rebuilds timeline snapshot from in-memory task state (no network / recurrence sync).
     func rebuildTimelineFromTasks(immediate: Bool = false) {
-        if immediate {
-            timelineRebuildTask?.cancel()
-            timelineRebuildTask = nil
-            performTimelineRebuild()
-            return
-        }
-        timelineRebuildTask?.cancel()
-        timelineRebuildTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: Self.timelineRebuildDebounceNs)
-            guard !Task.isCancelled, let self else { return }
-            self.performTimelineRebuild()
-            if self.syncWidgetsAfterDebouncedRebuild {
-                self.syncWidgetsAfterDebouncedRebuild = false
-                self.syncWidgetDataOnly()
-                self.syncExecutionEnvironment()
-            }
-            self.timelineRebuildTask = nil
-        }
-    }
-
-    private func performTimelineRebuild() {
-        timelineService.rebuild(
-            tasks: tasksVM.tasks,
-            completedToday: tasksVM.completedToday,
-            recurrenceTemplates: tasksVM.recurrenceTemplates,
-            bills: modulesVM.bills,
-            shoppingItems: modulesVM.shoppingItems,
-            contacts: modulesVM.contacts,
-            medications: MedicationStore.load()
-        )
-        if let change = CalendarChangeDetector.evaluate(timelineEvents: timelineService.snapshot.today) {
-            pendingCalendarChange = change
-        }
+        surfaceSync.rebuildTimelineFromTasks(immediate: immediate)
     }
 
     func refreshProactiveActions(userId: String) async {
@@ -964,9 +919,7 @@ final class AppShellState: ObservableObject {
         bootstrappedUserId = nil
         hasCompletedBootstrap = false
         launchSignpostID = nil
-        timelineRebuildTask?.cancel()
-        timelineRebuildTask = nil
-        syncWidgetsAfterDebouncedRebuild = false
+        surfaceSync.resetDebounceState()
     }
 
     private var healthKitEnabled: Bool {
@@ -1068,6 +1021,11 @@ final class AppShellState: ObservableObject {
 
     func evaluateManualSleepPrompt() {
         guard !isPerformingFactoryReset else { return }
+        // UI tests need a clear path to Briefing / tabs — sleep prompt blocks the shell.
+        if UITestLaunchConfiguration.isEnabled {
+            showManualSleepSheet = false
+            return
+        }
         showManualSleepSheet = ManualSleepLogStore.shouldPrompt(
             healthSummary: brainVM.rawHealthSummary ?? brainVM.healthSummary
         )

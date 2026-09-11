@@ -26,7 +26,16 @@ public final class HealthKitObserverService {
         ]
 
         for sampleType in sampleTypes {
-            healthStore.enableBackgroundDelivery(for: sampleType, frequency: .hourly) { _, _ in }
+            // Still called so Health observers behave as before. Without the
+            // com.apple.developer.healthkit.background-delivery entitlement the system
+            // may no-op; we log failures instead of removing the call.
+            healthStore.enableBackgroundDelivery(for: sampleType, frequency: .hourly) { success, error in
+                if !success {
+                    #if DEBUG
+                    print("HealthKit background delivery failed for \(sampleType): \(String(describing: error))")
+                    #endif
+                }
+            }
 
             let query = HKObserverQuery(sampleType: sampleType, predicate: nil) { _, completionHandler, _ in
                 defer { completionHandler() }

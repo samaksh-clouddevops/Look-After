@@ -280,6 +280,7 @@ public struct EnergyReport: Identifiable, Codable, Sendable {
 }
 
 /// User profile with preferences and settings.
+/// API keys must never live on this Codable surface — use SecretStore / Keychain only.
 public struct UserProfile: Identifiable, Codable, Sendable {
     public var id: String
     public var displayName: String
@@ -292,9 +293,18 @@ public struct UserProfile: Identifiable, Codable, Sendable {
     public var medications: [MedicationSchedule]
     public var preferredTaskDuration: Int   // in minutes, default 5
     public var enableHealthTracking: Bool
+    /// Deprecated leftover — never encoded. Kept so call sites compile; always nil after decode.
     public var geminiApiKey: String?
     public var createdAt: Date
     public var updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id, displayName, email
+        case peakEnergyStartHour, peakEnergyEndHour, targetSleepHours
+        case workStartHour, workEndHour, medications
+        case preferredTaskDuration, enableHealthTracking
+        case createdAt, updatedAt
+    }
     
     public init(
         id: String = UUID().uuidString,
@@ -323,9 +333,45 @@ public struct UserProfile: Identifiable, Codable, Sendable {
         self.medications = medications
         self.preferredTaskDuration = preferredTaskDuration
         self.enableHealthTracking = enableHealthTracking
-        self.geminiApiKey = geminiApiKey
+        self.geminiApiKey = nil
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        _ = geminiApiKey
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        peakEnergyStartHour = try c.decode(Int.self, forKey: .peakEnergyStartHour)
+        peakEnergyEndHour = try c.decode(Int.self, forKey: .peakEnergyEndHour)
+        targetSleepHours = try c.decode(Double.self, forKey: .targetSleepHours)
+        workStartHour = try c.decode(Int.self, forKey: .workStartHour)
+        workEndHour = try c.decode(Int.self, forKey: .workEndHour)
+        medications = try c.decodeIfPresent([MedicationSchedule].self, forKey: .medications) ?? []
+        preferredTaskDuration = try c.decodeIfPresent(Int.self, forKey: .preferredTaskDuration) ?? 5
+        enableHealthTracking = try c.decodeIfPresent(Bool.self, forKey: .enableHealthTracking) ?? true
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        geminiApiKey = nil
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(displayName, forKey: .displayName)
+        try c.encodeIfPresent(email, forKey: .email)
+        try c.encode(peakEnergyStartHour, forKey: .peakEnergyStartHour)
+        try c.encode(peakEnergyEndHour, forKey: .peakEnergyEndHour)
+        try c.encode(targetSleepHours, forKey: .targetSleepHours)
+        try c.encode(workStartHour, forKey: .workStartHour)
+        try c.encode(workEndHour, forKey: .workEndHour)
+        try c.encode(medications, forKey: .medications)
+        try c.encode(preferredTaskDuration, forKey: .preferredTaskDuration)
+        try c.encode(enableHealthTracking, forKey: .enableHealthTracking)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
     }
 }
 

@@ -33,6 +33,9 @@ public final class TimelineConstraintViewModel: ObservableObject {
     public var onTaskUpdated: ((LifeTask) -> Void)?
     /// Fired when a vertical drag successfully commits a new schedule time.
     public var onScheduleDragCommitted: (() -> Void)?
+    /// EventKit peers for OccupiedDay (injected from shell / calendar sync).
+    public var calendarEventsProvider: ((Date) -> [BriefingCalendarEvent])?
+    public var lifeModelProvider: (() -> LifeModel?) = { LifeModelStore.load() }
 
     public init(
         telemetry: any InteractionTelemetryServing = InteractionTelemetryService.shared,
@@ -137,19 +140,45 @@ public final class TimelineConstraintViewModel: ObservableObject {
               task.timeConstraintValue != .anchored else {
             return
         }
-        guard task.scheduledTime == nil || abs(task.scheduledTime!.timeIntervalSince(proposedStart)) > 30 else {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: task.scheduledDate ?? proposedStart)
+        let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        let neighbors = Array(tasksByID.values).filter { $0.id != taskID && $0.status.isActive }
+        let occupied = OccupiedDay.build(
+            tasks: neighbors,
+            calendarEvents: calendarEventsProvider?(day) ?? [],
+            model: lifeModelProvider(),
+            on: day,
+            calendar: calendar,
+            excludingTaskID: taskID
+        ).occupiedForPlacement(excludingTaskID: taskID)
+        let placement = SchedulePlacementGuard.evaluate(
+            proposedStart: proposedStart,
+            durationMinutes: duration,
+            task: task,
+            occupied: occupied,
+            calendar: calendar,
+            mode: .rejectOutsideBox,
+            neighborTasks: neighbors
+        )
+        let start: Date
+        switch placement {
+        case .accepted(let date), .snapped(let date):
+            start = date
+        case .needsAI, .rejected:
+            return
+        }
+        guard task.scheduledTime == nil || abs(task.scheduledTime!.timeIntervalSince(start)) > 30 else {
             return
         }
 
-        let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
-        task.scheduledTime = proposedStart
-        task.scheduledEndTime = proposedStart.addingTimeInterval(TimeInterval(duration * 60))
-        if let day = task.scheduledDate {
-            task.scheduledDate = Calendar.current.startOfDay(for: day)
-        } else {
-            task.scheduledDate = Calendar.current.startOfDay(for: proposedStart)
+        task.scheduledTime = start
+        task.scheduledEndTime = start.addingTimeInterval(TimeInterval(duration * 60))
+        task.scheduledDate = day
+        if TaskReaper.allowsStart(start, for: task, calendar: calendar) {
+            TaskConstraintAlignment.markUserPlaced(&task)
         }
-        TaskConstraintAlignment.markUserPlaced(&task)
+        task.updatedAt = Date()
         tasksByID[taskID] = task
         onTaskUpdated?(task)
         onScheduleDragCommitted?()
@@ -161,15 +190,41 @@ public final class TimelineConstraintViewModel: ObservableObject {
               task.timeConstraintValue != .anchored else {
             return
         }
-        let delta = TimeInterval(minutes * 60)
-        if let start = task.scheduledTime {
-            task.scheduledTime = start.addingTimeInterval(delta)
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: task.scheduledDate ?? task.scheduledTime ?? Date())
+        let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        let base = task.scheduledTime ?? calendar.date(bySettingHour: 12, minute: 0, second: 0, of: day) ?? Date()
+        let proposed = base.addingTimeInterval(TimeInterval(minutes * 60))
+        let neighbors = Array(tasksByID.values).filter { $0.id != taskID && $0.status.isActive }
+        let occupied = OccupiedDay.build(
+            tasks: neighbors,
+            calendarEvents: calendarEventsProvider?(day) ?? [],
+            model: lifeModelProvider(),
+            on: day,
+            calendar: calendar,
+            excludingTaskID: taskID
+        ).occupiedForPlacement(excludingTaskID: taskID)
+        let placement = SchedulePlacementGuard.evaluate(
+            proposedStart: proposed,
+            durationMinutes: duration,
+            task: task,
+            occupied: occupied,
+            calendar: calendar,
+            mode: .rejectOutsideBox,
+            neighborTasks: neighbors
+        )
+        let start: Date
+        switch placement {
+        case .accepted(let date), .snapped(let date):
+            start = date
+        case .needsAI, .rejected:
+            return
         }
-        if let end = task.scheduledEndTime {
-            task.scheduledEndTime = end.addingTimeInterval(delta)
-        }
-        if let day = task.scheduledDate {
-            task.scheduledDate = day.addingTimeInterval(delta)
+        task.scheduledTime = start
+        task.scheduledEndTime = start.addingTimeInterval(TimeInterval(duration * 60))
+        task.scheduledDate = day
+        if TaskReaper.allowsStart(start, for: task, calendar: calendar) {
+            TaskConstraintAlignment.markUserPlaced(&task)
         }
         task.updatedAt = Date()
         tasksByID[taskID] = task

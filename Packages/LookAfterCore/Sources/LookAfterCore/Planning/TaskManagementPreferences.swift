@@ -11,7 +11,7 @@ public enum TaskManagementPreferences {
         set { UserDefaults.standard.set(newValue, forKey: smarterFocusTipsKey) }
     }
 
-    /// When on (default), day reschedule uses the premium GLM tier (glm-5.2).
+    /// When on (default), day reschedule uses the premium GLM tier (glm-5.3).
     public static var highQualitySchedulingEnabled: Bool {
         get { UserDefaults.standard.object(forKey: highQualitySchedulingKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: highQualitySchedulingKey) }

@@ -20,4 +20,13 @@ final class AppGroupIntentStoreTests: XCTestCase {
         XCTAssertEqual(drained.first?.payload, "Buy milk")
         XCTAssertTrue(AppGroupIntentStore.pending().isEmpty)
     }
+
+    func testOpenCaptureEnqueue() {
+        AppGroupIntentStore.enqueue(action: .openCapture)
+        let pending = AppGroupIntentStore.pending()
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending.first?.action, .openCapture)
+        XCTAssertNil(pending.first?.payload)
+        XCTAssertTrue(PendingShortcutAction.allCases.contains(.openCapture))
+    }
 }

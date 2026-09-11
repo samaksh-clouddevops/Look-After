@@ -27,7 +27,8 @@ public enum DayScheduleReconciler {
         model: LifeModel? = nil,
         now: Date = Date(),
         calendar: Calendar = .current,
-        bufferMinutes: Int = 5
+        bufferMinutes: Int = 5,
+        calendarEvents: [BriefingCalendarEvent] = []
     ) -> Result {
         let dayStart = calendar.startOfDay(for: day)
 
@@ -47,7 +48,7 @@ public enum DayScheduleReconciler {
             return updated
         }
 
-        // 2) Deterministic conflict cascade (anchored > flexible > fluid).
+        // 2) Deterministic conflict cascade (anchored > flexible > fluid); calendar occupies.
         let cascade = ConflictResolutionCascade.resolve(
             tasks: synced,
             on: dayStart,
@@ -56,7 +57,8 @@ public enum DayScheduleReconciler {
             calendar: calendar,
             bufferMinutes: bufferMinutes,
             parkedQueue: ParkedTaskQueueStore.shared,
-            remainingTasks: synced
+            remainingTasks: synced,
+            calendarEvents: calendarEvents
         )
         changedIDs.formUnion(cascade.changedTaskIDs)
 
@@ -117,16 +119,18 @@ public enum DayScheduleReconciler {
                 continue
             }
 
-            if case .strictWindow(let minutes) = policy, let start = task.scheduledTime,
-               now > start.addingTimeInterval(TimeInterval(minutes * 60)) {
-                task.status = .expired
-                task.scheduledTime = nil
-                task.scheduledEndTime = nil
-                task.updatedAt = now
-                byID[task.id] = task
-                changed.insert(task.id)
-                decisions.append(.init(taskID: task.id, action: .expired, reason: "midnight_strict_window"))
-                continue
+            if case .strictWindow(let minutes) = policy, let start = task.scheduledTime {
+                let combined = calendar.combine(date: calendar.startOfDay(for: task.scheduledDate ?? start), timeFrom: start) ?? start
+                if now > combined.addingTimeInterval(TimeInterval(minutes * 60)) {
+                    task.status = .expired
+                    task.scheduledTime = nil
+                    task.scheduledEndTime = nil
+                    task.updatedAt = now
+                    byID[task.id] = task
+                    changed.insert(task.id)
+                    decisions.append(.init(taskID: task.id, action: .expired, reason: "midnight_strict_window"))
+                    continue
+                }
             }
 
             switch TaskReaper.verdict(
@@ -189,23 +193,21 @@ public enum DayScheduleReconciler {
         return Result(tasks: merged, changedTaskIDs: changed, conflictTaskIDs: [])
     }
 
-    /// Returns true when two tasks overlap on the same day.
+    /// Returns true when two tasks overlap, or a task overlaps calendar/protected occupancy.
     public static func hasOverlap(
         _ tasks: [LifeTask],
         on day: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        calendarEvents: [BriefingCalendarEvent] = [],
+        model: LifeModel? = nil
     ) -> Bool {
-        let intervals = TaskScheduleInterval.intervals(from: tasks, on: day, calendar: calendar)
-        guard intervals.count > 1 else { return false }
-        for i in 0..<(intervals.count - 1) where intervals[i].overlaps(intervals[i + 1]) {
-            return true
-        }
-        for i in 0..<intervals.count {
-            for j in (i + 1)..<intervals.count where intervals[i].overlaps(intervals[j]) {
-                return true
-            }
-        }
-        return false
+        OccupiedDay.build(
+            tasks: tasks,
+            calendarEvents: calendarEvents,
+            model: model,
+            on: day,
+            calendar: calendar
+        ).hasOverlap
     }
 
     // MARK: - Commitment sync

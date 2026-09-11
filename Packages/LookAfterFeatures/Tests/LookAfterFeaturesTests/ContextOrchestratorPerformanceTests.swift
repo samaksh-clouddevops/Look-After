@@ -5,9 +5,9 @@ import LookAfterData
 
 /// Measures ContextOrchestrator.refresh batch-update path.
 /// Pass: refresh with realistic payload under target; hard fail above budget.
-@MainActor
 final class ContextOrchestratorPerformanceTests: XCTestCase {
 
+    @MainActor
     func testRefresh_WithTypicalDayPayload_WithinBudget() async {
         let orchestrator = ContextOrchestrator(
             environmentProvider: EnvironmentContextProvider(
@@ -60,6 +60,7 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testRefresh_WarmSecondCall_WithinBudget() async {
         let orchestrator = ContextOrchestrator(
             environmentProvider: EnvironmentContextProvider(
@@ -117,6 +118,7 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testRefresh_PublishesConsistentBatchState() async {
         let orchestrator = ContextOrchestrator(
             environmentProvider: EnvironmentContextProvider(
@@ -152,6 +154,7 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
 
     // MARK: - Fixtures
 
+    @MainActor
     private func makeTasks(count: Int) -> [LifeTask] {
         (0..<count).map { i in
             LifeTask(
@@ -165,6 +168,7 @@ final class ContextOrchestratorPerformanceTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func makeTimeline(from tasks: some Collection<LifeTask>) -> [LifeTimelineEvent] {
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: Date())

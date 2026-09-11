@@ -23,6 +23,7 @@ public final class FactoryResetManager {
         "shopping_items",
         "relationships",
         "journal_entries",
+        "task_deletions",
     ]
 
     private static let moduleUserDefaultsPrefixes = [
@@ -47,6 +48,12 @@ public final class FactoryResetManager {
         UserCalibrationStore.reset()
         HabitCompletionStore.reset()
         TaskStore.shared.resetLocalStore()
+        try? InboxSQLiteStore.shared.reset()
+        try? HealthSummarySQLiteStore.shared.reset()
+        try? ModuleEntitySQLiteStore.shared.reset()
+        TaskDeletionRegistry.reset()
+        TaskSyncOutbox.shared.clearAll()
+        CloudSyncOutbox.shared.clearAll()
         local.deleteAllJSONFiles()
         local.deleteBehaviorMemoryDirectory()
         local.clearApplicationCaches()

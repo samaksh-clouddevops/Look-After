@@ -70,17 +70,12 @@ public final class MedicationViewModel: ObservableObject {
     }
     
     private func saveToDisk() {
-        if let data = try? JSONEncoder().encode(medications) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
-        }
+        MedicationStore.save(medications)
         NotificationCenter.default.post(name: .medicationListDidChange, object: nil)
     }
     
     private func loadFromDisk() {
-        if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let saved = try? JSONDecoder().decode([Medication].self, from: data) {
-            medications = saved
-        }
+        medications = MedicationStore.load()
     }
 }
 

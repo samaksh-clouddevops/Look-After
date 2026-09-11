@@ -24,12 +24,20 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     @Published public var draftText = ""
     @Published public var errorMessage: String?
 
+    /// Same NOW task id as the live timeline rail (hero must match).
+    public var nowTaskId: String? {
+        timelineService?.nowTaskId
+            ?? timelineRows.first(where: { $0.isNow && !$0.isCompleted })?.taskId
+    }
+
     @Published public private(set) var replanSummary: String?
     @Published public private(set) var isReplanning = false
     @Published public private(set) var isRedesigningWithAI = false
     @Published public private(set) var contextualReplanResult: DayReplanResult?
     @Published public private(set) var contextualReplanTrigger: DayReplanTrigger?
     @Published public private(set) var contextualReplanTitle: String = "Replan Preview"
+    /// AI mutations waiting for Approve / Reject (P1).
+    @Published public private(set) var pendingApproval: PendingPlanApproval?
 
     private var pendingContextualReplan: DayReplanContext?
 
@@ -85,6 +93,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         contextualReplanTrigger = nil
         contextualReplanTitle = "Replan Preview"
         pendingContextualReplan = nil
+        pendingApproval = nil
         medications = []
         hasSeededProactiveSuggestions = false
     }
@@ -99,9 +108,10 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
         hasSeededProactiveSuggestions = true
         negotiation = PlanningNegotiation(question: top.message, options: top.options)
+        // Intro only — question lives in the negotiation strip to avoid duplicated copy.
         turns.append(PlanningConversationTurn(
             role: .assistant,
-            text: "I noticed something on your schedule — \(top.message)",
+            text: "I noticed something on your schedule.",
             responseSource: .offline
         ))
     }
@@ -346,12 +356,19 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         refreshContext: () async -> Void
     ) async {
         let calendar = Calendar.current
+        let allowedTaskIDs = Set(tasksVM.schedulingContext.map(\.id))
         let taskByID = Dictionary(uniqueKeysWithValues: tasksVM.tasks.map { ($0.id, $0) })
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
         let freedSlot = pendingContextualReplan?.freedSlotWindow
+        let profile = UserLifeProfileStore.load()
 
         for suggestion in result.effectiveChanges(selectedVariantID: selectedVariantID) {
+            // A3: ignore hallucinated task IDs.
+            guard allowedTaskIDs.contains(suggestion.taskID) else { continue }
             guard var task = taskByID[suggestion.taskID], !task.isFixedTimeEvent else { continue }
+            if task.isLifeCommitmentTask || OnboardingTaskSeeder.isActivityRoutineTitle(task.title) {
+                continue
+            }
 
             if suggestion.deferToTomorrow {
                 task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
@@ -373,6 +390,23 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                     let effectiveStart = calendar.isDate(day, inSameDayAs: now) ? max(slot.start, now) : slot.start
                     if time < effectiveStart || end > slot.end { continue }
                 }
+                // B6: placement guard before writing.
+                let dayStart = calendar.startOfDay(for: time)
+                let neighbors = tasksVM.schedulingContext.filter { $0.id != task.id && $0.status.isActive }
+                let occupied = TaskScheduleInterval.intervals(from: neighbors, on: dayStart, calendar: calendar)
+                switch SchedulePlacementGuard.evaluate(
+                    proposedStart: time,
+                    durationMinutes: duration,
+                    task: task,
+                    occupied: occupied,
+                    neighborTasks: neighbors
+                ) {
+                case .rejected:
+                    continue
+                case .accepted, .snapped, .needsAI:
+                    break
+                }
+
                 task.scheduledDate = calendar.startOfDay(for: freedSlot?.start ?? Date())
                 task.scheduledTime = time
                 task.scheduledEndTime = end
@@ -380,18 +414,25 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 continue
             }
 
-            await tasksVM.updateTaskAndPersist(task)
+            // Approved replan path may override user-placed clocks (P2).
+            task.userPlacedScheduleAt = nil
+            await tasksVM.scheduleMutation.persist(task, userId: userId, reconcileSchedule: true)
         }
 
         if !result.mutations.isEmpty {
+            let allowedMutations = result.mutations.filter { mutation in
+                guard let id = mutation.taskID else { return true }
+                return allowedTaskIDs.contains(id)
+            }
             var meds = MedicationStore.load()
             _ = await applier.apply(
-                mutations: result.mutations,
+                mutations: allowedMutations,
                 tasksVM: tasksVM,
                 modulesVM: modulesVM,
                 userId: userId,
                 medications: &meds,
-                lifeProfile: UserLifeProfileStore.load()
+                lifeProfile: profile,
+                allowUserPlacedOverride: true
             )
         }
 
@@ -596,60 +637,16 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             }
 
             if !response.mutations.isEmpty {
-                let mutations = response.mutations
+                // P1: never auto-apply — show approval card with reason + change list.
+                let approval = PendingPlanApproval.make(
+                    mutations: response.mutations,
+                    reply: displayReply,
+                    userMessage: message,
+                    tasks: tasksVM.schedulingContext
+                )
+                pendingApproval = approval
                 if isVoiceTurn {
-                    Task { @MainActor in
-                        var applyResult = PlanMutationApplier.ApplyResult()
-                        var meds = self.medications
-                        applyResult = await self.applier.apply(
-                            mutations: mutations,
-                            tasksVM: tasksVM,
-                            modulesVM: modulesVM,
-                            userId: userId,
-                            medications: &meds,
-                            userMessage: message,
-                            lifeProfile: context.lifeProfile,
-                            deferReconcile: true
-                        )
-                        self.medications = meds
-                        await refreshContext()
-                        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
-                        if hasMultiDayCommit {
-                            self.multiDaySession = MultiDayPlanningSession(phase: .committed, draft: self.multiDayDraft)
-                            self.multiDayDraft = nil
-                            self.multiDayPlanning = nil
-                        }
-                        if applyResult.appliedCount == 0 {
-                            print("[ExecutivePlanning] mutations skipped: \(applyResult.skippedReasons)")
-                        }
-                    }
-                } else {
-                    var applyResult = PlanMutationApplier.ApplyResult()
-                    var meds = medications
-                    applyResult = await applier.apply(
-                        mutations: mutations,
-                        tasksVM: tasksVM,
-                        modulesVM: modulesVM,
-                        userId: userId,
-                        medications: &meds,
-                        userMessage: message,
-                        lifeProfile: context.lifeProfile
-                    )
-                    medications = meds
-                    displayReply = appendApplyNotices(to: displayReply, applyResult: applyResult)
-                    if let lastIndex = turns.indices.last {
-                        turns[lastIndex].text = displayReply
-                    }
-                    await refreshContext()
-                    NotificationCenter.default.post(name: .taskListDidChange, object: nil)
-                    if hasMultiDayCommit {
-                        multiDaySession = MultiDayPlanningSession(phase: .committed, draft: multiDayDraft)
-                        multiDayDraft = nil
-                        multiDayPlanning = nil
-                    }
-                    if applyResult.appliedCount == 0 {
-                        print("[ExecutivePlanning] mutations skipped: \(applyResult.skippedReasons)")
-                    }
+                    onSpeakReply?("I have \(approval.changeSummaries.count) suggested change\(approval.changeSummaries.count == 1 ? "" : "s"). Review and approve to apply.")
                 }
             }
         } catch {
@@ -724,6 +721,56 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             userId: userId,
             refreshContext: refreshContext
         )
+    }
+
+    /// P1: Apply pending AI mutations after user approval (P2: may override user-placed clocks).
+    public func approvePendingPlan(
+        tasksVM: TasksViewModel,
+        modulesVM: LifeModulesViewModel,
+        userId: String,
+        lifeProfile: UserLifeProfile = UserLifeProfileStore.load(),
+        refreshContext: @escaping () async -> Void
+    ) async {
+        guard let pending = pendingApproval else { return }
+        let hasMultiDayCommit = pending.mutations.contains { $0.kind == .createMultiDayTask }
+        var meds = medications
+        let applyResult = await applier.apply(
+            mutations: pending.mutations,
+            tasksVM: tasksVM,
+            modulesVM: modulesVM,
+            userId: userId,
+            medications: &meds,
+            userMessage: pending.userMessage,
+            lifeProfile: lifeProfile,
+            allowUserPlacedOverride: true
+        )
+        medications = meds
+        pendingApproval = nil
+        var notice = applyResult.appliedCount > 0
+            ? "Applied \(applyResult.appliedCount) change\(applyResult.appliedCount == 1 ? "" : "s")."
+            : "No changes were applied."
+        notice = appendApplyNotices(to: notice, applyResult: applyResult)
+        turns.append(PlanningConversationTurn(role: .assistant, text: notice))
+        if hasMultiDayCommit, applyResult.appliedCount > 0 {
+            multiDaySession = MultiDayPlanningSession(phase: .committed, draft: multiDayDraft)
+            multiDayDraft = nil
+            multiDayPlanning = nil
+        }
+        await refreshContext()
+        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+        if inputMode == .voice {
+            onSpeakReply?(notice)
+        }
+    }
+
+    public func rejectPendingPlan() {
+        guard pendingApproval != nil else { return }
+        pendingApproval = nil
+        let text = "Okay — I left your schedule as it is."
+        turns.append(PlanningConversationTurn(role: .assistant, text: text))
+        if inputMode == .voice {
+            onSpeakReply?(text)
+        }
     }
 
     public func applySelectedVariant(

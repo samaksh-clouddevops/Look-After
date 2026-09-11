@@ -108,6 +108,13 @@ public enum CaptureOutcome: Sendable, Equatable {
         }
     }
 
+    public func toastMessage(capacityFit: DaySupervisorContinuity.CaptureFit?) -> String {
+        guard case .taskCreated(_, let title) = self, let fit = capacityFit, fit != .fitToday else {
+            return toastMessage
+        }
+        return "Added **\(title)** · \(fit.chipLabel)"
+    }
+
     public var plainToastMessage: String {
         toastMessage.replacingOccurrences(of: "**", with: "")
     }
@@ -117,11 +124,19 @@ public struct CaptureRouteResult: Sendable {
     public var outcome: CaptureOutcome
     public var inboxItemId: String?
     public var createdTaskId: String?
+    /// Supervisor capacity hint after classify (fit / park / someday).
+    public var capacityFit: DaySupervisorContinuity.CaptureFit?
 
-    public init(outcome: CaptureOutcome, inboxItemId: String? = nil, createdTaskId: String? = nil) {
+    public init(
+        outcome: CaptureOutcome,
+        inboxItemId: String? = nil,
+        createdTaskId: String? = nil,
+        capacityFit: DaySupervisorContinuity.CaptureFit? = nil
+    ) {
         self.outcome = outcome
         self.inboxItemId = inboxItemId
         self.createdTaskId = createdTaskId
+        self.capacityFit = capacityFit
     }
 }
 

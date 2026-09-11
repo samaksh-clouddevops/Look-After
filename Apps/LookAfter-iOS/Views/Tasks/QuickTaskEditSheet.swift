@@ -49,7 +49,9 @@ struct QuickTaskEditSheet: View {
                     Section("Time") {
                         HStack(spacing: 12) {
                             TextField("Minutes", text: $estimatedMinutesText)
+                                #if os(iOS)
                                 .keyboardType(.numberPad)
+                                #endif
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 72)
                                 .onSubmit(commitEstimatedMinutesText)

@@ -38,6 +38,9 @@ public final class FirebaseManager: ObservableObject {
     
     private init() {
         LookAfterFirebaseConfiguration.configureIfNeeded()
+        // Restore local session for offline continuity. Firebase Auth listener
+        // will clear flags if the remote user is nil (revoked / signed out elsewhere).
+        // Local SQLite/JSON rows are never deleted by session-flag clears.
         let savedUid = UserDefaults.standard.string(forKey: "saved_user_uid")
         let savedEmail = UserDefaults.standard.string(forKey: "userEmail")
         if let uid = savedUid, !uid.isEmpty {
@@ -58,20 +61,75 @@ public final class FirebaseManager: ObservableObject {
     private func setupAuthListener() {
         authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in
-                if let user = user {
-                    let previous = self?.currentUserId
-                    self?.currentUserId = user.uid
-                    self?.userEmail = user.email ?? self?.userEmail
-                    self?.isAuthenticated = true
+                guard let self else { return }
+                if let user {
+                    let previous = self.currentUserId
+                    self.currentUserId = user.uid
+                    self.userEmail = user.email ?? self.userEmail
+                    self.isAuthenticated = true
                     UserDefaults.standard.set(user.uid, forKey: "saved_user_uid")
+                    if let email = user.email {
+                        UserDefaults.standard.set(email, forKey: "userEmail")
+                    }
 
                     if let previous, !previous.isEmpty, previous != user.uid {
                         HealthSummaryRepository().reassignSummaries(from: previous, to: user.uid)
                         TaskStore.shared.reassignTasks(from: previous, to: user.uid)
                     }
+                } else {
+                    // Remote Auth session gone. Keep pure local guest sessions (Keychain guest UID)
+                    // so offline bootstrap is not wiped by the initial nil callback. Local stores
+                    // are never deleted here.
+                    if ProcessInfo.processInfo.arguments.contains("-UITesting") {
+                        if let uid = self.currentUserId, !uid.isEmpty {
+                            self.isAuthenticated = true
+                            return
+                        }
+                        if let saved = UserDefaults.standard.string(forKey: "saved_user_uid"),
+                           !saved.isEmpty {
+                            self.currentUserId = saved
+                            self.isAuthenticated = true
+                            return
+                        }
+                    }
+                    if let guestId = try? GuestLocalIdentity.load(),
+                       self.currentUserId == guestId {
+                        return
+                    }
+                    // XCUITest seeds a deterministic uitest-* uid before Auth is ready.
+                    if let uid = self.currentUserId, uid.hasPrefix("uitest-") {
+                        self.isAuthenticated = true
+                        return
+                    }
+                    if let saved = UserDefaults.standard.string(forKey: "saved_user_uid"),
+                       saved.hasPrefix("uitest-") {
+                        self.currentUserId = saved
+                        self.isAuthenticated = true
+                        return
+                    }
+                    self.clearSessionFlagsPreservingLocalData()
                 }
             }
         }
+    }
+
+    /// Seeds a local authenticated session for XCUITest without waiting on Firebase Auth.
+    public func seedUITestSession(userId: String, email: String) {
+        try? GuestLocalIdentity.save(userId)
+        currentUserId = userId
+        isAuthenticated = true
+        userEmail = email
+        UserDefaults.standard.set(userId, forKey: "saved_user_uid")
+        UserDefaults.standard.set(email, forKey: "userEmail")
+    }
+
+    /// Clears in-memory / UserDefaults session markers without wiping local stores.
+    private func clearSessionFlagsPreservingLocalData() {
+        currentUserId = nil
+        isAuthenticated = false
+        userEmail = nil
+        UserDefaults.standard.removeObject(forKey: "saved_user_uid")
+        UserDefaults.standard.removeObject(forKey: "userEmail")
     }
 
     /// Stable account id for local storage — prefers Firebase Auth UID.
@@ -87,81 +145,59 @@ public final class FirebaseManager: ObservableObject {
     
     /// Sign in anonymously for quick start (no account required).
     public func signInAnonymously() async throws {
-        let fallbackUid = UserDefaults.standard.string(forKey: "saved_user_uid") ?? "guest_\(UUID().uuidString.prefix(8))"
-        UserDefaults.standard.set(fallbackUid, forKey: "saved_user_uid")
-        self.currentUserId = fallbackUid
-        self.isAuthenticated = true
-        
+        error = nil
         if FirebaseApp.app() != nil {
-            Task.detached {
-                if let result = try? await Auth.auth().signInAnonymously() {
-                    await MainActor.run {
-                        let previous = FirebaseManager.shared.currentUserId
-                        FirebaseManager.shared.currentUserId = result.user.uid
-                        UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
-                        if let previous, !previous.isEmpty, previous != result.user.uid {
-                            HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
-                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
-                        }
-                    }
-                }
+            let previous = currentUserId ?? (try? GuestLocalIdentity.load())
+            do {
+                let result = try await Auth.auth().signInAnonymously()
+                applyAuthenticatedUser(result.user, previousLocalId: previous)
+            } catch {
+                self.error = error.localizedDescription
+                throw error
             }
+            return
         }
+
+        let guestUID = try GuestLocalIdentity.resolvedOrCreate()
+        currentUserId = guestUID
+        isAuthenticated = true
+        userEmail = nil
+        UserDefaults.standard.set(guestUID, forKey: "saved_user_uid")
     }
     
-    /// Sign in with email/password.
+    /// Sign in with email/password. Requires Firebase; never invents unstable fallback UIDs.
     public func signIn(email: String, password: String) async throws {
-        let emailHash = abs(email.hashValue)
-        let fallbackUid = "usr_\(emailHash)"
-        UserDefaults.standard.set(fallbackUid, forKey: "saved_user_uid")
-        UserDefaults.standard.set(email, forKey: "userEmail")
-        
-        self.userEmail = email
-        self.currentUserId = fallbackUid
-        self.isAuthenticated = true
-        
-        if FirebaseApp.app() != nil {
-            Task.detached {
-                if let result = try? await Auth.auth().signIn(withEmail: email, password: password) {
-                    await MainActor.run {
-                        let previous = FirebaseManager.shared.currentUserId
-                        FirebaseManager.shared.currentUserId = result.user.uid
-                        UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
-                        if let previous, !previous.isEmpty, previous != result.user.uid {
-                            HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
-                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
-                        }
-                    }
-                }
-            }
+        error = nil
+        guard FirebaseApp.app() != nil else {
+            throw FirebaseManagerError.firebaseUnavailable
+        }
+        let previous = currentUserId
+        do {
+            let result = try await Auth.auth().signIn(withEmail: email, password: password)
+            applyAuthenticatedUser(result.user, previousLocalId: previous)
+            UserDefaults.standard.set(email, forKey: "userEmail")
+            userEmail = email
+        } catch {
+            self.error = error.localizedDescription
+            throw error
         }
     }
     
-    /// Create account with email/password.
+    /// Create account with email/password. Requires Firebase; never invents unstable fallback UIDs.
     public func createAccount(email: String, password: String) async throws {
-        let emailHash = abs(email.hashValue)
-        let fallbackUid = "usr_\(emailHash)"
-        UserDefaults.standard.set(fallbackUid, forKey: "saved_user_uid")
-        UserDefaults.standard.set(email, forKey: "userEmail")
-        
-        self.userEmail = email
-        self.currentUserId = fallbackUid
-        self.isAuthenticated = true
-        
-        if FirebaseApp.app() != nil {
-            Task.detached {
-                if let result = try? await Auth.auth().createUser(withEmail: email, password: password) {
-                    await MainActor.run {
-                        let previous = FirebaseManager.shared.currentUserId
-                        FirebaseManager.shared.currentUserId = result.user.uid
-                        UserDefaults.standard.set(result.user.uid, forKey: "saved_user_uid")
-                        if let previous, !previous.isEmpty, previous != result.user.uid {
-                            HealthSummaryRepository().reassignSummaries(from: previous, to: result.user.uid)
-                            TaskStore.shared.reassignTasks(from: previous, to: result.user.uid)
-                        }
-                    }
-                }
-            }
+        error = nil
+        guard FirebaseApp.app() != nil else {
+            throw FirebaseManagerError.firebaseUnavailable
+        }
+        let previous = currentUserId
+        do {
+            let result = try await Auth.auth().createUser(withEmail: email, password: password)
+            applyAuthenticatedUser(result.user, previousLocalId: previous)
+            UserDefaults.standard.set(email, forKey: "userEmail")
+            userEmail = email
+        } catch {
+            self.error = error.localizedDescription
+            throw error
         }
     }
     
@@ -170,11 +206,7 @@ public final class FirebaseManager: ObservableObject {
         if FirebaseApp.app() != nil {
             try? Auth.auth().signOut()
         }
-        currentUserId = nil
-        isAuthenticated = false
-        userEmail = nil
-        UserDefaults.standard.removeObject(forKey: "saved_user_uid")
-        UserDefaults.standard.removeObject(forKey: "userEmail")
+        clearSessionFlagsPreservingLocalData()
         LicenseManager.shared.clearLocalLicense()
     }
 
@@ -187,7 +219,7 @@ public final class FirebaseManager: ObservableObject {
     /// Sign in with Apple (AuthenticationServices → Firebase).
     public func signInWithApple() async throws {
         guard FirebaseApp.app() != nil else {
-            throw FirebaseManagerError.ssoFailed("Firebase is not configured")
+            throw FirebaseManagerError.firebaseUnavailable
         }
         let coordinator = AppleSignInCoordinator()
         let credential = try await coordinator.signIn()
@@ -198,15 +230,28 @@ public final class FirebaseManager: ObservableObject {
         }
     }
 
-    /// Sign in with Google via Firebase OAuth provider (browser sheet). Available on iOS.
+    /// True when bundled Firebase options are the offline dummy (Google SSO must not run).
+    public static var isMockConfiguration: Bool {
+        LookAfterFirebaseConfiguration.configureIfNeeded()
+        guard let app = FirebaseApp.app() else { return true }
+        if mockProjectIDs.contains(app.options.projectID ?? "") { return true }
+        if app.options.apiKey == LookAfterFirebaseConfiguration.mockAPIKey { return true }
+        let appID = app.options.googleAppID
+        return appID.contains("1234567890")
+    }
+
+    /// Sign in with Google via native Google Sign-In SDK → Firebase Auth.
     public func signInWithGoogle() async throws {
         guard FirebaseApp.app() != nil else {
-            throw FirebaseManagerError.ssoFailed("Firebase is not configured")
+            throw FirebaseManagerError.firebaseUnavailable
+        }
+        guard !Self.isMockConfiguration else {
+            throw FirebaseManagerError.ssoFailed(
+                "Add your Firebase iOS GoogleService-Info.plist to Config/, then rebuild."
+            )
         }
         #if os(iOS)
-        let provider = OAuthProvider(providerID: "google.com")
-        provider.scopes = ["email", "profile", "https://www.googleapis.com/auth/gmail.readonly"]
-        let credential = try await provider.credential(with: nil)
+        let credential = try await GoogleSignInCoordinator.signIn()
         let result = try await Auth.auth().signIn(with: credential)
         applyAuthenticatedUser(result.user)
         if let name = result.user.displayName, !name.isEmpty {
@@ -217,8 +262,8 @@ public final class FirebaseManager: ObservableObject {
         #endif
     }
 
-    private func applyAuthenticatedUser(_ user: User) {
-        let previous = currentUserId
+    private func applyAuthenticatedUser(_ user: User, previousLocalId: String? = nil) {
+        let previous = previousLocalId ?? currentUserId
         currentUserId = user.uid
         userEmail = user.email ?? userEmail
         isAuthenticated = true
@@ -264,12 +309,13 @@ public final class FirebaseManager: ObservableObject {
 
 // MARK: - Errors
 
-public enum FirebaseManagerError: Error, LocalizedError {
+public enum FirebaseManagerError: Error, LocalizedError, Equatable {
     case notAuthenticated
     case documentNotFound
     case encodingError
     case collectionNotFound
     case ssoFailed(String)
+    case firebaseUnavailable
     
     public var errorDescription: String? {
         switch self {
@@ -278,6 +324,7 @@ public enum FirebaseManagerError: Error, LocalizedError {
         case .encodingError: return "Failed to encode data"
         case .collectionNotFound: return "Collection not found"
         case .ssoFailed(let message): return message
+        case .firebaseUnavailable: return "Firebase is not configured"
         }
     }
 }

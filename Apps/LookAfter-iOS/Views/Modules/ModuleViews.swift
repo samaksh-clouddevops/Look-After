@@ -1115,7 +1115,7 @@ struct ReflectionJournalView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(
                                     RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                                        .fill(DesignSystem.backgroundSecondary)
+                                        .fill(DesignSystem.contentSurfaceElevated)
                                 )
                                 .padding(.horizontal, DesignSystem.screenHorizontal)
                             }
@@ -1174,7 +1174,7 @@ struct ReflectionJournalView: View {
             .padding(DesignSystem.cardPaddingMin)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
-                    .fill(DesignSystem.backgroundSecondary.opacity(0.5))
+                    .fill(DesignSystem.contentSurface)
             )
             .padding(.horizontal, DesignSystem.screenHorizontal)
         }

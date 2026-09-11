@@ -14,11 +14,12 @@ public enum CircuitBreakerAnalyzer {
         var actions: [ProactiveAction] = []
 
         if focusSessionActive, focusSessionElapsedMinutes >= 90, let title = focusTaskTitle {
+            let question = DaySupervisorContinuity.focusMismatchQuestion(kind: "hyperfocusBreak")
             actions.append(ProactiveAction(
                 kind: .hyperfocusBreak,
                 severity: .high,
-                message: "You've been deep in \"\(title)\" for \(focusSessionElapsedMinutes)m — stretch + water?",
-                options: ["Take a break", "Snooze 15m", "Mark done"],
+                message: "You've been deep in \"\(title)\" for \(focusSessionElapsedMinutes)m — \(question.prompt)",
+                options: question.options,
                 surface: .banner,
                 metadata: ["elapsed": "\(focusSessionElapsedMinutes)"]
             ))
@@ -27,11 +28,12 @@ public enum CircuitBreakerAnalyzer {
         let totalDeferrals = behaviorMemory.deferralRecords.reduce(0) { $0 + $1.deferralCount }
         let lowCapacity = capacityBand == .lowCapacity || capacityBand == .recoveryMode
         if activeTaskCount >= 8, totalDeferrals >= 5, lowCapacity {
+            let question = DaySupervisorContinuity.focusMismatchQuestion(kind: "overwhelm")
             actions.append(ProactiveAction(
                 kind: .overwhelmCircuitBreaker,
                 severity: .high,
-                message: "Today's a lot — switch to emergency mode with your top 3?",
-                options: ["Emergency mode", "Defer 3 tasks", "Keep plan"],
+                message: question.prompt,
+                options: question.options,
                 surface: .banner,
                 metadata: ["deferrals": "\(totalDeferrals)"]
             ))

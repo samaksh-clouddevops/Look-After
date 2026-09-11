@@ -122,7 +122,7 @@ cd Packages/LookAfterHealth && swift test
 
 ```bash
 xcodebuild -scheme LookAfter-iOS \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
   test
 ```
 

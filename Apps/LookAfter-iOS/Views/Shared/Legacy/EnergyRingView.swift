@@ -55,7 +55,7 @@ struct EnergyRingView: View {
 
     private func ringTrack(size: CGFloat, lineWidth: CGFloat) -> some View {
         Circle()
-            .stroke(Color.white.opacity(0.08), lineWidth: lineWidth)
+            .stroke(DesignSystem.border, lineWidth: lineWidth)
             .frame(width: size, height: size)
     }
 

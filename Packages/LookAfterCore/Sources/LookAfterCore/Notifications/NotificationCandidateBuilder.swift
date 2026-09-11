@@ -17,6 +17,7 @@ public enum NotificationCandidateBuilder {
         candidates += morningBriefingCandidate(
             postWake: input.postWake,
             userDisplayName: input.userDisplayName,
+            leanBody: input.dayAuditLeanBody,
             now: now,
             dayKey: dayKey,
             calendar: calendar
@@ -158,6 +159,7 @@ public enum NotificationCandidateBuilder {
     private static func morningBriefingCandidate(
         postWake: PostWakeDetector.Result,
         userDisplayName: String,
+        leanBody: String?,
         now: Date,
         dayKey: String,
         calendar: Calendar
@@ -166,13 +168,15 @@ public enum NotificationCandidateBuilder {
         let greetingName = userDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = greetingName.isEmpty ? "Good morning" : "Good morning, \(greetingName)"
         let fireDate = now.addingTimeInterval(2 * 60)
+        let body = (leanBody?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
+            ?? "Your briefing is ready — tap to see today's plan."
 
         return [
             NotificationCandidate(
                 id: NotificationIdentifier.proactive(.morningBriefing, suffix: dayKey),
                 kind: .morningBriefing,
                 title: title,
-                body: "Your briefing is ready — tap to see today's plan.",
+                body: body,
                 fireDate: fireDate,
                 route: .briefing
             )

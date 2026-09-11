@@ -2,8 +2,14 @@ import Foundation
 import LookAfterAI
 import LookAfterCore
 
-/// Generates the 3-line "For today" hero copy from tasks, timeline, and capacity signals.
+/// Generates short "For today" hero copy from tasks, timeline, and capacity signals.
+/// Prefer ≤2 scannable lines (ADHD load); greeting already owns the name — never repeat it here.
 enum BriefingDayHeroSummaryGenerator {
+
+    /// Hard cap on hero bullets — greeting + CTA already fill the first viewport.
+    static let maxHeroLines = 2
+    /// Soft cap per line so bullets stay scannable on a phone.
+    static let maxLineCharacters = 90
 
     struct Input: Sendable {
         var userName: String
@@ -33,17 +39,32 @@ enum BriefingDayHeroSummaryGenerator {
                 systemPrompt: LookAfterPrompts.briefingDayHeroSummarySystem,
                 tier: .economy
             )
-            if let lines = parseLines(raw), lines.count >= 2 {
-                return polish(Array(lines.prefix(3)))
+            if let lines = parseLines(raw), lines.count >= 1 {
+                return polish(Array(lines.prefix(maxHeroLines)))
             }
         } catch {}
         return deterministic
     }
 
     private static func polish(_ lines: [String]) -> [String] {
-        lines
-            .map { UserFacingCopy.humanizeBriefingLine($0) }
-            .filter { !$0.isEmpty }
+        Array(
+            lines
+                .map { UserFacingCopy.humanizeBriefingLine($0) }
+                .map { truncateLine($0) }
+                .filter { !$0.isEmpty }
+                .prefix(maxHeroLines)
+        )
+    }
+
+    private static func truncateLine(_ line: String) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > maxLineCharacters else { return trimmed }
+        let end = trimmed.index(trimmed.startIndex, offsetBy: maxLineCharacters - 1)
+        var slice = String(trimmed[..<end])
+        if let lastSpace = slice.lastIndex(of: " "), lastSpace > slice.startIndex {
+            slice = String(slice[..<lastSpace])
+        }
+        return slice.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
 
     private static func shouldCallAI(_ input: Input) -> Bool {
@@ -56,77 +77,69 @@ enum BriefingDayHeroSummaryGenerator {
 
     static func buildDeterministic(_ input: Input) -> [String] {
         var lines: [String] = []
-        let name = input.userName.trimmingCharacters(in: .whitespacesAndNewlines)
         let pending = input.mission.tasks.filter { !$0.isCompleted }
         let done = input.mission.tasks.filter(\.isCompleted)
 
-        // Line 1 — how the day feels
-        if input.sleep.isAvailable, let hours = input.sleep.totalHours {
-            let sleepPhrase = hours >= 7 ? "decent sleep" : "a short night"
-            if name.isEmpty {
-                lines.append(String(format: "You got %@ (%.1f hours). %@", sleepPhrase, hours, capacityPhrase(input)))
-            } else {
-                lines.append(String(format: "Hey %@. You got %@ (%.1f hours). %@", name, sleepPhrase, hours, capacityPhrase(input)))
-            }
-        } else if name.isEmpty {
-            lines.append("Here's today. \(missingSleepPrefix(input))\(capacityPhrase(input))")
-        } else {
-            lines.append("Hey \(name). \(missingSleepPrefix(input))\(capacityPhrase(input))")
-        }
-
-        // Line 2 — task plan
-        if pending.isEmpty, done.isEmpty, input.progress.remainingCount == 0 {
-            lines.append("Your list is empty. Add one thing that would make today feel finished.")
-        } else if pending.isEmpty {
-            lines.append("You're through the scheduled stuff (\(done.count) done). Open time if you want it.")
-        } else {
-            let top = pending.prefix(3).map(\.title).joined(separator: ", ")
-            var taskLine = "You've got \(pending.count) thing\(pending.count == 1 ? "" : "s") today"
-            if input.progress.overdueCount > 0 {
-                taskLine += ", and \(input.progress.overdueCount) \(input.progress.overdueCount == 1 ? "is" : "are") overdue"
-            }
-            if let minutes = input.dayBriefing?.plannedMinutesRemaining, minutes > 0 {
-                taskLine += ". About \(formatWorkMinutes(minutes)) of work lined up"
-            }
-            taskLine += ". The main ones: \(top)."
-            lines.append(taskLine)
-        }
-
-        // Line 3 — ongoing work, then next plan
+        // Prefer a single "what next" line when something is in progress.
         if let ongoing = input.tasks.first(where: { $0.status == .inProgress }) {
-            lines.append("You're in the middle of \"\(ongoing.title)\" — pick up where you left off.")
-            return Array(lines.prefix(3))
+            lines.append(capacityPhrase(input))
+            lines.append("Pick up \"\(formatTitleForList(ongoing.title))\".")
+            return Array(lines.prefix(maxHeroLines))
         }
 
         let now = Date()
         if let currentEvent = ongoingTimelineEvent(in: input.lifeTimelineEvents, now: now) {
-            lines.append("\(currentEvent.title) is underway right now. Stay with it if you can.")
-            return Array(lines.prefix(3))
+            lines.append(capacityPhrase(input))
+            lines.append(Self.underwayLine(for: currentEvent.title))
+            return Array(lines.prefix(maxHeroLines))
         }
 
-        if let plan = input.dayBriefing, !plan.planItems.isEmpty {
-            let upcoming = plan.planItems.filter { !$0.isCompleted }.prefix(2)
-            if let first = upcoming.first {
-                let when = first.timeLabel.map { "\($0), " } ?? ""
-                lines.append("Next on the plan is \(when)\(first.title). Start there if it helps.")
-                return Array(lines.prefix(3))
+        // Line 1 — how the day feels (no name; greeting owns that)
+        if input.sleep.isAvailable, let hours = input.sleep.totalHours {
+            let sleepPhrase = hours >= 7 ? "decent sleep" : "a short night"
+            lines.append(String(format: "%.1fh %@ · %@", hours, sleepPhrase, capacityPhrase(input)))
+        } else {
+            let sleepBit = missingSleepPrefix(input)
+            lines.append(sleepBit.isEmpty ? capacityPhrase(input) : "\(sleepBit)\(capacityPhrase(input))")
+        }
+
+        // Line 2 — next action or compact task count (not a full list dump)
+        if let plan = input.dayBriefing, !plan.planItems.isEmpty,
+           let first = plan.planItems.first(where: { !$0.isCompleted }) {
+            if let label = first.timeLabel, !label.isEmpty,
+               label.compare("Now", options: [.caseInsensitive, .diacriticInsensitive]) != .orderedSame {
+                lines.append("Next: \(formatTitleForList(first.title)) at \(label).")
+            } else {
+                lines.append("Next: \(formatTitleForList(first.title)).")
             }
+            return Array(lines.prefix(maxHeroLines))
         }
 
         if let title = input.calendar.nextEventTitle, let mins = input.calendar.minutesUntilStart {
-            let when = mins <= 90 ? "in \(mins) minutes" : "later"
-            lines.append("\(title) is \(when). Maybe do one small task before that.")
-        } else if let focus = input.dayBriefing?.focusWindowLabel, focus != UserFacingCopy.noFocusWindowToday {
-            lines.append("Your best focus time looks like \(focus). Save the hard stuff for then.")
-        } else if let highlight = input.dayBriefing?.pendingHighlights.first {
-            lines.append(highlight.hasSuffix(".") ? highlight : highlight + ".")
-        } else if let first = pending.first {
-            lines.append("If you're not sure where to start, try \"\(first.title)\" first.")
-        } else {
-            lines.append("Scroll down when you want the full picture on tasks and health.")
+            let when = mins <= 90 ? "in \(mins) min" : "later"
+            lines.append("\(formatTitleForList(title)) \(when).")
+            return Array(lines.prefix(maxHeroLines))
         }
 
-        return Array(lines.prefix(3))
+        if pending.isEmpty, done.isEmpty, input.progress.remainingCount == 0 {
+            lines.append("List is empty — add one thing that finishes the day.")
+        } else if pending.isEmpty {
+            lines.append("\(done.count) done. Open time if you want it.")
+        } else {
+            let starter = mainPendingTask(from: pending, lifeTasks: input.tasks) ?? pending[0]
+            let top = formatTitleForList(starter.title)
+            var taskLine = "\(pending.count) left"
+            if input.progress.overdueCount > 0 {
+                taskLine += ", \(input.progress.overdueCount) overdue"
+            }
+            if let minutes = input.dayBriefing?.plannedMinutesRemaining, minutes > 0 {
+                taskLine += " · \(formatWorkMinutes(minutes))"
+            }
+            taskLine += ". Start with \(top)."
+            lines.append(taskLine)
+        }
+
+        return Array(lines.prefix(maxHeroLines))
     }
 
     private static func ongoingTimelineEvent(in events: [LifeTimelineEvent], now: Date) -> LifeTimelineEvent? {
@@ -141,6 +154,74 @@ enum BriefingDayHeroSummaryGenerator {
             }
     }
 
+    /// Prefer morning / next-window tasks for the hero "Start with" cue.
+    private static func mainPendingTask(
+        from pending: [BriefingMissionTask],
+        lifeTasks: [LifeTask],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> BriefingMissionTask? {
+        guard !pending.isEmpty else { return nil }
+        let byId = Dictionary(uniqueKeysWithValues: lifeTasks.map { ($0.id, $0) })
+        let day = calendar.startOfDay(for: now)
+        let hour = calendar.component(.hour, from: now)
+
+        let ranked = pending.sorted { lhs, rhs in
+            let left = byId[lhs.id].map { TaskListSorter.nextActionableTime(for: $0, on: day, calendar: calendar) } ?? .distantFuture
+            let right = byId[rhs.id].map { TaskListSorter.nextActionableTime(for: $0, on: day, calendar: calendar) } ?? .distantFuture
+            if left != right { return left < right }
+            return lhs.priority > rhs.priority
+        }
+
+        let windowRelevant = ranked.filter { mission in
+            guard let task = byId[mission.id] else { return false }
+            switch TaskScheduleInterval.displaySchedule(for: task, on: day, calendar: calendar) {
+            case .window(let start, _, _):
+                let startHour = calendar.component(.hour, from: start)
+                if hour < 12 {
+                    return startHour < 14
+                }
+                return start <= now.addingTimeInterval(4 * 3600)
+            case .unslottedFlexible:
+                return hour < 12
+            case .noSchedule:
+                return false
+            }
+        }
+
+        return windowRelevant.first ?? ranked.first
+    }
+
+    private static func formatTitleForList(_ title: String) -> String {
+        let separators = [" — ", "—", " – ", "–"]
+        for separator in separators {
+            let parts = title.components(separatedBy: separator)
+            if parts.count == 2 {
+                let head = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                let tail = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !head.isEmpty, !tail.isEmpty else { break }
+                return "\(head) (\(tail))"
+            }
+        }
+        return title
+    }
+
+    /// Avoid awkward "Take medication is underway" grammar.
+    private static func underwayLine(for title: String) -> String {
+        let cleaned = formatTitleForList(title)
+        let lower = cleaned.lowercased()
+        if lower.contains("medication") || lower.hasPrefix("take med") || lower == "meds" {
+            return "Medication is underway. Stay with it."
+        }
+        if lower.hasPrefix("take ") {
+            let rest = String(cleaned.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !rest.isEmpty {
+                return "\(rest.prefix(1).uppercased())\(rest.dropFirst()) is underway. Stay with it."
+            }
+        }
+        return "\"\(cleaned)\" is underway. Stay with it."
+    }
+
     private static func formatWorkMinutes(_ minutes: Int) -> String {
         if minutes < 60 { return "\(max(1, minutes)) min" }
         let hours = minutes / 60
@@ -150,7 +231,7 @@ enum BriefingDayHeroSummaryGenerator {
     }
 
     private static func missingSleepPrefix(_ input: Input) -> String {
-        input.sleep.isAvailable ? "" : "No sleep data from last night — "
+        input.sleep.isAvailable ? "" : "No sleep data from last night. "
     }
 
     private static func capacityPhrase(_ input: Input) -> String {
@@ -190,6 +271,8 @@ enum BriefingDayHeroSummaryGenerator {
 
         return """
         Write like you're texting \(name). Short, warm, human. No dashes or semicolons.
+        Max \(maxHeroLines) lines. Each line under \(maxLineCharacters) characters.
+        Do not greet or use the user's name — the UI greeting already did that.
 
         Capacity: \(input.executiveCapacity.band.displayLabel). \(input.executiveCapacity.band.tagline)
         Energy: \(input.energy.currentEnergyPercent)%
@@ -200,10 +283,10 @@ enum BriefingDayHeroSummaryGenerator {
         Planned minutes left: \(input.dayBriefing?.plannedMinutesRemaining ?? 0)
 
         Still to do:
-        \(pendingTasks.map { "- \($0.title)" }.joined(separator: "\n"))
+        \(pendingTasks.prefix(4).map { "- \($0.title)" }.joined(separator: "\n"))
 
         Done:
-        \(completedTasks.map { "- \($0.title)" }.joined(separator: "\n"))
+        \(completedTasks.prefix(3).map { "- \($0.title)" }.joined(separator: "\n"))
 
         Today's plan:
         \(planLines.isEmpty ? "None" : planLines.joined(separator: "\n"))

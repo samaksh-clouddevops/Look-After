@@ -138,6 +138,19 @@ public final class ParkedTaskRecoveryService {
 
     /// Pull parked winners into LifeState on the freed gap (sparkle + real schedule).
     @discardableResult
+    public func placeSelected(
+        _ winners: [ParkedTaskEntry],
+        gapStart: Date,
+        day: Date,
+        userId: String,
+        tasksVM: TasksViewModel?,
+        now: Date = Date()
+    ) -> [ParkedTaskEntry] {
+        placeWinners(winners, gapStart: gapStart, day: day, userId: userId, tasksVM: tasksVM, now: now)
+    }
+
+    /// Pull parked winners into LifeState on the freed gap (sparkle + real schedule).
+    @discardableResult
     private func placeWinners(
         _ winners: [ParkedTaskEntry],
         gapStart: Date,

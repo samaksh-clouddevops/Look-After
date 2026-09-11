@@ -26,6 +26,10 @@ public final class TasksViewModel: ObservableObject {
     @Published public private(set) var undoToastMessage = ""
     /// Bumps whenever task rows mutate — drives TaskListView cache invalidation.
     @Published public private(set) var tasksContentRevision = 0
+    /// EventKit peers for OccupiedDay during reconcile / SMS (injected from shell).
+    public var calendarEventsProvider: ((Date) -> [BriefingCalendarEvent])?
+    /// Called after schedule persist + reconcile so shell can rebuild timeline / widgets (SoT).
+    public var onScheduleWriteCommitted: (() -> Void)?
     
     private let taskRepo: TaskStoring
     private let taskStore: TaskStore?
@@ -35,7 +39,7 @@ public final class TasksViewModel: ObservableObject {
     private let semanticAnalyzer: TaskSemanticAnalyzer
     private let focusStretchRefiner = TaskFocusStretchRefiner()
     private var timeDisplayFingerprints: [String: TimeDisplayFingerprint] = [:]
-    private var undoDismissTask: Task<Void, Never>?
+    private let undoController = TaskUndoController()
     private var loadGeneration = 0
     private var didCompactTaskStorage = false
     /// Blocks store-driven snapshot overwrites while a user edit is persisting.
@@ -84,6 +88,7 @@ public final class TasksViewModel: ObservableObject {
         self.autoFiller = autoFiller ?? TaskAutoFiller()
         self.taskImporter = TaskImporter()
         self.semanticAnalyzer = TaskSemanticAnalyzer()
+        undoController.attach(viewModel: self)
     }
 
     init(taskRepo: TaskStoring, decomposer: TaskDecomposer, autoFiller: TaskAutoFiller, taskImporter: TaskImporter, semanticAnalyzer: TaskSemanticAnalyzer? = nil) {
@@ -93,6 +98,7 @@ public final class TasksViewModel: ObservableObject {
         self.autoFiller = autoFiller
         self.taskImporter = taskImporter
         self.semanticAnalyzer = semanticAnalyzer ?? TaskSemanticAnalyzer()
+        undoController.attach(viewModel: self)
     }
     
     /// Load tasks — warms on-device cache off-main, paints local snapshot, then syncs remote.
@@ -860,8 +866,15 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    @Published public var createDurationWarning: String?
+
     /// Create a new task — instant UI update, persistence runs in background.
     public func createTask(_ task: LifeTask) {
+        let remaining = dayRemainingFlexMinutes()
+        createDurationWarning = DaySupervisorContinuity.createDurationWarning(
+            estimatedMinutes: task.estimatedMinutes,
+            remainingFlexMinutes: remaining
+        )
         if task.recurrenceRule != .none {
             createRecurringTask(task)
             return
@@ -882,7 +895,7 @@ public final class TasksViewModel: ObservableObject {
                 }
                 try await taskRepo.create(enriched)
                 
-                if enriched.steps.isEmpty {
+                if enriched.steps.isEmpty, Self.shouldAutoDecompose(enriched) {
                     await decomposeTask(enriched)
                 }
             } catch {
@@ -1169,10 +1182,10 @@ public final class TasksViewModel: ObservableObject {
 
         let allocations = DaySlotAllocator.allocate(
             requests: [
-                DaySlotAllocator.Request(
-                    id: task.id,
-                    estimatedMinutes: max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes),
-                    priority: task.priority
+                DaySlotAllocator.Request.makingSense(
+                    of: task,
+                    on: now,
+                    calendar: calendar
                 )
             ],
             existingTasks: occupied,
@@ -1318,6 +1331,12 @@ public final class TasksViewModel: ObservableObject {
     /// Semantic understanding — LLM when available, deterministic safety merge always.
     private func resolveSemanticProfile(for task: LifeTask) async -> TaskSemanticProfile {
         let deterministic = TaskSemanticProfileBuilder.build(from: task)
+        // Known routines/meals: rules already own timing — skip LLM classify theater.
+        if OnboardingTaskSeeder.isKnownDailyRoutineTitle(task.title)
+            || OnboardingTaskSeeder.isMealRoutineTitle(task.title)
+            || task.tags.contains("daily-routine") {
+            return deterministic
+        }
         let hasAIKey = GLMService.shared.hasConfiguredAPIKey
         guard hasAIKey else { return deterministic }
 
@@ -1393,6 +1412,36 @@ public final class TasksViewModel: ObservableObject {
         }
     }
     
+    /// Auto-decompose only when the task looks complex — not for errands/routines.
+    public static func shouldAutoDecompose(_ task: LifeTask) -> Bool {
+        if OnboardingTaskSeeder.isKnownDailyRoutineTitle(task.title)
+            || OnboardingTaskSeeder.isMealRoutineTitle(task.title)
+            || task.tags.contains("daily-routine")
+            || task.tags.contains("recovery-block") {
+            return false
+        }
+        let minutes = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        if minutes < 45 { return false }
+        let title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.split(separator: " ").count <= 3, minutes < 90 { return false }
+        return true
+    }
+
+    /// Rough remaining flex budget for create/capture capacity checks.
+    public func dayRemainingFlexMinutes(now: Date = Date(), calendar: Calendar = .current) -> Int {
+        let day = calendar.startOfDay(for: now)
+        let booked = schedulingContext
+            .filter { task in
+                guard task.status.isActive, task.isSchedulerMovable else { return false }
+                if let date = task.scheduledDate {
+                    return calendar.isDate(date, inSameDayAs: day)
+                }
+                return true
+            }
+            .reduce(0) { $0 + max($1.estimatedMinutes, TaskDurationPolicy.minimumMinutes) }
+        return max(0, 180 - booked)
+    }
+
     /// Decompose a task into micro-steps and auto-detect recurrence using AI.
     public func decomposeTask(_ task: LifeTask) async {
         decomposingTaskId = task.id
@@ -1855,10 +1904,13 @@ public final class TasksViewModel: ObservableObject {
 
         await dedupeLifeCommitmentTasks(userId: userId, model: model, calendar: calendar)
 
+        // Use disk snapshot — not only the filtered VM `tasks` array — so a second
+        // ensure pass cannot recreate Gym/Dinner that already exist today.
+        let disk = taskRepo.localSnapshot(for: userId)
         let assembly = DayAssembler.assemble(
             model: model,
-            existingTasks: tasks,
-            completedToday: completedToday,
+            existingTasks: disk.schedulingContext,
+            completedToday: disk.completedToday,
             userId: userId,
             date: date,
             calendar: calendar
@@ -1962,6 +2014,14 @@ public final class TasksViewModel: ObservableObject {
             batchNotifications: true
         )
 
+        await clearPrematurePreferredPlacements(
+            for: day,
+            userId: userId,
+            model: model,
+            now: date,
+            calendar: calendar
+        )
+
         await assignUnslottedFlexibleTasks(
             for: day,
             model: model,
@@ -2015,12 +2075,19 @@ public final class TasksViewModel: ObservableObject {
                         || original.estimatedMinutes != synced.estimatedMinutes
                 }
 
-                if commitmentDrift || DayScheduleReconciler.hasOverlap(syncedPool, on: day, calendar: calendar) {
+                if commitmentDrift || DayScheduleReconciler.hasOverlap(
+                    syncedPool,
+                    on: day,
+                    calendar: calendar,
+                    calendarEvents: calendarEventsProvider?(day) ?? [],
+                    model: model
+                ) {
                     let result = DayScheduleReconciler.reconcile(
                         tasks: activePool,
                         on: day,
                         model: model,
-                        calendar: calendar
+                        calendar: calendar,
+                        calendarEvents: calendarEventsProvider?(day) ?? []
                     )
                     for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
                         if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
@@ -2075,8 +2142,15 @@ public final class TasksViewModel: ObservableObject {
     ) async -> Set<String> {
         let allLocal = taskRepo.localAllTasks(for: userId)
         var pool = TaskScheduleQuery.scheduledActiveTasks(from: allLocal, on: day, calendar: calendar)
-        guard pool.count > 1 else { return [] }
-        guard DayScheduleReconciler.hasOverlap(pool, on: day, calendar: calendar) else { return [] }
+        let events = calendarEventsProvider?(day) ?? []
+        guard !pool.isEmpty else { return [] }
+        guard DayScheduleReconciler.hasOverlap(
+            pool,
+            on: day,
+            calendar: calendar,
+            calendarEvents: events,
+            model: model
+        ) else { return [] }
 
         // System repair: meals overlapping anchored blocks must shift — clear stale user-placed locks.
         var preparedPool = pool
@@ -2103,7 +2177,8 @@ public final class TasksViewModel: ObservableObject {
             on: day,
             model: model,
             now: now,
-            calendar: calendar
+            calendar: calendar,
+            calendarEvents: events
         )
         var changedIDs = Set<String>()
         for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
@@ -2253,6 +2328,45 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    /// Clears clocks parked before an upcoming preferred/fence (legacy allocator `now` fallback).
+    private func clearPrematurePreferredPlacements(
+        for day: Date,
+        userId: String,
+        model: LifeModel?,
+        now: Date,
+        calendar: Calendar
+    ) async {
+        let profile = UserLifeProfileStore.load()
+        let local = taskRepo.localAllTasks(for: userId)
+        let ids = Set(
+            PrematurePreferredPlacement.idsNeedingClear(
+                in: local,
+                on: day,
+                now: now,
+                model: model,
+                profile: profile,
+                calendar: calendar
+            )
+        )
+        guard !ids.isEmpty else { return }
+
+        for task in local where ids.contains(task.id) {
+            var cleared = task
+            cleared.scheduledTime = nil
+            cleared.scheduledEndTime = nil
+            cleared = TaskConstraintAlignment.align(cleared)
+            cleared.updatedAt = now
+            if let index = tasks.firstIndex(where: { $0.id == cleared.id }) {
+                tasks[index] = cleared
+            }
+            do {
+                try await taskRepo.update(cleared)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
     /// Snaps mis-slotted routines (e.g. Dinner at noon) back to canonical anchors.
     private func correctRoutineScheduleDrift(
         for day: Date,
@@ -2300,13 +2414,36 @@ public final class TasksViewModel: ObservableObject {
             guard RoutineScheduleAnchorResolver.shouldRestore(task: task, anchor: anchor, calendar: calendar) else {
                 continue
             }
-            if OnboardingTaskSeeder.isMealRoutineTitle(task.title) {
+        if OnboardingTaskSeeder.isMealRoutineTitle(task.title) {
                 let proposed = TaskScheduleInterval(taskID: task.id, start: anchor.start, end: anchor.end)
                 let blockers = TaskScheduleQuery.scheduledActiveTasks(from: allLocal, on: day, calendar: calendar)
                     .filter { $0.id != task.id && ($0.isLifeCommitmentTask || $0.timeConstraintValue == .anchored) }
-                if TaskScheduleInterval.intervals(from: blockers, on: day, calendar: calendar)
-                    .contains(where: { proposed.overlaps($0) }) {
-                    continue
+                let occupied = TaskScheduleInterval.intervals(from: blockers, on: day, calendar: calendar)
+                if occupied.contains(where: { proposed.overlaps($0) }) {
+                    switch SchedulePlacementGuard.evaluate(
+                        proposedStart: anchor.start,
+                        durationMinutes: max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes),
+                        task: task,
+                        occupied: occupied,
+                        calendar: calendar,
+                        mode: .searchInBox
+                    ) {
+                    case .accepted(let start), .snapped(let start):
+                        var shifted = task
+                        shifted.scheduledDate = day
+                        shifted.scheduledTime = start
+                        shifted.scheduledEndTime = start.addingTimeInterval(
+                            TimeInterval(max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes) * 60)
+                        )
+                        shifted.updatedAt = Date()
+                        if let index = tasks.firstIndex(where: { $0.id == shifted.id }) {
+                            tasks[index] = shifted
+                        }
+                        didChange = true
+                        continue
+                    case .rejected, .needsAI:
+                        continue
+                    }
                 }
             }
             var updated = task
@@ -2423,17 +2560,17 @@ public final class TasksViewModel: ObservableObject {
         }
 
         let requests = toAllocate.map { task in
-            DaySlotAllocator.Request(
-                id: task.id,
-                estimatedMinutes: max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes),
-                priority: task.priority,
+            DaySlotAllocator.Request.makingSense(
+                of: task,
+                on: day,
                 preferredStart: RoutineScheduleAnchorResolver.preferredStart(
                     for: task,
                     on: day,
                     model: model,
                     profile: profile,
                     calendar: calendar
-                )
+                ),
+                calendar: calendar
             )
         }
         let taskByID = Dictionary(uniqueKeysWithValues: toAllocate.map { ($0.id, $0) })
@@ -2696,18 +2833,19 @@ public final class TasksViewModel: ObservableObject {
         if LifeModelStore.hasCompiledModel { return }
 
         await removeRetiredRoutineTasks(userId: userId)
+        await migrateLegacyRoutineTitles(userId: userId)
 
         let routine = OnboardingTaskSeeder.dailyRoutineTasks()
         guard !routine.isEmpty else { return }
 
         try? await applyRecurrenceTemplateDedupe(userId: userId)
 
-        let existingTitles = Set(
+        let existingKeys = Set(
             (try? await taskRepo.getAll(for: userId))?
-                .map { $0.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) } ?? []
+                .map { OnboardingTaskSeeder.normalizedRoutineTitle($0.title) } ?? []
         )
 
-        for var seedTask in routine where !existingTitles.contains(seedTask.title.lowercased()) {
+        for var seedTask in routine where !existingKeys.contains(OnboardingTaskSeeder.normalizedRoutineTitle(seedTask.title)) {
             seedTask.userId = userId
             if seedTask.recurrenceRule != .none {
                 await persistRecurringTask(seedTask, decompose: false)
@@ -2729,6 +2867,88 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    /// Renames AI/em-dash hygiene titles and fixes clearly wrong early clocks (e.g. 5:00 AM brush).
+    /// Series template/occurrence cleanup stays in `applyRecurrenceTemplateDedupe` / TaskSeriesResolver.
+    private func migrateLegacyRoutineTitles(userId: String) async {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let snapshot = (try? await taskRepo.getAll(for: userId)) ?? tasks + completedToday
+        var didMutate = false
+
+        for task in snapshot {
+            guard OnboardingTaskSeeder.isKnownDailyRoutineTitle(task.title) else { continue }
+            let canonical = TaskTitleDisplay.humanized(task.title)
+            var candidate = task
+            var dirty = false
+
+            if candidate.title != canonical {
+                candidate.title = canonical
+                dirty = true
+            }
+
+            if let anchor = OnboardingTaskSeeder.routineAnchorTime(forTitle: canonical, on: today, calendar: calendar),
+               let scheduled = candidate.scheduledTime {
+                let hour = calendar.component(.hour, from: scheduled)
+                let minute = calendar.component(.minute, from: scheduled)
+                let anchorHour = calendar.component(.hour, from: anchor.start)
+                let anchorMinute = calendar.component(.minute, from: anchor.start)
+                // Fix clearly wrong early seeds (e.g. 5:00 AM brush) back to slot time.
+                if hour != anchorHour || minute != anchorMinute, hour < 6, anchorHour >= 6 {
+                    candidate.scheduledTime = anchor.start
+                    candidate.scheduledEndTime = anchor.start.addingTimeInterval(TimeInterval(anchor.durationMinutes * 60))
+                    candidate.estimatedMinutes = anchor.durationMinutes
+                    dirty = true
+                }
+            }
+
+            if dirty {
+                try? await taskRepo.update(candidate)
+                didMutate = true
+            }
+        }
+
+        // Alias duplicates (e.g. "Brush teeth — morning" + "Brush teeth after waking") that are
+        // both active non-templates on the same day — keep the one closest to the slot clock.
+        let active = ((try? await taskRepo.getAll(for: userId)) ?? tasks)
+            .filter { $0.status != .completed }
+        var groups: [String: [LifeTask]] = [:]
+        for task in active where OnboardingTaskSeeder.isKnownDailyRoutineTitle(task.title) {
+            // Only collapse same-day active rows that are not recurrence templates.
+            guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { continue }
+            let day = calendar.startOfDay(for: task.scheduledDate ?? task.scheduledTime ?? today)
+            let key = "\(OnboardingTaskSeeder.normalizedRoutineTitle(task.title))|\(day.timeIntervalSince1970)"
+            groups[key, default: []].append(task)
+        }
+
+        var idsToDelete: [String] = []
+        for (_, group) in groups where group.count > 1 {
+            let canonicalTitle = TaskTitleDisplay.humanized(group[0].title)
+            let ranked = group.sorted { lhs, rhs in
+                guard let anchor = OnboardingTaskSeeder.routineAnchorTime(forTitle: canonicalTitle, on: today, calendar: calendar) else {
+                    return lhs.title.count < rhs.title.count
+                }
+                let l = abs((lhs.scheduledTime ?? today).timeIntervalSince(anchor.start))
+                let r = abs((rhs.scheduledTime ?? today).timeIntervalSince(anchor.start))
+                return l < r
+            }
+            for extra in ranked.dropFirst() {
+                idsToDelete.append(extra.id)
+            }
+        }
+
+        for id in Set(idsToDelete) {
+            tasks.removeAll { $0.id == id }
+            completedToday.removeAll { $0.id == id }
+            try? await taskRepo.delete(id)
+            didMutate = true
+        }
+
+        if didMutate {
+            applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "legacy-routine-migrate")
+            notifyTaskListDidChange()
+        }
+    }
+
     /// Removes routines that are no longer tasks (e.g. Journal moved to Timeline reflection).
     public func removeRetiredRoutineTasks(userId: String) async {
         guard !userId.isEmpty else { return }
@@ -2745,8 +2965,7 @@ public final class TasksViewModel: ObservableObject {
     }
 
     public func performUndo() async {
-        undoDismissTask?.cancel()
-        undoDismissTask = nil
+        undoController.cancelAutoExpire()
         isUndoToastVisible = false
         undoToastMessage = ""
         guard let action = pendingUndo else { return }
@@ -2800,203 +3019,24 @@ public final class TasksViewModel: ObservableObject {
     }
 
     public func dismissUndoToast() {
-        undoDismissTask?.cancel()
-        undoDismissTask = nil
+        undoController.cancelAutoExpire()
         isUndoToastVisible = false
         undoToastMessage = ""
         pendingUndo = nil
     }
 
     private func presentUndo(_ action: TaskUndoAction) {
-        undoDismissTask?.cancel()
         pendingUndo = action
         undoToastMessage = "\(action.message) • Undo"
         isUndoToastVisible = true
-
-        undoDismissTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self?.expireUndoIfMatching(action.id)
-            }
-        }
+        undoController.scheduleAutoExpire(for: action.id)
     }
 
-    private func expireUndoIfMatching(_ actionID: String) {
+    func expireUndoIfMatching(_ actionID: String) {
         guard pendingUndo?.id == actionID else { return }
         isUndoToastVisible = false
         undoToastMessage = ""
         pendingUndo = nil
-        undoDismissTask = nil
-    }
-}
-
-/// ViewModel for the Universal Inbox.
-@MainActor
-public final class InboxViewModel: ObservableObject {
-    
-    @Published public var items: [InboxItem] = []
-    @Published public var unprocessedCount: Int = 0
-    @Published public var isLoading: Bool = false
-    @Published public var isProcessing: Bool = false
-    @Published public var error: String?
-    
-    private let inboxRepo: InboxRepository
-    private let glm: GLMService
-    private var currentUserId: String = ""
-    public var onCreateTask: ((InboxTaskDraft) async throws -> Void)?
-
-    public init(inboxRepo: InboxRepository? = nil, glmService: GLMService = .shared) {
-        self.inboxRepo = inboxRepo ?? InboxRepository()
-        self.glm = glmService
-    }
-    
-    /// Load all inbox items.
-    public func loadItems(userId: String) async {
-        currentUserId = userId
-        if FreshInstallGuard.isActive {
-            resetInMemoryState()
-            return
-        }
-        isLoading = true
-        do {
-            items = try await inboxRepo.getAll(for: userId)
-            unprocessedCount = items.filter { $0.status == .unprocessed || $0.status == .needsReview }.count
-        } catch {
-            self.error = error.localizedDescription
-        }
-        isLoading = false
-    }
-
-    /// Route capture through unified CaptureRouter (auto-process).
-    public func routeCapture(_ request: CaptureRequest, userId: String) async -> CaptureRouteResult {
-        isProcessing = true
-        defer { isProcessing = false }
-
-        if CaptureOfflineQueue.shared.shouldDeferRouting {
-            CaptureOfflineQueue.shared.enqueue(request, userId: userId)
-            let preview = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return CaptureRouteResult(outcome: .queuedOffline(preview: preview))
-        }
-
-        let result = await CaptureRouter.shared.route(request, userId: userId)
-        await loadItems(userId: userId)
-        return result
-    }
-
-    /// Process captures queued while offline.
-    public func processOfflineCaptureQueue(userId: String) async {
-        let results = await CaptureOfflineQueue.shared.processPending(userId: userId) { request, uid in
-            await CaptureRouter.shared.route(request, userId: uid)
-        }
-        if !results.isEmpty {
-            await loadItems(userId: userId)
-        }
-        for result in results {
-            NotificationCenter.default.post(
-                name: .captureDidRoute,
-                object: nil,
-                userInfo: [CaptureNotificationKey.result: CaptureRouteResultBox(result)]
-            )
-        }
-    }
-
-    /// Quick capture — routes via CaptureRouter (same as composer).
-    public func quickCapture(text: String, userId: String, source: CaptureSource = .inbox) async -> CaptureRouteResult {
-        await routeCapture(
-            CaptureRequest(text: text, source: source, contextHints: CaptureContextHints(screen: "inbox")),
-            userId: userId
-        )
-    }
-    
-    /// Process an inbox item with AI.
-    public func processItem(_ item: InboxItem) async {
-        isProcessing = true
-        
-        let prompt = LookAfterPrompts.inboxProcessingPrompt(item: item)
-
-        do {
-            let response = try await glm.complete(
-                prompt: prompt,
-                systemPrompt: LookAfterPrompts.inboxProcessingSystem,
-                tier: .standard
-            )
-            
-            let cleaned = response
-                .replacingOccurrences(of: "```json", with: "")
-                .replacingOccurrences(of: "```", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            if let data = cleaned.data(using: .utf8),
-               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                
-                var updated = item
-                updated.status = .categorized
-                updated.aiSummary = json["summary"] as? String
-                updated.aiSuggestedAction = json["suggestedAction"] as? String
-                updated.processedAt = Date()
-                
-                if let areaStr = json["lifeArea"] as? String {
-                    updated.lifeArea = LifeArea.allCases.first { $0.rawValue == areaStr }
-                }
-                if let priorityStr = json["priority"] as? String {
-                    updated.suggestedPriority = Priority.allCases.first { $0.label == priorityStr }
-                }
-
-                try await inboxRepo.update(updated)
-
-                if let index = items.firstIndex(where: { $0.id == item.id }) {
-                    items[index] = updated
-                }
-                unprocessedCount = items.filter { $0.status == .unprocessed || $0.status == .needsReview }.count
-
-                if let action = json["suggestedAction"] as? String,
-                   action.lowercased() != "archive",
-                   let title = json["taskTitle"] as? String,
-                   !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   let handler = onCreateTask {
-                    let difficultyStr = json["taskDifficulty"] as? String
-                    let difficulty = TaskDifficulty.allCases.first { $0.rawValue == difficultyStr }
-                    let minutes = json["estimatedMinutes"] as? Int ?? 15
-                    let draft = InboxTaskDraft(
-                        title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                        lifeArea: updated.lifeArea,
-                        priority: updated.suggestedPriority,
-                        difficulty: difficulty,
-                        estimatedMinutes: TaskDurationPolicy.clamp(minutes, allowShortTasks: true)
-                    )
-                    try await handler(draft)
-                    updated.status = .actionCreated
-                    try await inboxRepo.update(updated)
-                    if let index = items.firstIndex(where: { $0.id == item.id }) {
-                        items[index] = updated
-                    }
-                }
-            }
-        } catch {
-            self.error = error.localizedDescription
-        }
-        
-        isProcessing = false
-    }
-    
-    /// Delete an inbox item.
-    public func deleteItem(_ item: InboxItem) async {
-        do {
-            try await inboxRepo.delete(item.id)
-            items.removeAll { $0.id == item.id }
-            unprocessedCount = items.filter { $0.status == .unprocessed || $0.status == .needsReview }.count
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    /// Clears inbox presentation state after factory reset.
-    public func resetInMemoryState() {
-        items = []
-        unprocessedCount = 0
-        isLoading = false
-        isProcessing = false
-        error = nil
+        undoController.cancelAutoExpire()
     }
 }

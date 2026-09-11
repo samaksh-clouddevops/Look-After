@@ -3,6 +3,10 @@ import Foundation
 /// Chronological timeline ordering — interleaves unslotted flexibles into the current day gap.
 public enum TimelineDisplaySort {
 
+    public static func isSleepBoundary(_ event: LifeTimelineEvent) -> Bool {
+        event.id.hasPrefix("sleep-boundary")
+    }
+
     /// True when the event has no concrete clock slot (shows "Flexible today").
     public static func isUnslottedFlexible(_ event: LifeTimelineEvent) -> Bool {
         guard event.scheduleKind.isFlexibleToday || event.isFlexibleToday else { return false }

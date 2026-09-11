@@ -55,14 +55,14 @@ struct MacSettingsView: View {
                             }
                         }
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     Button(role: .destructive, action: {
                         try? FirebaseManager.shared.signOut()
                     }) {
                         Label("Sign Out", systemImage: "arrow.right.square")
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("Account")
                 })
@@ -104,30 +104,46 @@ struct MacSettingsView: View {
                         Image(systemName: "sparkles")
                             .foregroundColor(DesignSystem.accentPrimary)
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
+
+                    NavigationLink(destination: {
+                        APIKeysSettingsView()
+                    }, label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("API Keys", systemImage: "key.fill")
+                            Text(GLMService.shared.hasConfiguredAPIKey
+                                 ? "Direct z.ai GLM key configured"
+                                 : "Add a GLM API key to enable AI")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textSecondary)
+                        }
+                    })
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     NavigationLink(destination: {
                         LicenseSettingsView()
                     }, label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Label("License", systemImage: "checkmark.seal.fill")
-                            Text(LicenseManager.shared.isLicensed ? "Licensed AI via secure proxy" : "Enter product key to unlock AI")
+                            Text(LicenseManager.shared.isLicensed ? "Product key active (cloud voice)" : "Optional — cloud voice / legacy proxy")
                                 .font(.system(size: 12))
                                 .foregroundColor(DesignSystem.textSecondary)
                         }
                     })
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     NavigationLink(destination: {
                         GLMConfigurationSettingsView()
                     }, label: {
                         Label("GLM Configuration", systemImage: "cpu")
                     })
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
                 }, header: {
                     Text("AI Engine")
                 }, footer: {
-                    Text("All AI runs through the secure proxy after you redeem a product key.")
+                    Text(GLMService.shared.hasConfiguredAPIKey
+                         ? "AI calls z.ai directly with your GLM API key."
+                         : "Add a GLM API key in API Keys to enable AI.")
                 })
 
                 Section(content: {

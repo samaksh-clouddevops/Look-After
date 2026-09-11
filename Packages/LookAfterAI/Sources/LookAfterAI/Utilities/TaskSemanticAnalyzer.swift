@@ -1,8 +1,9 @@
 import Foundation
 import LookAfterCore
 
-/// LLM-powered semantic understanding — runs once at task create/edit only.
-/// Scheduling, conflict resolution, and optimization stay deterministic in ExecutiveBrain.
+/// LLM-powered semantic understanding — classify on create/edit, and judge
+/// placement when the deterministic layer returns `.needsAI`.
+/// Scheduling search itself stays deterministic in LookAfterCore.
 public final class TaskSemanticAnalyzer: @unchecked Sendable {
 
     private let glm: GLMService
@@ -32,6 +33,43 @@ public final class TaskSemanticAnalyzer: @unchecked Sendable {
         }
 
         return parseProfile(json: json, task: task)
+    }
+
+    /// Second-pass judge when the semantic layer returns `.needsAI`.
+    public func judgePlacement(
+        task: LifeTask,
+        proposedStart: Date,
+        durationMinutes: Int,
+        neighborTasks: [LifeTask],
+        calendar: Calendar = .current
+    ) async throws -> PlacementJudgment {
+        let prompt = LookAfterPrompts.placementSensePrompt(
+            task: task,
+            proposedStart: proposedStart,
+            durationMinutes: durationMinutes,
+            neighborTasks: neighborTasks,
+            calendar: calendar
+        )
+        let response = try await glm.complete(
+            prompt: prompt,
+            systemPrompt: LookAfterPrompts.structuredOutputSystem,
+            tier: .economy
+        )
+        let cleaned = response
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = cleaned.data(using: .utf8),
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw TaskSemanticAnalyzerError.parseError
+        }
+        return PlacementJudgment(
+            allowed: json["allowed"] as? Bool ?? false,
+            reason: json["reason"] as? String ?? "",
+            suggestedStartHour: json["suggestedStartHour"] as? Int,
+            suggestedStartMinute: json["suggestedStartMinute"] as? Int
+        )
     }
 
     private func parseProfile(json: [String: Any], task: LifeTask) -> TaskSemanticProfile {
@@ -90,6 +128,25 @@ public final class TaskSemanticAnalyzer: @unchecked Sendable {
                 $0.rawValue.lowercased() == raw.lowercased().replacingOccurrences(of: " ", with: "")
             }
         }
+    }
+}
+
+public struct PlacementJudgment: Sendable, Equatable {
+    public var allowed: Bool
+    public var reason: String
+    public var suggestedStartHour: Int?
+    public var suggestedStartMinute: Int?
+
+    public init(
+        allowed: Bool,
+        reason: String,
+        suggestedStartHour: Int? = nil,
+        suggestedStartMinute: Int? = nil
+    ) {
+        self.allowed = allowed
+        self.reason = reason
+        self.suggestedStartHour = suggestedStartHour
+        self.suggestedStartMinute = suggestedStartMinute
     }
 }
 

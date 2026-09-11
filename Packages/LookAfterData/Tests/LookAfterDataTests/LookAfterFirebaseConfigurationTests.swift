@@ -14,4 +14,11 @@ final class LookAfterFirebaseConfigurationTests: XCTestCase {
         XCTAssertFalse(LookAfterFirebaseConfiguration.isValidAPIKey("dummy_api_key"))
         XCTAssertFalse(LookAfterFirebaseConfiguration.isValidAPIKey("AIzaSy0000000000000000000000000000000"))
     }
+
+    func testOAuthCallbackURLSchemeFromGoogleAppID() {
+        let scheme = LookAfterFirebaseConfiguration.oauthCallbackURLScheme(
+            googleAppID: "1:1234567890:ios:1234567890abcdef"
+        )
+        XCTAssertEqual(scheme, "app-1-1234567890-ios-1234567890abcdef")
+    }
 }

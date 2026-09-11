@@ -11,6 +11,7 @@ struct EmergencyModeView: View {
     @ObservedObject var adhdVM: ADHDViewModel
     let onStartTask: (LifeTask) -> Void
     
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulseAnimation = false
     
     var body: some View {
@@ -76,7 +77,7 @@ struct EmergencyModeView: View {
                             .padding(DesignSystem.spacingMD)
                             .background(
                                 RoundedRectangle(cornerRadius: DesignSystem.radiusLG)
-                                    .fill(DesignSystem.backgroundElevated)
+                                    .fill(DesignSystem.contentSurfaceElevated)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: DesignSystem.radiusLG)
                                             .stroke(DesignSystem.border, lineWidth: 1)
@@ -96,10 +97,12 @@ struct EmergencyModeView: View {
                         .font(.system(size: 14, weight: .semibold, design: .default))
                         .foregroundColor(.white.opacity(0.5))
                 }
+                .accessibilityLabel("Exit emergency mode")
                 .padding(.bottom, DesignSystem.spacingXL)
             }
         }
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                 pulseAnimation = true
             }
@@ -112,7 +115,9 @@ struct EmergencyModeView: View {
 struct FocusSessionView: View {
     
     @ObservedObject var adhdVM: ADHDViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingDurationPicker = false
+    @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 40
     
     var body: some View {
         ZStack {
@@ -140,14 +145,18 @@ struct FocusSessionView: View {
                 // Task name
                 if let task = adhdVM.currentFocusTask {
                     Text(task.title)
-                        .font(.system(size: 20, weight: .bold, design: .default))
+                        .font(.title3.weight(.bold))
                         .foregroundColor(DesignSystem.textPrimary)
                         .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.85)
                         .padding(.horizontal)
                 }
                 
-                // Timer ring + analog clock
+                // Timer ring + analog clock (+ PhaseAnimator breathe when motion allowed)
                 ZStack {
+                    focusBreatheGlow
+
                     AnalogFocusClockView(
                         progress: adhdVM.focusProgress,
                         accentColor: adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary,
@@ -157,8 +166,13 @@ struct FocusSessionView: View {
 
                     VStack(spacing: 4) {
                         Text(adhdVM.focusRemainingString)
-                            .font(.system(size: 40, weight: .bold, design: .monospaced))
+                            .font(.system(size: timerSize, weight: .bold, design: .monospaced))
+                            .monospacedDigit()
                             .foregroundColor(DesignSystem.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .contentTransition(.numericText(countsDown: true))
+                            .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: adhdVM.focusRemainingString)
                             .accessibilityIdentifier("focus-timer-remaining")
 
                         Text(adhdVM.isPaused ? "paused" : "remaining")
@@ -180,16 +194,16 @@ struct FocusSessionView: View {
                             .font(.system(size: 13, weight: .bold, design: .default))
                             .foregroundColor(DesignSystem.textMuted)
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(DesignSystem.backgroundElevated))
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .background(Capsule().fill(DesignSystem.contentSurfaceElevated))
                     }
                     
                     Button(action: { showingDurationPicker = true }) {
                         Image(systemName: "timer")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(DesignSystem.accentPrimary)
-                            .padding(10)
-                            .background(Circle().fill(DesignSystem.backgroundElevated))
+                            .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                            .background(Circle().fill(DesignSystem.contentSurfaceElevated))
                     }
                     
                     Button(action: { adhdVM.addTime(minutes: 5) }) {
@@ -197,8 +211,8 @@ struct FocusSessionView: View {
                             .font(.system(size: 13, weight: .bold, design: .default))
                             .foregroundColor(DesignSystem.textMuted)
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(DesignSystem.backgroundElevated))
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .background(Capsule().fill(DesignSystem.contentSurfaceElevated))
                     }
                 }
                 
@@ -234,7 +248,7 @@ struct FocusSessionView: View {
                             .frame(width: 56, height: 56)
                             .background(
                                 Circle()
-                                    .fill(DesignSystem.backgroundElevated)
+                                    .fill(DesignSystem.contentSurfaceElevated)
                             )
                     }
                     .accessibilityIdentifier("focus-session-pause-toggle")
@@ -250,7 +264,7 @@ struct FocusSessionView: View {
                                 .frame(width: 56, height: 56)
                                 .background(
                                     Circle()
-                                        .fill(DesignSystem.backgroundElevated)
+                                        .fill(DesignSystem.contentSurfaceElevated)
                                 )
                         }
                     }
@@ -265,7 +279,7 @@ struct FocusSessionView: View {
                             .frame(width: 56, height: 56)
                             .background(
                                 Circle()
-                                    .fill(DesignSystem.backgroundElevated)
+                                    .fill(DesignSystem.contentSurfaceElevated)
                             )
                     }
                     .buttonStyle(.plain)
@@ -308,12 +322,35 @@ struct FocusSessionView: View {
         }
         .accessibilityIdentifier("screen-focus-session")
     }
+
+    @ViewBuilder
+    private var focusBreatheGlow: some View {
+        let glowColor = (adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary)
+            .opacity(0.22)
+        if reduceMotion {
+            Circle()
+                .fill(glowColor)
+                .frame(width: 240, height: 240)
+                .blur(radius: 28)
+        } else {
+            PhaseAnimator([false, true]) { phase in
+                Circle()
+                    .fill(glowColor)
+                    .frame(width: 240, height: 240)
+                    .scaleEffect(phase ? 1.12 : 0.88)
+                    .blur(radius: 28)
+            } animation: { _ in
+                .easeInOut(duration: 4)
+            }
+        }
+    }
 }
 
 /// Body Doubling View — virtual co-working presence with ambient timer.
 struct BodyDoublingView: View {
     
     @ObservedObject var adhdVM: ADHDViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @State private var breatheAnimation = false
     
@@ -324,7 +361,7 @@ struct BodyDoublingView: View {
             VStack(spacing: DesignSystem.spacingXL) {
                 Spacer()
                 
-                // Breathing circle animation
+                // Breathing circle animation (static when Reduce Motion)
                 ZStack {
                     ForEach(0..<3) { i in
                         Circle()
@@ -336,15 +373,17 @@ struct BodyDoublingView: View {
                                     ],
                                     center: .center,
                                     startRadius: 0,
-                                    endRadius: breatheAnimation ? 150 : 80
+                                    endRadius: reduceMotion ? 110 : (breatheAnimation ? 150 : 80)
                                 )
                             )
                             .frame(width: 300, height: 300)
-                            .scaleEffect(breatheAnimation ? 1.2 : 0.8)
+                            .scaleEffect(reduceMotion ? 1.0 : (breatheAnimation ? 1.2 : 0.8))
                             .animation(
-                                .easeInOut(duration: 4)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.5),
+                                reduceMotion
+                                    ? nil
+                                    : .easeInOut(duration: 4)
+                                        .repeatForever(autoreverses: true)
+                                        .delay(Double(i) * 0.5),
                                 value: breatheAnimation
                             )
                     }
@@ -384,13 +423,14 @@ struct BodyDoublingView: View {
                         .padding(.vertical, 14)
                         .background(
                             Capsule()
-                                .fill(DesignSystem.backgroundElevated)
+                                .fill(DesignSystem.contentSurfaceElevated)
                         )
                 }
                 .padding(.bottom, DesignSystem.spacingXL)
             }
         }
         .onAppear {
+            guard !reduceMotion else { return }
             breatheAnimation = true
         }
     }

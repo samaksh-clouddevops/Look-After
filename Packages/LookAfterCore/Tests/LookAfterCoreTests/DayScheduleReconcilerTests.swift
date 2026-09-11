@@ -74,7 +74,18 @@ final class DayScheduleReconcilerTests: XCTestCase {
         dinner = TaskConstraintAlignment.align(dinner)
         XCTAssertEqual(dinner.timeConstraintValue, .flexible)
 
-        let plan = DaySchedulePlanner.plan(tasks: [gym, dinner], on: day, calendar: calendar)
+        let model = LifeModelValidator.compileLocally(from: """
+        ### Gym
+        **6:30 PM – 8:00 PM**
+        """)
+        let plan = DaySchedulePlanner.plan(
+            tasks: [gym, dinner],
+            on: day,
+            model: model,
+            profile: UserLifeProfile(),
+            now: day,
+            calendar: calendar
+        )
         let applied = DaySchedulePlanner.apply(plan: plan, to: [gym, dinner], on: day, calendar: calendar)
         let updatedDinner = applied.tasks.first { $0.title == "Dinner" }
         XCTAssertNotNil(updatedDinner)

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Configuration for the official GLM 5.2 API.
+/// Configuration for the official Z.ai GLM API (premium default: GLM-5.3).
 public struct GLMConfiguration: Codable, Sendable, Equatable {
     public var baseURL: String
     /// Premium-tier model (coach, planning, replan).
@@ -30,9 +30,15 @@ public struct GLMConfiguration: Codable, Sendable, Equatable {
     }
 
     public static let defaultBaseURL = "https://api.z.ai/api/paas/v4"
-    public static let defaultModel = "glm-5.2"
-    public static let defaultStandardModel = "glm-4.7"
-    public static let defaultEconomyModel = "glm-4.7-flash"
+    public static let defaultModel = "glm-5.3"
+    /// Previous premium id — migrated to `defaultModel` on load.
+    public static let legacyPremiumModel = "glm-5.2"
+    public static let defaultStandardModel = "glm-5.3"
+    /// Previous standard id — migrated on load.
+    public static let legacyStandardModel = "glm-4.7"
+    public static let defaultEconomyModel = "glm-5.3-flash"
+    /// Previous economy / flash fallback id — migrated on load.
+    public static let legacyEconomyModel = "glm-4.7-flash"
     public static let apiKeyEnvVar = "GLM_API_KEY"
     public static let legacyEnvVar = "ZAI_API_KEY"
 
@@ -94,9 +100,9 @@ public struct GLMConfiguration: Codable, Sendable, Equatable {
     }
 
     /// Universal flash fallback when a premium / standard GLM model is unavailable.
-    public static let flashFallbackModel = "glm-4.7-flash"
+    public static let flashFallbackModel = "glm-5.3-flash"
 
-    /// Models to try for one tier — e.g. glm-5.2 then glm-4.7-flash.
+    /// Models to try for one tier — e.g. glm-5.3 then glm-5.3-flash.
     public func modelsToAttempt(primary: String) -> [String] {
         guard Self.usesFlashFallback(primary) else { return [primary] }
         let flash = economyModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -111,11 +117,59 @@ public struct GLMConfiguration: Codable, Sendable, Equatable {
         let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return false }
         if normalized.contains("flash") { return false }
-        if normalized.contains("glm-5") || normalized.contains("5.2")
+        if normalized.contains("glm-5") || normalized.contains("5.3") || normalized.contains("5.2")
             || normalized.contains("5.1") || normalized.contains("5-turbo") {
             return true
         }
         return normalized == "glm-4.7"
+    }
+
+    /// GLM-5.3+ rejects `thinking.type: disabled` — reasoning is always on.
+    public static func requiresMandatoryThinking(_ model: String) -> Bool {
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let minor = glm5MinorVersion(normalized) else { return false }
+        return minor >= 3
+    }
+
+    /// Lightweight reasoning for app chat/planning (Z.ai migration guidance for former `disabled` callers).
+    public static let defaultReasoningEffort = "low"
+
+    private static func glm5MinorVersion(_ normalizedModel: String) -> Int? {
+        guard let range = normalizedModel.range(of: #"glm-5\.(\d+)"#, options: .regularExpression) else {
+            return nil
+        }
+        let match = String(normalizedModel[range])
+        guard let dot = match.lastIndex(of: "."),
+              let minor = Int(match[match.index(after: dot)...]) else {
+            return nil
+        }
+        return minor
+    }
+
+    /// Migrates persisted model ids when they still point at previous defaults.
+    public mutating func migrateLegacyModelsIfNeeded() -> Bool {
+        var changed = false
+        let premium = defaultModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if premium.caseInsensitiveCompare(Self.legacyPremiumModel) == .orderedSame {
+            defaultModel = Self.defaultModel
+            changed = true
+        }
+        let standard = standardModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if standard.caseInsensitiveCompare(Self.legacyStandardModel) == .orderedSame {
+            standardModel = Self.defaultStandardModel
+            changed = true
+        }
+        let economy = economyModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if economy.caseInsensitiveCompare(Self.legacyEconomyModel) == .orderedSame {
+            economyModel = Self.defaultEconomyModel
+            changed = true
+        }
+        return changed
+    }
+
+    /// Migrates a persisted premium model id when it still points at the previous flagship.
+    public mutating func migrateLegacyPremiumModelIfNeeded() -> Bool {
+        migrateLegacyModelsIfNeeded()
     }
 }
 

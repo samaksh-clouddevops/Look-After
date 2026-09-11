@@ -140,6 +140,10 @@ final class LookAfterIntentBridge {
             shell.adhdVM.startFocusSession(task: task)
             NotificationRouter.shared.applyRoute(.focusSession, payload: taskId)
             return true
+
+        case .openCapture:
+            NotificationRouter.shared.applyRoute(.capture, payload: nil)
+            return true
         }
     }
 
@@ -170,6 +174,8 @@ final class LookAfterIntentBridge {
             return "Focus session complete."
         case .startHeroTask:
             return "Starting focus."
+        case .openCapture:
+            return "Opening Capture."
         }
     }
 
@@ -189,6 +195,8 @@ final class LookAfterIntentBridge {
             return "Will complete focus when you open Look After."
         case .startHeroTask:
             return "Open Look After to start focus."
+        case .openCapture:
+            return "Open Look After to capture."
         }
     }
 }

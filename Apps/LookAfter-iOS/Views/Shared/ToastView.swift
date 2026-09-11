@@ -5,6 +5,8 @@ import LookAfterCore
 
 /// A global toast notification view for success, error, and info feedback.
 struct ToastView: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     let message: String
     let type: ToastType
     
@@ -43,22 +45,40 @@ struct ToastView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(type.color.opacity(0.4), lineWidth: 1)
-                )
-        )
-        .shadow(color: type.color.opacity(0.3), radius: 12, y: 4)
+        .modifier(ToastChrome(
+            reduceTransparency: reduceTransparency,
+            accentStroke: type.color.opacity(0.4)
+        ))
         .padding(.horizontal, 20)
+    }
+}
+
+private struct ToastChrome: ViewModifier {
+    let reduceTransparency: Bool
+    let accentStroke: Color
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(shape.fill(DesignSystem.contentSurfaceElevated))
+                .overlay(shape.stroke(DesignSystem.border, lineWidth: 1))
+        } else {
+            content
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .overlay(shape.stroke(accentStroke, lineWidth: 1))
+        }
     }
 }
 
 // MARK: - Toast Modifier
 
 struct ToastModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isShowing: Bool
     let message: String
     let type: ToastView.ToastType
@@ -78,13 +98,13 @@ struct ToastModifier: ViewModifier {
                     .task(id: dismissToken) {
                         try? await Task.sleep(for: .seconds(duration))
                         guard !Task.isCancelled else { return }
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                             isShowing = false
                         }
                     }
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isShowing)
+        .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: isShowing)
         .onChange(of: isShowing) { _, showing in
             if showing { dismissToken = UUID() }
         }
@@ -125,6 +145,8 @@ extension View {
 // MARK: - Undo Toast
 
 struct UndoToastModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isShowing: Bool
     let message: String
     var duration: TimeInterval = 4
@@ -156,7 +178,7 @@ struct UndoToastModifier: ViewModifier {
                     if let onView {
                         Button(viewLabel) {
                             dismissToken = UUID()
-                            withAnimation(.easeInOut(duration: 0.25)) {
+                            withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                                 isShowing = false
                             }
                             onView()
@@ -169,7 +191,7 @@ struct UndoToastModifier: ViewModifier {
                     if showsUndo {
                         Button("Undo") {
                             dismissToken = UUID()
-                            withAnimation(.easeInOut(duration: 0.25)) {
+                            withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                                 isShowing = false
                             }
                             onUndo()
@@ -181,15 +203,10 @@ struct UndoToastModifier: ViewModifier {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                        )
-                )
-                .shadow(color: Color.black.opacity(0.25), radius: 12, y: 4)
+                .modifier(ToastChrome(
+                    reduceTransparency: reduceTransparency,
+                    accentStroke: Color.white.opacity(0.15)
+                ))
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -198,14 +215,14 @@ struct UndoToastModifier: ViewModifier {
                 .task(id: dismissToken) {
                     try? await Task.sleep(for: .seconds(duration))
                     guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                         isShowing = false
                     }
                     onDismiss?()
                 }
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isShowing)
+        .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: isShowing)
         .onChange(of: isShowing) { _, showing in
             if showing {
                 dismissToken = UUID()

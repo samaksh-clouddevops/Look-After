@@ -2,7 +2,7 @@ import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
 
-/// Reusable glass card wrapper for Daily Briefing sections.
+/// Opaque content card wrapper for Daily Briefing sections (chrome stays glass; cards do not).
 struct BriefingCardContainer<Content: View>: View {
     let title: String
     let icon: String

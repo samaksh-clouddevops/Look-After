@@ -63,4 +63,34 @@ public struct SchedulingWindows: Sendable, Equatable {
                 && minutesFromMidnight < block.endMinutesFromMidnight
         }
     }
+
+    public func overlapsProtected(start: Date, end: Date, calendar: Calendar = .current) -> Bool {
+        let startMinutes = calendar.component(.hour, from: start) * 60 + calendar.component(.minute, from: start)
+        let endMinutes = calendar.component(.hour, from: end) * 60 + calendar.component(.minute, from: end)
+        return protectedBlocks.contains { block in
+            guard block.days.includes(start, calendar: calendar) else { return false }
+            return startMinutes < block.endMinutesFromMidnight && block.startMinutesFromMidnight < endMinutes
+        }
+    }
+
+    public func protectedIntervals(on day: Date, calendar: Calendar = .current) -> [TaskScheduleInterval] {
+        let dayStart = calendar.startOfDay(for: day)
+        return protectedBlocks.compactMap { block in
+            guard block.days.includes(dayStart, calendar: calendar) else { return nil }
+            guard let start = calendar.date(
+                bySettingHour: block.startHour,
+                minute: block.startMinute,
+                second: 0,
+                of: dayStart
+            ) else { return nil }
+            let end = calendar.date(
+                bySettingHour: block.endHour,
+                minute: block.endMinute,
+                second: 0,
+                of: dayStart
+            ) ?? start.addingTimeInterval(3600)
+            guard end > start else { return nil }
+            return TaskScheduleInterval(taskID: "protected.\(block.id)", start: start, end: end)
+        }
+    }
 }

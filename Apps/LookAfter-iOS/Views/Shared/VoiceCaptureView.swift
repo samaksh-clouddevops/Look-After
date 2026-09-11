@@ -5,7 +5,7 @@ import LookAfterCore
 struct AudioWaveformView: View {
     let levels: [CGFloat]
     var activeColor: Color = DesignSystem.accentPrimary
-    var inactiveColor: Color = Color.white.opacity(0.15)
+    var inactiveColor: Color = DesignSystem.border
     
     var body: some View {
         HStack(spacing: 3) {
@@ -37,7 +37,7 @@ struct VoiceCaptureView: View {
                         .foregroundColor(DesignSystem.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
                 }
             }
             

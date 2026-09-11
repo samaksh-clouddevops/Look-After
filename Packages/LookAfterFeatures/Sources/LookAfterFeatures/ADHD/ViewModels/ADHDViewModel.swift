@@ -54,8 +54,8 @@ public final class ADHDViewModel: ObservableObject {
     @Published public var efScoreTrend: String = "stable" // "improving", "declining", "stable"
     
     private var focusTickTask: Task<Void, Never>?
-    private var bodyDoublingTimer: Timer?
-    private var countdownTimer: Timer?
+    private var bodyDoublingTask: Task<Void, Never>?
+    private var countdownTask: Task<Void, Never>?
     private var pausedElapsed: TimeInterval = 0
     
     public init() {
@@ -103,29 +103,27 @@ public final class ADHDViewModel: ObservableObject {
         isCountdownActive = true
         countdownValue = 3
         currentFocusTask = task
-
-        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            Task { @MainActor in
-                guard let self = self else { timer.invalidate(); return }
-
+        countdownTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
                 if self.countdownValue > 1 {
                     self.countdownValue -= 1
                 } else {
-                    timer.invalidate()
-                    self.countdownTimer = nil
+                    self.countdownTask = nil
                     self.isCountdownActive = false
                     self.countdownValue = 3
                     onComplete()
+                    return
                 }
             }
         }
-        countdownTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
     }
 
     public func cancelCountdownIfNeeded() {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
+        countdownTask?.cancel()
+        countdownTask = nil
         isCountdownActive = false
         countdownValue = 3
     }
@@ -333,10 +331,11 @@ public final class ADHDViewModel: ObservableObject {
         isBodyDoubling = true
         bodyDoublingElapsed = 0
         
-        bodyDoublingTimer?.invalidate()
-        bodyDoublingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            Task { @MainActor in
-                guard let self = self else { timer.invalidate(); return }
+        bodyDoublingTask?.cancel()
+        bodyDoublingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let self else { return }
                 self.bodyDoublingElapsed += 1
             }
         }
@@ -344,7 +343,8 @@ public final class ADHDViewModel: ObservableObject {
     
     /// End body doubling mode.
     public func endBodyDoubling() {
-        bodyDoublingTimer?.invalidate()
+        bodyDoublingTask?.cancel()
+        bodyDoublingTask = nil
         isBodyDoubling = false
         bodyDoublingElapsed = 0
     }
@@ -420,7 +420,8 @@ public final class ADHDViewModel: ObservableObject {
     
     public func cleanup() {
         stopFocusTick()
-        bodyDoublingTimer?.invalidate()
-        countdownTimer?.invalidate()
+        bodyDoublingTask?.cancel()
+        bodyDoublingTask = nil
+        countdownTask?.cancel()
     }
 }

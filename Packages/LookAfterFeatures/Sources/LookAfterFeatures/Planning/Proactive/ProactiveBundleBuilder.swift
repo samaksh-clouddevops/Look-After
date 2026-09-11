@@ -140,7 +140,15 @@ public enum ProactiveBundleBuilder {
 
     private static func focusMicroStartBundle(action: ProactiveAction, context: BuildContext) -> ProactiveActionBundle {
         let taskID = action.relatedTaskIDs.first ?? context.tasks.first(where: { $0.status.isActive })?.id
-        let minutes = action.kind == .waitingMode ? 5 : 2
+        let task = taskID.flatMap { id in context.tasks.first(where: { $0.id == id }) }
+        let minutes: Int
+        if let task {
+            minutes = TaskDurationPolicy.microStartSessionMinutes(for: task)
+        } else if action.kind == .waitingMode {
+            minutes = TaskDurationPolicy.softDefaultMinutes
+        } else {
+            minutes = TaskDurationPolicy.softDefaultMinutes
+        }
         return ProactiveActionBundle(focusSessionTaskID: taskID, focusSessionMinutes: minutes)
     }
 

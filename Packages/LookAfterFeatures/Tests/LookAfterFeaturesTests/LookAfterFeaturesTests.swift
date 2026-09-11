@@ -3,6 +3,7 @@ import XCTest
 import LookAfterCore
 
 final class LookAfterFeaturesTests: XCTestCase {
+    @MainActor
     func testInsightsTimeframeDayCounts() {
         XCTAssertEqual(InsightsTimeframe.last7Days.dayCount, 7)
         XCTAssertEqual(InsightsTimeframe.last30Days.dayCount, 30)
@@ -10,6 +11,7 @@ final class LookAfterFeaturesTests: XCTestCase {
         XCTAssertEqual(InsightsTimeframe.lastYear.dayCount, 365)
     }
 
+    @MainActor
     func testInsightsSummaryDefaults() {
         let summary = InsightsSummary()
 

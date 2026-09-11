@@ -114,10 +114,20 @@ public final class CaptureRouter {
             updated.processedAt = Date()
             try? await inboxRepo.update(updated)
             await onInboxItemsChanged?()
+            let remaining = CaptureCapacityContext.remainingFlexMinutes()
+            let fit = DaySupervisorContinuity.captureFit(
+                estimatedMinutes: draft.estimatedMinutes,
+                remainingFlexMinutes: remaining
+            )
+            if fit != .fitToday {
+                updated.aiSummary = (updated.aiSummary ?? title) + " · \(fit.chipLabel)"
+                try? await inboxRepo.update(updated)
+            }
             let result = CaptureRouteResult(
                 outcome: .taskCreated(taskId: task.id, title: task.title),
                 inboxItemId: inboxItem.id,
-                createdTaskId: task.id
+                createdTaskId: task.id,
+                capacityFit: fit
             )
             postNotification(result)
             await CaptureGraphIndexer.indexTask(inboxID: inboxItem.id, taskID: task.id)

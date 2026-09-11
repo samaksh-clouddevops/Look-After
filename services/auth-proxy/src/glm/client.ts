@@ -17,6 +17,24 @@ export type GlmChatResponse = {
   completionTokens: number;
 };
 
+function glm5MinorVersion(model: string): number | null {
+  const match = model.trim().toLowerCase().match(/glm-5\.(\d+)/);
+  if (!match) return null;
+  return Number.parseInt(match[1], 10);
+}
+
+/** GLM-5.3+ always reasons; `thinking.type: disabled` is rejected. */
+function thinkingFieldsForModel(model: string): Record<string, unknown> {
+  const minor = glm5MinorVersion(model);
+  if (minor !== null && minor >= 3) {
+    return {
+      thinking: { type: "enabled" },
+      reasoning_effort: "low",
+    };
+  }
+  return { thinking: { type: "disabled" } };
+}
+
 export async function callGlmChat(
   baseUrl: string,
   apiKey: string,
@@ -36,7 +54,7 @@ export async function callGlmChat(
       temperature: body.temperature ?? 0.7,
       max_tokens: body.max_tokens ?? 4096,
       stream: false,
-      thinking: { type: "disabled" },
+      ...thinkingFieldsForModel(body.model),
     }),
   });
 

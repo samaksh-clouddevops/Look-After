@@ -121,7 +121,8 @@ public enum IdealSleepPlanner {
                   input.calendar.isDate(scheduledDate, inSameDayAs: tomorrow),
                   let time = task.scheduledTime else { continue }
             let label = shortTaskAnchorLabel(task, time: time, calendar: input.calendar)
-            candidates.append(WakeAnchor(date: time, label: label))
+            let combined = input.calendar.combine(date: tomorrow, timeFrom: time) ?? time
+            candidates.append(WakeAnchor(date: combined, label: label))
         }
 
         if let earliest = candidates.min(by: { $0.date < $1.date }) {
@@ -192,7 +193,8 @@ public enum IdealSleepPlanner {
                   input.calendar.isDate(scheduledDate, inSameDayAs: todayStart),
                   let start = task.scheduledTime else { continue }
             let duration = max(task.estimatedMinutes, 30)
-            let end = start.addingTimeInterval(TimeInterval(duration * 60))
+            let combinedStart = input.calendar.combine(date: todayStart, timeFrom: start) ?? start
+            let end = combinedStart.addingTimeInterval(TimeInterval(duration * 60))
             if end > windDownThreshold {
                 latestEnd = max(latestEnd ?? end, end)
             }

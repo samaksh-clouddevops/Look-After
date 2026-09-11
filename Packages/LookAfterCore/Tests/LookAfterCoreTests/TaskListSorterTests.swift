@@ -31,4 +31,62 @@ final class TaskListSorterTests: XCTestCase {
         let sorted = TaskListSorter.sortByPriorityThenSchedule(tasks.shuffled())
         XCTAssertEqual(sorted.map(\.id), ["a", "m", "z"])
     }
+
+    func testSortForTodayOrdersMorningBeforeEveningRegardlessOfPriority() {
+        let morning = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: today)!
+        let evening = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: today)!
+        let tasks = [
+            LifeTask(
+                id: "dinner",
+                title: "Dinner",
+                priority: .high,
+                estimatedMinutes: 45,
+                scheduledDate: today,
+                scheduledTime: evening,
+                timeConstraint: .anchored,
+                userId: "user-1"
+            ),
+            LifeTask(
+                id: "morning",
+                title: "Morning review",
+                priority: .low,
+                estimatedMinutes: 10,
+                scheduledDate: today,
+                scheduledTime: morning,
+                timeConstraint: .anchored,
+                userId: "user-1"
+            ),
+        ]
+
+        let sorted = TaskListSorter.sortForToday(tasks.shuffled(), calendar: calendar, now: today)
+        XCTAssertEqual(sorted.map(\.id), ["morning", "dinner"])
+    }
+
+    func testSortByNextActionableThenPriorityUsesClockThenPriority() {
+        let eight = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: today)!
+        let nine = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+        let tasks = [
+            LifeTask(
+                id: "nine",
+                title: "Nine",
+                priority: .high,
+                scheduledDate: today,
+                scheduledTime: nine,
+                timeConstraint: .anchored,
+                userId: "user-1"
+            ),
+            LifeTask(
+                id: "eight",
+                title: "Eight",
+                priority: .low,
+                scheduledDate: today,
+                scheduledTime: eight,
+                timeConstraint: .anchored,
+                userId: "user-1"
+            ),
+        ]
+
+        let sorted = TaskListSorter.sortByNextActionableThenPriority(tasks, calendar: calendar, now: today)
+        XCTAssertEqual(sorted.map(\.id), ["eight", "nine"])
+    }
 }

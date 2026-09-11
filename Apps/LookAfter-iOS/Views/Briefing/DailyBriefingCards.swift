@@ -65,13 +65,18 @@ struct BriefingDailySummaryCard: View {
     let summary: BriefingDailySummary
     var compact: Bool
 
+    @ScaledMetric(relativeTo: .largeTitle) private var scoreSize: CGFloat = 36
+    @ScaledMetric(relativeTo: .title) private var compactScoreSize: CGFloat = 28
+
     var body: some View {
         BriefingCardContainer(title: summary.scoreLabel, icon: "chart.line.uptrend.xyaxis", compact: compact) {
             HStack(alignment: .top, spacing: DesignSystem.spacingMD) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(summary.score)")
-                        .font(.system(size: compact ? 28 : 36, weight: .bold, design: .default))
+                        .font(.system(size: compact ? compactScoreSize : scoreSize, weight: .bold, design: .default))
                         .foregroundColor(DesignSystem.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     Text("/ \(summary.maxScore) · \(summary.scoreBand)")
                         .font(.dsMetadata())
                         .foregroundColor(DesignSystem.textMuted)
@@ -233,6 +238,8 @@ struct BriefingCalendarCard: View {
     var compact: Bool
     var onConnectCalendar: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         BriefingCardContainer(title: "Calendar", icon: "calendar", compact: compact) {
             if let title = calendar.nextEventTitle {
@@ -241,14 +248,19 @@ struct BriefingCalendarCard: View {
                         .font(.system(size: 16, weight: .bold, design: .default))
                         .foregroundColor(DesignSystem.textPrimary)
                     if let minutes = calendar.minutesUntilStart {
-                        Text(minutes <= 0 ? "Starting now" : "In \(minutes) min")
+                        let countdown = minutes <= 0 ? "Starting now" : "In \(minutes) min"
+                        Text(countdown)
                             .font(.system(size: 13, design: .default))
                             .foregroundColor(DesignSystem.accentPrimary)
+                            .contentTransition(.numericText(countsDown: true))
+                            .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: countdown)
                     }
                     if let duration = calendar.durationMinutes {
                         Text("\(duration) min")
                             .font(.system(size: 12, design: .default))
                             .foregroundColor(DesignSystem.textMuted)
+                            .contentTransition(.numericText())
+                            .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: duration)
                     }
                 }
             } else if calendar.isConnected {
@@ -339,7 +351,10 @@ struct BriefingHealthCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(DesignSystem.contentSurfaceSubtle)
+        )
     }
 }
 
@@ -428,7 +443,10 @@ struct BriefingHabitsCard: View {
                         .frame(maxWidth: .infinity, minHeight: 56)
                         .padding(.horizontal, DesignSystem.spacingSM)
                         .padding(.vertical, DesignSystem.spacingSM)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(DesignSystem.contentSurfaceSubtle)
+                        )
                     })
                     .buttonStyle(.plain)
                     .accessibilityLabel(habit.title)
@@ -498,24 +516,43 @@ struct BriefingProgressCard: View {
     let progress: BriefingProgressData
     var compact: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         BriefingCardContainer(title: UserFacingCopy.progressTitle, icon: "chart.bar.fill", compact: compact) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.spacingSM) {
+            // Counts on one row; duration + score on their own rows so wall clock
+            // never reads as sitting under "Overdue" (LAY-C3).
+            HStack(alignment: .top, spacing: DesignSystem.spacingSM) {
                 stat("Completed", value: "\(progress.completedCount)")
                 stat("Remaining", value: "\(progress.remainingCount)")
                 stat("Overdue", value: "\(progress.overdueCount)", highlight: progress.overdueCount > 0 ? DesignSystem.error : nil)
-                stat(UserFacingCopy.taskTimeTitle, value: progress.deepWorkMinutes.durationString)
             }
+            HStack {
+                Text(UserFacingCopy.taskTimeTitle)
+                    .font(.system(size: 12, weight: .medium, design: .default))
+                    .foregroundColor(DesignSystem.textMuted)
+                Spacer()
+                Text(progress.deepWorkMinutes.durationString)
+                    .font(.system(size: 16, weight: .semibold, design: .default))
+                    .foregroundColor(DesignSystem.textPrimary)
+                    .contentTransition(.numericText())
+                    .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: progress.deepWorkMinutes)
+            }
+            .padding(.top, 4)
             HStack {
                 Text(UserFacingCopy.dayScoreTitle)
                     .font(.system(size: 12, weight: .medium, design: .default))
                     .foregroundColor(DesignSystem.textMuted)
                 Spacer()
                 Text("\(progress.productivityScore)/100")
-                    .font(.system(size: 20, weight: .bold, design: .default))
+                    .font(.title3.weight(.bold))
                     .foregroundColor(DesignSystem.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
+                    .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: progress.productivityScore)
             }
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
     }
 
@@ -524,9 +561,13 @@ struct BriefingProgressCard: View {
             Text(label)
                 .font(.system(size: 11, weight: .medium, design: .default))
                 .foregroundColor(DesignSystem.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
             Text(value)
                 .font(.system(size: 18, weight: .bold, design: .default))
                 .foregroundColor(highlight ?? DesignSystem.textPrimary)
+                .contentTransition(.numericText())
+                .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: value)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -632,7 +673,7 @@ private func healthStatusEmptyState(
     )
 }
 
-// MARK: - Section card (V4 recipe)
+// MARK: - Section card (V5 — opaque content surface)
 
 struct BriefingSectionCard<Content: View>: View {
     let title: String
@@ -656,7 +697,7 @@ struct BriefingSectionCard<Content: View>: View {
                     if let icon {
                         Image(systemName: icon)
                             .font(.dsIcon())
-                            .foregroundColor(DesignSystem.accentPrimary)
+                            .foregroundColor(DesignSystem.textSecondary)
                     }
                     VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
                         Text(title)
@@ -680,12 +721,11 @@ struct BriefingSectionCard<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(sectionBackground)
         .overlay(sectionBorder)
-        .overlay(sectionHighlight)
     }
 
     private var sectionBackground: some View {
         RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
-            .fill(DesignSystem.backgroundSecondary)
+            .fill(DesignSystem.contentSurface)
             .shadow(
                 color: DesignSystem.shadowElevated.opacity(DesignSystem.shadowOpacity(for: colorScheme)),
                 radius: 18,
@@ -704,21 +744,6 @@ struct BriefingSectionCard<Content: View>: View {
         RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
             .stroke(DesignSystem.border, lineWidth: 1)
     }
-
-    private var sectionHighlight: some View {
-        RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(colorScheme == .dark ? 0.10 : 0.35),
-                        Color.white.opacity(0.02),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                lineWidth: 1
-            )
-    }
 }
 
 // MARK: - Greeting header (reference layout)
@@ -731,6 +756,7 @@ struct BriefingGreetingHeader: View {
     }
 
     var body: some View {
+        // Wave C: serif reserved for the user name only — keep until the type rule ships.
         VStack(alignment: .leading, spacing: 4) {
             if !parts.salutation.isEmpty {
                 Text(parts.salutation)
@@ -739,9 +765,11 @@ struct BriefingGreetingHeader: View {
             if !parts.name.isEmpty {
                 Text(parts.name)
                     .textStyleBriefingUserName()
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
             }
             Text("Here's how today looks.")
-                .textStyleCaption(color: DesignSystem.textMuted)
+                .textStyleCaption(color: DesignSystem.textSecondary)
                 .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -885,7 +913,7 @@ struct BriefingSnapshotStrip: View {
 
     private func estimatedBand(_ fallback: String) -> String {
         guard healthNeedsAttention else { return fallback }
-        return "Estimated — connect Health for real data"
+        return "Connect Health for estimate"
     }
 
     private func isPositiveBand(_ band: String?) -> Bool {
@@ -924,7 +952,7 @@ struct BriefingSnapshotStrip: View {
                         .font(.dsTabLabel())
                         .foregroundColor(bandIsPositive ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.85)
+                        .minimumScaleFactor(0.9)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -934,7 +962,7 @@ struct BriefingSnapshotStrip: View {
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundElevated.opacity(0.9))
+                .fill(DesignSystem.contentSurfaceSubtle)
         )
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
@@ -947,6 +975,8 @@ struct BriefingSnapshotStrip: View {
 // MARK: - Scroll affordance (footer of first viewport)
 
 struct BriefingScrollAffordance: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 4) {
             scrollChevron
@@ -960,16 +990,15 @@ struct BriefingScrollAffordance: View {
 
     @ViewBuilder
     private var scrollChevron: some View {
-        if #available(iOS 18.0, *) {
-            Image(systemName: "chevron.compact.down")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(DesignSystem.accentPrimary.opacity(0.75))
-                .symbolEffect(.bounce, options: .repeating.speed(0.35))
-        } else {
-            Image(systemName: "chevron.compact.down")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(DesignSystem.accentPrimary.opacity(0.75))
-        }
+        Image(systemName: "chevron.compact.down")
+            .font(.system(size: 18, weight: .medium))
+            .foregroundColor(DesignSystem.accentPrimary.opacity(0.75))
+            .symbolEffect(
+                .bounce,
+                options: .repeating.speed(0.35),
+                isActive: !reduceMotion
+            )
+            .symbolEffectsRemoved(reduceMotion)
     }
 }
 

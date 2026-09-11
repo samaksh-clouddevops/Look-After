@@ -60,7 +60,7 @@ struct BriefingModuleInsightsCard: View {
         .padding(DesignSystem.spacingMD)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundElevated.opacity(0.75))
+                .fill(DesignSystem.contentSurfaceSubtle)
         )
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)

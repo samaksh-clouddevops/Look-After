@@ -47,7 +47,9 @@ struct FlowWidgetEntry: TimelineEntry {
 
 private enum WidgetStyle {
     static let background = DesignSystem.backgroundPrimary
-    static let surface = DesignSystem.backgroundSecondary
+    static let surface = DesignSystem.contentSurface
+    static let surfaceElevated = DesignSystem.contentSurfaceElevated
+    /// Brand green — same as `DesignSystem.accentPrimary` / `5A9E3F`.
     static let accent = DesignSystem.accentPrimary
     static let textPrimary = DesignSystem.textPrimary
     static let textSecondary = DesignSystem.textSecondary
@@ -57,24 +59,33 @@ private enum WidgetStyle {
 struct NowWidgetView: View {
     var entry: FlowWidgetEntry
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var usesFullColor: Bool { renderingMode == .fullColor }
 
     var body: some View {
-        switch family {
-        case .systemMedium:
-            mediumView
-        default:
-            smallView
+        Group {
+            switch family {
+            case .systemMedium:
+                mediumView
+            default:
+                smallView
+            }
         }
+        .widgetURL(URL(string: "lookafter://today"))
     }
 
     private var smallView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "sparkles")
-                    .foregroundColor(WidgetStyle.textMuted)
-                Text("NOW")
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                    .widgetAccentable()
+                Text(LookAfterL10n.widgetNow)
                     .font(.dsMetadata(weight: .bold))
-                    .foregroundColor(WidgetStyle.textSecondary)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
+                    .widgetAccentable()
                 Spacer()
                 energyBadge
             }
@@ -82,27 +93,29 @@ struct NowWidgetView: View {
             if let title = entry.snapshot.topTaskTitle {
                 Text(title)
                     .font(.dsBody(weight: .semibold))
-                    .foregroundColor(WidgetStyle.textPrimary)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
                     .lineLimit(3)
                 if let mins = entry.snapshot.topTaskMinutes {
                     Text("~\(mins) min")
-                        .font(.dsMetadata())
-                        .foregroundColor(WidgetStyle.textMuted)
+                        .font(.dsMetadata().monospacedDigit())
+                        .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                        .contentTransition(.numericText())
+                        .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: mins)
                 }
             } else {
-                Text("All clear")
+                Text(LookAfterL10n.widgetAllClear)
                     .font(.dsBody(weight: .semibold))
-                    .foregroundColor(WidgetStyle.textPrimary)
-                Text("Nothing urgent right now")
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
+                Text(LookAfterL10n.widgetNothingUrgent)
                     .font(.dsMetadata())
-                    .foregroundColor(WidgetStyle.textMuted)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
             }
 
             Spacer(minLength: 0)
 
-            if #available(iOS 17.0, *), entry.snapshot.resolvedTopTaskTitle != nil {
+            if entry.snapshot.resolvedTopTaskTitle != nil {
                 Button(intent: WidgetStartHeroTaskIntent()) {
-                    Text("Start focus")
+                    Text(LookAfterL10n.widgetStartFocus)
                         .font(.dsMetadata(weight: .semibold))
                         .frame(maxWidth: .infinity)
                 }
@@ -110,9 +123,11 @@ struct NowWidgetView: View {
                 .tint(WidgetStyle.accent)
             }
 
-            Text("\(entry.snapshot.completedTodayCount) done today")
-                .font(.dsMetadata())
-                .foregroundColor(WidgetStyle.textMuted)
+            Text(LookAfterL10n.widgetDoneToday(count: entry.snapshot.completedTodayCount))
+                .font(.dsMetadata().monospacedDigit())
+                .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                .contentTransition(.numericText())
+                .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: entry.snapshot.completedTodayCount)
         }
         .padding(14)
         .containerBackground(for: .widget) {
@@ -125,26 +140,28 @@ struct NowWidgetView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "sparkles")
-                        .foregroundColor(WidgetStyle.textMuted)
-                    Text("Next step")
+                        .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                        .widgetAccentable()
+                    Text(LookAfterL10n.widgetNextStep)
                         .font(.dsMetadata(weight: .bold))
-                        .foregroundColor(WidgetStyle.textSecondary)
+                        .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
+                        .widgetAccentable()
                 }
 
                 if let title = entry.snapshot.topTaskTitle {
                     Text(title)
                         .font(.dsHeadline())
-                        .foregroundColor(WidgetStyle.textPrimary)
+                        .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
                         .lineLimit(2)
                 } else {
-                    Text("Your mind is clear")
+                    Text(LookAfterL10n.widgetMindClear)
                         .font(.dsHeadline())
-                        .foregroundColor(WidgetStyle.textPrimary)
+                        .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
                 }
 
                 Text(entry.snapshot.recommendation)
                     .font(.dsMetadata())
-                    .foregroundColor(WidgetStyle.textMuted)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
                     .lineLimit(2)
             }
 
@@ -154,7 +171,8 @@ struct NowWidgetView: View {
                 energyRing
                 Text(entry.snapshot.energyLevel)
                     .font(.dsMetadata(weight: .semibold))
-                    .foregroundColor(WidgetStyle.textSecondary)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
+                    .widgetAccentable()
             }
         }
         .padding(14)
@@ -165,26 +183,51 @@ struct NowWidgetView: View {
 
     private var energyBadge: some View {
         Text("\(entry.snapshot.energyScore)%")
-            .font(.dsMetadata(weight: .bold))
-            .foregroundColor(DesignSystem.accentOnPrimary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(WidgetStyle.accent))
+            .font(.dsMetadata(weight: .bold).monospacedDigit())
+            .contentTransition(.numericText())
+            .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: entry.snapshot.energyScore)
+            .modifier(EnergyBadgeChrome(usesFullColor: usesFullColor))
+            .widgetAccentable()
     }
 
     private var energyRing: some View {
         ZStack {
             Circle()
-                .stroke(DesignSystem.divider, lineWidth: 5)
+                .stroke(usesFullColor ? DesignSystem.divider : Color.primary.opacity(0.2), lineWidth: 5)
                 .frame(width: 52, height: 52)
             Circle()
                 .trim(from: 0, to: Double(entry.snapshot.energyScore) / 100)
-                .stroke(WidgetStyle.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .stroke(
+                    usesFullColor ? WidgetStyle.accent : Color.primary,
+                    style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                )
                 .frame(width: 52, height: 52)
                 .rotationEffect(.degrees(-90))
+                .widgetAccentable()
             Text("\(entry.snapshot.energyScore)")
-                .font(.dsCaption(weight: .bold))
-                .foregroundColor(WidgetStyle.textPrimary)
+                .font(.dsCaption(weight: .bold).monospacedDigit())
+                .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
+                .contentTransition(.numericText())
+                .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: entry.snapshot.energyScore)
+                .widgetAccentable()
+        }
+    }
+}
+
+private struct EnergyBadgeChrome: ViewModifier {
+    let usesFullColor: Bool
+
+    func body(content: Content) -> some View {
+        if usesFullColor {
+            content
+                .foregroundStyle(DesignSystem.accentOnPrimary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(WidgetStyle.accent))
+        } else {
+            // Vibrant / accented: let the system material carry the plate; keep the score accentable.
+            content
+                .foregroundStyle(.primary)
         }
     }
 }
@@ -196,36 +239,64 @@ struct NowWidget: Widget {
         StaticConfiguration(kind: kind, provider: FlowWidgetProvider()) { entry in
             NowWidgetView(entry: entry)
         }
-        .configurationDisplayName("Next Step")
-        .description("See your top task and energy level at a glance.")
+        .configurationDisplayName(LookAfterL10n.widgetConfigNowName)
+        .description(LookAfterL10n.widgetConfigNowDescription)
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 
 struct EnergyWidgetView: View {
     var entry: FlowWidgetEntry
+    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var usesFullColor: Bool { renderingMode == .fullColor }
+    private var energyValue: Double { Double(entry.snapshot.energyScore) }
 
     var body: some View {
+        Group {
+            switch family {
+            case .accessoryRectangular:
+                accessoryRectangular
+            case .accessoryInline:
+                accessoryInline
+            default:
+                homeSmall
+            }
+        }
+        .widgetURL(URL(string: "lookafter://today"))
+    }
+
+    private var homeSmall: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "bolt.heart.fill")
-                    .foregroundColor(WidgetStyle.textMuted)
-                Text("ENERGY")
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                    .widgetAccentable()
+                Text(LookAfterL10n.widgetEnergy)
                     .font(.dsMetadata(weight: .bold))
-                    .foregroundColor(WidgetStyle.textSecondary)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
+                    .widgetAccentable()
                 Spacer()
                 Text(entry.snapshot.energyLevel)
                     .font(.dsMetadata(weight: .semibold))
-                    .foregroundColor(WidgetStyle.textSecondary)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(WidgetStyle.surfaceElevated))
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(entry.snapshot.energyScore)")
-                    .font(.dsDisplay())
-                    .foregroundColor(WidgetStyle.textPrimary)
+                    .font(.dsDisplay().monospacedDigit())
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
+                    .contentTransition(.numericText())
+                    .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: entry.snapshot.energyScore)
+                    .widgetAccentable()
                 Text("%")
                     .font(.dsCaption(weight: .semibold))
-                    .foregroundColor(WidgetStyle.textMuted)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -243,8 +314,13 @@ struct EnergyWidgetView: View {
             Spacer(minLength: 0)
 
             Text("\(entry.snapshot.activeTaskCount) active • \(entry.snapshot.completedTodayCount) done")
-                .font(.dsMetadata())
-                .foregroundColor(WidgetStyle.textMuted)
+                .font(.dsMetadata().monospacedDigit())
+                .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                .contentTransition(.numericText())
+                .animation(
+                    PremiumMotion.snappy(reduceMotion: reduceMotion),
+                    value: entry.snapshot.activeTaskCount + entry.snapshot.completedTodayCount
+                )
         }
         .padding(14)
         .containerBackground(for: .widget) {
@@ -252,14 +328,47 @@ struct EnergyWidgetView: View {
         }
     }
 
+    private var accessoryRectangular: some View {
+        Gauge(value: energyValue, in: 0...100) {
+            Label("Energy", systemImage: "bolt.heart.fill")
+                .widgetAccentable()
+        } currentValueLabel: {
+            Text("\(entry.snapshot.energyScore)")
+                .font(.headline.monospacedDigit())
+                .contentTransition(.numericText())
+                .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: entry.snapshot.energyScore)
+                .widgetAccentable()
+        } minimumValueLabel: {
+            Text("0")
+        } maximumValueLabel: {
+            Text("100")
+        }
+        .gaugeStyle(.accessoryLinearCapacity)
+        .containerBackground(for: .widget) {
+            AccessoryWidgetBackground()
+        }
+    }
+
+    private var accessoryInline: some View {
+        Label {
+            Text("\(entry.snapshot.energyScore)% \(entry.snapshot.energyLevel)")
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: entry.snapshot.energyScore)
+        } icon: {
+            Image(systemName: "bolt.heart.fill")
+        }
+        .widgetAccentable()
+    }
+
     private func metricRow(icon: String, text: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundColor(WidgetStyle.textMuted)
+                .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
             Text(text)
                 .font(.dsMetadata())
-                .foregroundColor(WidgetStyle.textSecondary)
+                .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
         }
     }
 }
@@ -279,39 +388,52 @@ struct EnergyWidget: Widget {
 
 struct TasksWidgetView: View {
     var entry: FlowWidgetEntry
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var usesFullColor: Bool { renderingMode == .fullColor }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "checkmark.square.fill")
-                    .foregroundColor(WidgetStyle.textMuted)
-                Text("TASKS")
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                    .widgetAccentable()
+                Text(LookAfterL10n.widgetTasks)
                     .font(.dsMetadata(weight: .bold))
-                    .foregroundColor(WidgetStyle.textSecondary)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
+                    .widgetAccentable()
                 Spacer()
                 Text("\(entry.snapshot.completedTodayCount) done")
-                    .font(.dsMetadata())
-                    .foregroundColor(WidgetStyle.textMuted)
+                    .font(.dsMetadata().monospacedDigit())
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                    .contentTransition(.numericText())
+                    .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: entry.snapshot.completedTodayCount)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(WidgetStyle.surfaceElevated))
             }
 
             if entry.snapshot.tasks.isEmpty {
-                Text("No active tasks")
+                Text(LookAfterL10n.widgetNoActiveTasks)
                     .font(.dsBody(weight: .semibold))
-                    .foregroundColor(WidgetStyle.textSecondary)
+                    .foregroundStyle(usesFullColor ? WidgetStyle.textSecondary : .secondary)
             } else {
                 ForEach(entry.snapshot.tasks.prefix(3)) { task in
                     HStack(spacing: 8) {
                         Circle()
-                            .stroke(DesignSystem.border, lineWidth: 1.5)
+                            .stroke(usesFullColor ? DesignSystem.border : Color.primary.opacity(0.35), lineWidth: 1.5)
                             .frame(width: 14, height: 14)
+                            .background(Circle().fill(WidgetStyle.surface))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(task.title)
                                 .font(.dsMetadata(weight: .semibold))
-                                .foregroundColor(WidgetStyle.textPrimary)
+                                .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
                                 .lineLimit(1)
                             Text("\(task.estimatedMinutes)m • \(task.priorityLabel)")
-                                .font(.dsMetadata())
-                                .foregroundColor(WidgetStyle.textMuted)
+                                .font(.dsMetadata().monospacedDigit())
+                                .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
+                                .contentTransition(.numericText())
                         }
                     }
                 }
@@ -347,5 +469,7 @@ struct LookAfterWidgetBundle: WidgetBundle {
         TasksWidget()
         FocusLiveActivity()
         NowPinLiveActivity()
+        LookAfterCaptureControl()
+        LookAfterStartFocusControl()
     }
 }

@@ -75,10 +75,14 @@ public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSign
     }
 
     private static func isAuthorized(_ status: EKAuthorizationStatus) -> Bool {
-        if #available(iOS 17.0, macOS 14.0, *) {
-            return status == .fullAccess || status == .writeOnly
-        }
-        return status.rawValue == 3
+        // Kept as fullAccess || writeOnly to avoid restricting calendar-dependent surfaces
+        // for users who only granted write-only (prior product behavior). Prefer requesting fullAccess.
+        status == .fullAccess || status == .writeOnly
+    }
+
+    /// Exposed for unit tests.
+    public static func canReadEvents(_ status: EKAuthorizationStatus) -> Bool {
+        isAuthorized(status)
     }
 
     private static func computeFreeBlockMinutes(from start: Date, to end: Date, events: [EKEvent]) -> Int {

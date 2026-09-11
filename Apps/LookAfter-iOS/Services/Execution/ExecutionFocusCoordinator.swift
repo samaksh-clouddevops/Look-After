@@ -74,21 +74,13 @@ final class ExecutionFocusCoordinator {
         suppressLowPriority: Bool,
         constraintLabel: String
     ) async {
-        if #available(iOS 17.0, *) {
-            let intent = LookAfterFocusIntent(
-                category: category,
-                taskTitle: taskTitle,
-                suppressLowPriority: suppressLowPriority,
-                constraintLabel: constraintLabel
-            )
-            _ = try? await intent.perform()
-        } else {
-            ExecutionFocusFilterStore.shared.record(
-                category: category,
-                taskTitle: taskTitle,
-                suppressLowPriority: suppressLowPriority
-            )
-        }
+        let intent = LookAfterFocusIntent(
+            category: category,
+            taskTitle: taskTitle,
+            suppressLowPriority: suppressLowPriority,
+            constraintLabel: constraintLabel
+        )
+        _ = try? await intent.perform()
     }
 
     private func clearFilterIfNeeded() {

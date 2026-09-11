@@ -2,11 +2,10 @@ import AppIntents
 import LookAfterCore
 
 /// Widget / Live Activity intents enqueue actions for the main app to drain on foreground.
-@available(iOS 17.0, *)
 struct WidgetPauseFocusIntent: AppIntent {
-    static var title: LocalizedStringResource = "Pause Focus"
-    static var description = IntentDescription("Pauses the active focus session.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "Pause Focus"
+    static let description = IntentDescription("Pauses the active focus session.")
+    static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult {
         AppGroupIntentStore.enqueue(action: .pauseFocus)
@@ -14,11 +13,10 @@ struct WidgetPauseFocusIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct WidgetCompleteFocusIntent: AppIntent {
-    static var title: LocalizedStringResource = "Complete Focus"
-    static var description = IntentDescription("Completes the active focus session.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "Complete Focus"
+    static let description = IntentDescription("Completes the active focus session.")
+    static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult {
         AppGroupIntentStore.enqueue(action: .completeFocus)
@@ -26,14 +24,24 @@ struct WidgetCompleteFocusIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct WidgetStartHeroTaskIntent: AppIntent {
-    static var title: LocalizedStringResource = "Start Next Task"
-    static var description = IntentDescription("Starts focus on your hero task.")
-    static var openAppWhenRun: Bool = true
+    static let title: LocalizedStringResource = "Start Next Task"
+    static let description = IntentDescription("Starts focus on your hero task.")
+    static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
         AppGroupIntentStore.enqueue(action: .startHeroTask)
+        return .result()
+    }
+}
+
+struct WidgetOpenCaptureIntent: AppIntent {
+    static let title: LocalizedStringResource = "Capture"
+    static let description = IntentDescription("Opens Look After Capture.")
+    static let openAppWhenRun = true
+
+    func perform() async throws -> some IntentResult {
+        AppGroupIntentStore.enqueue(action: .openCapture)
         return .result()
     }
 }

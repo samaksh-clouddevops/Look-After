@@ -70,6 +70,11 @@ public final class WeeklyAIRetrospectiveGenerator {
 
     private func finalize(_ retro: WeeklyAIRetrospective) -> WeeklyAIRetrospective {
         persistExperiment(retro)
+        let headline = ([retro.narrative] + retro.frictionPatterns).joined(separator: " ")
+        DaySupervisorPriorsStore.ingest(
+            retrospectiveHeadline: headline,
+            experiment: retro.experimentForNextWeek
+        )
         return retro
     }
 

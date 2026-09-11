@@ -60,6 +60,22 @@ final class NotificationCoordinator {
         let executionSuppresses = ExecutionFocusFilterStore.shared.suppressLowPriority
         let focusActive = shell.adhdVM.isFocusSessionActive || executionSuppresses
 
+        let leanBody: String? = {
+            if let audit = shell.briefingVM.dayAudit {
+                return DaySupervisorContinuity.leanNotificationBody(from: audit)
+            }
+            let quick = DayAuditService.run(
+                DayAuditService.Input(
+                    tasks: shell.tasksVM.schedulingContext,
+                    parkedCandidates: ParkedTaskQueueStore.shared.candidatesForReintegration(limit: 5),
+                    energyPercent: shell.briefingVM.energy.currentEnergyPercent,
+                    capacityBandLabel: shell.briefingVM.executiveCapacity.band.displayLabel,
+                    now: now
+                )
+            )
+            return DaySupervisorContinuity.leanNotificationBody(from: quick)
+        }()
+
         let input = NotificationRefreshInput(
             now: now,
             medications: MedicationStore.load(),
@@ -72,7 +88,8 @@ final class NotificationCoordinator {
             focusBreakFireDate: focusBreakDate,
             focusSessionToken: focusToken,
             userDisplayName: UserLifeProfileStore.resolvedDisplayName(),
-            proactiveActions: shell.proactiveActions.filter { $0.surface == .notification }
+            proactiveActions: shell.proactiveActions.filter { $0.surface == .notification },
+            dayAuditLeanBody: leanBody
         )
 
         await refresh(input: input)

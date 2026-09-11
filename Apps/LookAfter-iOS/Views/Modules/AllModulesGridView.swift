@@ -113,6 +113,7 @@ struct AllModulesGridView: View {
                         Image(systemName: "gearshape")
                             .premiumIcon()
                     }
+                    .buttonStyle(.glass)
                 }
             }
             .navigationBarHidden(true)

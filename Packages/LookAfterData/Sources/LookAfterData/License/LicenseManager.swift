@@ -2,6 +2,10 @@ import Foundation
 import LookAfterAI
 
 /// Persists license status and talks to the Azure auth-proxy redeem/status APIs.
+///
+/// `UserDefaults` `isLicensed` is a **local cache only** — spoofable offline. Cloud AI must
+/// still be gated by auth-proxy (403 when inactive). Call `refreshStatus()` on foreground /
+/// launch when a proxy client is configured; do not treat the UD bool as source of truth.
 @MainActor
 public final class LicenseManager: ObservableObject {
     public static let shared = LicenseManager()

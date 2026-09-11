@@ -36,8 +36,10 @@ public enum PerformanceMonitor {
     public static func measureAsync<T>(
         _ label: String,
         warnAfterMs: Double = 100,
+        isolation: isolated (any Actor)? = #isolation,
         _ block: () async throws -> T
     ) async rethrows -> T {
+        _ = isolation
         let signpostID = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: "MeasureAsync", signpostID: signpostID, "%{public}s", label)
         let start = CFAbsoluteTimeGetCurrent()

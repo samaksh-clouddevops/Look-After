@@ -4,6 +4,7 @@ import LookAfterCore
 
 final class BrainVoiceWelcomeBuilderTests: XCTestCase {
 
+    @MainActor
     func testWelcomeUsesHeroTaskWhenAvailable() {
         var presentation = BrainPresentation.empty
         presentation.greeting = "Good evening"
@@ -28,6 +29,7 @@ final class BrainVoiceWelcomeBuilderTests: XCTestCase {
         XCTAssertTrue(message.contains("Gym"))
     }
 
+    @MainActor
     func testWelcomeUsesContinuationWhenConversationExists() {
         let message = BrainVoiceWelcomeBuilder.message(
             presentation: .empty,

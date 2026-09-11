@@ -178,10 +178,10 @@ public struct LABottomSheet<Content: View>: View {
 
 // MARK: - V4 screen components (Phase 1)
 
-private enum LAV4Surface {
+private enum LAContentSurface {
     static func cardBackground() -> some View {
         RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
-            .fill(DesignSystem.backgroundSecondary)
+            .fill(DesignSystem.contentSurface)
             .shadow(
                 color: DesignSystem.shadowElevated,
                 radius: DesignSystem.shadowRadius,
@@ -211,6 +211,8 @@ public struct LACategoryChip: View {
         Text(title)
             .textStyleCaption(color: DesignSystem.textPrimary)
             .dsChipText()
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .padding(.horizontal, DesignSystem.spacingSM)
             .padding(.vertical, DesignSystem.spacingXXS)
             .background(
@@ -231,11 +233,18 @@ public struct LAProgressBar: View {
     let label: String
     let progress: Double
     var showsPercentage: Bool
+    var barHeight: CGFloat
 
-    public init(label: String, progress: Double, showsPercentage: Bool = true) {
+    public init(
+        label: String,
+        progress: Double,
+        showsPercentage: Bool = true,
+        barHeight: CGFloat = 8
+    ) {
         self.label = label
         self.progress = min(max(progress, 0), 1)
         self.showsPercentage = showsPercentage
+        self.barHeight = barHeight
     }
 
     public var body: some View {
@@ -259,7 +268,7 @@ public struct LAProgressBar: View {
                         .frame(width: geo.size.width * progress)
                 }
             }
-            .frame(height: 4)
+            .frame(height: barHeight)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label), \(Int(progress * 100)) percent")
@@ -305,10 +314,17 @@ public struct LADismissFAB: View {
     public var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
-                .font(.dsIcon(weight: .bold))
-                .foregroundColor(DesignSystem.accentOnPrimary)
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(DesignSystem.accentPrimary))
+                .font(.system(size: LAChromeMetrics.iconPointSize, weight: .bold))
+                .foregroundStyle(DesignSystem.textPrimary)
+                .frame(width: LAChromeMetrics.fabDiameter, height: LAChromeMetrics.fabDiameter)
+                .background {
+                    Circle()
+                        .fill(DesignSystem.contentSurfaceElevated)
+                        .overlay(
+                            Circle()
+                                .stroke(DesignSystem.border, lineWidth: 1)
+                        )
+                }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("capture-dismiss-fab")
@@ -346,7 +362,7 @@ public struct LAExecutiveBriefingCard: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
             Text("For today")
-                .textStyleSectionLabel(color: DesignSystem.accentPrimary)
+                .textStyleSectionLabel(color: DesignSystem.textSecondary)
                 .textCase(.uppercase)
                 .accessibilityAddTraits(.isHeader)
 
@@ -363,7 +379,7 @@ public struct LAExecutiveBriefingCard: View {
                         HStack(alignment: .top, spacing: DesignSystem.spacingSM) {
                             Text("•")
                                 .font(.dsBody(weight: .semibold))
-                                .foregroundColor(DesignSystem.accentPrimary)
+                                .foregroundColor(DesignSystem.textSecondary)
                                 .padding(.top, 1)
 
                             Text(line)
@@ -377,21 +393,19 @@ public struct LAExecutiveBriefingCard: View {
 
             Button(action: onContinue) {
                 Text(buttonTitle)
-                    .textStyleCardTitle(color: DesignSystem.accentOnPrimary)
+                    .font(.dsBody(weight: .semibold))
+                    .foregroundStyle(DesignSystem.accentOnPrimary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.spacingMD)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(DesignSystem.accentPrimary)
-                    )
+                    .frame(minHeight: DesignSystem.minTouchTarget)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
+            .tint(LookAfterChrome.accentTint)
             .accessibilityIdentifier("briefing-continue-cta")
         }
         .padding(DesignSystem.cardPaddingMin)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LAV4Surface.cardBackground())
-        .overlay(LAV4Surface.cardBorder())
+        .background(LAContentSurface.cardBackground())
+        .overlay(LAContentSurface.cardBorder())
         .accessibilityElement(children: .contain)
     }
 
@@ -409,59 +423,83 @@ public struct LABriefingGlanceRow: View {
     let title: String
     let timeRange: String
     var dotColor: Color
+    var showsRailAbove: Bool
+    var showsRailBelow: Bool
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(title: String, timeRange: String, dotColor: Color = DesignSystem.focus, action: @escaping () -> Void) {
+    public init(
+        title: String,
+        timeRange: String,
+        dotColor: Color = DesignSystem.focus,
+        showsRailAbove: Bool = false,
+        showsRailBelow: Bool = false,
+        action: @escaping () -> Void
+    ) {
         self.title = title
         self.timeRange = timeRange
         self.dotColor = dotColor
+        self.showsRailAbove = showsRailAbove
+        self.showsRailBelow = showsRailBelow
         self.action = action
     }
 
     public var body: some View {
         Button(action: action) {
-            HStack(spacing: DesignSystem.spacingMD) {
-                Circle()
-                    .fill(dotColor)
-                    .frame(width: 8, height: 8)
+            HStack(alignment: .center, spacing: DesignSystem.spacingMD) {
+                ZStack {
+                    GeometryReader { geo in
+                        let midY = geo.size.height / 2
+                        ZStack {
+                            if showsRailAbove {
+                                Rectangle()
+                                    .fill(dotColor.opacity(0.35))
+                                    .frame(width: 2, height: midY)
+                                    .position(x: geo.size.width / 2, y: midY / 2)
+                            }
+                            if showsRailBelow {
+                                Rectangle()
+                                    .fill(dotColor.opacity(0.35))
+                                    .frame(width: 2, height: midY)
+                                    .position(x: geo.size.width / 2, y: midY + midY / 2)
+                            }
+                        }
+                    }
+                    Circle()
+                        .fill(dotColor)
+                        .frame(width: 8, height: 8)
+                }
+                .frame(width: 12)
+                .frame(maxHeight: .infinity)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(TaskTitleDisplay.humanized(title))
                         .textStyleCardTitle()
                         .multilineTextAlignment(.leading)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .truncationMode(.tail)
                     Text(timeRange)
                         .textStyleCaption()
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(DesignSystem.textMuted)
+                    .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                    .contentShape(Rectangle())
+                    .accessibilityHidden(true)
             }
-            .padding(.horizontal, DesignSystem.spacingMD)
-            .padding(.vertical, DesignSystem.spacingSM + 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                    .fill(DesignSystem.backgroundElevated)
-                    .shadow(
-                        color: DesignSystem.shadowElevated.opacity(DesignSystem.shadowOpacity(for: colorScheme) * 0.6),
-                        radius: 10,
-                        x: 0,
-                        y: 4
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                    .stroke(DesignSystem.border, lineWidth: 1)
-            )
+            .padding(.horizontal, DesignSystem.spacingSM)
+            .padding(.vertical, DesignSystem.spacingSM)
+            .frame(maxWidth: .infinity, minHeight: DesignSystem.minTouchTarget, alignment: .leading)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(TaskTitleDisplay.humanized(title)), \(timeRange)")
     }
 }
 
@@ -536,7 +574,7 @@ public struct LAPriorityRow: View {
         title: String,
         category: String,
         detail: String? = nil,
-        ringColor: Color = DesignSystem.focus,
+        ringColor: Color = DesignSystem.textSecondary,
         isComplete: Bool = false,
         isActionsExpanded: Bool = false,
         onToggle: @escaping () -> Void,
@@ -582,15 +620,19 @@ public struct LAPriorityRow: View {
 
                     HStack(spacing: DesignSystem.spacingXS) {
                         LACategoryChip(category, color: ringColor)
+                            .layoutPriority(1)
                         if let detail, !detail.isEmpty {
                             Text(detail)
                                 .font(.dsTabLabel())
                                 .foregroundColor(DesignSystem.textMuted)
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .truncationMode(.middle)
                         }
                     }
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
 
                 Image(systemName: isActionsExpanded ? "chevron.up" : "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
@@ -625,23 +667,14 @@ public struct LAPriorityRow: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.horizontal, DesignSystem.spacingMD)
+        .padding(.horizontal, DesignSystem.spacingXS)
         .padding(.vertical, DesignSystem.spacingSM)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .fill(DesignSystem.backgroundElevated)
-                .shadow(
-                    color: DesignSystem.shadowElevated.opacity(DesignSystem.shadowOpacity(for: colorScheme) * 0.5),
-                    radius: 8,
-                    x: 0,
-                    y: 3
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                .stroke(isActionsExpanded ? DesignSystem.accentPrimary.opacity(0.35) : DesignSystem.border, lineWidth: 1)
-        )
+        .overlay(alignment: .bottom) {
+            if !isActionsExpanded {
+                Divider().opacity(0.5)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggleActions)
         .animation(.easeInOut(duration: 0.22), value: isActionsExpanded)
@@ -755,7 +788,7 @@ public struct LABrainVoiceOrb: View {
     @State private var breathe = false
     @State private var ripple = false
 
-    public init(state: LABrainVoiceOrbState, diameter: CGFloat = 220, onTap: @escaping () -> Void) {
+    public init(state: LABrainVoiceOrbState, diameter: CGFloat = 200, onTap: @escaping () -> Void) {
         self.state = state
         self.diameter = diameter
         self.onTap = onTap
@@ -764,25 +797,74 @@ public struct LABrainVoiceOrb: View {
     public var body: some View {
         Button(action: onTap) {
             ZStack {
+                // Soft outer glow — restrained
+                Circle()
+                    .fill(orbAccent.opacity(0.12))
+                    .frame(width: diameter * 1.12, height: diameter * 1.12)
+                    .blur(radius: reduceMotion ? 6 : 12)
+
                 if state == .listening && !reduceMotion {
                     Circle()
-                        .stroke(DesignSystem.focus.opacity(0.35), lineWidth: 2)
-                        .frame(width: diameter * (ripple ? 1.08 : 1.0), height: diameter * (ripple ? 1.08 : 1.0))
-                        .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: ripple)
+                        .stroke(orbAccent.opacity(0.45), lineWidth: 2)
+                        .frame(
+                            width: diameter * (ripple ? 1.12 : 1.02),
+                            height: diameter * (ripple ? 1.12 : 1.02)
+                        )
+                        .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: ripple)
                 }
+
+                // Core filled orb
                 Circle()
                     .fill(
                         RadialGradient(
                             colors: orbColors,
-                            center: .center,
+                            center: UnitPoint(x: 0.35, y: 0.32),
                             startRadius: 0,
-                            endRadius: diameter * 0.55
+                            endRadius: diameter * 0.62
                         )
                     )
                     .frame(width: diameter * breatheScale, height: diameter * breatheScale)
-                    .blur(radius: state == .thinking ? 1 : 0)
-                    .shadow(color: DesignSystem.focus.opacity(0.25), radius: 24, x: 0, y: 8)
+                    .overlay {
+                        // Specular highlight — depth so it doesn’t read as a flat blob
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color.white.opacity(0.55),
+                                        Color.white.opacity(0.08),
+                                        Color.clear
+                                    ],
+                                    center: UnitPoint(x: 0.32, y: 0.28),
+                                    startRadius: 0,
+                                    endRadius: diameter * 0.42
+                                )
+                            )
+                            .blendMode(.softLight)
+                    }
+                    .overlay {
+                        Circle()
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.55),
+                                        orbAccent.opacity(0.35),
+                                        Color.black.opacity(0.12)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    }
+                    .shadow(color: orbAccent.opacity(0.35), radius: state == .thinking ? 28 : 18, x: 0, y: 10)
+
+                if state == .thinking {
+                    ProgressView()
+                        .tint(DesignSystem.textPrimary.opacity(0.7))
+                        .scaleEffect(1.1)
+                }
             }
+            .frame(width: diameter * 1.2, height: diameter * 1.2)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("brain-voice-orb")
@@ -798,23 +880,51 @@ public struct LABrainVoiceOrb: View {
 
     private var breatheScale: CGFloat {
         guard !reduceMotion, state == .ready || state == .speaking else { return 1.0 }
-        return breathe ? 1.04 : 0.96
+        return breathe ? 1.03 : 0.97
+    }
+
+    private var orbAccent: Color {
+        switch state {
+        case .ready: return DesignSystem.accentPrimary
+        case .listening: return DesignSystem.accentPrimary
+        case .thinking: return DesignSystem.textSecondary
+        case .speaking: return DesignSystem.accentPrimary
+        }
     }
 
     private var orbColors: [Color] {
+        // Lime / neutral family — same brand as the rest of the app (no purple split).
         switch state {
-        case .ready, .listening:
-            return [Color(hex: "B8D4FF"), Color(hex: "C8B8FF"), Color(hex: "E8F4FF")]
+        case .ready:
+            return [
+                DesignSystem.contentSurfaceElevated,
+                DesignSystem.accentPrimary.opacity(0.35),
+                DesignSystem.accentPrimary.opacity(0.55)
+            ]
+        case .listening:
+            return [
+                Color(hex: "E8FFD4"),
+                DesignSystem.accentPrimary.opacity(0.65),
+                DesignSystem.accentPrimary
+            ]
         case .thinking:
-            return [Color(hex: "9EC5FF"), Color(hex: "A898FF"), Color(hex: "D0E8FF")]
+            return [
+                DesignSystem.contentSurface,
+                DesignSystem.textMuted.opacity(0.35),
+                DesignSystem.textSecondary.opacity(0.55)
+            ]
         case .speaking:
-            return [Color(hex: "A8C8FF"), Color(hex: "B8D4FF"), Color(hex: "E8F4FF")]
+            return [
+                Color(hex: "F0F7E8"),
+                DesignSystem.accentPrimary.opacity(0.45),
+                DesignSystem.accentPrimary.opacity(0.7)
+            ]
         }
     }
 
     private var accessibilityLabel: String {
         switch state {
-        case .ready: return "Voice assistant ready. Tap to speak."
+        case .ready: return "Voice orb ready. Tap to speak."
         case .listening: return "Listening"
         case .thinking: return "Thinking"
         case .speaking: return "Speaking"
@@ -846,7 +956,7 @@ public struct LASectionCard<Content: View>: View {
                     if let icon {
                         Image(systemName: icon)
                             .font(.dsIcon())
-                            .foregroundColor(DesignSystem.accentPrimary)
+                            .foregroundColor(DesignSystem.textSecondary)
                     }
                     VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
                         Text(title)
@@ -883,20 +993,6 @@ public struct LASectionCard<Content: View>: View {
         .overlay(
             RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
                 .stroke(DesignSystem.border, lineWidth: 1)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.35),
-                            Color.white.opacity(0.02),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
         )
     }
 }

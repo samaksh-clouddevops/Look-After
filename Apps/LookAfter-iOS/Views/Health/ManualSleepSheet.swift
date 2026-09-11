@@ -11,53 +11,56 @@ struct ManualSleepSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                PremiumBackground()
+            VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+                Text("No sleep data from last night")
+                    .font(.dsHeadline())
+                    .foregroundColor(DesignSystem.textPrimary)
 
-                VStack(alignment: .leading, spacing: DesignSystem.spacingLG) {
-                    Text("No sleep data from last night")
-                        .font(.dsHeadline())
-                        .foregroundColor(DesignSystem.textPrimary)
+                Text("Apple Health didn't record your sleep. How did you actually sleep? We'll use this to pace your day.")
+                    .font(.dsBody())
+                    .foregroundColor(DesignSystem.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Apple Health didn't record your sleep. How did you actually sleep? We'll use this to pace your day.")
-                        .font(.dsBody())
-                        .foregroundColor(DesignSystem.textSecondary)
-                        .dsPrimaryText(lineLimit: 4)
+                Text("Last night's sleep")
+                    .font(.dsCaption(weight: .semibold))
+                    .foregroundColor(DesignSystem.textSecondary)
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+                    .padding(.top, DesignSystem.spacingXXS)
 
-                    VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-                        Text("Last night's sleep")
-                            .font(.dsCaption(weight: .semibold))
-                            .foregroundColor(DesignSystem.textMuted)
-                            .tracking(0.4)
-
-                        HStack(spacing: DesignSystem.spacingSM) {
-                            ForEach(ManualSleepRating.allCases) { rating in
-                                ratingButton(rating)
-                            }
-                        }
+                HStack(spacing: DesignSystem.spacingXS) {
+                    ForEach(ManualSleepRating.allCases) { rating in
+                        ratingButton(rating)
                     }
-
-                    if let selected {
-                        Text("\(selected.emoji) \(selected.label) — we'll adjust your plan accordingly.")
-                            .font(.dsCaption())
-                            .foregroundColor(DesignSystem.textSecondary)
-                    }
-
-                    Button {
-                        guard let selected else { return }
-                        onSubmit(selected)
-                        dismiss()
-                    } label: {
-                        Text("Save sleep")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(selected == nil)
-
-                    Spacer(minLength: 0)
                 }
-                .padding(DesignSystem.spacingLG)
+
+                if let selected {
+                    Text("\(selected.label) — we'll adjust your plan accordingly.")
+                        .font(.dsCaption())
+                        .foregroundColor(DesignSystem.textSecondary)
+                        .accessibilityLabel("\(selected.label) selected")
+                }
+
+                Button {
+                    guard let selected else { return }
+                    onSubmit(selected)
+                    dismiss()
+                } label: {
+                    Text("Save sleep")
+                        .font(.dsCaption(weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: DesignSystem.minTouchTarget)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(LookAfterChrome.accentTint)
+                .disabled(selected == nil)
+                .opacity(selected == nil ? 0.45 : 1)
+
+                Spacer(minLength: 0)
             }
+            .padding(DesignSystem.spacingLG)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(DesignSystem.backgroundPrimary.ignoresSafeArea())
             .navigationTitle("How did you sleep?")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -71,6 +74,8 @@ struct ManualSleepSheet: View {
                 }
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .accessibilityIdentifier("screen-manual-sleep")
         .interactiveDismissDisabled()
     }
@@ -82,24 +87,29 @@ struct ManualSleepSheet: View {
             HapticManager.impact(.light)
         } label: {
             VStack(spacing: 6) {
-                Text(rating.emoji)
-                    .font(.system(size: 28))
+                Image(systemName: rating.systemImage)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(isSelected ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
+                    .frame(height: 28)
                 Text(rating.label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(isSelected ? DesignSystem.accentPrimary : DesignSystem.textMuted)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(isSelected ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, DesignSystem.spacingSM)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                    .fill(isSelected ? DesignSystem.accentPrimary.opacity(0.15) : DesignSystem.backgroundElevated)
+                    .fill(isSelected ? DesignSystem.accentPrimary.opacity(0.15) : DesignSystem.contentSurfaceSubtle)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                    .stroke(isSelected ? DesignSystem.accentPrimary : Color.clear, lineWidth: 1.5)
+                    .stroke(isSelected ? DesignSystem.accentPrimary : DesignSystem.border, lineWidth: isSelected ? 1.5 : 1)
             )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(rating.label) sleep")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

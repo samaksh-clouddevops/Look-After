@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Scroll tracking
 
 public struct ScrollOffsetKey: PreferenceKey {
-    public static var defaultValue: CGFloat = 0
+    public static let defaultValue: CGFloat = 0
     public static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
@@ -66,22 +66,15 @@ public struct ImmersivePrimaryCTA: View {
 
     public var body: some View {
         Button(action: action) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(DesignSystem.accentPrimary.opacity(0.15))
-                    .blur(radius: 20)
-                    .padding(-8)
-
-                Text(title)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(DesignSystem.backgroundPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 64)
-                    .background(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .fill(DesignSystem.accentPrimary)
-                    )
-            }
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(DesignSystem.accentOnPrimary)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: DesignSystem.minTouchTarget)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusButton, style: .continuous)
+                        .fill(DesignSystem.accentPrimary)
+                )
         }
         .buttonStyle(PremiumPressStyle())
     }
@@ -153,7 +146,7 @@ public struct VisualMemoryCanvas: View {
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                .stroke(DesignSystem.border, lineWidth: 1)
         )
     }
 

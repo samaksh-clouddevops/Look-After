@@ -22,12 +22,18 @@ public enum PostCompletionAgent {
         now: Date = Date()
     ) -> [ProactiveAction] {
         guard completedTodayCount >= 3, completedTodayCount % 3 == 0, let nextTask else { return [] }
+        let duration = TaskDurationPolicy.microStartDurationPhrase(for: nextTask)
+        let session = TaskDurationPolicy.microStartSessionMinutes(for: nextTask)
         return [
             ProactiveAction(
                 kind: .postCompletionMomentum,
                 severity: .medium,
-                message: "Nice streak — 5 min on \"\(nextTask.title)\" while you're rolling?",
-                options: ["Start 5-min", "Pick another", "Not now"],
+                message: "Nice streak — \(duration) on \"\(nextTask.title)\" while you're rolling?",
+                options: [
+                    TaskDurationPolicy.microStartShortOptionLabel(minutes: session),
+                    "Pick another",
+                    "Not now"
+                ],
                 surface: .notification,
                 relatedTaskIDs: [nextTask.id],
                 expiresAt: now.addingTimeInterval(20 * 60)
@@ -52,12 +58,17 @@ public enum StallAgent {
         if completedTodayCount > 0, let lastCompletionAt, now.timeIntervalSince(lastCompletionAt) < 2 * 3600 {
             return []
         }
+        let minutes = TaskDurationPolicy.softDefaultMinutes
         return [
             ProactiveAction(
                 kind: .initiationBridge,
                 severity: .high,
-                message: "You've opened the app a few times — want a 2-min micro-start?",
-                options: ["Start 2-min", "Defer one thing", "Not now"],
+                message: "You've opened the app a few times — want a \(minutes)-min micro-start?",
+                options: [
+                    TaskDurationPolicy.microStartShortOptionLabel(minutes: minutes),
+                    "Defer one thing",
+                    "Not now"
+                ],
                 surface: .banner
             )
         ]

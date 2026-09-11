@@ -1,11 +1,10 @@
 import AppIntents
 import LookAfterCore
 
-@available(iOS 17.0, *)
 struct WhatsNextIntent: AppIntent {
-    static var title: LocalizedStringResource = "What's Next"
-    static var description = IntentDescription("Speaks your orchestrated next step from Look After.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "What's Next"
+    static let description = IntentDescription("Speaks your orchestrated next step from Look After.")
+    static let openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let message = await LookAfterIntentBridge.shared.whatsNextBriefing(refreshLive: true)
@@ -13,11 +12,10 @@ struct WhatsNextIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct OverwhelmedIntent: AppIntent {
-    static var title: LocalizedStringResource = "I'm Overwhelmed"
-    static var description = IntentDescription("Opens anchor mode with one small task suggestion.")
-    static var openAppWhenRun: Bool = true
+    static let title: LocalizedStringResource = "I'm Overwhelmed"
+    static let description = IntentDescription("Opens anchor mode with one small task suggestion.")
+    static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let message = await LookAfterIntentBridge.shared.enqueueOrPerform(.overwhelmed)
@@ -25,11 +23,10 @@ struct OverwhelmedIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct CaptureShortcutIntent: AppIntent {
-    static var title: LocalizedStringResource = "Capture Thought"
-    static var description = IntentDescription("Capture a task, note, or event through Look After routing.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "Capture Thought"
+    static let description = IntentDescription("Capture a task, note, or event through Look After routing.")
+    static let openAppWhenRun: Bool = false
 
     @Parameter(title: "Text")
     var text: String
@@ -50,11 +47,10 @@ struct CaptureShortcutIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct DeferHeroIntent: AppIntent {
-    static var title: LocalizedStringResource = "Not Today"
-    static var description = IntentDescription("Defers your current hero task and refreshes your plan.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "Not Today"
+    static let description = IntentDescription("Defers your current hero task and refreshes your plan.")
+    static let openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let message = await LookAfterIntentBridge.shared.enqueueOrPerform(.deferHero)
@@ -62,11 +58,10 @@ struct DeferHeroIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct TakeBreakIntent: AppIntent {
-    static var title: LocalizedStringResource = "I Need a Break"
-    static var description = IntentDescription("Pauses an active focus session or suggests rest.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "I Need a Break"
+    static let description = IntentDescription("Pauses an active focus session or suggests rest.")
+    static let openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let message = await LookAfterIntentBridge.shared.enqueueOrPerform(.takeBreak)
@@ -74,11 +69,10 @@ struct TakeBreakIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct PauseFocusIntent: AppIntent {
-    static var title: LocalizedStringResource = "Pause Focus"
-    static var description = IntentDescription("Pauses the active focus timer.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "Pause Focus"
+    static let description = IntentDescription("Pauses the active focus timer.")
+    static let openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult {
         _ = await LookAfterIntentBridge.shared.enqueueOrPerform(.pauseFocus)
@@ -86,11 +80,10 @@ struct PauseFocusIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct CompleteFocusIntent: AppIntent {
-    static var title: LocalizedStringResource = "Complete Focus"
-    static var description = IntentDescription("Ends the active focus session.")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "Complete Focus"
+    static let description = IntentDescription("Ends the active focus session.")
+    static let openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult {
         _ = await LookAfterIntentBridge.shared.enqueueOrPerform(.completeFocus)
@@ -98,11 +91,10 @@ struct CompleteFocusIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
 struct StartHeroTaskIntent: AppIntent {
-    static var title: LocalizedStringResource = "Start Next Task"
-    static var description = IntentDescription("Starts focus on your hero task.")
-    static var openAppWhenRun: Bool = true
+    static let title: LocalizedStringResource = "Start Next Task"
+    static let description = IntentDescription("Starts focus on your hero task.")
+    static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
         _ = await LookAfterIntentBridge.shared.enqueueOrPerform(.startHeroTask)
@@ -110,7 +102,17 @@ struct StartHeroTaskIntent: AppIntent {
     }
 }
 
-@available(iOS 17.0, *)
+struct OpenCaptureIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Capture"
+    static let description = IntentDescription("Opens Look After Capture.")
+    static let openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let message = await LookAfterIntentBridge.shared.enqueueOrPerform(.openCapture)
+        return .result(dialog: IntentDialog(stringLiteral: message))
+    }
+}
+
 struct LookAfterAppShortcuts: AppShortcutsProvider {
     @AppShortcutsBuilder
     static var appShortcuts: [AppShortcut] {
@@ -141,6 +143,15 @@ struct LookAfterAppShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Capture",
             systemImageName: "mic.circle"
+        )
+        AppShortcut(
+            intent: OpenCaptureIntent(),
+            phrases: [
+                "Open capture in \(.applicationName)",
+                "\(.applicationName) open capture"
+            ],
+            shortTitle: "Open Capture",
+            systemImageName: "plus.circle"
         )
         AppShortcut(
             intent: DeferHeroIntent(),

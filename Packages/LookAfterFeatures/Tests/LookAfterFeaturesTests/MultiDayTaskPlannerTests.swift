@@ -4,6 +4,7 @@ import XCTest
 
 final class MultiDayTaskPlannerTests: XCTestCase {
 
+    @MainActor
     func testPlanCreatesParentAndSlices() {
         let draft = MultiDayPlanDraft(
             title: "Finish quarterly report",
@@ -29,6 +30,7 @@ final class MultiDayTaskPlannerTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testOfflinePlanClampsDayCount() {
         let plan = MultiDayTaskPlanner.plan(
             title: "Big goal",
@@ -39,6 +41,7 @@ final class MultiDayTaskPlannerTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(plan.slices.count, 2)
     }
 
+    @MainActor
     func testCreativePlanCreatesProject() {
         let draft = MultiDayPlanDraft(
             title: "Album prep",

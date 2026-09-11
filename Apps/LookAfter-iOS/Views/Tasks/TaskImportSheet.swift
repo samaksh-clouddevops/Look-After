@@ -206,12 +206,11 @@ struct TaskImportSheet: View {
                         .font(.system(size: 15, weight: .bold, design: .default))
                     Spacer()
                 }
-                .foregroundColor(.white)
                 .padding(.vertical, 14)
-                .background(Capsule().fill(DesignSystem.accentGradient))
             }
+            .buttonStyle(.glassProminent)
+            .tint(LookAfterChrome.accentTint)
             .disabled(selectedCount == 0)
-            .buttonStyle(.plain)
         }
         .padding()
         .elevatedSurface()

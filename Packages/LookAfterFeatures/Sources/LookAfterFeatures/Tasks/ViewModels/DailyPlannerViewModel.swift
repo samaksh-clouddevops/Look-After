@@ -422,11 +422,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         let windows = schedulingWindows()
         let requests = ids.compactMap { id -> DaySlotAllocator.Request? in
             guard let task = taskByID[id], task.isSchedulerMovable else { return nil }
-            return DaySlotAllocator.Request(
-                id: id,
-                estimatedMinutes: task.estimatedMinutes,
-                priority: task.priority
-            )
+            return DaySlotAllocator.Request.makingSense(of: task, on: planningDay, calendar: calendar)
         }
         let occupied = todayTasks.filter {
             guard let scheduledDate = $0.scheduledDate, $0.scheduledTime != nil else { return false }

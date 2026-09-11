@@ -19,15 +19,17 @@ struct LicenseRedeemView: View {
                     Text("Enter the product key you received with Look After. It unlocks AI without putting API keys on your device.")
                         .font(.system(size: 13))
                         .foregroundColor(DesignSystem.textSecondary)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
                 }
 
                 Section("Product key") {
                     TextField("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", text: $productKey)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
+                        #endif
                         .autocorrectionDisabled()
                         .font(.system(size: 14, design: .monospaced))
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
 
                     Button {
                         Task { await redeem() }
@@ -40,14 +42,14 @@ struct LicenseRedeemView: View {
                         }
                     }
                     .disabled(license.isBusy || productKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
                 }
 
                 if license.isLicensed {
                     Section {
                         Label("License active", systemImage: "checkmark.seal.fill")
                             .foregroundColor(DesignSystem.success)
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.contentSurface)
                     }
                 }
 
@@ -56,7 +58,7 @@ struct LicenseRedeemView: View {
                         Text(message)
                             .font(.system(size: 13))
                             .foregroundColor(DesignSystem.warning)
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.contentSurface)
                     }
                 }
 
@@ -65,7 +67,7 @@ struct LicenseRedeemView: View {
                         onFinished?()
                         dismiss()
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
                 } footer: {
                     Text("You can activate later in Settings. Without a license, AI needs a personal GLM key or runs in deterministic mode.")
                         .font(.system(size: 11))
@@ -111,7 +113,7 @@ struct LicenseSettingsView: View {
                         Text(license.isLicensed ? "Active" : "Not activated")
                             .foregroundColor(license.isLicensed ? DesignSystem.success : DesignSystem.textSecondary)
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(DesignSystem.contentSurface)
 
                     if let redeemedAt = license.redeemedAt {
                         HStack {
@@ -121,7 +123,7 @@ struct LicenseSettingsView: View {
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(DesignSystem.textSecondary)
                         }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
                     }
                 }
 
@@ -130,20 +132,20 @@ struct LicenseSettingsView: View {
                         Text("Auth proxy URL is not configured. Set AuthProxyBaseURL in Info.plist after deploying Azure.")
                             .font(.system(size: 13))
                             .foregroundColor(DesignSystem.textSecondary)
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.contentSurface)
                     }
                 } else {
                     Section {
                         NavigationLink("Enter product key") {
                             LicenseRedeemView()
                         }
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
 
                         Button("Refresh status") {
                             Task { await license.refreshStatus() }
                         }
                         .disabled(license.isBusy)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(DesignSystem.contentSurface)
                     }
                 }
 
@@ -152,7 +154,7 @@ struct LicenseSettingsView: View {
                         Text(err)
                             .font(.system(size: 12))
                             .foregroundColor(DesignSystem.warning)
-                            .listRowBackground(Color.white.opacity(0.05))
+                            .listRowBackground(DesignSystem.contentSurface)
                     }
                 }
             }

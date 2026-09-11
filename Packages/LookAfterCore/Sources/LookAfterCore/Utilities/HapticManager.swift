@@ -17,17 +17,9 @@ public struct HapticManager {
         case .heavy:
             generator = UIImpactFeedbackGenerator(style: .heavy)
         case .soft:
-            if #available(iOS 13.0, *) {
-                generator = UIImpactFeedbackGenerator(style: .soft)
-            } else {
-                generator = UIImpactFeedbackGenerator(style: .light)
-            }
+            generator = UIImpactFeedbackGenerator(style: .soft)
         case .rigid:
-            if #available(iOS 13.0, *) {
-                generator = UIImpactFeedbackGenerator(style: .rigid)
-            } else {
-                generator = UIImpactFeedbackGenerator(style: .heavy)
-            }
+            generator = UIImpactFeedbackGenerator(style: .rigid)
         }
         generator.prepare()
         generator.impactOccurred()

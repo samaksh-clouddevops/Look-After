@@ -157,8 +157,9 @@ struct ContinueSessionView: View {
         guard controller.phase == .restoring else { return }
         restoreProgress = 0
         let seconds = max(0.5, Double(controller.context?.restartTaxSeconds ?? 1))
-        withAnimation(.easeInOut(duration: seconds)) { restoreProgress = 1 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+        withAnimation(.easeInOut(duration: seconds), completionCriteria: .logicallyComplete) {
+            restoreProgress = 1
+        } completion: {
             guard controller.phase == .restoring else { return }
             withAnimation(.easeOut(duration: 0.35)) {
                 controller.finishRestoring()

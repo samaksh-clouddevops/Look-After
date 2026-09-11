@@ -20,7 +20,7 @@ public final class SpeechRecognitionManager: ObservableObject {
     /// Called once per utterance with the final transcript (auto-commit or manual stop).
     public var onUtteranceComplete: ((String) -> Void)?
     
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private let speechRecognizer: SFSpeechRecognizer?
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -30,7 +30,14 @@ public final class SpeechRecognitionManager: ObservableObject {
     private var hasReceivedSpeech = false
     private var utteranceCommitted = false
     
-    public init() {}
+    public init() {
+        let preferred = Locale.preferredLanguages.first.flatMap { Locale(identifier: $0) } ?? Locale.current
+        if let recognizer = SFSpeechRecognizer(locale: preferred), recognizer.isAvailable {
+            speechRecognizer = recognizer
+        } else {
+            speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        }
+    }
     
     /// Request microphone and speech recognition permissions.
     public func requestPermissions() async -> Bool {
@@ -47,16 +54,7 @@ public final class SpeechRecognitionManager: ObservableObject {
         }
         
         #if os(iOS)
-        let micGranted: Bool
-        if #available(iOS 17.0, *) {
-            micGranted = await AVAudioApplication.requestRecordPermission()
-        } else {
-            micGranted = await withCheckedContinuation { continuation in
-                AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                    continuation.resume(returning: granted)
-                }
-            }
-        }
+        let micGranted = await AVAudioApplication.requestRecordPermission()
         guard micGranted else {
             permissionDenied = true
             errorMessage = "Microphone permission was denied."
@@ -104,6 +102,8 @@ public final class SpeechRecognitionManager: ObservableObject {
             recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
             guard let recognitionRequest else { return }
             recognitionRequest.shouldReportPartialResults = true
+            // Capture locally so the audio tap never touches MainActor-isolated state.
+            let requestForTap = recognitionRequest
             
             let inputNode = audioEngine.inputNode
             let recordingFormat = inputNode.outputFormat(forBus: 0)
@@ -117,7 +117,7 @@ public final class SpeechRecognitionManager: ObservableObject {
             inputNode.removeTap(onBus: 0)
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
                 guard buffer.frameLength > 0 else { return }
-                self?.recognitionRequest?.append(buffer)
+                requestForTap.append(buffer)
 
                 guard let channelData = buffer.floatChannelData?[0] else { return }
                 let frameLength = Int(buffer.frameLength)

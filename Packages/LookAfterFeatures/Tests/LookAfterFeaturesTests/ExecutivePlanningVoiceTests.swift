@@ -4,8 +4,8 @@ import XCTest
 import LookAfterCore
 import LookAfterData
 
-@MainActor
 final class ExecutivePlanningVoiceTests: XCTestCase {
+    @MainActor
     func testOnSpeakReplyOnlyWhenVoiceMode() async {
         let glm = failingGLMService()
         let engine = LLMPlanningEngine(glmService: glm)
@@ -53,6 +53,7 @@ final class ExecutivePlanningVoiceTests: XCTestCase {
         XCTAssertEqual(planningVM.inputMode, .voice)
     }
 
+    @MainActor
     func testSeedProactiveSuggestionsOnlyRunsOnce() {
         let planningVM = ExecutivePlanningViewModel()
         planningVM.seedProactiveSuggestionsIfNeeded(tasks: [])
@@ -62,6 +63,7 @@ final class ExecutivePlanningVoiceTests: XCTestCase {
     }
 }
 
+@MainActor
 private func failingGLMService() -> GLMService {
     let glm = GLMService.makeForTesting(keyManager: GLMKeyManager(
         secretStore: InMemorySecretStore(),

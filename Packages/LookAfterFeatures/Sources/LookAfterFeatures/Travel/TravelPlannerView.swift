@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import LookAfterCore
+import LookAfterData
 
 // MARK: - ViewModel
 
@@ -12,6 +13,8 @@ public final class TravelViewModel: ObservableObject {
     
     private let persistenceKey = "lifeos_travel_trips"
     private let packingKey = "lifeos_travel_packing"
+    private let tripsFilename = "travel_trips"
+    private let packingFilename = "travel_packing"
     
     public init() {
         loadFromDisk()
@@ -55,15 +58,20 @@ public final class TravelViewModel: ObservableObject {
     }
     
     private func saveToDisk() {
-        if let data = try? JSONEncoder().encode(trips) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
-        }
-        if let data = try? JSONEncoder().encode(packingList) {
-            UserDefaults.standard.set(data, forKey: packingKey)
-        }
+        LocalPersistenceManager.shared.save(trips, filename: tripsFilename)
+        LocalPersistenceManager.shared.save(packingList, filename: packingFilename)
+        UserDefaults.standard.removeObject(forKey: persistenceKey)
+        UserDefaults.standard.removeObject(forKey: packingKey)
     }
     
     private func loadFromDisk() {
+        let fileTrips: [TravelTrip] = LocalPersistenceManager.shared.load([TravelTrip].self, filename: tripsFilename)
+        let filePacking: [PackingItem] = LocalPersistenceManager.shared.load([PackingItem].self, filename: packingFilename)
+        if !fileTrips.isEmpty || !filePacking.isEmpty {
+            trips = fileTrips
+            packingList = filePacking
+            return
+        }
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
            let saved = try? JSONDecoder().decode([TravelTrip].self, from: data) {
             trips = saved
@@ -71,6 +79,9 @@ public final class TravelViewModel: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: packingKey),
            let saved = try? JSONDecoder().decode([PackingItem].self, from: data) {
             packingList = saved
+        }
+        if !trips.isEmpty || !packingList.isEmpty {
+            saveToDisk()
         }
     }
 }
@@ -162,7 +173,7 @@ public struct TravelPlannerView: View {
                                                 .font(.system(size: 12, weight: .bold, design: .default))
                                                 .padding(.horizontal, 8)
                                                 .padding(.vertical, 4)
-                                                .background(Color.white.opacity(0.1))
+                                                .background(DesignSystem.contentSurfaceElevated)
                                                 .cornerRadius(6)
                                                 .foregroundColor(DesignSystem.textSecondary)
                                         }
@@ -172,7 +183,7 @@ public struct TravelPlannerView: View {
                                             .foregroundColor(DesignSystem.textMuted)
                                     }
                                     .padding()
-                                    .background(Color.white.opacity(0.05))
+                                    .background(DesignSystem.contentSurface)
                                     .cornerRadius(16)
                                     .padding(.horizontal)
                                     .contextMenu {
@@ -197,7 +208,7 @@ public struct TravelPlannerView: View {
                                     .font(.system(size: 15, design: .default))
                                     .foregroundColor(DesignSystem.textPrimary)
                                     .padding(12)
-                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceSubtle))
                                 
                                 Button(action: {
                                     guard !newItemName.isEmpty else { return }
@@ -255,7 +266,7 @@ public struct TravelPlannerView: View {
                                         .accessibilityLabel("Remove item")
                                     }
                                     .padding()
-                                    .background(Color.white.opacity(0.05))
+                                    .background(DesignSystem.contentSurface)
                                     .cornerRadius(12)
                                     .padding(.horizontal)
                                     .contextMenu {

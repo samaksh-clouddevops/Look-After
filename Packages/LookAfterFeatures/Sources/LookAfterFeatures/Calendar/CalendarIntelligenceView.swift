@@ -39,20 +39,7 @@ public final class CalendarViewModel: ObservableObject {
         syncMessage = nil
         
         do {
-            let granted: Bool
-            if #available(iOS 17.0, *) {
-                granted = try await eventStore.requestFullAccessToEvents()
-            } else {
-                granted = try await withCheckedThrowingContinuation { continuation in
-                    eventStore.requestAccess(to: .event) { accessGranted, error in
-                        if let error = error {
-                            continuation.resume(throwing: error)
-                        } else {
-                            continuation.resume(returning: accessGranted)
-                        }
-                    }
-                }
-            }
+            let granted = try await eventStore.requestFullAccessToEvents()
             
             if granted {
                 let startDate = Calendar.current.startOfDay(for: Date())
@@ -138,8 +125,8 @@ public struct CalendarIntelligenceView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(DesignSystem.textMuted)
                             .padding(10)
-                            .background(Circle().fill(Color.white.opacity(0.08)))
                     }
+                    .buttonStyle(.glass)
                     .disabled(viewModel.isSyncingWithAppleCalendar)
                     
                     // Add Manual Event

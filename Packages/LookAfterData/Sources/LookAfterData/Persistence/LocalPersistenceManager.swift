@@ -4,7 +4,7 @@ import LookAfterCore
 /// Manages on-device JSON persistence for all LifeOS modules as a fallback when Firebase is offline or unauthenticated.
 /// Performance optimized: Encode + disk write happen on a serial background queue so the main thread stays free.
 /// Loads use a barrier so they never race with pending writes for the same file.
-public final class LocalPersistenceManager {
+public final class LocalPersistenceManager: @unchecked Sendable {
 
     public static let shared = LocalPersistenceManager()
     private let fileManager = FileManager.default
@@ -27,7 +27,11 @@ public final class LocalPersistenceManager {
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .secondsSince1970
                 let data = try encoder.encode(items)
-                try data.write(to: url, options: .atomic)
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                try? FileManager.default.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: url.path
+                )
             } catch {
                 print("[LocalPersistenceManager] Error saving \(filename): \(error)")
             }
@@ -43,7 +47,11 @@ public final class LocalPersistenceManager {
                     let encoder = JSONEncoder()
                     encoder.dateEncodingStrategy = .secondsSince1970
                     let data = try encoder.encode(items)
-                    try data.write(to: url, options: .atomic)
+                    try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                    try? FileManager.default.setAttributes(
+                        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                        ofItemAtPath: url.path
+                    )
                 } catch {
                     print("[LocalPersistenceManager] Error saving \(filename): \(error)")
                 }

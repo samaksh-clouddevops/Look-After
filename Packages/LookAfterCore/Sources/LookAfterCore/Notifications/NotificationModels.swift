@@ -213,6 +213,8 @@ public struct NotificationRefreshInput: Sendable {
     public var focusSessionToken: String?
     public var userDisplayName: String
     public var proactiveActions: [ProactiveAction]
+    /// One lean supervisor line (fault or pull) — replaces generic morning body when set.
+    public var dayAuditLeanBody: String?
 
     public init(
         now: Date = Date(),
@@ -226,7 +228,8 @@ public struct NotificationRefreshInput: Sendable {
         focusBreakFireDate: Date? = nil,
         focusSessionToken: String? = nil,
         userDisplayName: String = "",
-        proactiveActions: [ProactiveAction] = []
+        proactiveActions: [ProactiveAction] = [],
+        dayAuditLeanBody: String? = nil
     ) {
         self.now = now
         self.medications = medications
@@ -240,5 +243,6 @@ public struct NotificationRefreshInput: Sendable {
         self.focusSessionToken = focusSessionToken
         self.userDisplayName = userDisplayName
         self.proactiveActions = proactiveActions
+        self.dayAuditLeanBody = dayAuditLeanBody
     }
 }

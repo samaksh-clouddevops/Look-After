@@ -5,9 +5,19 @@ public enum TaskScheduleQuery {
 
     // MARK: - Series identity
 
-    /// Recurrence series keyed by normalized title so duplicate templates collapse to one row.
+    /// Series identity: prefer template / parent id; title key only as fallback (A5).
     public static func seriesKey(for task: LifeTask) -> String {
+        if let parent = task.parentTaskId, !parent.isEmpty {
+            return "series|\(parent)"
+        }
+        if TaskRecurrenceEngine.isRecurrenceTemplate(task) {
+            return "series|\(task.id)"
+        }
         if usesTitleBasedRecurrenceKey(for: task) {
+            #if DEBUG
+            // Collision risk when two distinct routines share a normalized title.
+            print("[TaskScheduleQuery] title-based seriesKey for \"\(task.title)\" id=\(task.id)")
+            #endif
             return "recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(task.title))"
         }
         return TaskReaper.collisionKey(for: task)

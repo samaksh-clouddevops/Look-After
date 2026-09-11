@@ -95,7 +95,7 @@ struct LifeBlockView<Content: View>: View {
 
     private var accessibilityHintText: String {
         if constraint.isSchedulerMovable {
-            return "Press and hold, then drag up or down to change the start time."
+            return "Activate Pick up to reschedule, then drag up or down. New start time announces when you drop."
         }
         return "Press and hold for a rubber-band preview. This task is anchored."
     }
@@ -233,12 +233,23 @@ struct LifeBlockView<Content: View>: View {
                 verticalOffset: verticalOffset
             )
             viewModel.handle(.commitVerticalDrag(taskID: taskID, proposedStart: proposed))
+            announceScheduleCommit(proposed)
         } else {
             let minutes = TimelineDragTimeMapping.offsetMinutes(from: verticalOffset)
             if minutes != 0 {
                 viewModel.handle(.commitVerticalOffset(taskID: taskID, offsetMinutes: minutes))
+                let formatter = DateFormatter()
+                formatter.dateFormat = "h:mm a"
+                let label = minutes > 0 ? "Moved later by \(minutes) minutes" : "Moved earlier by \(-minutes) minutes"
+                AccessibilityNotification.Announcement(label).post()
             }
         }
+    }
+
+    private func announceScheduleCommit(_ proposed: Date) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        AccessibilityNotification.Announcement("Start time set to \(formatter.string(from: proposed))").post()
     }
 
     private func pickUpForAccessibility() {

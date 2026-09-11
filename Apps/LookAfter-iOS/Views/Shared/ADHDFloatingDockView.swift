@@ -3,6 +3,7 @@ import LookAfterCore
 
 /// ADHD Quick-Dock pinned at the bottom of the Master Canvas for zero-friction emergency assistance.
 public struct ADHDFloatingDockView: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var onDecideForMe: () -> Void
     var onVoiceCapture: () -> Void
@@ -19,35 +20,57 @@ public struct ADHDFloatingDockView: View {
     }
 
     public var body: some View {
-        HStack(spacing: DesignSystem.spacingSM) {
-            PremiumCompactButton("Decide", icon: "bolt.shield.fill", role: .secondary) {
-                HapticManager.impact(.heavy)
-                onDecideForMe()
-            }
+        GlassEffectContainer(spacing: DesignSystem.spacingSM) {
+            HStack(spacing: DesignSystem.spacingSM) {
+                PremiumCompactButton("Decide", icon: "bolt.shield.fill", role: .secondary) {
+                    HapticManager.impact(.heavy)
+                    onDecideForMe()
+                }
 
-            PremiumCompactButton("Voice", icon: "mic.fill", role: .primary) {
-                HapticManager.impact(.medium)
-                onVoiceCapture()
-            }
+                Button {
+                    HapticManager.impact(.medium)
+                    onVoiceCapture()
+                } label: {
+                    Label("Voice", systemImage: "mic.fill")
+                        .font(.dsCaption(weight: .semibold))
+                        .padding(.horizontal, DesignSystem.spacingSM)
+                        .frame(minHeight: DesignSystem.minTouchTarget)
+                }
+                .buttonStyle(.glassProminent)
+                .tint(LookAfterChrome.accentTint)
 
-            PremiumCompactButton("Reset", icon: "heart.flow.fill", role: .tertiary) {
-                HapticManager.impact(.soft)
-                onResetMode()
+                PremiumCompactButton("Reset", icon: "heart.flow.fill", role: .tertiary) {
+                    HapticManager.impact(.soft)
+                    onResetMode()
+                }
             }
+            .padding(.horizontal, DesignSystem.spacingMD)
+            .padding(.vertical, DesignSystem.spacingSM)
+            .modifier(ADHDDockChrome(reduceTransparency: reduceTransparency))
         }
-        .padding(.horizontal, DesignSystem.spacingMD)
-        .padding(.vertical, DesignSystem.spacingSM)
-        .background(
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .background(Capsule(style: .continuous).fill(DesignSystem.backgroundElevated.opacity(0.92)))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.04), lineWidth: 1)
-        )
-        .shadow(color: DesignSystem.shadowElevated.opacity(0.5), radius: 12, x: 0, y: 6)
         .padding(.horizontal, DesignSystem.screenHorizontal)
         .accessibilityIdentifier("screen-adhd-dock")
+    }
+}
+
+private struct ADHDDockChrome: ViewModifier {
+    let reduceTransparency: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(DesignSystem.contentSurfaceElevated)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(DesignSystem.border, lineWidth: 1)
+                )
+        } else {
+            content
+                .glassEffect(.regular, in: .capsule)
+        }
     }
 }

@@ -126,6 +126,42 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
         self.sortPriority = sortPriority
         self.scheduleKind = scheduleKind
     }
+
+    public func withCompletion(_ isCompleted: Bool, at completedAt: Date? = Date()) -> LifeTimelineEvent {
+        LifeTimelineEvent(
+            id: id,
+            kind: kind,
+            title: title,
+            subtitle: subtitle,
+            detailLines: detailLines,
+            date: date,
+            estimatedMinutes: estimatedMinutes,
+            isCompleted: isCompleted,
+            isFixed: isFixed,
+            timeConstraint: timeConstraint,
+            completedAt: isCompleted ? completedAt : nil,
+            sortPriority: sortPriority,
+            scheduleKind: scheduleKind
+        )
+    }
+
+    public func withDate(_ date: Date) -> LifeTimelineEvent {
+        LifeTimelineEvent(
+            id: id,
+            kind: kind,
+            title: title,
+            subtitle: subtitle,
+            detailLines: detailLines,
+            date: date,
+            estimatedMinutes: estimatedMinutes,
+            isCompleted: isCompleted,
+            isFixed: isFixed,
+            timeConstraint: timeConstraint,
+            completedAt: completedAt,
+            sortPriority: sortPriority,
+            scheduleKind: scheduleKind
+        )
+    }
 }
 
 /// Builds a life-oriented timeline — groups shopping/finance, formats medications, hides block jargon.
@@ -201,7 +237,8 @@ public enum LifeTimelinePresenter {
                 kind: .bill,
                 title: humanBillTitle(bill.title),
                 subtitle: bill.isOverdue ? "Overdue" : "Due today",
-                date: bill.dueDate
+                date: dayAnchor,
+                scheduleKind: .flexibleDay
             ))
         }
 
@@ -214,17 +251,25 @@ public enum LifeTimelinePresenter {
                 kind: .relationship,
                 title: "\(contact.name)'s birthday",
                 subtitle: "Reach out today",
-                date: next
+                date: dayAnchor,
+                scheduleKind: .flexibleDay
             ))
         }
 
         for event in calendarEvents where calendar.isDate(event.startDate, inSameDayAs: dayAnchor) {
+            let minutes: Int?
+            if let end = event.endDate {
+                minutes = max(15, Int(end.timeIntervalSince(event.startDate) / 60))
+            } else {
+                minutes = 30
+            }
             events.append(LifeTimelineEvent(
                 id: "cal-\(event.id)",
                 kind: .meeting,
                 title: UserFacingCopy.sanitize(event.title).isEmpty ? event.title : UserFacingCopy.sanitize(event.title),
                 subtitle: event.timeLabel,
                 date: event.startDate,
+                estimatedMinutes: minutes,
                 isFixed: true
             ))
         }
@@ -254,7 +299,7 @@ public enum LifeTimelinePresenter {
         }
 
         let filtered = events
-            .filter { calendar.isDate($0.date, inSameDayAs: dayAnchor) || $0.date >= dayAnchor }
+            .filter { calendar.isDate($0.date, inSameDayAs: dayAnchor) }
         return TimelineDisplaySort.sorted(filtered, now: now, calendar: calendar)
     }
 
@@ -477,20 +522,21 @@ public enum LifeTimelinePresenter {
         calendar: Calendar
     ) -> LifeTimelineEvent {
         let names = items.map(\.name).sorted()
-        let when: Date
         if let task = scheduledTask,
            let day = task.scheduledDate.map({ calendar.startOfDay(for: $0) }),
            let time = task.scheduledTime,
-           let combined = calendar.combine(date: day, timeFrom: time) {
-            when = combined
-        } else if let task = scheduledTask, let date = task.scheduledDate {
-            let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
-            let slot = PlanningSchedulePolicy.nextAvailableSlot(workHours: workHours)
-                ?? (workHours.startHour, 0)
-            when = calendar.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: date) ?? date
-        } else {
-            let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
-            when = PlanningSchedulePolicy.schedulingCursor(workHours: workHours)
+           let combined = calendar.combine(date: day, timeFrom: time),
+           TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: day, calendar: calendar) {
+            let minutes = task.estimatedMinutes
+            return LifeTimelineEvent(
+                id: "shopping-trip",
+                kind: .shopping,
+                title: "Stop at the grocery store",
+                subtitle: "About \(minutes) minutes",
+                detailLines: names,
+                date: combined,
+                estimatedMinutes: minutes
+            )
         }
         let minutes = scheduledTask?.estimatedMinutes ?? min(45, 15 + names.count * 3)
         return LifeTimelineEvent(
@@ -499,8 +545,9 @@ public enum LifeTimelinePresenter {
             title: "Stop at the grocery store",
             subtitle: "About \(minutes) minutes",
             detailLines: names,
-            date: when,
-            estimatedMinutes: minutes
+            date: calendar.startOfDay(for: now),
+            estimatedMinutes: minutes,
+            scheduleKind: .flexibleDay
         )
     }
 
@@ -511,11 +558,13 @@ public enum LifeTimelinePresenter {
             let headline = HumanLanguage.outcomeHeadline(task: task)
             return UserFacingCopy.isInternalExecutionLabel(headline) ? task.title : headline
         }
-        let earliest = tasks.compactMap { $0.scheduledTime ?? $0.scheduledDate }.min() ?? now
-        let when = earliest < now
-            ? (calendar.date(bySettingHour: calendar.component(.hour, from: now) + 1, minute: 0, second: 0, of: now) ?? now)
-            : earliest
+        let earliestConcrete = tasks.compactMap { task -> Date? in
+            guard let day = task.scheduledDate, let time = task.scheduledTime else { return nil }
+            return calendar.combine(date: calendar.startOfDay(for: day), timeFrom: time)
+        }.min()
+        let when = earliestConcrete ?? calendar.startOfDay(for: now)
         let minutes = tasks.reduce(0) { $0 + max($1.estimatedMinutes, TaskDurationPolicy.minimumMinutes) }
+        let hasClock = earliestConcrete != nil
         return LifeTimelineEvent(
             id: "finance-session",
             kind: .finance,
@@ -523,7 +572,8 @@ public enum LifeTimelinePresenter {
             subtitle: "About \(minutes) minutes",
             detailLines: lines,
             date: when,
-            estimatedMinutes: minutes
+            estimatedMinutes: minutes,
+            scheduleKind: hasClock ? .fixedWindow : .flexibleDay
         )
     }
 

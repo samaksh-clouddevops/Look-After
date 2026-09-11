@@ -4,6 +4,7 @@ import LookAfterCore
 
 final class LifeStateProgressResolverTests: XCTestCase {
 
+    @MainActor
     func testUsesBriefingHealthSnapshotSignals() {
         let snapshot = BriefingHealthSnapshot(
             readinessLabel: "Sharp",
@@ -27,6 +28,7 @@ final class LifeStateProgressResolverTests: XCTestCase {
         XCTAssertEqual(progress.wellbeing, 0.68, accuracy: 0.001)
     }
 
+    @MainActor
     func testWithoutOvernightSignalUsesEstimatedEnergyAndRecovery() {
         let snapshot = BriefingHealthSnapshot(
             readinessLabel: "Steady",
@@ -48,6 +50,7 @@ final class LifeStateProgressResolverTests: XCTestCase {
         XCTAssertEqual(progress.wellbeing, 0.55, accuracy: 0.001)
     }
 
+    @MainActor
     func testSleepFallbackForWellbeingWhenRecoveryUnavailable() {
         let snapshot = BriefingHealthSnapshot(
             readinessLabel: "Steady",

@@ -20,6 +20,17 @@ public enum ManualSleepRating: String, Codable, Sendable, CaseIterable, Identifi
         }
     }
 
+    /// SF Symbol for UI (prefer over emoji for consistent chrome).
+    public var systemImage: String {
+        switch self {
+        case .awful: return "cloud.bolt.fill"
+        case .poor: return "moon.zzz.fill"
+        case .fair: return "cloud.fill"
+        case .good: return "sun.max.fill"
+        case .great: return "sparkles"
+        }
+    }
+
     public var label: String {
         switch self {
         case .awful: return "Awful"

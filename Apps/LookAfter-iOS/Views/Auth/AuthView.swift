@@ -7,6 +7,7 @@ public struct AuthView: View {
     
     @ObservedObject var firebase: FirebaseManager = .shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     
     @State private var isSignUpMode: Bool = false
     @State private var fullName: String = ""
@@ -53,47 +54,58 @@ public struct AuthView: View {
                         Button(action: { performAppleSignIn() }) {
                             HStack(spacing: 10) {
                                 Image(systemName: "apple.logo")
-                                    .font(.system(size: 20))
+                                    .font(.system(size: 18))
                                 Text("Continue with Apple")
-                                    .font(.system(size: 16, weight: .semibold, design: .default))
+                                    .font(.system(size: 15, weight: .semibold, design: .default))
                             }
                             .foregroundColor(.black)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .frame(height: DesignSystem.minTouchTarget)
                             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
                         }
                         .disabled(isLoading)
                         .opacity(isLoading ? 0.5 : 1)
                         #endif
 
-                        Button(action: { performGoogleSignIn() }) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "g.circle.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.red)
-                                Text("Continue with Google")
-                                    .font(.system(size: 16, weight: .semibold, design: .default))
-                                    .foregroundColor(.white)
+                        if FirebaseManager.isMockConfiguration {
+                            Text("Google Sign-In needs a real Firebase iOS config in Config/GoogleService-Info.plist.")
+                                .font(.system(size: 13, weight: .medium, design: .default))
+                                .foregroundColor(DesignSystem.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 4)
+                        } else {
+                            Button(action: { performGoogleSignIn() }) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "g.circle.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(.white)
+                                    Text("Continue with Google")
+                                        .font(.system(size: 15, weight: .semibold, design: .default))
+                                        .foregroundColor(DesignSystem.accentOnPrimary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: DesignSystem.minTouchTarget)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(DesignSystem.accentPrimary)
+                                )
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.12)))
+                            .disabled(isLoading)
+                            .opacity(isLoading ? 0.5 : 1)
                         }
-                        .disabled(isLoading)
-                        .opacity(isLoading ? 0.5 : 1)
                     }
                     .padding(.horizontal)
                     
                     // Divider
                     HStack {
                         Rectangle()
-                            .fill(DesignSystem.borderGlass)
+                            .fill(DesignSystem.border)
                             .frame(height: 1)
                         Text("OR")
                             .font(.system(size: 12, weight: .bold, design: .default))
                             .foregroundColor(DesignSystem.textMuted)
                         Rectangle()
-                            .fill(DesignSystem.borderGlass)
+                            .fill(DesignSystem.border)
                             .frame(height: 1)
                     }
                     .padding(.horizontal)
@@ -104,7 +116,7 @@ public struct AuthView: View {
                             TextField("Full Name", text: $fullName)
                                 .textFieldStyle(.plain)
                                 .padding()
-                                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                                .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceSubtle))
                                 .foregroundColor(.white)
                         }
                         
@@ -113,13 +125,13 @@ public struct AuthView: View {
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
                             .padding()
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                            .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceSubtle))
                             .foregroundColor(.white)
                         
                         SecureField("Password", text: $passwordText)
                             .textFieldStyle(.plain)
                             .padding()
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                            .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceSubtle))
                             .foregroundColor(.white)
                         
                         if let err = errorMessage {
@@ -140,18 +152,23 @@ public struct AuthView: View {
                             HStack {
                                 if isLoading {
                                     ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.accentOnPrimary))
                                     Text("Signing in...")
-                                        .font(.system(size: 16, weight: .bold, design: .default))
+                                        .font(.system(size: 15, weight: .semibold, design: .default))
                                 } else {
                                     Text(isSignUpMode ? "Create \(UserFacingCopy.productName) Account" : "Sign In")
-                                        .font(.system(size: 16, weight: .bold, design: .default))
+                                        .font(.system(size: 15, weight: .semibold, design: .default))
                                 }
                             }
+                            .foregroundColor(DesignSystem.accentOnPrimary)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .frame(height: DesignSystem.minTouchTarget)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(DesignSystem.accentPrimary)
+                            )
                         }
-                        .buttonStyle(PremiumPrimaryButtonStyle())
+                        .buttonStyle(.plain)
                         .disabled(isLoading || emailText.trimmingCharacters(in: .whitespaces).isEmpty || passwordText.isEmpty)
                         .opacity(isLoading ? 0.7 : 1)
                         
@@ -184,7 +201,7 @@ public struct AuthView: View {
             }
             
             if isLoading {
-                Color.black.opacity(0.3)
+                LookAfterChrome.overlayScrim
                     .ignoresSafeArea()
                     .transition(.opacity)
                 
@@ -197,16 +214,13 @@ public struct AuthView: View {
                         .foregroundColor(.white)
                 }
                 .padding(32)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
+                .modifier(AuthLoadingChrome(reduceTransparency: reduceTransparency))
                 .transition(.scale.combined(with: .opacity))
                 .zIndex(100)
             }
             
             if authSuccess {
-                Color.black.opacity(0.4)
+                LookAfterChrome.overlayScrim
                     .ignoresSafeArea()
                     .transition(.opacity)
                 
@@ -228,7 +242,7 @@ public struct AuthView: View {
                 .padding(40)
                 .background(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                        .fill(DesignSystem.contentSurfaceElevated)
                 )
                 .transition(.scale.combined(with: .opacity))
                 .zIndex(101)
@@ -358,6 +372,26 @@ public struct AuthView: View {
         withAnimation {
             isLoading = false
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct AuthLoadingChrome: ViewModifier {
+    let reduceTransparency: Bool
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(shape.fill(DesignSystem.contentSurfaceElevated))
+                .overlay(shape.stroke(DesignSystem.border, lineWidth: 1))
+        } else {
+            content
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
         }
     }
 }

@@ -23,7 +23,14 @@ public final class DecideForMePicker: @unchecked Sendable {
         snapshot: CognitiveSnapshot,
         tasks: [LifeTask]
     ) async -> DecideForMeResult? {
-        let candidates = tasks.filter(\.status.isActive)
+        let openWindow = max(15, Int((1.0 - snapshot.energyScore) * 30) + 45)
+        let energyPercent = Int(snapshot.energyScore * 100)
+        let feasible = DaySupervisorContinuity.feasibleTasks(
+            from: tasks,
+            openWindowMinutes: openWindow,
+            energyPercent: energyPercent
+        )
+        let candidates = feasible.isEmpty ? tasks.filter(\.status.isActive) : feasible
         guard !candidates.isEmpty else { return nil }
 
         let prompt = LookAfterPrompts.decideForMePrompt(snapshot: snapshot, tasks: candidates)

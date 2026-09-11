@@ -9,6 +9,7 @@ import LookAfterHealth
 public struct LookAfterRootCanvas: View {
     @EnvironmentObject private var shell: AppShellState
     @EnvironmentObject private var featureTour: AppFeatureTourCoordinator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showModules = false
     @State private var showCoach = false
     @State private var showDailyPlan = false
@@ -59,10 +60,16 @@ public struct LookAfterRootCanvas: View {
     @State private var showPostWakeSheet = false
     @State private var showGoingOutSheet = false
     @State private var showContextualReplanPreview = false
+    @Namespace private var captureMorphNamespace
 
     public init() {}
 
     private var heroTask: LifeTask? {
+        if let event = TimelineNowResolver.currentNowEvent(in: shell.timelineService.snapshot.today),
+           let id = TimelineNowResolver.taskId(from: event.id),
+           let task = shell.tasksVM.tasks.first(where: { $0.id == id && $0.status.isActive }) {
+            return task
+        }
         if let id = shell.contextOrchestrator.briefing?.hero.action.taskID,
            let task = shell.tasksVM.tasks.first(where: { $0.id == id }) {
             return task
@@ -142,7 +149,11 @@ public struct LookAfterRootCanvas: View {
             tabContent
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if showsBottomNav {
-                        LookAfterBottomNav(selection: $selectedTab, onCapture: { openCapture(source: .bottomNav) })
+                        LookAfterBottomNav(
+                            selection: $selectedTab,
+                            captureMorphNamespace: captureMorphNamespace,
+                            onCapture: { openCapture(source: .bottomNav) }
+                        )
                     }
                 }
 
@@ -300,6 +311,10 @@ public struct LookAfterRootCanvas: View {
                 onRouted: handleCaptureRouted
             )
             .environmentObject(shell)
+            .modifier(CaptureSheetZoomModifier(
+                reduceMotion: reduceMotion,
+                namespace: captureMorphNamespace
+            ))
         }
         .sheet(isPresented: $showInbox) {
             NavigationStack {
@@ -317,7 +332,8 @@ public struct LookAfterRootCanvas: View {
                 ReschedulePreviewSheet(
                     plannerVM: tomorrowPlannerVM,
                     proposal: proposal,
-                    userId: firebase.resolvedUserId
+                    userId: firebase.resolvedUserId,
+                    tasksViewModel: shell.tasksVM
                 )
             }
         }
@@ -392,7 +408,8 @@ public struct LookAfterRootCanvas: View {
             }
         }
         .fullScreenCover(isPresented: Binding<Bool>(
-            get: { !firebase.isAuthenticated },
+            // UITests seed a local session; never block capture behind Auth.
+            get: { !UITestLaunchConfiguration.isEnabled && !firebase.isAuthenticated },
             set: { _ in }
         )) {
             AuthView()
@@ -438,7 +455,8 @@ public struct LookAfterRootCanvas: View {
         .onChange(of: shell.adhdVM.isFocusSessionActive) { wasActive, isActive in
             if wasActive && !isActive {
                 selectedTab = tabBeforeFocus
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(400))
                     openCapture(
                         source: .postFocus,
                         hints: CaptureContextHints(
@@ -531,7 +549,6 @@ public struct LookAfterRootCanvas: View {
                 onOpenCoach: { showCoach = true },
                 onOpenDailyPlan: { showDailyPlan = true },
                 onOpenSettings: { showSettings = true },
-                onCapture: { openCapture(source: .briefing, hints: CaptureContextHints(screen: "briefing")) },
                 onStartTask: { task in startBrainHeroTask(task, instant: true) },
                 onReplanDay: { showDailyPlan = true },
                 onPostWake: { showPostWakeSheet = true },
@@ -562,6 +579,12 @@ public struct LookAfterRootCanvas: View {
                 onPlanningSubmit: submitPlanningTurn,
                 onNegotiationSelect: { option in
                     Task { await handleProactiveNegotiation(option) }
+                },
+                onApprovePendingPlan: {
+                    Task { await approvePendingPlanChanges() }
+                },
+                onRejectPendingPlan: {
+                    planningVM.rejectPendingPlan()
                 },
                 onProactiveBannerAppear: { action in
                     ProactiveSpeechService(synthesizer: planningSpeech).speakProactiveAction(action)
@@ -598,6 +621,7 @@ public struct LookAfterRootCanvas: View {
                 isPlanningTomorrow: tomorrowPlannerVM.isScheduling
             )
         case .review:
+            // Deep-link / legacy tab — Review is no longer in the bottom bar (open from You).
             WeeklyReviewView(
                 summary: displayedWeeklyReviewSummary,
                 aiRetrospective: weeklyAIRetrospective,
@@ -865,6 +889,17 @@ public struct LookAfterRootCanvas: View {
         }
     }
 
+    private func approvePendingPlanChanges() async {
+        let userId = firebase.resolvedUserId
+        await planningVM.approvePendingPlan(
+            tasksVM: shell.tasksVM,
+            modulesVM: shell.modulesVM,
+            userId: userId,
+            lifeProfile: UserLifeProfileStore.load(),
+            refreshContext: planningRefreshContext(userId: userId)
+        )
+    }
+
     private func submitPlanningTurnAndGetReply(text: String, startedWithVoice: Bool) async -> String {
         let userId = firebase.resolvedUserId
         let context = planningContext()
@@ -930,6 +965,19 @@ public struct LookAfterRootCanvas: View {
         shell.tasksVM.resolveTimelineTask(id: id)
     }
 
+    private func addSuggestedTimelineSlot(sourceId: String, start: Date) async {
+        let userId = firebase.resolvedUserId
+        guard !userId.isEmpty else { return }
+        let placed = await shell.tasksVM.scheduleMutation.placeSuggestedSlot(
+            taskID: sourceId,
+            start: start,
+            userId: userId
+        )
+        if placed {
+            shell.refreshWidgetData(rebuildTimeline: true, immediateTimelineRebuild: true)
+        }
+    }
+
     private func completeTimelineTask(taskId: String) async {
         let userId = firebase.resolvedUserId
         guard !userId.isEmpty else { return }
@@ -942,7 +990,8 @@ public struct LookAfterRootCanvas: View {
         }
         planningVM.markTimelineTaskCompleted(taskId: taskId)
         shell.syncBrainLiveProgress(userId: userId)
-        shell.refreshWidgetData(rebuildTimeline: false)
+        // T-42 / Phase G4: restamp App Group widgets + pin from the patched NOW snapshot.
+        shell.refreshWidgetData(rebuildTimeline: true, immediateTimelineRebuild: true)
     }
 
     private func uncompleteTimelineTask(taskId: String) async {
@@ -957,7 +1006,7 @@ public struct LookAfterRootCanvas: View {
         }
         planningVM.markTimelineTaskUncompleted(taskId: taskId)
         shell.syncBrainLiveProgress(userId: userId)
-        shell.refreshWidgetData(rebuildTimeline: false)
+        shell.refreshWidgetData(rebuildTimeline: true, immediateTimelineRebuild: true)
     }
 
     private func rescheduleTimelineTask(taskId: String) async {
@@ -999,7 +1048,8 @@ public struct LookAfterRootCanvas: View {
     }
 
     private func handleCaptureRouted(_ result: CaptureRouteResult) {
-        captureToastMessage = result.outcome.plainToastMessage
+        captureToastMessage = result.outcome.toastMessage(capacityFit: result.capacityFit)
+            .replacingOccurrences(of: "**", with: "")
         captureUndoTaskId = result.createdTaskId
         captureUndoInboxId = result.inboxItemId
         let view = viewAction(for: result)
@@ -1182,7 +1232,8 @@ public struct LookAfterRootCanvas: View {
                     thinkingStep: planningVM.visibleThinkingStep,
                     isProcessing: planningVM.isProcessing,
                     title: "Full timeline",
-                    onViewAll: { showFullTimeline = false },
+                    showsFullTimelineButton: false,
+                    onViewAll: {},
                     onCompleteTask: { taskId in
                         Task { await completeTimelineTask(taskId: taskId) }
                     },
@@ -1208,19 +1259,32 @@ public struct LookAfterRootCanvas: View {
                     onRemoveFromTimelineTask: { taskId in
                         Task { await removeFromTimelineAndReplanSlot(taskId: taskId) }
                     },
+                    onAddSuggestedTask: { sourceId, start in
+                        Task { await addSuggestedTimelineSlot(sourceId: sourceId, start: start) }
+                    },
                     onPersistScheduleChange: { task in
                         let userId = firebase.resolvedUserId
                         guard !userId.isEmpty else { return }
                         Task {
+                            var toSave = task
+                            if task.id.hasPrefix("proj-")
+                                || !shell.tasksVM.tasks.contains(where: { $0.id == task.id }) {
+                                do {
+                                    toSave = try await shell.tasksVM.materializeTimelineTask(task, userId: userId)
+                                } catch {
+                                    return
+                                }
+                            }
                             await shell.tasksVM.scheduleMutation.persist(
-                                task,
+                                toSave,
                                 userId: userId,
                                 userPlaced: true
                             )
                         }
                     },
                     taskForID: resolveTimelineTask,
-                    parentScrollDisabled: $fullTimelineScrollDisabled
+                    parentScrollDisabled: $fullTimelineScrollDisabled,
+                    calendarEventsProvider: shell.tasksVM.calendarEventsProvider
                 )
                 .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
                 .padding(.vertical, DesignSystem.spacingMD)
@@ -1230,8 +1294,11 @@ public struct LookAfterRootCanvas: View {
             .background(PremiumBackground())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { showFullTimeline = false }
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DesignSystem.accentPrimary)
+                        .buttonStyle(.plain)
                 }
             }
         }

@@ -5,24 +5,20 @@ import LookAfterFeatures
 import UIKit
 #endif
 
-// MARK: - Golden ratio type scale
+// MARK: - Briefing type scale (Dynamic Type–aware)
 
-/// Body 17pt → Header 17 × φ ≈ 27.5 → 27pt (φ = 1.618).
+/// Relative styles near the old golden-ratio sizes (body ~17 → header ~title2).
 enum BriefingTypeScale {
-    static let phi: CGFloat = 1.618
-    static let body: CGFloat = 17
-    static let header: CGFloat = 27 // floor(17 * 1.618)
-
     static var headerFont: Font {
-        .system(size: header, weight: .medium, design: .default)
+        .title2.weight(.bold)
     }
 
     static var bodyFont: Font {
-        .system(size: body, weight: .regular, design: .default)
+        .body
     }
 
     static var chipFont: Font {
-        .system(size: 13, weight: .medium, design: .default)
+        .caption.weight(.medium)
     }
 }
 
@@ -55,6 +51,7 @@ struct MorningBriefingView: View {
                     .foregroundColor(DesignSystem.textPrimary)
                     .multilineTextAlignment(.leading)
                     .lineSpacing(4)
+                    .minimumScaleFactor(0.85)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(revealed ? 1 : (isLoading ? 0.4 : 1))
                     .accessibilityIdentifier("morning-briefing-narrative")
@@ -106,7 +103,7 @@ struct MorningBriefingView: View {
                 .font(BriefingTypeScale.chipFont)
                 .foregroundColor(DesignSystem.textSecondary)
             Text(chip.value)
-                .font(.system(size: 13, weight: .semibold, design: .default))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(DesignSystem.textPrimary)
         }
         .padding(.horizontal, 12)

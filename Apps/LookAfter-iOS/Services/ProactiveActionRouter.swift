@@ -93,7 +93,12 @@ struct ProactiveActionRouter {
 
         if lower.contains("accountability") || lower.contains("ping accountability") {
             let buddy = UserDefaults.standard.string(forKey: AccountabilitySettings.contactNameKey) ?? "my accountability buddy"
-            env.shareAccountabilityMessage("Hey \(buddy) — starting a 2-min focus block now. Check in on me?")
+            let minutes = resolvedAction.flatMap { action -> Int? in
+                guard let id = action.relatedTaskIDs.first,
+                      let task = env.shell.tasksVM.tasks.first(where: { $0.id == id }) else { return nil }
+                return TaskDurationPolicy.microStartSessionMinutes(for: task)
+            } ?? TaskDurationPolicy.softDefaultMinutes
+            env.shareAccountabilityMessage("Hey \(buddy) — starting a \(minutes)-min focus block now. Check in on me?")
             recordAccepted(resolvedAction)
             return .handled
         }
@@ -131,8 +136,16 @@ struct ProactiveActionRouter {
     private static func applyBundle(_ bundle: ProactiveActionBundle, option: String, action: ProactiveAction?, env: Environment) async -> Bool {
         let lower = option.lowercased()
 
-        if lower.contains("min focus") || lower.contains("start 2-min") || lower.contains("start 5-min") || lower.contains("micro-start") || lower.contains("start 5") {
-            let minutes = bundle.focusSessionMinutes ?? (lower.contains("5") ? 5 : 2)
+        if lower.contains("min focus")
+            || lower.contains("micro-start")
+            || (lower.contains("start") && lower.contains("min")) {
+            let parsed = TaskDurationPolicy.parseExplicitMinutes(from: option)
+            let minutes = bundle.focusSessionMinutes
+                ?? parsed
+                ?? resolveFocusTask(bundle: bundle, action: action, env: env).map {
+                    TaskDurationPolicy.microStartSessionMinutes(for: $0)
+                }
+                ?? TaskDurationPolicy.softDefaultMinutes
             if let task = resolveFocusTask(bundle: bundle, action: action, env: env) {
                 env.startFocusSession(task, minutes)
                 return true
@@ -161,7 +174,8 @@ struct ProactiveActionRouter {
                 modulesVM: env.shell.modulesVM,
                 userId: env.userId,
                 medications: &medications,
-                lifeProfile: UserLifeProfileStore.load()
+                lifeProfile: UserLifeProfileStore.load(),
+                allowUserPlacedOverride: true
             )
             MedicationStore.save(medications)
             await env.refreshContext()

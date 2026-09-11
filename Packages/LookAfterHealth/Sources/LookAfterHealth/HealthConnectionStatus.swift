@@ -269,7 +269,8 @@ public enum HealthConnectionStatusResolver {
         if !input.hasSleepData { missing.append("Sleep") }
         if !input.hasActivityData { missing.append("Steps & activity") }
         if !input.hasHeartRateData { missing.append("Heart rate") }
-        if !input.hasHRVData { missing.append("HRV recovery") }
+        // HRV is optional recovery signal — missing HRV alone must not block "all good"
+        // or keep a Sync now banner that cannot fetch a metric Apple Health does not have.
         return missing
     }
 

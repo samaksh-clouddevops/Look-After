@@ -1,11 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "LookAfterAI",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14)
+        .iOS(.v26),
+        .macOS(.v26)
     ],
     products: [
         .library(name: "LookAfterAI", targets: ["LookAfterAI"])
@@ -17,17 +17,20 @@ let package = Package(
         .target(
             name: "LookAfterAI",
             dependencies: ["LookAfterCore"],
-            path: "Sources/LookAfterAI"
+            path: "Sources/LookAfterAI",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "LookAfterAITests",
             dependencies: ["LookAfterAI"],
-            path: "Tests/LookAfterAITests"
+            path: "Tests/LookAfterAITests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         ),
         .testTarget(
             name: "FlowDirectorTests",
             dependencies: ["LookAfterAI"],
-            path: "Tests/FlowDirectorTests"
+            path: "Tests/FlowDirectorTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("NonisolatedNonsendingByDefault")]
         )
     ]
 )

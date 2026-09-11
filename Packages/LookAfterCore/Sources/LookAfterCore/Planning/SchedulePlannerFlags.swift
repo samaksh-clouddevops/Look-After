@@ -1,6 +1,10 @@
 import Foundation
 
 /// Feature flags for schedule engine rollout.
+///
+/// Wave 3 (B2): Prefer a **single** planner path. Do not run `DaySchedulePlanner`
+/// and legacy `DayScheduleReconciler` on the same reconcile pass — `TasksViewModel`
+/// branches on `useUnifiedDayPlanner` (default true).
 public enum SchedulePlannerFlags {
     private static let unifiedPlannerKey = "lookafter.schedule.useUnifiedDayPlanner"
 

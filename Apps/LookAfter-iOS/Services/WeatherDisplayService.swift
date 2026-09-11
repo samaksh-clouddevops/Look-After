@@ -112,8 +112,8 @@ final class WeatherDisplayService: NSObject, ObservableObject {
 
 extension WeatherDisplayService: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
         Task { @MainActor in
-            let status = manager.authorizationStatus
             if status == .authorizedWhenInUse || status == .authorizedAlways {
                 await refresh()
             }

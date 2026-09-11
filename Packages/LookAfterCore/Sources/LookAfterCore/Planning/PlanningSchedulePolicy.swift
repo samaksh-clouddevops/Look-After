@@ -18,6 +18,15 @@ public enum PlanningSchedulePolicy {
         public var startMinutesFromMidnight: Int { startHour * 60 + startMinute }
         public var endMinutesFromMidnight: Int { endHour * 60 + endMinute }
 
+        public func endDate(on day: Date, calendar: Calendar = .current) -> Date? {
+            calendar.date(
+                bySettingHour: endHour,
+                minute: endMinute,
+                second: 0,
+                of: calendar.startOfDay(for: day)
+            )
+        }
+
         public static func from(profile: UserLifeProfile) -> WorkHours {
             WorkHours(
                 startHour: profile.workStartHour,

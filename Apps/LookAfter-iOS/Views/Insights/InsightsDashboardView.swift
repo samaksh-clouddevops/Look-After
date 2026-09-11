@@ -102,7 +102,7 @@ public struct InsightsDashboardView: View {
         .foregroundColor(DesignSystem.textMuted)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .background(Capsule().fill(DesignSystem.contentSurfaceSubtle))
     }
 
     // MARK: - Sections
@@ -135,7 +135,7 @@ public struct InsightsDashboardView: View {
                                     Capsule().fill(
                                         viewModel.selectedTimeframe == timeframe
                                             ? DesignSystem.accentPrimary.opacity(0.35)
-                                            : Color.white.opacity(0.06)
+                                            : DesignSystem.contentSurfaceSubtle
                                     )
                                 )
                                 .foregroundColor(
@@ -365,7 +365,7 @@ public struct InsightsDashboardView: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(DesignSystem.textSecondary)
                         .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.3)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(DesignSystem.contentSurfaceElevated))
                 }
             }
         }

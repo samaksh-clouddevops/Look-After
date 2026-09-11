@@ -2,9 +2,9 @@ import XCTest
 @testable import LookAfterFeatures
 
 /// Verifies StateCoalescer collapses rapid updates into a single emission.
-@MainActor
 final class StateCoalescerPerformanceTests: XCTestCase {
 
+    @MainActor
     func testRapidUpdatesCollapseToLatestValue() async {
         let coalescer = StateCoalescer(initialValue: 0, delayMilliseconds: 30)
 
@@ -21,6 +21,7 @@ final class StateCoalescerPerformanceTests: XCTestCase {
         XCTAssertEqual(coalescer.value, 20, "Coalescer must publish only the latest pending value")
     }
 
+    @MainActor
     func testFlushPublishesImmediately() {
         let coalescer = StateCoalescer(initialValue: "a", delayMilliseconds: 200)
         coalescer.update("b")
@@ -28,6 +29,7 @@ final class StateCoalescerPerformanceTests: XCTestCase {
         XCTAssertEqual(coalescer.value, "c")
     }
 
+    @MainActor
     func testUpdateOverheadUnderOneMillisecond() {
         let coalescer = StateCoalescer(initialValue: 0, delayMilliseconds: 16)
         let start = CFAbsoluteTimeGetCurrent()

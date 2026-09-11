@@ -49,26 +49,32 @@ struct BrainDashboardView: View {
                 statusRow
 
                 LABrainVoiceOrb(state: orbState, onTap: handleOrbTap)
+                    #if os(iOS)
                     .featureTourAnchor(.brainVoiceOrb, cornerRadius: 110)
                     .id(AppFeatureTourAnchorID.brainVoiceOrb.rawValue)
-                    .padding(.vertical, DesignSystem.spacingSM)
+                    #endif
+                    .padding(.vertical, DesignSystem.spacingXS)
 
-                contextCopy
+                Text(orbHint)
+                    .textStyleCaption(color: DesignSystem.textSecondary)
+                    .multilineTextAlignment(.center)
 
                 if let responseSubtitle {
                     Text(responseSubtitle)
                         .textStyleBody(color: DesignSystem.textSecondary)
                         .multilineTextAlignment(.center)
-                        .lineLimit(3)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.92)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, DesignSystem.spacingMD)
                         .transition(.opacity)
                 }
 
-                Spacer(minLength: DesignSystem.spacingLG)
+                Spacer(minLength: DesignSystem.spacingSM)
 
                 decideForMeChip
-                askBrainGhostButton
-                siriHint
+                    .frame(maxWidth: .infinity)
+                askBrainTextButton
             }
             .padding(.horizontal, DesignSystem.screenHorizontal)
             .padding(.top, DesignSystem.spacingSM)
@@ -91,17 +97,19 @@ struct BrainDashboardView: View {
                 resumeListeningIfNeeded()
             }
         }
-        .onChange(of: orbState) { _, state in
-            if state == .thinking {
-                VoiceSessionKeepAlive.begin("brain-voice-thinking")
-            } else {
-                VoiceSessionKeepAlive.end("brain-voice-thinking")
-            }
-        }
         .onChange(of: brain.isThinking) { _, thinking in
+            // Only mirror Brain thinking during an active voice turn — never lock the orb
+            // because Briefing / Day Audit / other screens kicked off a chat.
+            guard isConversationActive else { return }
             if thinking {
-                orbState = .thinking
-                statusLine = "Thinking…"
+                if orbState != .speaking {
+                    orbState = .thinking
+                    statusLine = "Thinking…"
+                }
+            } else if orbState == .thinking {
+                orbState = .ready
+                statusLine = nil
+                resumeListeningIfNeeded()
             }
         }
     }
@@ -146,7 +154,7 @@ struct BrainDashboardView: View {
                     .foregroundColor(DesignSystem.textSecondary)
                     .frame(width: 44, height: 44)
             })
-            .accessibilityLabel("Brain actions")
+            .accessibilityLabel("More")
         }
     }
 
@@ -164,34 +172,26 @@ struct BrainDashboardView: View {
             .accessibilityElement(children: .combine)
         } else if orbState == .ready {
             Text("I'm here when you're ready.")
-                .textStyleCaption(color: DesignSystem.textSecondary)
+                .textStyleCaption(color: DesignSystem.textPrimary.opacity(0.72))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private var statusDotColor: Color {
         switch orbState {
-        case .listening: return DesignSystem.health
-        case .thinking: return DesignSystem.focus
+        case .listening: return DesignSystem.accentPrimary
+        case .thinking: return DesignSystem.textSecondary
         default: return DesignSystem.textMuted
         }
     }
 
-    private var contextCopy: some View {
-        Text("Analyzing your context, commitments, energy, and goals to help you decide.")
-            .textStyleBody(color: DesignSystem.textPrimary.opacity(0.72))
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var siriHint: some View {
-        Text(isConversationActive
-             ? "Speak naturally — I'll listen and reply. Tap the orb to end."
-             : "I'll check in shortly — or tap the orb to start now.")
-            .textStyleCaption(color: DesignSystem.textMuted)
-            .multilineTextAlignment(.center)
-            .padding(.top, DesignSystem.spacingXS)
-            .accessibilityHint("Voice input via the orb or Siri shortcut")
+    private var orbHint: String {
+        switch orbState {
+        case .ready: return "Tap the orb to speak"
+        case .listening: return "Listening — tap to end"
+        case .thinking: return "Thinking — tap to cancel"
+        case .speaking: return "Speaking — tap to skip"
+        }
     }
 
     private var decideForMeChip: some View {
@@ -200,36 +200,25 @@ struct BrainDashboardView: View {
                 Image(systemName: "sparkles")
                     .font(.dsIcon())
                 Text("Decide for me")
-                    .textStyleCardTitle()
+                    .font(.dsBody(weight: .semibold))
             }
-            .foregroundColor(DesignSystem.accentPrimary)
-            .padding(.horizontal, DesignSystem.spacingLG)
-            .padding(.vertical, DesignSystem.spacingMD)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(DesignSystem.accentPrimary.opacity(0.12))
-            )
+            .foregroundStyle(DesignSystem.accentOnPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: DesignSystem.minTouchTarget)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassProminent)
+        .tint(LookAfterChrome.accentTint)
         .accessibilityIdentifier("brain-decide-entry")
         .accessibilityLabel("Decide for me")
     }
 
-    private var askBrainGhostButton: some View {
+    private var askBrainTextButton: some View {
         Button(action: onNavigateToCoach) {
-            HStack(spacing: DesignSystem.spacingSM) {
-                Image(systemName: "bubble.left")
-                    .font(.dsIcon())
-                Text("Ask Brain")
-                    .textStyleCardTitle()
-            }
-            .foregroundColor(DesignSystem.textPrimary)
-            .padding(.horizontal, DesignSystem.spacingLG)
-            .padding(.vertical, DesignSystem.spacingMD)
-            .background(
-                Capsule(style: .continuous)
-                    .stroke(DesignSystem.border, lineWidth: 1)
-            )
+            Text("Ask Brain")
+                .font(.dsCaption(weight: .semibold))
+                .foregroundStyle(DesignSystem.accentPrimary)
+                .frame(minHeight: DesignSystem.minTouchTarget)
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("brain-ask-entry")
@@ -251,6 +240,10 @@ struct BrainDashboardView: View {
 
     private func deliverProactiveWelcomeIfNeeded() async {
         guard !didDeliverProactiveWelcome else { return }
+        guard !UITestLaunchConfiguration.isEnabled else {
+            didDeliverProactiveWelcome = true
+            return
+        }
         guard !isConversationActive else { return }
         guard orbState == .ready else { return }
         guard !speechSynthesizer.isSpeaking, !brain.isThinking else { return }
@@ -297,6 +290,10 @@ struct BrainDashboardView: View {
     }
 
     private func handleOrbTap() {
+        // B5 / S19: one start path. Orb tap is the *voice* entry for the same job as
+        // "Decide for me" (help me decide) — not a third unrelated product path.
+        // Ready → start listening; listening → end; speaking → stop TTS;
+        // thinking → cancel so the UI never feels frozen.
         switch orbState {
         case .ready:
             cancelProactiveWelcome()
@@ -305,7 +302,7 @@ struct BrainDashboardView: View {
         case .listening:
             endConversation()
         case .thinking:
-            break
+            cancelInFlightVoiceTurn()
         case .speaking:
             speechSynthesizer.stop()
             orbState = .ready
@@ -314,12 +311,24 @@ struct BrainDashboardView: View {
         }
     }
 
+    private func cancelInFlightVoiceTurn() {
+        speechSynthesizer.stop()
+        speechManager.onUtteranceComplete = nil
+        speechManager.autoCommitEnabled = false
+        speechManager.stopListening()
+        orbState = .ready
+        statusLine = "Cancelled — tap to speak again."
+        // Keep conversation active so a follow-up tap can listen immediately.
+        isConversationActive = true
+    }
+
     private func endConversation() {
         cancelProactiveWelcome()
         isConversationActive = false
         speechManager.onUtteranceComplete = nil
         speechManager.autoCommitEnabled = false
         speechManager.stopListening()
+        speechSynthesizer.stop()
         orbState = .ready
         statusLine = nil
     }
@@ -331,6 +340,12 @@ struct BrainDashboardView: View {
 
     private func startListening() async {
         guard orbState != .thinking else { return }
+        // UITests must not trip Speech permission alerts mid-navigation.
+        if UITestLaunchConfiguration.isEnabled {
+            orbState = .ready
+            statusLine = nil
+            return
+        }
         orbState = .listening
         statusLine = "Listening…"
         responseSubtitle = nil
@@ -341,6 +356,15 @@ struct BrainDashboardView: View {
             Task { await sendVoiceMessage(message) }
         }
         await speechManager.startListening()
+
+        // Permission / mic failure leaves isListening false — don't trap the orb.
+        if !speechManager.isListening {
+            orbState = .ready
+            statusLine = speechManager.errorMessage
+                ?? (speechManager.permissionDenied
+                    ? "Microphone or speech permission needed."
+                    : "Couldn't start listening — tap to retry.")
+        }
     }
 
     private func sendVoiceMessage(_ message: String) async {
@@ -353,6 +377,8 @@ struct BrainDashboardView: View {
 
         orbState = .thinking
         statusLine = "Thinking…"
+        VoiceSessionKeepAlive.begin("brain-voice-thinking")
+        defer { VoiceSessionKeepAlive.end("brain-voice-thinking") }
 
         // Let the mic session fully release before playback TTS starts.
         try? await Task.sleep(nanoseconds: 80_000_000)
@@ -364,6 +390,9 @@ struct BrainDashboardView: View {
         } else {
             response = await brain.chat(message: trimmed)
         }
+
+        // User may have cancelled mid-flight.
+        guard isConversationActive, orbState == .thinking else { return }
 
         let rawReply = response.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawReply.isEmpty else {
@@ -380,9 +409,11 @@ struct BrainDashboardView: View {
         if SpeechVoiceSettings.autoSpeakReplies {
             orbState = .speaking
             speechSynthesizer.speak(reply.isEmpty ? rawReply : reply)
+            // Cloud TTS sets isSpeaking immediately; Apple path does too.
+            // If both fail synchronously, recover.
             if !speechSynthesizer.isSpeaking {
                 orbState = .ready
-                statusLine = "Couldn't play voice reply."
+                statusLine = speechSynthesizer.lastError ?? "Couldn't play voice reply."
                 resumeListeningIfNeeded()
             }
         } else {

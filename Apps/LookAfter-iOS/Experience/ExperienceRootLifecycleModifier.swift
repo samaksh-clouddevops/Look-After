@@ -85,10 +85,13 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
         } else if phase == .active {
             AppForegroundTracker.recordForeground()
             shell.syncExecutionEnvironment()
+            Task { await LicenseManager.shared.refreshStatus() }
+            Task { await AppleCredentialMonitor.refreshCredentialState() }
             let userId = firebase.resolvedUserId
             if !userId.isEmpty {
                 Task {
                     await LookAfterIntentBridge.shared.processPendingQueue(userId: userId)
+                    await TaskSyncOutbox.shared.drain()
                 }
             }
             let healthEnabled = UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true

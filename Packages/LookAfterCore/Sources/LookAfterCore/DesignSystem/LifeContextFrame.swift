@@ -226,6 +226,7 @@ public enum FallbackGradientStyle {
 
 public struct FallbackGradient: View {
     let style: FallbackGradientStyle
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathe: Double = 0
 
     public init(style: FallbackGradientStyle) {
@@ -234,11 +235,20 @@ public struct FallbackGradient: View {
 
     public var body: some View {
         LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-            .opacity(style == .sleep ? 0.88 + breathe * 0.12 : 1)
+            .opacity(style == .sleep ? (reduceMotion ? 0.94 : 0.88 + breathe * 0.12) : 1)
             .onAppear {
-                guard style == .sleep else { return }
+                guard style == .sleep, !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 5).repeatForever(autoreverses: true)) {
                     breathe = 1
+                }
+            }
+            .onChange(of: reduceMotion) { _, reduced in
+                if reduced {
+                    breathe = 0
+                } else if style == .sleep {
+                    withAnimation(.easeInOut(duration: 5).repeatForever(autoreverses: true)) {
+                        breathe = 1
+                    }
                 }
             }
     }
@@ -311,18 +321,18 @@ public struct DayPreviewCard: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(FallbackGradient(style: .neutral).opacity(0.35))
+            .background(DesignSystem.contentSurface)
             .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 36, style: .continuous)
-                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                    .stroke(DesignSystem.border, lineWidth: 1)
             )
         }
         .buttonStyle(PremiumPressStyle())
     }
 
     private var divider: some View {
-        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+        Rectangle().fill(DesignSystem.divider).frame(height: 1)
     }
 }
 
@@ -354,11 +364,11 @@ public struct RememberPreviewCard: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(FallbackGradient(style: .remember).opacity(0.4))
+            .background(DesignSystem.contentSurfaceSubtle)
             .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 36, style: .continuous)
-                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                    .stroke(DesignSystem.border, lineWidth: 1)
             )
         }
         .buttonStyle(PremiumPressStyle())
@@ -393,7 +403,7 @@ public struct SleepPreviewCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 36, style: .continuous)
-                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                    .stroke(DesignSystem.border, lineWidth: 1)
             )
         }
         .buttonStyle(PremiumPressStyle())

@@ -60,6 +60,24 @@ final class TaskScheduleIntervalDisplayTests: XCTestCase {
             10
         )
     }
+
+    func testFlexibleGlanceLabelAvoidsMidnightDayEndRange() {
+        let day = makeDate(year: 2026, month: 9, day: 9, hour: 0)
+        let event = LifeTimelineEvent(
+            id: "task-morning-review",
+            kind: .work,
+            title: "Morning review",
+            subtitle: "Flexible today",
+            date: day,
+            estimatedMinutes: 10,
+            isFixed: false,
+            scheduleKind: .flexibleDay
+        )
+
+        XCTAssertEqual(event.scheduleRangeLabel, "Flexible today · 10m")
+        XCTAssertFalse(event.isImportantCommitment)
+        XCTAssertFalse(event.scheduleRangeLabel.contains("12:00 AM"))
+    }
 }
 
 final class PreWindowFitAnalyzerTests: XCTestCase {
