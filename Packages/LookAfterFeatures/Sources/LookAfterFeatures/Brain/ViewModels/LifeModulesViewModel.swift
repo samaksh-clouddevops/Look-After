@@ -51,22 +51,35 @@ public final class LifeModulesViewModel: ObservableObject {
             return
         }
         isLoading = true
-        do {
-            async let loadedBills = billRepo.getAll(for: userId)
-            async let loadedShopping = shoppingRepo.getAll(for: userId)
-            async let loadedRel = relRepo.getAll(for: userId)
-            async let loadedJournal = journalRepo.getAll(for: userId)
-            
-            self.bills = try await loadedBills
-            self.shoppingItems = Self.mergeShoppingItems(
-                existing: self.shoppingItems,
-                loaded: try await loadedShopping
-            )
-            self.contacts = try await loadedRel
-            self.journalEntries = try await loadedJournal
-        } catch {
-            self.error = error.localizedDescription
+
+        // Await each repo independently so a single module's fetch failure doesn't
+        // discard the other three, which may have already succeeded concurrently.
+        async let billsResult: Result<[BillItem], Error> = Result { try await billRepo.getAll(for: userId) }
+        async let shoppingResult: Result<[ShoppingItem], Error> = Result { try await shoppingRepo.getAll(for: userId) }
+        async let relResult: Result<[RelationshipContact], Error> = Result { try await relRepo.getAll(for: userId) }
+        async let journalResult: Result<[JournalEntry], Error> = Result { try await journalRepo.getAll(for: userId) }
+
+        var errors: [String] = []
+
+        switch await billsResult {
+        case .success(let loaded): self.bills = loaded
+        case .failure(let error): errors.append(error.localizedDescription)
         }
+        switch await shoppingResult {
+        case .success(let loaded):
+            self.shoppingItems = Self.mergeShoppingItems(existing: self.shoppingItems, loaded: loaded)
+        case .failure(let error): errors.append(error.localizedDescription)
+        }
+        switch await relResult {
+        case .success(let loaded): self.contacts = loaded
+        case .failure(let error): errors.append(error.localizedDescription)
+        }
+        switch await journalResult {
+        case .success(let loaded): self.journalEntries = loaded
+        case .failure(let error): errors.append(error.localizedDescription)
+        }
+
+        self.error = errors.isEmpty ? nil : errors.joined(separator: "\n")
         isLoading = false
     }
     
@@ -89,7 +102,12 @@ public final class LifeModulesViewModel: ObservableObject {
             recurringFrequency: recurringFrequency
         )
         bills.append(bill)
-        try? await billRepo.create(bill)
+        do {
+            try await billRepo.create(bill)
+        } catch {
+            bills.removeAll { $0.id == bill.id }
+            self.error = "Couldn't add bill: \(error.localizedDescription)"
+        }
     }
     
     public func toggleBillPaid(_ bill: BillItem) async {
@@ -177,13 +195,17 @@ public final class LifeModulesViewModel: ObservableObject {
     
     public func addContact(name: String, relationship: String, targetFrequencyDays: Int) async {
         let contact = RelationshipContact(name: name, relationship: relationship, targetFrequencyDays: targetFrequencyDays)
-        contacts.append(contact)
-        try? await relRepo.create(contact)
+        await addContact(contact)
     }
-    
+
     public func addContact(_ contact: RelationshipContact) async {
         contacts.append(contact)
-        try? await relRepo.create(contact)
+        do {
+            try await relRepo.create(contact)
+        } catch {
+            contacts.removeAll { $0.id == contact.id }
+            self.error = "Couldn't add contact: \(error.localizedDescription)"
+        }
     }
     
     public func logContacted(_ contact: RelationshipContact) async {
@@ -201,8 +223,14 @@ public final class LifeModulesViewModel: ObservableObject {
     public func addJournalEntry(content: String, mood: String, gratitudes: [String]) async {
         let entry = JournalEntry(content: content, mood: mood, gratitudes: gratitudes)
         journalEntries.insert(entry, at: 0)
-        try? await journalRepo.create(entry)
-        
+        do {
+            try await journalRepo.create(entry)
+        } catch {
+            journalEntries.removeAll { $0.id == entry.id }
+            self.error = "Couldn't add journal entry: \(error.localizedDescription)"
+            return
+        }
+
         // Save to AI Memory
         let mem = MemoryEntry(content: content, sourceType: "journal")
         memoryEntries.append(mem)
