@@ -329,7 +329,7 @@ public final class DailyPlannerViewModel: ObservableObject {
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let decoded = try JSONDecoder().decode([RawScheduleSuggestion].self, from: Data(clean.utf8))
+        let decoded = try SharedFormatters.jsonDecoderSeconds.decode([RawScheduleSuggestion].self, from: Data(clean.utf8))
         return decoded.map {
             DayScheduleSuggestion(
                 id: $0.id,
@@ -346,7 +346,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         summary: String,
         source: DayPlanSource = .local
     ) -> DayRescheduleProposal {
-        let taskByID = Dictionary(uniqueKeysWithValues: todayTasks.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(todayTasks.map { ($0.id, $0) })
         let movable = schedulableFlexibleTasks()
         var merged = suggestions.filter { suggestion in
             guard let task = taskByID[suggestion.id] else { return false }
@@ -467,7 +467,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         let movable = schedulableFlexibleTasks()
         let suggestions = buildLocalSuggestions(
             for: movable.map(\.id),
-            taskByID: Dictionary(uniqueKeysWithValues: todayTasks.map { ($0.id, $0) })
+            taskByID: Dictionary.uniquingFirstValue(todayTasks.map { ($0.id, $0) })
         )
         return buildProposal(
             from: suggestions,
@@ -506,7 +506,7 @@ public final class DailyPlannerViewModel: ObservableObject {
     }
 
     private func apply(changes: [DayScheduleChange]) async throws {
-        let taskByID = Dictionary(uniqueKeysWithValues: todayTasks.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(todayTasks.map { ($0.id, $0) })
         var scheduled: [LifeTask] = []
 
         for change in changes {

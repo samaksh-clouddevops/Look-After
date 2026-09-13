@@ -68,7 +68,7 @@ public enum ProactiveNotificationAdapter {
 
     private static func resolvedFireDate(for action: ProactiveAction, now: Date) -> Date? {
         if let iso = action.metadata["fireDate"],
-           let date = ISO8601DateFormatter().date(from: iso) {
+           let date = FlexibleISO8601Date.date(from: iso) {
             return date
         }
         if let expiresAt = action.expiresAt {

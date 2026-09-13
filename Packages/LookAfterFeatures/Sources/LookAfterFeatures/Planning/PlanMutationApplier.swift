@@ -55,14 +55,15 @@ public struct PlanMutationApplier {
         var result = ApplyResult()
         let windows = SchedulingWindows.from(profile: lifeProfile)
         let dayStart = calendar.startOfDay(for: Date())
-        let allTasks = tasksVM.schedulingContext
-        let taskByID = Dictionary(uniqueKeysWithValues: allTasks.map { ($0.id, $0) })
-        let taskByTitle = Dictionary(
-            allTasks.map { ($0.title.lowercased(), $0) },
-            uniquingKeysWith: { first, _ in first }
+        // Prefer full active list + scheduling context so title/id resolution sees all movable tasks.
+        let allTasks = dedupeTasks(tasksVM.tasks + tasksVM.schedulingContext)
+        let taskByID = Dictionary.uniquingFirstValue(allTasks.map { ($0.id, $0) })
+        let taskByTitle = Dictionary.uniquingFirstValue(
+            allTasks.map { ($0.title.lowercased(), $0) }
         )
+        let allowedTaskIDs = Set(taskByID.keys)
         var pendingCreates: [PendingCreate] = []
-        var schedulingPool = tasksScheduledToday(from: tasksVM.schedulingContext)
+        var schedulingPool = tasksScheduledToday(from: allTasks)
         let idempotency = ScheduleMutationIdempotencyStore.shared
 
         for mutation in mutations {
@@ -71,13 +72,24 @@ public struct PlanMutationApplier {
                 result.skippedReasons.append("Skipped duplicate change (already applied this session)")
                 continue
             }
+            // Reject hallucinated task IDs up front (BUG-014 / BUG-036).
+            if let claimedID = mutation.taskID?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !claimedID.isEmpty,
+               !allowedTaskIDs.contains(claimedID),
+               Self.requiresExistingTaskID(mutation.kind) {
+                result.skippedReasons.append("Unknown task id \"\(claimedID)\" — skipped \(mutation.kind.rawValue)")
+                continue
+            }
+
             switch mutation.kind {
             case .reuseTask:
                 if let title = mutation.title,
                    let existing = resolvedExistingTask(mutation: mutation, taskByID: taskByID, taskByTitle: taskByTitle) {
                     result.reusedTasks.append(.init(requestedTitle: title, existingTitle: existing.title))
+                    result.appliedCount += 1
+                } else {
+                    result.skippedReasons.append("Could not reuse task — no match")
                 }
-                result.appliedCount += 1
 
             case .createTask:
                 guard let title = mutation.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
@@ -272,15 +284,14 @@ public struct PlanMutationApplier {
                 // re-read race ahead of the persist, silently re-including the deferred/removed
                 // task in today's schedule even though `appliedCount` already reported success.
                 await tasksVM.updateTaskAndPersist(task)
+                schedulingPool.removeAll { $0.id == task.id }
                 result.appliedCount += 1
-                Task {
-                    if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
-                        NotificationCenter.default.post(
-                            name: .deferralRecoveryScriptReady,
-                            object: nil,
-                            userInfo: ["script": script]
-                        )
-                    }
+                if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
+                    NotificationCenter.default.post(
+                        name: .deferralRecoveryScriptReady,
+                        object: nil,
+                        userInfo: ["script": script]
+                    )
                 }
 
             case .completeTask:
@@ -333,7 +344,7 @@ public struct PlanMutationApplier {
                 }
                 var deadline: Date?
                 if let iso = mutation.deadlineISO {
-                    deadline = ISO8601DateFormatter().date(from: iso)
+                    deadline = FlexibleISO8601Date.date(from: iso)
                 }
                 let draft = MultiDayPlanDraft(
                     title: title,
@@ -371,7 +382,7 @@ public struct PlanMutationApplier {
                 windows: windows,
                 on: dayStart
             )
-            let allocationByID = Dictionary(uniqueKeysWithValues: allocations.map { ($0.id, $0.scheduledTime) })
+            let allocationByID = Dictionary.uniquingFirstValue(allocations.map { ($0.id, $0.scheduledTime) })
 
             for pending in pendingCreates {
                 var task = pending.task
@@ -380,10 +391,15 @@ public struct PlanMutationApplier {
                     let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
                     task.scheduledEndTime = scheduledTime.addingTimeInterval(TimeInterval(duration * 60))
                 }
-                tasksVM.createTask(task)
-                schedulingPool.append(task)
-                result.appliedCount += 1
-                result.createdTaskIDs.append(task.id)
+                // Await persistence so apply result reflects durable creates (BUG-037).
+                do {
+                    try await tasksVM.createTaskAndAwait(task)
+                    schedulingPool.append(task)
+                    result.appliedCount += 1
+                    result.createdTaskIDs.append(task.id)
+                } catch {
+                    result.skippedReasons.append("Could not create \"\(task.title)\": \(error.localizedDescription)")
+                }
             }
         }
 
@@ -475,6 +491,25 @@ public struct PlanMutationApplier {
         } catch {
             return nil
         }
+    }
+
+    private static func requiresExistingTaskID(_ kind: PlanMutationKind) -> Bool {
+        switch kind {
+        case .rescheduleTask, .deferTask, .completeTask, .removeFromToday, .reuseTask:
+            return true
+        case .createTask, .createMultiDayTask, .addShoppingItem, .captureNote, .markMedicationTaken:
+            return false
+        }
+    }
+
+    private func dedupeTasks(_ tasks: [LifeTask]) -> [LifeTask] {
+        var seen = Set<String>()
+        var result: [LifeTask] = []
+        result.reserveCapacity(tasks.count)
+        for task in tasks where seen.insert(task.id).inserted {
+            result.append(task)
+        }
+        return result
     }
 
     private struct PendingCreate {

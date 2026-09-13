@@ -1,6 +1,7 @@
 import Foundation
 import LookAfterAI
 import LookAfterCore
+import os
 
 /// Generates short "For today" hero copy from tasks, timeline, and capacity signals.
 /// Prefer ≤2 scannable lines (ADHD load); greeting already owns the name — never repeat it here.
@@ -25,6 +26,8 @@ enum BriefingDayHeroSummaryGenerator {
         var lifeTimelineEvents: [LifeTimelineEvent]
     }
 
+    private static let logger = Logger(subsystem: "com.lookafter.app", category: "BriefingDayHero")
+
     static func generate(_ input: Input) async -> [String] {
         let deterministic = polish(buildDeterministic(input))
         guard shouldCallAI(input) else { return deterministic }
@@ -42,7 +45,9 @@ enum BriefingDayHeroSummaryGenerator {
             if let lines = parseLines(raw), lines.count >= 1 {
                 return polish(Array(lines.prefix(maxHeroLines)))
             }
-        } catch {}
+        } catch {
+            logger.debug("Day hero AI summary fell back to deterministic: \(error.localizedDescription, privacy: .public)")
+        }
         return deterministic
     }
 

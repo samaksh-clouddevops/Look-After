@@ -43,7 +43,8 @@ public struct IntegratedHeroComposition: View {
                 duration: durationLabel.isEmpty ? nil : durationLabel,
                 window: contextMeta
             ),
-            primaryActionTitle: "Continue",
+            // Action language > vague "Continue" (UX excellence).
+            primaryActionTitle: durationLabel.isEmpty ? "Start now" : "Start · \(durationLabel)",
             disclosure: disclosure.hasContent ? disclosure : nil
         )
     }

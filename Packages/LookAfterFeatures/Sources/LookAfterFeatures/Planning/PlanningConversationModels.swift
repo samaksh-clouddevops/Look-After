@@ -88,6 +88,8 @@ public enum PlanningNegotiationPhase: String, Sendable, Equatable {
     case idle
     case proposingVariants
     case awaitingSelection
+    /// User must confirm staged plan mutations before they hit the schedule.
+    case awaitingConfirmation
 }
 
 public struct PlanningTurnResponse: Sendable, Equatable {

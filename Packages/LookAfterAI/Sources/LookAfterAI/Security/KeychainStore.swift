@@ -8,7 +8,10 @@ public protocol SecretStore {
 }
 
 enum KeychainStore {
-    static let service = "com.samaksh.flowos.ai-keys"
+    /// Canonical service id after brand migration (BUG-027).
+    static let service = "com.lookafter.ai-keys"
+    /// Pre-migration service id — still read so existing installs keep API keys.
+    static let legacyService = "com.samaksh.flowos.ai-keys"
 
     enum KeychainError: Error {
         case saveFailed(OSStatus)
@@ -23,10 +26,11 @@ public struct KeychainSecretStore: SecretStore {
 
     public func save(_ value: String, account: String) throws {
         let data = Data(value.utf8)
-        let query = baseQuery(account: account)
-        SecItemDelete(query as CFDictionary)
+        // Prefer canonical service; clear both so we don't leave duplicate secrets.
+        SecItemDelete(baseQuery(account: account, service: KeychainStore.service) as CFDictionary)
+        SecItemDelete(baseQuery(account: account, service: KeychainStore.legacyService) as CFDictionary)
 
-        var addQuery = query
+        var addQuery = baseQuery(account: account, service: KeychainStore.service)
         addQuery[kSecValueData as String] = data
         addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
@@ -37,7 +41,28 @@ public struct KeychainSecretStore: SecretStore {
     }
 
     public func load(account: String) throws -> String? {
-        var query = baseQuery(account: account)
+        if let value = try load(account: account, service: KeychainStore.service) {
+            return value
+        }
+        // Migrate-on-read from legacy brand service id.
+        if let legacy = try load(account: account, service: KeychainStore.legacyService) {
+            try? save(legacy, account: account)
+            return legacy
+        }
+        return nil
+    }
+
+    public func delete(account: String) throws {
+        let primary = SecItemDelete(baseQuery(account: account, service: KeychainStore.service) as CFDictionary)
+        let legacy = SecItemDelete(baseQuery(account: account, service: KeychainStore.legacyService) as CFDictionary)
+        let ok: Set<OSStatus> = [errSecSuccess, errSecItemNotFound]
+        guard ok.contains(primary) || ok.contains(legacy) else {
+            throw KeychainStore.KeychainError.deleteFailed(primary)
+        }
+    }
+
+    private func load(account: String, service: String) throws -> String? {
+        var query = baseQuery(account: account, service: service)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -56,17 +81,10 @@ public struct KeychainSecretStore: SecretStore {
         return value
     }
 
-    public func delete(account: String) throws {
-        let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw KeychainStore.KeychainError.deleteFailed(status)
-        }
-    }
-
-    private func baseQuery(account: String) -> [String: Any] {
+    private func baseQuery(account: String, service: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: KeychainStore.service,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
     }

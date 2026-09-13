@@ -1,4 +1,5 @@
 import Foundation
+import LookAfterCore
 
 public enum AuthProxyError: Error, LocalizedError, Sendable {
     case notConfigured
@@ -118,7 +119,7 @@ public final class AuthProxyClient: @unchecked Sendable {
             let speed: Double?
             let model: String
         }
-        let bodyData = try JSONEncoder().encode(
+        let bodyData = try SharedFormatters.jsonEncoderSeconds.encode(
             Body(input: input, voice: voice, speed: speed, model: model)
         )
         var request = try await authorizedRequest(path: "/v1/ai/speech", method: "POST", forceRefresh: false)
@@ -172,7 +173,7 @@ public final class AuthProxyClient: @unchecked Sendable {
     }
 
     private func postJSON<Body: Encodable, T: Decodable>(path: String, body: Body) async throws -> T {
-        let bodyData = try JSONEncoder().encode(body)
+        let bodyData = try SharedFormatters.jsonEncoderSeconds.encode(body)
         return try await performJSON(path: path, method: "POST", bodyData: bodyData)
     }
 
@@ -201,7 +202,7 @@ public final class AuthProxyClient: @unchecked Sendable {
             throw AuthProxyError.httpStatus(http.statusCode, String(message.prefix(200)))
         }
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            return try SharedFormatters.jsonDecoderSeconds.decode(T.self, from: data)
         } catch {
             throw AuthProxyError.decodeFailed
         }

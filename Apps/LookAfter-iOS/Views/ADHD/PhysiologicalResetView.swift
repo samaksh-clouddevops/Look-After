@@ -9,9 +9,9 @@ public struct PhysiologicalResetView: View {
     @State private var scale: CGFloat = 0.6
     @State private var phaseText = "Inhale Deeply..."
     @State private var secondsRemaining = 60
-    @State private var hasCompleted = false
+    /// Task-based tick — cancelled on dismiss (PERF-007); avoids orphaned Timer.publish.
+    @State private var tickTask: Task<Void, Never>?
 
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let phaseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     public init() {}
@@ -81,22 +81,31 @@ public struct PhysiologicalResetView: View {
         }
         .onAppear {
             startBreathingAnimation()
+            startCountdown()
         }
-        .onReceive(timer) { _ in
-            guard !hasCompleted else { return }
-            if secondsRemaining > 0 {
-                secondsRemaining -= 1
-            } else {
-                hasCompleted = true
-                HapticManager.notification(.success)
-                dismiss()
-            }
+        .onDisappear {
+            tickTask?.cancel()
+            tickTask = nil
         }
         .onReceive(phaseTimer) { _ in
             guard !reduceMotion else { return }
             phaseText = phaseText == "Inhale Deeply..." ? "Exhale Slowly..." : "Inhale Deeply..."
         }
         .accessibilityIdentifier("screen-physiological-reset")
+    }
+
+    private func startCountdown() {
+        tickTask?.cancel()
+        tickTask = Task { @MainActor in
+            while !Task.isCancelled, secondsRemaining > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                secondsRemaining -= 1
+            }
+            guard !Task.isCancelled else { return }
+            HapticManager.notification(.success)
+            dismiss()
+        }
     }
 
     private func startBreathingAnimation() {

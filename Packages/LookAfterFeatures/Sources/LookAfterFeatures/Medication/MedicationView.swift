@@ -73,7 +73,7 @@ public final class MedicationViewModel: ObservableObject {
         MedicationStore.save(medications)
         NotificationCenter.default.post(name: .medicationListDidChange, object: nil)
     }
-    
+
     private func loadFromDisk() {
         medications = MedicationStore.load()
     }

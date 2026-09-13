@@ -50,7 +50,7 @@ public final class ScheduleMutationService {
         calendar: Calendar = .current
     ) async throws {
         let dayStart = calendar.startOfDay(for: planningDay)
-        let taskByID = Dictionary(uniqueKeysWithValues: viewModel.tasks.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(viewModel.tasks.map { ($0.id, $0) })
         let events = viewModel.calendarEventsProvider?(dayStart) ?? []
         let model = LifeModelStore.load()
 

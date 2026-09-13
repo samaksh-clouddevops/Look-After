@@ -14,7 +14,7 @@ public enum MedicationStore {
         if let cached = cachedMedications.withLock({ $0 }) { return cached }
         migrateFromUserDefaultsIfNeeded()
         guard let data = try? Data(contentsOf: fileURL()),
-              let medications = try? JSONDecoder().decode([Medication].self, from: data) else {
+              let medications = try? SharedFormatters.jsonDecoderSeconds.decode([Medication].self, from: data) else {
             cachedMedications.withLock { $0 = [] }
             return []
         }
@@ -24,7 +24,7 @@ public enum MedicationStore {
 
     public static func save(_ medications: [Medication]) {
         do {
-            let data = try JSONEncoder().encode(medications)
+            let data = try SharedFormatters.jsonEncoderSeconds.encode(medications)
             try writeProtected(data)
             UserDefaults.standard.removeObject(forKey: userDefaultsKey)
         } catch {

@@ -73,11 +73,11 @@ public final class TravelViewModel: ObservableObject {
             return
         }
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let saved = try? JSONDecoder().decode([TravelTrip].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([TravelTrip].self, from: data) {
             trips = saved
         }
         if let data = UserDefaults.standard.data(forKey: packingKey),
-           let saved = try? JSONDecoder().decode([PackingItem].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([PackingItem].self, from: data) {
             packingList = saved
         }
         if !trips.isEmpty || !packingList.isEmpty {

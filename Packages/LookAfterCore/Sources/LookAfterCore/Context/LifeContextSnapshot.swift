@@ -299,6 +299,7 @@ public enum ContextActionKind: String, Codable, Sendable {
     case resumeSession
     case openContinueSession
     case beginWork
+    case startRecovery
     case openShopping
     case openCoach
     case openBrain

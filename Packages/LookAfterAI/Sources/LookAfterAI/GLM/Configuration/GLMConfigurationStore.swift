@@ -15,7 +15,7 @@ public final class GLMConfigurationStore: @unchecked Sendable {
         defer { lock.unlock() }
         guard
             let data = UserDefaults.standard.data(forKey: storageKey),
-            var config = try? JSONDecoder().decode(GLMConfiguration.self, from: data)
+            var config = try? SharedFormatters.jsonDecoderSeconds.decode(GLMConfiguration.self, from: data)
         else {
             return .default
         }
@@ -30,7 +30,7 @@ public final class GLMConfigurationStore: @unchecked Sendable {
     public func save(_ configuration: GLMConfiguration) {
         lock.lock()
         defer { lock.unlock() }
-        if let data = try? JSONEncoder().encode(configuration) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(configuration) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
     }

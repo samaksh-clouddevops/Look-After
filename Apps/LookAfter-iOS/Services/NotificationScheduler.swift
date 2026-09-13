@@ -55,6 +55,10 @@ actor NotificationScheduler {
     // MARK: - Private
 
     private func schedule(candidate: NotificationCandidate) async {
+        // Past fire dates silently fail or fire immediately with undefined UX (BUG-038).
+        let fireDate = candidate.fireDate
+        guard fireDate.timeIntervalSinceNow > 1 else { return }
+
         let content = UNMutableNotificationContent()
         content.title = candidate.title
         content.body = candidate.body
@@ -76,7 +80,7 @@ actor NotificationScheduler {
 
         let components = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute, .second],
-            from: candidate.fireDate
+            from: fireDate
         )
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         let request = UNNotificationRequest(identifier: candidate.id, content: content, trigger: trigger)

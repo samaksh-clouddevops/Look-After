@@ -1,5 +1,6 @@
 import Foundation
 import LookAfterCore
+import os
 
 /// Secure storage and health tracking for GLM API keys.
 public final class GLMKeyManager: @unchecked Sendable {
@@ -9,6 +10,7 @@ public final class GLMKeyManager: @unchecked Sendable {
     private let secretStore: SecretStore
     private let lock = NSLock()
     private var records: [GLMKeyRecord] = []
+    private let logger = Logger(subsystem: "com.lookafter.app", category: "GLMKeyManager")
 
     public init(secretStore: SecretStore = KeychainSecretStore(), metadataKey: String = "glmKeyRecords") {
         self.secretStore = secretStore
@@ -241,7 +243,7 @@ public final class GLMKeyManager: @unchecked Sendable {
     private func loadRecords() {
         guard
             let data = UserDefaults.standard.data(forKey: metadataKey),
-            let decoded = try? JSONDecoder().decode([GLMKeyRecord].self, from: data)
+            let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([GLMKeyRecord].self, from: data)
         else {
             records = []
             return
@@ -250,7 +252,7 @@ public final class GLMKeyManager: @unchecked Sendable {
     }
 
     private func persistLocked() {
-        if let data = try? JSONEncoder().encode(records) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(records) {
             UserDefaults.standard.set(data, forKey: metadataKey)
         }
     }
@@ -268,7 +270,7 @@ public final class GLMKeyManager: @unchecked Sendable {
         guard records.isEmpty else { return }
 
         if let legacyData = UserDefaults.standard.data(forKey: legacyRecordsKey),
-           let legacyRecords = try? JSONDecoder().decode([LegacyKeyRecord].self, from: legacyData) {
+           let legacyRecords = try? SharedFormatters.jsonDecoderSeconds.decode([LegacyKeyRecord].self, from: legacyData) {
             for legacy in legacyRecords {
                 guard let secret = try? secretStore.load(account: legacy.id) else { continue }
                 let record = GLMKeyRecord(
@@ -302,7 +304,9 @@ public final class GLMKeyManager: @unchecked Sendable {
                 records = [record]
                 persistLocked()
                 UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
-            } catch {}
+            } catch {
+                logger.error("Legacy API key migration failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -324,7 +328,9 @@ public final class GLMKeyManager: @unchecked Sendable {
             try secretStore.save(bundled, account: record.id)
             records = [record]
             persistLocked()
-        } catch {}
+        } catch {
+            logger.error("Bundled default API key seed failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Syncs GLM key from `~/ADHD/credentials` (creates or updates "Developer credentials").

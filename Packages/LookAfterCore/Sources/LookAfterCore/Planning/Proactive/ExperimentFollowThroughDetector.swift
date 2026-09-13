@@ -10,14 +10,14 @@ public enum ExperimentReminderStore {
 
     public static func save(experiment: String, weekKey: String) {
         let payload = StoredExperiment(weekKey: weekKey, experiment: experiment)
-        if let data = try? JSONEncoder().encode(payload) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(payload) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
 
     public static func load() -> StoredExperiment? {
         guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode(StoredExperiment.self, from: data) else { return nil }
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode(StoredExperiment.self, from: data) else { return nil }
         return decoded
     }
 

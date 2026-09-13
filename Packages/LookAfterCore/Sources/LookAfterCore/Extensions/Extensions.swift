@@ -78,6 +78,91 @@ extension String {
     }
 }
 
+// MARK: - Dictionary uniqueness helpers
+
+extension Dictionary {
+    /// Builds a dictionary from key-value pairs without trapping on duplicate keys
+    /// (`Dictionary(uniqueKeysWithValues:)` fatals when IDs collide after merges).
+    public static func uniquingFirstValue<S: Sequence>(
+        _ pairs: S
+    ) -> [Key: Value] where S.Element == (Key, Value) {
+        Dictionary(pairs, uniquingKeysWith: { first, _ in first })
+    }
+}
+
+// MARK: - Flexible ISO-8601 dates (LLM / API)
+
+public enum FlexibleISO8601Date {
+    /// Parses full ISO-8601 timestamps and date-only (`yyyy-MM-dd`) values.
+    public static func date(from raw: String) -> Date? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: trimmed) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: trimmed) { return date }
+
+        let dayOnly = DateFormatter()
+        dayOnly.calendar = Calendar(identifier: .gregorian)
+        dayOnly.locale = Locale(identifier: "en_US_POSIX")
+        dayOnly.timeZone = TimeZone.current
+        dayOnly.dateFormat = "yyyy-MM-dd"
+        return dayOnly.date(from: String(trimmed.prefix(10)))
+    }
+}
+
+// MARK: - Shared formatters (PERF-018)
+
+/// Thread-safe-enough for MainActor UI + short-lived off-main encoding.
+/// Prefer these over constructing `DateFormatter()` / `JSONEncoder()` in row bodies.
+public enum SharedFormatters {
+    public static let iso8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    public static let iso8601NoFraction: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    /// Short time like `3:45 PM` — MainActor UI use.
+    @MainActor
+    public static let shortTime: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.autoupdatingCurrent
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
+
+    /// Medium date like `Aug 9, 2026`.
+    @MainActor
+    public static let mediumDate: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.autoupdatingCurrent
+        f.timeStyle = .none
+        f.dateStyle = .medium
+        return f
+    }()
+
+    public static let jsonEncoderSeconds: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .secondsSince1970
+        return e
+    }()
+
+    public static let jsonDecoderSeconds: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .secondsSince1970
+        return d
+    }()
+}
+
 // MARK: - Double Extensions
 
 extension Double {

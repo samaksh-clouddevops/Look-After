@@ -225,6 +225,7 @@ public enum FallbackGradientStyle {
 }
 
 public struct FallbackGradient: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let style: FallbackGradientStyle
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathe: Double = 0

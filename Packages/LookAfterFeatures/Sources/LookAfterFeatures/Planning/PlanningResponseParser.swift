@@ -47,7 +47,7 @@ enum PlanningResponseParser {
 
     private static func decodeStrict(_ clean: String) -> PlanningTurnResponse? {
         guard let data = clean.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(PlanningTurnResponse.self, from: data)
+        return try? SharedFormatters.jsonDecoderSeconds.decode(PlanningTurnResponse.self, from: data)
     }
 
     // MARK: - Lenient dictionary decode
@@ -154,7 +154,7 @@ enum PlanningResponseParser {
         let reasoning = dict["reasoning"] as? String ?? ""
         var deadline: Date?
         if let iso = dict["deadlineISO"] as? String ?? dict["deadline_iso"] as? String {
-            deadline = ISO8601DateFormatter().date(from: iso)
+            deadline = FlexibleISO8601Date.date(from: iso)
         }
         let slices = parseSliceDrafts(from: dict) ?? []
         return MultiDayPlanDraft(
@@ -271,7 +271,8 @@ enum PlanningResponseParser {
         }
         return "I'm looking at your day and will adjust the plan based on what you shared."
     }
-}
+
+    }
 
 // MARK: - LLM enum normalization
 

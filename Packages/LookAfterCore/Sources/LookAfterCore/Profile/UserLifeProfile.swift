@@ -143,7 +143,7 @@ public enum UserLifeProfileStore {
     public static func load() -> UserLifeProfile {
         if let cached = cachedProfile.withLock({ $0 }) { return cached }
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let profile = try? JSONDecoder().decode(UserLifeProfile.self, from: data) else {
+              let profile = try? SharedFormatters.jsonDecoderSeconds.decode(UserLifeProfile.self, from: data) else {
             let migrated = migratedLegacyProfile()
             cachedProfile.withLock { $0 = migrated }
             return migrated
@@ -156,7 +156,7 @@ public enum UserLifeProfileStore {
         var updated = profile
         refreshPreferredName(on: &updated)
 
-        if let data = try? JSONEncoder().encode(updated) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(updated) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
         UserDefaults.standard.set(updated.peakStartHour, forKey: "peakStartHour")

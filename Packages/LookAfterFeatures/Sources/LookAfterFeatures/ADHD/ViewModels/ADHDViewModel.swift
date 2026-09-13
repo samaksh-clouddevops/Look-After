@@ -12,14 +12,18 @@ public final class ADHDViewModel: ObservableObject {
     @Published public var emergencyTasks: [LifeTask] = []
     
     // MARK: - Focus Session
-    
+
     @Published public var isFocusSessionActive: Bool = false
+    /// High-frequency clock for the focus overlay only.
     @Published public var focusSessionElapsed: TimeInterval = 0
+    /// 5-second coarse elapsed for shell / non-overlay observers (PERF-014).
+    @Published public private(set) var focusDisplayElapsed: TimeInterval = 0
     @Published public var focusSessionTarget: TimeInterval = 25 * 60
     /// Bumps when Live Activity should refresh progress (bucket boundaries).
     @Published public private(set) var focusProgressBucket: Int = -1
 
     private static let liveActivityProgressBuckets: Set<Int> = [0, 25, 50, 65, 75, 90, 95]
+    private var lastDisplayElapsedBucket: Int = -1
     @Published public var focusBreakReminder: Bool = false
     @Published public var currentFocusTask: LifeTask?
     @Published public var isPaused: Bool = false
@@ -65,18 +69,18 @@ public final class ADHDViewModel: ObservableObject {
     private var focusPhaseAnchorDate: Date?
     
     public init() {
-        // Load saved timer settings
+        // Load saved timer settings (clamp invalid / zero values).
         let savedFocus = UserDefaults.standard.integer(forKey: "focusDurationMinutes")
         let savedBreak = UserDefaults.standard.integer(forKey: "breakDurationMinutes")
         let savedLongBreak = UserDefaults.standard.integer(forKey: "longBreakMinutes")
         let savedSessions = UserDefaults.standard.integer(forKey: "sessionsBeforeLongBreak")
-        
-        if savedFocus > 0 { focusDurationMinutes = savedFocus }
-        if savedBreak > 0 { breakDurationMinutes = savedBreak }
-        if savedLongBreak > 0 { longBreakMinutes = savedLongBreak }
-        if savedSessions > 0 { sessionsBeforeLongBreak = savedSessions }
+
+        if savedFocus > 0 { focusDurationMinutes = min(savedFocus, 240) }
+        if savedBreak > 0 { breakDurationMinutes = min(savedBreak, 60) }
+        if savedLongBreak > 0 { longBreakMinutes = min(savedLongBreak, 90) }
+        if savedSessions > 0 { sessionsBeforeLongBreak = min(max(savedSessions, 1), 12) }
     }
-    
+
     // MARK: - Emergency Mode
     
     /// Activate emergency mode — shows only top 3 tasks with minimal UI.
@@ -133,17 +137,38 @@ public final class ADHDViewModel: ObservableObject {
         isCountdownActive = false
         countdownValue = 3
     }
-    
+
     // MARK: - Focus Session
     
     /// Start a focus/pomodoro session — uses the scheduled window when set, else task estimate.
     /// Performance: flips `isFocusSessionActive` immediately so UI can paint; timer starts next run-loop.
     public func startFocusSession(task: LifeTask, durationMinutes: Int? = nil) {
+        beginFocusInterval(
+            task: task,
+            durationMinutes: durationMinutes,
+            resetSessionCounter: true
+        )
+    }
+
+    /// Continues the next pomodoro work interval without resetting the session counter (BUG-008).
+    private func continueFocusInterval(task: LifeTask) {
+        beginFocusInterval(
+            task: task,
+            durationMinutes: nil,
+            resetSessionCounter: false
+        )
+    }
+
+    private func beginFocusInterval(
+        task: LifeTask,
+        durationMinutes: Int?,
+        resetSessionCounter: Bool
+    ) {
         PerformanceMonitor.signpostInterval("FocusTimerOpen", warnAfterMs: 16) {
             let duration = durationMinutes ?? Self.focusDuration(for: task, defaultMinutes: focusDurationMinutes)
             cancelCountdownIfNeeded()
             stopFocusTick()
-            focusSessionElapsed = 0
+            resetElapsedCounters()
             focusPhaseAnchorDate = Date()
             focusSessionTarget = TimeInterval(duration * 60)
             focusProgressBucket = -1
@@ -152,7 +177,9 @@ public final class ADHDViewModel: ObservableObject {
             isPaused = false
             isOnBreak = false
             showContextRecovery = false
-            currentSessionNumber = 1
+            if resetSessionCounter {
+                currentSessionNumber = 1
+            }
             // UI flag last so observers see a complete initial state in one publish cycle.
             isFocusSessionActive = true
             onFocusSessionDidStart?()
@@ -177,7 +204,7 @@ public final class ADHDViewModel: ObservableObject {
         }
         return defaultMinutes
     }
-    
+
     private func stopFocusTick() {
         focusTickTask?.cancel()
         focusTickTask = nil
@@ -187,6 +214,13 @@ public final class ADHDViewModel: ObservableObject {
         let bucket = Int((focusProgress * 100).rounded(.down))
         guard Self.liveActivityProgressBuckets.contains(bucket), bucket != focusProgressBucket else { return }
         focusProgressBucket = bucket
+    }
+
+    private func publishFocusDisplayElapsedIfNeeded() {
+        let bucket = Int(focusSessionElapsed) / 5
+        guard bucket != lastDisplayElapsedBucket else { return }
+        lastDisplayElapsedBucket = bucket
+        focusDisplayElapsed = focusSessionElapsed
     }
 
     private func startFocusTimer() {
@@ -201,6 +235,7 @@ public final class ADHDViewModel: ObservableObject {
                 // so a delayed/suspended tick (backgrounding, throttling) self-corrects instead
                 // of permanently drifting behind real elapsed time.
                 focusSessionElapsed = max(0, Date().timeIntervalSince(anchor))
+                publishFocusDisplayElapsedIfNeeded()
                 publishFocusProgressBucketIfNeeded()
 
                 if focusSessionElapsed >= focusSessionTarget {
@@ -209,7 +244,7 @@ public final class ADHDViewModel: ObservableObject {
                         isOnBreak = false
                         currentSessionNumber += 1
                         if let task = currentFocusTask {
-                            startFocusSession(task: task)
+                            continueFocusInterval(task: task)
                         }
                     } else {
                         startBreak()
@@ -227,18 +262,24 @@ public final class ADHDViewModel: ObservableObject {
     /// Start a break period.
     private func startBreak() {
         isOnBreak = true
-        focusSessionElapsed = 0
+        resetElapsedCounters()
         focusPhaseAnchorDate = Date()
         focusProgressBucket = -1
-        
-        // Long break every N sessions
-        let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
+
+        // Long break every N sessions (guard divisor — UserDefaults can be 0).
+        let isLongBreak = isLongBreakSession
         focusSessionTarget = TimeInterval((isLongBreak ? longBreakMinutes : breakDurationMinutes) * 60)
         focusBreakReminder = false
-        
+
         startFocusTimer()
     }
-    
+
+    /// Safe long-break detector — never divides by zero (BUG-041).
+    private var isLongBreakSession: Bool {
+        let n = max(sessionsBeforeLongBreak, 1)
+        return currentSessionNumber > 0 && currentSessionNumber % n == 0
+    }
+
     /// Pause the focus session.
     public func pauseFocusSession() {
         // Capture the true elapsed time from the anchor (not the last tick's possibly-stale
@@ -276,39 +317,47 @@ public final class ADHDViewModel: ObservableObject {
         isOnBreak = false
         currentSessionNumber += 1
         if let task = currentFocusTask {
-            startFocusSession(task: task)
+            continueFocusInterval(task: task)
         }
     }
-    
+
     /// Add time to current session.
     public func addTime(minutes: Int) {
         focusSessionTarget += TimeInterval(minutes * 60)
         publishFocusProgressBucketIfNeeded()
     }
-    
+
     /// Reduce time from current session.
     public func reduceTime(minutes: Int) {
         let reduction = TimeInterval(minutes * 60)
         focusSessionTarget = max(focusSessionElapsed + 60, focusSessionTarget - reduction) // Keep at least 1 min remaining
         publishFocusProgressBucketIfNeeded()
     }
-    
-    /// Reset current session timer to full configured duration.
+
+    /// Reset current session timer to full configured duration (or task window when set).
     public func resetTimer() {
         stopFocusTick()
-        focusSessionElapsed = 0
+        resetElapsedCounters()
         focusPhaseAnchorDate = Date()
         focusProgressBucket = -1
         if isOnBreak {
-            let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
-            focusSessionTarget = TimeInterval((isLongBreak ? longBreakMinutes : breakDurationMinutes) * 60)
+            focusSessionTarget = TimeInterval((isLongBreakSession ? longBreakMinutes : breakDurationMinutes) * 60)
+        } else if let task = currentFocusTask {
+            let minutes = Self.focusDuration(for: task, defaultMinutes: focusDurationMinutes)
+            focusSessionTarget = TimeInterval(minutes * 60)
         } else {
             focusSessionTarget = TimeInterval(focusDurationMinutes * 60)
         }
         isPaused = false
         startFocusTimer()
     }
-    
+
+    private func resetElapsedCounters() {
+        focusSessionElapsed = 0
+        focusDisplayElapsed = 0
+        lastDisplayElapsedBucket = -1
+    }
+
     /// Optional hook fired synchronously when a focus session begins (Live Activity, execution layer).
     public var onFocusSessionDidStart: (() -> Void)?
 
@@ -322,7 +371,7 @@ public final class ADHDViewModel: ObservableObject {
         stopFocusTick()
         cancelCountdownIfNeeded()
         isFocusSessionActive = false
-        focusSessionElapsed = 0
+        resetElapsedCounters()
         focusPhaseAnchorDate = nil
         focusProgressBucket = -1
         focusBreakReminder = false
@@ -337,21 +386,26 @@ public final class ADHDViewModel: ObservableObject {
         }
     }
     
-    /// Resume from interruption with context recovery.
+    /// Resume from interruption with context recovery (restores paused elapsed when possible).
     public func resumeFromInterruption() {
         showContextRecovery = false
+        if isFocusSessionActive, isPaused {
+            resumeFocusSession()
+            return
+        }
         if let task = lastInterruptedTask {
+            // Fresh interval if the focus session was fully torn down.
             startFocusSession(task: task)
         }
     }
-    
+
     // MARK: - Body Doubling
-    
+
     /// Start body doubling mode — virtual co-working presence.
     public func startBodyDoubling() {
         isBodyDoubling = true
         bodyDoublingElapsed = 0
-        
+
         bodyDoublingTask?.cancel()
         bodyDoublingTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -361,7 +415,7 @@ public final class ADHDViewModel: ObservableObject {
             }
         }
     }
-    
+
     /// End body doubling mode.
     public func endBodyDoubling() {
         bodyDoublingTask?.cancel()
@@ -369,7 +423,7 @@ public final class ADHDViewModel: ObservableObject {
         isBodyDoubling = false
         bodyDoublingElapsed = 0
     }
-    
+
     // MARK: - Save Settings
     
     public func saveTimerSettings() {
@@ -410,20 +464,20 @@ public final class ADHDViewModel: ObservableObject {
     /// Current session label (task headline or break name).
     public var sessionLabel: String {
         if isOnBreak {
-            let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
-            return isLongBreak ? "Long Break" : "Short Break"
+            return isLongBreakSession ? "Long Break" : "Short Break"
         }
         if let task = currentFocusTask {
             return HumanLanguage.outcomeHeadline(task: task)
         }
         return "Working"
     }
-    
+
     /// Session counter string.
     public var sessionCounterString: String {
-        return "Session \(currentSessionNumber) of \(sessionsBeforeLongBreak)"
+        let total = max(sessionsBeforeLongBreak, 1)
+        return "Session \(currentSessionNumber) of \(total)"
     }
-    
+
     /// Formatted body doubling elapsed time.
     public var bodyDoublingElapsedString: String {
         let minutes = Int(bodyDoublingElapsed) / 60

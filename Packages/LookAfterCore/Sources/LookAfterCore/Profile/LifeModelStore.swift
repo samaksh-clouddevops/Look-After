@@ -10,7 +10,7 @@ public enum LifeModelStore {
     public static func load() -> LifeModel? {
         if let cached = cache.withLock({ $0 }) { return cached }
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let model = try? JSONDecoder().decode(LifeModel.self, from: data) else {
+              let model = try? SharedFormatters.jsonDecoderSeconds.decode(LifeModel.self, from: data) else {
             cache.withLock { $0 = .some(nil) }
             return nil
         }
@@ -19,7 +19,7 @@ public enum LifeModelStore {
     }
 
     public static func save(_ model: LifeModel) {
-        if let data = try? JSONEncoder().encode(model) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(model) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
         cache.withLock { $0 = .some(model) }

@@ -6,14 +6,14 @@ public enum ProactiveSnapshotStore {
 
     public static func save(_ actions: [ProactiveAction]) {
         let payload = actions.map { SnapshotAction(from: $0) }
-        if let data = try? JSONEncoder().encode(payload) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(payload) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
 
     public static func load() -> [ProactiveAction] {
         guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([SnapshotAction].self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([SnapshotAction].self, from: data) else {
             return []
         }
         return decoded.map(\.action)

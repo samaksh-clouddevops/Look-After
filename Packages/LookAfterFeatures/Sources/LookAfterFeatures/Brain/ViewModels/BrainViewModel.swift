@@ -34,6 +34,8 @@ public final class BrainViewModel: ObservableObject {
     private let healthRepo: HealthSummaryRepository
     private let energyRepo: EnergyReportRepository
     private var flowDirector: FlowDirector?
+    /// Optional façade (Phase 3). Used when `ArchitectureFeatureFlags.useBrainFacade` is on.
+    private var brainFacade: (any BrainFacadeProtocol)?
 
     public init(
         brain: ExecutiveBrain,
@@ -43,7 +45,8 @@ public final class BrainViewModel: ObservableObject {
         taskRepo: TaskRepository? = nil,
         healthStore: HealthStore? = nil,
         healthRepo: HealthSummaryRepository? = nil,
-        energyRepo: EnergyReportRepository? = nil
+        energyRepo: EnergyReportRepository? = nil,
+        brainFacade: (any BrainFacadeProtocol)? = nil
     ) {
         self.brain = brain
         self.flowDirector = flowDirector
@@ -53,11 +56,16 @@ public final class BrainViewModel: ObservableObject {
         self.taskRepo = taskRepo ?? TaskRepository()
         self.healthRepo = healthRepo ?? HealthSummaryRepository()
         self.energyRepo = energyRepo ?? EnergyReportRepository()
+        self.brainFacade = brainFacade
     }
 
     /// Attach or replace the Flow Director instance (async factory wiring from app layer).
     public func configure(flowDirector: FlowDirector) {
         self.flowDirector = flowDirector
+    }
+
+    public func configure(brainFacade: any BrainFacadeProtocol) {
+        self.brainFacade = brainFacade
     }
 
     /// Applies a pre-built Brain tab presentation from `BriefingProjector`.
@@ -187,6 +195,16 @@ public final class BrainViewModel: ObservableObject {
                     activeTasks: activeTasks
                 )
             }
+
+            // Phase 3: façade can override with executive-cost guidance (e.g. short sleep).
+            if ArchitectureFeatureFlags.useBrainFacade, let facade = brainFacade {
+                await applyBrainFacadeHint(
+                    facade: facade,
+                    userId: userId,
+                    health: latestHealth,
+                    activeTasks: activeTasks
+                )
+            }
         } catch {
             self.error = error.localizedDescription
             self.recommendation = "Pick one small task and start there."
@@ -217,6 +235,31 @@ public final class BrainViewModel: ObservableObject {
     }
 
     // MARK: - Private
+
+    /// Applies deterministic façade guidance; may override recommendation when sleep is short.
+    private func applyBrainFacadeHint(
+        facade: any BrainFacadeProtocol,
+        userId: String,
+        health: HealthSummary?,
+        activeTasks: [LifeTask]
+    ) async {
+        let sleepHours: Double? = {
+            guard let minutes = health?.totalSleepMinutes, minutes > 0 else { return nil }
+            return Double(minutes) / 60.0
+        }()
+        let input = BrainFacadeInput(
+            userId: userId,
+            sleepHours: sleepHours,
+            energyScore: nil,
+            activeTaskCount: activeTasks.count
+        )
+        guard let output = await facade.recommend(input) else { return }
+        if output.backendID.contains("recovery") {
+            recommendation = [output.headline, output.supportingLine]
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+        }
+    }
 
     private func loadHealth(for userId: String) async -> HealthSummary? {
         if let healthStore {

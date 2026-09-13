@@ -42,7 +42,7 @@ public final class LearningViewModel: ObservableObject {
             return
         }
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let saved = try? JSONDecoder().decode([KnowledgeNote].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([KnowledgeNote].self, from: data) {
             nodes = saved
             if !nodes.isEmpty { saveToDisk() }
         }

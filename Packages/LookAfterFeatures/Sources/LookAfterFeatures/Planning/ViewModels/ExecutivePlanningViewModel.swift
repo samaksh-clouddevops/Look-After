@@ -21,6 +21,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     @Published public private(set) var timelineRows: [ExecutivePlanningTimelineRow] = []
     @Published public private(set) var tomorrowTimelineRows: [ExecutivePlanningTimelineRow] = []
     @Published public private(set) var recentDeltas: [PlanningTimelineDelta] = []
+    /// Mutations parsed from the last turn awaiting explicit user confirm (BUG-014 / BUG-036).
+    @Published public private(set) var pendingMutations: [PlanMutation] = []
     @Published public var draftText = ""
     @Published public var errorMessage: String?
 
@@ -57,6 +59,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     private weak var timelineService: TimelineService?
     private var cancellables = Set<AnyCancellable>()
     private var hasSeededProactiveSuggestions = false
+    /// When false (default), LLM mutations stage for confirmation instead of auto-applying.
+    public var autoApplyMutations: Bool = false
 
     public init(engine: LLMPlanningEngine = LLMPlanningEngine()) {
         self.engine = engine
@@ -91,6 +95,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         timelineRows = []
         tomorrowTimelineRows = []
         recentDeltas = []
+        pendingMutations = []
         draftText = ""
         errorMessage = nil
         replanSummary = nil
@@ -365,7 +370,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     ) async {
         let calendar = Calendar.current
         let allowedTaskIDs = Set(tasksVM.schedulingContext.map(\.id))
-        let taskByID = Dictionary(uniqueKeysWithValues: tasksVM.tasks.map { ($0.id, $0) })
+        let taskByID = Dictionary.uniquingFirstValue(tasksVM.tasks.map { ($0.id, $0) })
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
         let freedSlot = pendingContextualReplan?.freedSlotWindow
         let profile = UserLifeProfileStore.load()
@@ -494,6 +499,14 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         let notices = parts.joined(separator: " ")
         if reply.isEmpty { return notices }
         return reply + "\n\n" + notices
+    }
+
+    private func appendPendingMutationNotice(to reply: String, count: Int) -> String {
+        let notice = count == 1
+            ? "I drafted 1 schedule change — confirm Apply changes when you're ready."
+            : "I drafted \(count) schedule changes — confirm Apply changes when you're ready."
+        if reply.isEmpty { return notice }
+        return reply + "\n\n" + notice
     }
 
     public func submit(
@@ -703,6 +716,31 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             }
         }
 
+        // Staged mutation confirm / discard (BUG-014).
+        if negotiationPhase == .awaitingConfirmation || !pendingMutations.isEmpty {
+            let lower = option.lowercased()
+            if lower.contains("apply") {
+                await confirmPendingMutations(
+                    context: context,
+                    tasksVM: tasksVM,
+                    modulesVM: modulesVM,
+                    userId: userId,
+                    refreshContext: refreshContext
+                )
+                return
+            }
+            if lower.contains("discard") || lower.contains("later") || lower.contains("cancel") {
+                discardPendingMutations()
+                turns.append(PlanningConversationTurn(
+                    role: .assistant,
+                    text: lower.contains("later")
+                        ? "Okay — I'll keep the draft and won't change your schedule yet."
+                        : "Discarded those plan changes."
+                ))
+                return
+            }
+        }
+
         if let variantID = negotiation?.variantID(forOption: option),
            let variant = planVariants?.first(where: { $0.id == variantID })
             ?? contextualReplanResult?.planVariants?.first(where: { $0.id == variantID }) {
@@ -778,6 +816,47 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         turns.append(PlanningConversationTurn(role: .assistant, text: text))
         if inputMode == .voice {
             onSpeakReply?(text)
+        }
+    }
+
+    /// Applies staged mutations after explicit user confirmation.
+    public func confirmPendingMutations(
+        context: PlanningConversationContext,
+        tasksVM: TasksViewModel,
+        modulesVM: LifeModulesViewModel,
+        userId: String,
+        refreshContext: @escaping () async -> Void
+    ) async {
+        let mutations = pendingMutations
+        guard !mutations.isEmpty else {
+            discardPendingMutations()
+            return
+        }
+        var meds = medications
+        let applyResult = await applier.apply(
+            mutations: mutations,
+            tasksVM: tasksVM,
+            modulesVM: modulesVM,
+            userId: userId,
+            medications: &meds,
+            lifeProfile: context.lifeProfile
+        )
+        medications = meds
+        pendingMutations = []
+        negotiation = nil
+        negotiationPhase = .idle
+        var notice = "Applied \(applyResult.appliedCount) change\(applyResult.appliedCount == 1 ? "" : "s")."
+        notice = appendApplyNotices(to: notice, applyResult: applyResult)
+        turns.append(PlanningConversationTurn(role: .assistant, text: notice))
+        await refreshContext()
+        NotificationCenter.default.post(name: .taskListDidChange, object: nil)
+    }
+
+    public func discardPendingMutations() {
+        pendingMutations = []
+        if negotiationPhase == .awaitingConfirmation {
+            negotiation = nil
+            negotiationPhase = .idle
         }
     }
 

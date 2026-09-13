@@ -36,7 +36,7 @@ public final class TaskDecomposer: @unchecked Sendable {
             var estimatedMinutes: Int?
         }
 
-        if let parsed = try? JSONDecoder().decode(Response.self, from: data),
+        if let parsed = try? SharedFormatters.jsonDecoderSeconds.decode(Response.self, from: data),
            let steps = parsed.steps, !steps.isEmpty {
             let taskSteps = steps.map {
                 TaskStep(

@@ -77,14 +77,14 @@ public enum ProactiveFeedbackStore {
 
     private static func loadEvents() -> [ProactiveFeedbackEvent] {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([ProactiveFeedbackEvent].self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([ProactiveFeedbackEvent].self, from: data) else {
             return []
         }
         return decoded
     }
 
     private static func saveEvents(_ events: [ProactiveFeedbackEvent]) {
-        if let data = try? JSONEncoder().encode(events) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(events) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
     }

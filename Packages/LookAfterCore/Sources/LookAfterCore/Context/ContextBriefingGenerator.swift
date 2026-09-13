@@ -432,6 +432,19 @@ public struct ContextBriefingGenerator: Sendable {
         )
     }
 
+    private static func resolvedActionTaskID(
+        for rec: ExecutiveRecommendationEngine.Output,
+        fallbackTask: LifeTask
+    ) -> String? {
+        if let taskID = rec.taskID { return taskID }
+        switch rec.actionKind {
+        case .viewPlan, .openCoach, .openBrain, .openHealthDetail, .openShopping, .startRecovery:
+            return nil
+        default:
+            return fallbackTask.id
+        }
+    }
+
     private func coreFromEngine(_ rec: ExecutiveRecommendationEngine.Output, fallbackTask: LifeTask) -> CoreRecommendation {
         let estimate = DurationEstimate(pointMinutes: rec.durationMinutes, confidence: 0.85)
         return CoreRecommendation(
@@ -443,7 +456,7 @@ public struct ContextBriefingGenerator: Sendable {
             buttonLabel: rec.buttonLabel,
             action: ContextAction(
                 label: rec.headline,
-                taskID: rec.taskID ?? fallbackTask.id,
+                taskID: Self.resolvedActionTaskID(for: rec, fallbackTask: fallbackTask),
                 kind: rec.actionKind
             ),
             impactLabel: rec.impactLabel,

@@ -46,25 +46,31 @@ jobs:
         with:
           install-xcodegen: "false"
           generate-project: "false"
+      # Package tests are hard gates for Core / Features / ExecutiveBrain.
+      # AI and Data stay soft until SPM deps are fully hermetic on CI agents.
       - name: Test LookAfterCore
         run: swift test --package-path Packages/LookAfterCore --parallel
       - name: Test LookAfterFeatures
         run: |
+          set -euo pipefail
           if [ -f Packages/LookAfterFeatures/Package.swift ]; then
             swift test --package-path Packages/LookAfterFeatures --parallel
           fi
       - name: Test LookAfterAI
         run: |
+          set -euo pipefail
           if [ -f Packages/LookAfterAI/Package.swift ]; then
             swift test --package-path Packages/LookAfterAI --parallel || true
           fi
       - name: Test LookAfterData
         run: |
+          set -euo pipefail
           if [ -f Packages/LookAfterData/Package.swift ]; then
             swift test --package-path Packages/LookAfterData --parallel || true
           fi
       - name: Test ExecutiveBrain
         run: |
+          set -euo pipefail
           if [ -f Packages/ExecutiveBrain/Package.swift ]; then
             swift test --package-path Packages/ExecutiveBrain --parallel
           fi

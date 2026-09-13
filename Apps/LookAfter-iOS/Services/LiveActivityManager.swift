@@ -38,6 +38,48 @@ final class LiveActivityManager {
         }
     }
 
+    /// Ends orphaned focus Live Activities left after process death when no session is active (BUG-015).
+    func reconcileOrphanedFocusActivities(manualFocusActive: Bool) {
+        guard !manualFocusActive else {
+            if focusActivity == nil {
+                focusActivity = Activity<FocusActivityAttributes>.activities.first
+            }
+            return
+        }
+        // Prefer a single attached activity; end extras and stale execution-driven ones when idle.
+        let existing = Activity<FocusActivityAttributes>.activities
+        guard !existing.isEmpty else {
+            focusActivity = nil
+            isExecutionDriven = false
+            return
+        }
+        if focusActivity == nil {
+            focusActivity = existing.first
+        }
+        let keepID = focusActivity?.id
+        for activity in existing where activity.id != keepID {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
+    }
+
+    /// Cold-launch cleanup: drop all focus activities if app has no active focus/execution surface.
+    func endOrphanedFocusActivitiesOnLaunch(manualFocusActive: Bool, executionProjects: Bool) {
+        reattachNowPinIfNeeded()
+        if manualFocusActive || executionProjects {
+            reconcileOrphanedFocusActivities(manualFocusActive: manualFocusActive)
+            return
+        }
+        let orphans = Activity<FocusActivityAttributes>.activities
+        focusActivity = nil
+        isExecutionDriven = false
+        for activity in orphans {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
+        if !orphans.isEmpty {
+            PinNowLogger.info("Ended \(orphans.count) orphaned focus Live Activit(y/ies) on launch")
+        }
+    }
+
     // MARK: - Focus Session (manual ADHD / pomodoro)
 
     func startFocusActivity(

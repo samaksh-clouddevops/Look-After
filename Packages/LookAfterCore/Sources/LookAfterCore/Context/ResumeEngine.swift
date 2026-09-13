@@ -5,14 +5,10 @@ public final class ResumeEngine: @unchecked Sendable {
     public static let shared = ResumeEngine()
 
     private let defaults: UserDefaults
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
     private let lock = NSLock()
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        encoder.dateEncodingStrategy = .secondsSince1970
-        decoder.dateDecodingStrategy = .secondsSince1970
     }
 
     private func storageKey(userId: String) -> String {
@@ -23,7 +19,7 @@ public final class ResumeEngine: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let data = defaults.data(forKey: storageKey(userId: userId)),
-              let snapshot = try? decoder.decode(ResumeSnapshot.self, from: data) else {
+              let snapshot = try? SharedFormatters.jsonDecoderSeconds.decode(ResumeSnapshot.self, from: data) else {
             return nil
         }
         return snapshot.isStale ? nil : snapshot
@@ -32,7 +28,7 @@ public final class ResumeEngine: @unchecked Sendable {
     public func save(_ snapshot: ResumeSnapshot, userId: String) {
         lock.lock()
         defer { lock.unlock() }
-        guard let data = try? encoder.encode(snapshot) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(snapshot) else { return }
         defaults.set(data, forKey: storageKey(userId: userId))
     }
 

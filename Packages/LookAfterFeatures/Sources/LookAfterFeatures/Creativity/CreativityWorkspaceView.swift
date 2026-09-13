@@ -60,7 +60,7 @@ public final class CreativityViewModel: ObservableObject {
             return
         }
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
-           let saved = try? JSONDecoder().decode([CreativeProject].self, from: data) {
+           let saved = try? SharedFormatters.jsonDecoderSeconds.decode([CreativeProject].self, from: data) {
             projects = saved
             if !projects.isEmpty { saveToDisk() }
         }

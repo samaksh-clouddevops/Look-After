@@ -165,10 +165,13 @@ struct ProactiveActionRouter {
             return true
         }
 
+        // Only apply when the option explicitly asks to apply/confirm — never on vague labels (BUG-036).
         if !bundle.mutations.isEmpty,
-           lower.contains("schedule") || lower.contains("defer") || lower.contains("reschedule") || lower.contains("mark done") || lower.contains("create") || lower.contains("batch") || lower.contains("reply") || lower.contains("call") {
+           lower.contains("apply") || lower.contains("confirm") || lower.contains("yes,") || lower == "yes"
+            || lower.hasPrefix("schedule it") || lower.hasPrefix("defer it") || lower.hasPrefix("reschedule it")
+            || lower.hasPrefix("mark done") || lower.hasPrefix("create it") {
             var medications = MedicationStore.load()
-            _ = await PlanMutationApplier().apply(
+            let applyResult = await PlanMutationApplier().apply(
                 mutations: bundle.mutations,
                 tasksVM: env.shell.tasksVM,
                 modulesVM: env.shell.modulesVM,
@@ -178,8 +181,10 @@ struct ProactiveActionRouter {
                 allowUserPlacedOverride: true
             )
             MedicationStore.save(medications)
-            await env.refreshContext()
-            return true
+            if applyResult.appliedCount > 0 {
+                await env.refreshContext()
+            }
+            return applyResult.appliedCount > 0 || !applyResult.skippedReasons.isEmpty
         }
 
         if let route = bundle.moduleRoute {
@@ -258,14 +263,14 @@ enum ProactivePreviewTimeoutStore {
             expiresAt: expiresAt,
             bundleJSON: ProactiveActionBundleCodec.decode(from: action).flatMap { _ in action.metadata[ProactiveBundleMetadataKeys.payload] }
         )
-        if let data = try? JSONEncoder().encode(payload) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(payload) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
 
     static func load() -> PendingPreview? {
         guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode(PendingPreview.self, from: data) else { return nil }
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode(PendingPreview.self, from: data) else { return nil }
         return decoded
     }
 

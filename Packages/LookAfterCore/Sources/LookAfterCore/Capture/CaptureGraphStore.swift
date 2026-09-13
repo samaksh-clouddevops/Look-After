@@ -42,7 +42,7 @@ public actor CaptureGraphStore {
 
     private init() {
         if let data = UserDefaults.standard.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([CaptureGraphEdge].self, from: data) {
+           let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([CaptureGraphEdge].self, from: data) {
             edges = decoded
         }
     }
@@ -67,7 +67,7 @@ public actor CaptureGraphStore {
     }
 
     private func persist() {
-        if let data = try? JSONEncoder().encode(edges) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(edges) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
     }

@@ -33,28 +33,28 @@ public enum ProactiveDismissStore {
 
     private static func loadSnoozeMap() -> [String: Date] {
         guard let data = UserDefaults.standard.data(forKey: snoozeKey),
-              let decoded = try? JSONDecoder().decode([String: Date].self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode([String: Date].self, from: data) else {
             return [:]
         }
         return decoded
     }
 
     private static func saveSnoozeMap(_ map: [String: Date]) {
-        if let data = try? JSONEncoder().encode(map) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(map) {
             UserDefaults.standard.set(data, forKey: snoozeKey)
         }
     }
 
     private static func loadDismissedKinds() -> Set<String> {
         guard let data = UserDefaults.standard.data(forKey: dismissedKindsKey),
-              let decoded = try? JSONDecoder().decode(Set<String>.self, from: data) else {
+              let decoded = try? SharedFormatters.jsonDecoderSeconds.decode(Set<String>.self, from: data) else {
             return []
         }
         return decoded
     }
 
     private static func saveDismissedKinds(_ set: Set<String>) {
-        if let data = try? JSONEncoder().encode(set) {
+        if let data = try? SharedFormatters.jsonEncoderSeconds.encode(set) {
             UserDefaults.standard.set(data, forKey: dismissedKindsKey)
         }
     }

@@ -9,7 +9,13 @@ public enum GmailTokenStore {
     private static let account = "gmail_refresh_token"
 
     public static func saveRefreshToken(_ token: String) throws {
-        let data = Data(token.utf8)
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            try deleteRefreshToken()
+            return
+        }
+
+        let data = Data(trimmed.utf8)
         let query = baseQuery()
         let update: [String: Any] = [kSecValueData as String: data]
         let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
@@ -34,11 +40,12 @@ public enum GmailTokenStore {
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data,
-              let token = String(data: data, encoding: .utf8),
-              !token.isEmpty else { return nil }
-        return token
+              let token = String(data: data, encoding: .utf8) else { return nil }
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// Removes the Keychain item entirely (BUG-010).
     public static func deleteRefreshToken() throws {
         let status = SecItemDelete(baseQuery() as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {

@@ -70,6 +70,9 @@ public struct LookAfterRootCanvas: View {
            let task = shell.tasksVM.tasks.first(where: { $0.id == id && $0.status.isActive }) {
             return task
         }
+        if shell.contextOrchestrator.briefing?.hero.action.kind == .startRecovery {
+            return nil
+        }
         if let id = shell.contextOrchestrator.briefing?.hero.action.taskID,
            let task = shell.tasksVM.tasks.first(where: { $0.id == id }) {
             return task
@@ -157,31 +160,13 @@ public struct LookAfterRootCanvas: View {
                     }
                 }
 
-            // ADHD Overlays
-            if shell.adhdVM.isEmergencyMode {
-                EmergencyModeView(adhdVM: shell.adhdVM) { task in
-                    shell.adhdVM.startCountdown(for: task) {
-                        shell.adhdVM.startFocusSession(task: task)
-                    }
-                }
-                .transition(.opacity)
-                .zIndex(100)
-                VStack {
-                    Spacer()
-                    ADHDFloatingDockView(
-                        onDecideForMe: { showDecideForMe = true },
-                        onVoiceCapture: { showCoach = true },
-                        onResetMode: { showResetMode = true }
-                    )
-                    .padding(.bottom, 12)
-                }
-            }
-
-            if shell.adhdVM.isFocusSessionActive {
-                FocusSessionView(adhdVM: shell.adhdVM)
-                    .zIndex(99)
-                    .ignoresSafeArea()
-            }
+            // ADHD overlays observe adhdVM in a child — not the full shell (PERF-019).
+            ADHDOverlayHost(
+                adhdVM: shell.adhdVM,
+                onDecideForMe: { showDecideForMe = true },
+                onVoiceCapture: { showCoach = true },
+                onResetMode: { showResetMode = true }
+            )
 
             if shell.adhdVM.isBodyDoubling {
                 BodyDoublingView(adhdVM: shell.adhdVM)
@@ -726,7 +711,7 @@ public struct LookAfterRootCanvas: View {
     }
 
     private var contextualReplanTaskTitles: [String: String] {
-        Dictionary(uniqueKeysWithValues: shell.tasksVM.tasks.map { ($0.id, $0.title) })
+        Dictionary.uniquingFirstValue(shell.tasksVM.tasks.map { ($0.id, $0.title) })
     }
 
     private func submitPostWakeReplan(wakeTime: Date) async {
@@ -1027,6 +1012,10 @@ public struct LookAfterRootCanvas: View {
     }
 
     private func startBrainHeroTask(_ task: LifeTask?, instant: Bool = false, durationMinutes: Int? = nil) {
+        if task == nil, shell.contextOrchestrator.briefing?.hero.action.kind == .startRecovery {
+            showResetMode = true
+            return
+        }
         if let task {
             tabBeforeFocus = selectedTab
             if instant {
@@ -1094,6 +1083,10 @@ public struct LookAfterRootCanvas: View {
     }
 
     private func resumeBrainSession(taskID: String?) {
+        if shell.contextOrchestrator.briefing?.hero.action.kind == .startRecovery {
+            showResetMode = true
+            return
+        }
         let resolved = taskID.flatMap { id in
             shell.tasksVM.tasks.first { $0.id == id && $0.status.isActive }
         } ?? heroTask
@@ -1303,5 +1296,43 @@ public struct LookAfterRootCanvas: View {
             }
         }
         .environmentObject(shell)
+    }
+}
+
+/// Isolates ADHD overlay observation so 1 Hz focus ticks don't redraw the whole root canvas (PERF-019).
+private struct ADHDOverlayHost: View {
+    @ObservedObject var adhdVM: ADHDViewModel
+    let onDecideForMe: () -> Void
+    let onVoiceCapture: () -> Void
+    let onResetMode: () -> Void
+
+    var body: some View {
+        ZStack {
+            if adhdVM.isEmergencyMode {
+                EmergencyModeView(adhdVM: adhdVM) { task in
+                    adhdVM.startCountdown(for: task) {
+                        adhdVM.startFocusSession(task: task)
+                    }
+                }
+                .transition(.opacity)
+                .zIndex(100)
+                VStack {
+                    Spacer()
+                    ADHDFloatingDockView(
+                        onDecideForMe: onDecideForMe,
+                        onVoiceCapture: onVoiceCapture,
+                        onResetMode: onResetMode
+                    )
+                    .padding(.bottom, 12)
+                }
+            }
+
+            if adhdVM.isFocusSessionActive {
+                FocusSessionView(adhdVM: adhdVM)
+                    .zIndex(99)
+                    .ignoresSafeArea()
+            }
+        }
+        .allowsHitTesting(adhdVM.isEmergencyMode || adhdVM.isFocusSessionActive)
     }
 }

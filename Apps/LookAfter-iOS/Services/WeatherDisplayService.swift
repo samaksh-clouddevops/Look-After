@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import LookAfterCore
 
 /// Fetches local weather for Today status chips via Open-Meteo (no WeatherKit entitlement required).
 @MainActor
@@ -79,7 +80,7 @@ final class WeatherDisplayService: NSObject, ObservableObject {
             throw URLError(.badServerResponse)
         }
 
-        let decoded = try JSONDecoder().decode(OpenMeteoResponse.self, from: data)
+        let decoded = try SharedFormatters.jsonDecoderSeconds.decode(OpenMeteoResponse.self, from: data)
         let temp = Int(decoded.current.temperature2m.rounded())
         let label = Self.conditionLabel(for: decoded.current.weatherCode)
         return Snapshot(conditionLabel: label, temperatureCelsius: temp, isAvailable: true)

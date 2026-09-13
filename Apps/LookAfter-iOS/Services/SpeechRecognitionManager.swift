@@ -29,7 +29,10 @@ public final class SpeechRecognitionManager: ObservableObject {
     private var lastTranscriptChange = Date()
     private var hasReceivedSpeech = false
     private var utteranceCommitted = false
-    
+    /// Throttle MainActor hops from the audio tap (BUG-019).
+    private var lastLevelPublish = Date.distantPast
+    private let levelPublishInterval: TimeInterval = 0.05
+
     public init() {
         let preferred = Locale.preferredLanguages.first.flatMap { Locale(identifier: $0) } ?? Locale.current
         if let recognizer = SFSpeechRecognizer(locale: preferred), recognizer.isAvailable {
@@ -127,11 +130,17 @@ public final class SpeechRecognitionManager: ObservableObject {
                     sum += abs(channelData[i])
                 }
                 let avg = sum / Float(frameLength)
-                Task { @MainActor in
-                    self?.updateAudioLevels(level: CGFloat(min(avg * 8, 1.0)))
+                let level = CGFloat(min(avg * 8, 1.0))
+                // Coalesce level UI updates onto the main actor at ~20 Hz.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let now = Date()
+                    guard now.timeIntervalSince(self.lastLevelPublish) >= self.levelPublishInterval else { return }
+                    self.lastLevelPublish = now
+                    self.updateAudioLevels(level: level)
                 }
             }
-            
+
             recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
                 Task { @MainActor in
                     guard let self else { return }
@@ -199,13 +208,18 @@ public final class SpeechRecognitionManager: ObservableObject {
     }
     
     private func updateAudioLevels(level: CGFloat) {
-        audioLevels.removeFirst()
-        audioLevels.append(max(0.08, level))
+        let next = max(0.08, level)
+        // Avoid publishing identical-looking bars (PERF-004).
+        var levels = audioLevels
+        levels.removeFirst()
+        levels.append(next)
+        audioLevels = levels
     }
-    
+
     private func startLevelAnimation() {
         levelTimer?.invalidate()
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        // 10 Hz is enough for visualizers; 20 Hz was thrashing @Published (PERF-004).
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.isListening else { return }
                 // Subtle idle animation when levels are low
@@ -214,6 +228,8 @@ public final class SpeechRecognitionManager: ObservableObject {
                 }
             }
         }
+        levelTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func noteTranscriptActivity() {

@@ -1,11 +1,15 @@
 import Foundation
 import LookAfterData
 import Network
+import os
 
 /// Persists capture requests when offline and drains the queue when connectivity returns.
 @MainActor
 public final class CaptureOfflineQueue {
     public static let shared = CaptureOfflineQueue()
+
+    /// Hard cap — oldest entries drop first when exceeded (R-028 / BUG-016).
+    public static let maxPendingCaptures = 100
 
     private struct PendingCapture: Codable, Identifiable {
         var id: String
@@ -18,6 +22,7 @@ public final class CaptureOfflineQueue {
     private let filename = "pending_captures"
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "com.lookafter.capture.connectivity")
+    private let logger = Logger(subsystem: "com.lookafter.app", category: "CaptureOfflineQueue")
 
     public private(set) var isOnline = true
     public var onConnectivityRestored: ((String) async -> Void)?
@@ -56,6 +61,11 @@ public final class CaptureOfflineQueue {
                 queuedAt: Date()
             )
         )
+        if queue.count > Self.maxPendingCaptures {
+            let overflow = queue.count - Self.maxPendingCaptures
+            queue.removeFirst(overflow)
+            logger.warning("Offline capture queue capped; dropped \(overflow, privacy: .public) oldest item(s)")
+        }
         persistence.save(queue, filename: filename)
     }
 
@@ -68,6 +78,7 @@ public final class CaptureOfflineQueue {
     }
 
     /// Drain queued captures through the router; returns routed results.
+    /// Failed or re-queued routes stay on disk until a later successful pass (BUG-006).
     public func processPending(
         userId: String,
         route: (CaptureRequest, String) async -> CaptureRouteResult
@@ -80,7 +91,11 @@ public final class CaptureOfflineQueue {
         for record in records {
             let result = await route(record.request, record.userId)
             results.append(result)
-            remaining.removeAll { $0.id == record.id }
+            if Self.shouldRemoveFromQueue(after: result) {
+                remaining.removeAll { $0.id == record.id }
+            } else {
+                logger.info("Keeping offline capture \(record.id, privacy: .public) after unsuccessful route")
+            }
         }
         persistence.save(remaining, filename: filename)
         return results
@@ -88,6 +103,18 @@ public final class CaptureOfflineQueue {
 
     public func clear() {
         persistence.save([PendingCapture](), filename: filename)
+    }
+
+    /// Terminal success or durable local inbox outcomes may drop the queue row.
+    /// `queuedOffline` and unknown failures must retain the pending item.
+    static func shouldRemoveFromQueue(after result: CaptureRouteResult) -> Bool {
+        switch result.outcome {
+        case .queuedOffline:
+            return false
+        case .taskCreated, .scheduledEvent, .journalEntry, .healthLog,
+             .insightSaved, .archived, .needsReview:
+            return true
+        }
     }
 
     private func loadAll() -> [PendingCapture] {

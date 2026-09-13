@@ -149,7 +149,7 @@ public final class ParkedTaskQueueStore: @unchecked Sendable {
             fileURL = nil
         }
         if let fileURL, let data = try? Data(contentsOf: fileURL),
-           let loaded = try? JSONDecoder().decode(ParkedTaskQueueEnvelope.self, from: data) {
+           let loaded = try? SharedFormatters.jsonDecoderSeconds.decode(ParkedTaskQueueEnvelope.self, from: data) {
             envelope = loaded
         } else {
             envelope = .empty()
@@ -316,7 +316,7 @@ public final class ParkedTaskQueueStore: @unchecked Sendable {
 
     private func persist(_ snap: ParkedTaskQueueEnvelope) {
         guard !memoryOnly, let fileURL else { return }
-        guard let data = try? JSONEncoder().encode(snap) else { return }
+        guard let data = try? SharedFormatters.jsonEncoderSeconds.encode(snap) else { return }
         try? data.write(to: fileURL, options: [.atomic])
     }
 }

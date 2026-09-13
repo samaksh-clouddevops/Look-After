@@ -236,7 +236,7 @@ public final class LifeModulesViewModel: ObservableObject {
     }
 
     private static func mergeShoppingItems(existing: [ShoppingItem], loaded: [ShoppingItem]) -> [ShoppingItem] {
-        var merged = Dictionary(uniqueKeysWithValues: loaded.map { ($0.id, $0) })
+        var merged = Dictionary.uniquingFirstValue(loaded.map { ($0.id, $0) })
         for item in existing where merged[item.id] == nil {
             merged[item.id] = item
         }

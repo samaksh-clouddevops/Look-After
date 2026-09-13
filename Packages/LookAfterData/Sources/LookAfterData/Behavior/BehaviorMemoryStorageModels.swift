@@ -73,16 +73,19 @@ struct BehaviorMemoryStorageEnvelope: Codable, Sendable, Equatable {
 
 /// Encodes/decodes storage envelopes with consistent date strategy.
 enum BehaviorMemoryStorageCodec {
-    static func encode(_ envelope: BehaviorMemoryStorageEnvelope) throws -> Data {
+    /// Dedicated encoder keeps sortedKeys for stable vault hashing (PERF-018).
+    private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
         encoder.outputFormatting = [.sortedKeys]
-        return try encoder.encode(envelope)
+        return encoder
+    }()
+
+    static func encode(_ envelope: BehaviorMemoryStorageEnvelope) throws -> Data {
+        try encoder.encode(envelope)
     }
 
     static func decode(_ data: Data) throws -> BehaviorMemoryStorageEnvelope {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        return try decoder.decode(BehaviorMemoryStorageEnvelope.self, from: data)
+        try SharedFormatters.jsonDecoderSeconds.decode(BehaviorMemoryStorageEnvelope.self, from: data)
     }
 }

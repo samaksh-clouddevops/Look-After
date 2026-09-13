@@ -152,7 +152,7 @@ public struct BriefingExecutiveHero: Sendable, Equatable {
     public var isActionableTask: Bool {
         guard let kind = actionKind else { return false }
         switch kind {
-        case .openBrain, .viewPlan, .openCoach, .openHealthDetail, .openShopping:
+        case .openBrain, .viewPlan, .openCoach, .openHealthDetail, .openShopping, .startRecovery:
             return false
         default:
             return true
