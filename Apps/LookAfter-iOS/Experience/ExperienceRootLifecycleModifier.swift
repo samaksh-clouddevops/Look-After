@@ -58,9 +58,19 @@ struct ExperienceRootLifecycleModifier: ViewModifier {
         if UserDefaults.standard.object(forKey: "enableHealth") as? Bool ?? true {
             healthSync.startHealthObservers()
         }
-        shell.adhdVM.onFocusSessionEnded = { minutes, _ in
+        // Resolve the current user id at invocation time (not capture time)
+        // so that switching accounts without relaunching the app — sign out
+        // then sign back in as a different user — doesn't attribute a
+        // focus-session completion to the previous user. `firebase` is a
+        // reference type held for the lifetime of the app, so reading
+        // `resolvedUserId` here always reflects whoever is signed in when
+        // the session actually ends.
+        shell.adhdVM.onFocusSessionEnded = { [firebase] minutes, _ in
             Task {
-                await shell.brainVM.handleFlowSessionEnded(durationMinutes: minutes, userId: userId)
+                await shell.brainVM.handleFlowSessionEnded(
+                    durationMinutes: minutes,
+                    userId: firebase.resolvedUserId
+                )
                 shell.refreshWidgetData()
             }
         }

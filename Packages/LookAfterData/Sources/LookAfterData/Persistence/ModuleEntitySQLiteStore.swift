@@ -54,13 +54,12 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
             try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
         do {
-            dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: configuration)
-            try dbQueue.write { db in
-                try Self.createSchema(db)
-                if migrateFromJSON {
-                    try Self.migrateFromJSONIfNeeded(db, documentsDirectory: documentsDirectory)
-                }
-            }
+            dbQueue = try SQLiteStoreRecovery.openWithQuarantineFallback(
+                databaseURL: databaseURL,
+                configuration: configuration,
+                storeName: "ModuleEntitySQLiteStore",
+                prepare: Self.createSchema
+            )
             if databaseURL.path != ":memory:" {
                 try? FileManager.default.setAttributes(
                     [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
@@ -68,7 +67,17 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
                 )
             }
         } catch {
-            fatalError("[ModuleEntitySQLiteStore] Failed to open database: \(error)")
+            fatalError("[ModuleEntitySQLiteStore] Failed to open database even after quarantine/recreate: \(error)")
+        }
+
+        if migrateFromJSON {
+            do {
+                try dbQueue.write { db in
+                    try Self.migrateFromJSONIfNeeded(db, documentsDirectory: documentsDirectory)
+                }
+            } catch {
+                print("[ModuleEntitySQLiteStore] JSON migration failed, skipping: \(error)")
+            }
         }
     }
 

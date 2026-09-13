@@ -41,16 +41,18 @@ public final class InboxSQLiteStore: @unchecked Sendable {
             try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
         do {
-            dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: configuration)
-            try dbQueue.write { db in
-                try Self.createSchema(db)
-            }
+            dbQueue = try SQLiteStoreRecovery.openWithQuarantineFallback(
+                databaseURL: databaseURL,
+                configuration: configuration,
+                storeName: "InboxSQLiteStore",
+                prepare: Self.createSchema
+            )
             try? FileManager.default.setAttributes(
                 [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                 ofItemAtPath: databaseURL.path
             )
         } catch {
-            fatalError("[InboxSQLiteStore] Failed to open database: \(error)")
+            fatalError("[InboxSQLiteStore] Failed to open database even after quarantine/recreate: \(error)")
         }
     }
 

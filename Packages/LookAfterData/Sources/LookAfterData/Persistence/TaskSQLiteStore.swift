@@ -49,15 +49,27 @@ public final class TaskSQLiteStore: @unchecked Sendable {
             try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
         do {
-            dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: configuration)
-            try dbQueue.write { db in
-                try Self.createSchema(db)
-                if migrateFromJSON {
+            dbQueue = try SQLiteStoreRecovery.openWithQuarantineFallback(
+                databaseURL: databaseURL,
+                configuration: configuration,
+                storeName: "TaskSQLiteStore",
+                prepare: Self.createSchema
+            )
+        } catch {
+            fatalError("[TaskSQLiteStore] Failed to open database even after quarantine/recreate: \(error)")
+        }
+
+        if migrateFromJSON {
+            do {
+                try dbQueue.write { db in
                     try Self.migrateFromJSONIfNeeded(db, documentsDirectory: documentsDirectory)
                 }
+            } catch {
+                // A corrupted legacy tasks.json should not brick an
+                // otherwise-healthy database — skip migration and leave the
+                // JSON file in place for manual recovery/inspection.
+                print("[TaskSQLiteStore] JSON migration failed, skipping: \(error)")
             }
-        } catch {
-            fatalError("[TaskSQLiteStore] Failed to open database: \(error)")
         }
     }
 
