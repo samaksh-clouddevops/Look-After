@@ -36,8 +36,46 @@ public enum NotificationCandidateBuilder {
             now: now
         )
         candidates += ProactiveNotificationAdapter.candidates(from: input.proactiveActions, now: now, calendar: calendar)
+        candidates += departureCandidate(context: input.departureContext, now: now, dayKey: dayKey, calendar: calendar)
 
         return candidates
+    }
+
+    // MARK: - Departure reminder
+
+    private static func departureCandidate(
+        context: DepartureNotificationContext?,
+        now: Date,
+        dayKey: String,
+        calendar: Calendar
+    ) -> [NotificationCandidate] {
+        guard let context else { return [] }
+        guard let prediction = DepartureTimePredictor.predict(
+            originLatitude: context.originLatitude,
+            originLongitude: context.originLongitude,
+            destinationLatitude: context.destinationLatitude,
+            destinationLongitude: context.destinationLongitude,
+            arrivalHour: context.arrivalHour,
+            arrivalMinute: context.arrivalMinute,
+            on: now,
+            calendar: calendar
+        ), prediction.departureDate > now else { return [] }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let departureLabel = formatter.string(from: prediction.departureDate)
+        let arrivalLabel = formatter.string(from: prediction.arrivalDate)
+
+        return [
+            NotificationCandidate(
+                id: NotificationIdentifier.proactive(.departureReminder, suffix: dayKey),
+                kind: .departureReminder,
+                title: "Time to leave",
+                body: "Leave by \(departureLabel) to reach \(context.destinationLabel) by \(arrivalLabel) (~\(prediction.travelMinutes) min).",
+                fireDate: prediction.departureDate,
+                route: .today
+            )
+        ]
     }
 
     // MARK: - Medication

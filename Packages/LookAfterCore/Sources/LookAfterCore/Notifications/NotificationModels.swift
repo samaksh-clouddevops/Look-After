@@ -17,6 +17,7 @@ public enum NotificationKind: String, Codable, CaseIterable, Sendable, Identifia
     case weekPrimer
     case endOfDayClose
     case postCompletionMomentum
+    case departureReminder
 
     public var id: String { rawValue }
 
@@ -36,6 +37,7 @@ public enum NotificationKind: String, Codable, CaseIterable, Sendable, Identifia
         case .weekPrimer: return "Week primer"
         case .endOfDayClose: return "End of day close"
         case .postCompletionMomentum: return "Completion momentum"
+        case .departureReminder: return "Departure reminder"
         }
     }
 
@@ -43,6 +45,7 @@ public enum NotificationKind: String, Codable, CaseIterable, Sendable, Identifia
         switch self {
         case .medication: return 1
         case .transitionShield: return 2
+        case .departureReminder: return 2
         case .meetingPrep: return 3
         case .taskDue: return 4
         case .initiationBridge: return 5
@@ -222,6 +225,9 @@ public struct NotificationRefreshInput: Sendable {
     public var proactiveActions: [ProactiveAction]
     /// One lean supervisor line (fault or pull) — replaces generic morning body when set.
     public var dayAuditLeanBody: String?
+    /// Home/office coordinates + work start time, used to predict a "time to leave" reminder.
+    /// Nil/absent fields simply suppress the departure candidate — no paid entitlement required.
+    public var departureContext: DepartureNotificationContext?
 
     public init(
         now: Date = Date(),
@@ -236,7 +242,8 @@ public struct NotificationRefreshInput: Sendable {
         focusSessionToken: String? = nil,
         userDisplayName: String = "",
         proactiveActions: [ProactiveAction] = [],
-        dayAuditLeanBody: String? = nil
+        dayAuditLeanBody: String? = nil,
+        departureContext: DepartureNotificationContext? = nil
     ) {
         self.now = now
         self.medications = medications
@@ -251,5 +258,35 @@ public struct NotificationRefreshInput: Sendable {
         self.userDisplayName = userDisplayName
         self.proactiveActions = proactiveActions
         self.dayAuditLeanBody = dayAuditLeanBody
+        self.departureContext = departureContext
+    }
+}
+
+/// Inputs needed to predict a "time to leave" notification for a work-start commitment.
+public struct DepartureNotificationContext: Sendable, Equatable {
+    public var originLatitude: Double
+    public var originLongitude: Double
+    public var destinationLatitude: Double
+    public var destinationLongitude: Double
+    public var destinationLabel: String
+    public var arrivalHour: Int
+    public var arrivalMinute: Int
+
+    public init(
+        originLatitude: Double,
+        originLongitude: Double,
+        destinationLatitude: Double,
+        destinationLongitude: Double,
+        destinationLabel: String,
+        arrivalHour: Int,
+        arrivalMinute: Int
+    ) {
+        self.originLatitude = originLatitude
+        self.originLongitude = originLongitude
+        self.destinationLatitude = destinationLatitude
+        self.destinationLongitude = destinationLongitude
+        self.destinationLabel = destinationLabel
+        self.arrivalHour = arrivalHour
+        self.arrivalMinute = arrivalMinute
     }
 }

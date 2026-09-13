@@ -89,10 +89,39 @@ final class NotificationCoordinator {
             focusSessionToken: focusToken,
             userDisplayName: UserLifeProfileStore.resolvedDisplayName(),
             proactiveActions: shell.proactiveActions.filter { $0.surface == .notification },
-            dayAuditLeanBody: leanBody
+            dayAuditLeanBody: leanBody,
+            departureContext: Self.makeDepartureContext()
         )
 
         await refresh(input: input)
+    }
+
+    /// Builds a departure prediction context from the user's saved Home coordinate and
+    /// Office (or first custom place) coordinate + configured work start time. Returns nil
+    /// when Home or a destination hasn't been set — no notification is scheduled.
+    static func makeDepartureContext() -> DepartureNotificationContext? {
+        let profile = UserLifeProfileStore.load()
+        guard let homeLat = profile.homeLatitude, let homeLon = profile.homeLongitude else { return nil }
+
+        let destination: (lat: Double, lon: Double, label: String)?
+        if let officeLat = profile.officeLatitude, let officeLon = profile.officeLongitude {
+            destination = (officeLat, officeLon, "office")
+        } else if let first = profile.customPlaces.first {
+            destination = (first.latitude, first.longitude, first.name)
+        } else {
+            destination = nil
+        }
+        guard let destination else { return nil }
+
+        return DepartureNotificationContext(
+            originLatitude: homeLat,
+            originLongitude: homeLon,
+            destinationLatitude: destination.lat,
+            destinationLongitude: destination.lon,
+            destinationLabel: destination.label,
+            arrivalHour: profile.workStartHour,
+            arrivalMinute: profile.workStartMinute
+        )
     }
 
     func refresh(input: NotificationRefreshInput) async {

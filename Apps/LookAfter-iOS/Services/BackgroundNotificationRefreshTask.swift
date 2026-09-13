@@ -104,7 +104,8 @@ enum BackgroundNotificationRefreshTask {
             heroTaskId: heroTask?.id,
             userDisplayName: UserLifeProfileStore.resolvedDisplayName(),
             proactiveActions: ProactiveSnapshotStore.load().filter { $0.surface == .notification },
-            dayAuditLeanBody: leanBody
+            dayAuditLeanBody: leanBody,
+            departureContext: NotificationCoordinator.makeDepartureContext()
         )
 
         await NotificationCoordinator.shared.refresh(input: input)
