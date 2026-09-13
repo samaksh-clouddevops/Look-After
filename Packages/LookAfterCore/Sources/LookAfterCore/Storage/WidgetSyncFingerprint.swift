@@ -22,6 +22,9 @@ public enum WidgetSyncFingerprint {
             String(progressBucket),
             remainingBucket,
             snapshot.pinNextUpSummary,
+            snapshot.sleepHours.map { String(format: "%.1f", $0) } ?? "",
+            snapshot.stepCount.map(String.init) ?? "",
+            snapshot.hrvMs.map(String.init) ?? "",
         ].joined(separator: "|")
     }
 

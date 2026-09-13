@@ -127,6 +127,21 @@ final class WidgetSyncService {
         }
     }
 
+    /// Wipes the shared App Group snapshot and ends any pinned Live Activity on sign-out /
+    /// account switch so the home screen and Lock Screen never expose the previous
+    /// account's tasks, energy, or recommendation text to whoever is signed in next.
+    func clearForSignOut() {
+        timelineReloadTask?.cancel()
+        timelineReloadTask = nil
+        pinRefreshTask?.cancel()
+        pinRefreshTask = nil
+        lastWidgetSnapshotFingerprint = nil
+        UserDefaults.standard.set(false, forKey: pinNowKey)
+        WidgetDataStore.clear()
+        reloadWidgetTimelines()
+        LiveActivityManager.shared.endAllActivities()
+    }
+
     /// Rebuilds and pushes the latest task state to the pinned Live Activity.
     func refreshPinNow(
         brainVM: BrainViewModel,

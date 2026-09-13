@@ -119,103 +119,96 @@ struct FocusSessionView: View {
     @State private var showingDurationPicker = false
     @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 40
     
+    private var accent: Color {
+        adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary
+    }
+
     var body: some View {
         ZStack {
-            DesignSystem.backgroundPrimary
+            // Premium dark canvas — deliberately forced dark regardless of system
+            // appearance so the focus clock reads as a calm, immersive instrument.
+            Color.black
                 .ignoresSafeArea()
-            
+
+            RadialGradient(
+                colors: [accent.opacity(0.10), Color.clear],
+                center: .center,
+                startRadius: 20,
+                endRadius: 340
+            )
+            .ignoresSafeArea()
+
             VStack(spacing: DesignSystem.spacingLG) {
-                Spacer()
-                
+                Spacer(minLength: DesignSystem.spacingLG)
+
                 // Session state label
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary)
+                        .fill(accent)
                         .frame(width: 8, height: 8)
                     Text(adhdVM.sessionLabel.uppercased())
                         .font(.dsMetadata(weight: .bold))
-                        .foregroundColor(adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary)
+                        .tracking(1.2)
+                        .foregroundColor(accent)
                     Text("•")
-                        .foregroundColor(DesignSystem.textMuted)
+                        .foregroundColor(.white.opacity(0.3))
                     Text(adhdVM.sessionCounterString)
                         .font(.system(size: 13, weight: .medium, design: .default))
-                        .foregroundColor(DesignSystem.textMuted)
+                        .foregroundColor(.white.opacity(0.5))
                 }
-                
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+
                 // Task name
                 if let task = adhdVM.currentFocusTask {
                     Text(task.title)
                         .font(.title3.weight(.bold))
-                        .foregroundColor(DesignSystem.textPrimary)
+                        .foregroundColor(.white)
                         .multilineTextAlignment(.center)
                         .lineLimit(3)
                         .minimumScaleFactor(0.85)
                         .padding(.horizontal)
                 }
-                
+
+                Spacer(minLength: DesignSystem.spacingSM)
+
                 // Timer ring + analog clock (+ PhaseAnimator breathe when motion allowed)
                 ZStack {
                     focusBreatheGlow
 
                     AnalogFocusClockView(
                         progress: adhdVM.focusProgress,
-                        accentColor: adhdVM.isOnBreak ? DesignSystem.textSecondary : DesignSystem.accentPrimary,
-                        trackColor: DesignSystem.border,
-                        size: 220
+                        accentColor: accent,
+                        trackColor: Color.white.opacity(0.10),
+                        size: 272
                     )
 
-                    VStack(spacing: 4) {
+                    VStack(spacing: 6) {
                         Text(adhdVM.focusRemainingString)
-                            .font(.system(size: timerSize, weight: .bold, design: .monospaced))
+                            .font(.system(size: timerSize * 1.15, weight: .bold, design: .monospaced))
                             .monospacedDigit()
-                            .foregroundColor(DesignSystem.textPrimary)
+                            .foregroundColor(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                             .contentTransition(.numericText(countsDown: true))
                             .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: adhdVM.focusRemainingString)
                             .accessibilityIdentifier("focus-timer-remaining")
 
-                        Text(adhdVM.isPaused ? "paused" : "remaining")
-                            .font(.dsCaption())
-                            .foregroundColor(DesignSystem.textMuted)
+                        Text(adhdVM.isPaused ? "PAUSED" : "REMAINING")
+                            .font(.dsCaption(weight: .bold))
+                            .tracking(1.5)
+                            .foregroundColor(.white.opacity(0.45))
                             .accessibilityIdentifier("focus-timer-status")
                     }
                 }
-                
+                .padding(.vertical, DesignSystem.spacingSM)
+
                 // Elapsed time
-                Text("Elapsed: \(adhdVM.focusElapsedString)")
-                    .font(.system(size: 14, weight: .medium, design: .default))
-                    .foregroundColor(DesignSystem.textSecondary)
-                
-                // +/- time controls
-                HStack(spacing: 16) {
-                    Button(action: { adhdVM.reduceTime(minutes: 5) }) {
-                        Text("-5 min")
-                            .font(.system(size: 13, weight: .bold, design: .default))
-                            .foregroundColor(DesignSystem.textMuted)
-                            .padding(.horizontal, 14)
-                            .frame(minHeight: DesignSystem.minTouchTarget)
-                            .background(Capsule().fill(DesignSystem.contentSurfaceElevated))
-                    }
-                    
-                    Button(action: { showingDurationPicker = true }) {
-                        Image(systemName: "timer")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                            .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
-                            .background(Circle().fill(DesignSystem.contentSurfaceElevated))
-                    }
-                    
-                    Button(action: { adhdVM.addTime(minutes: 5) }) {
-                        Text("+5 min")
-                            .font(.system(size: 13, weight: .bold, design: .default))
-                            .foregroundColor(DesignSystem.textMuted)
-                            .padding(.horizontal, 14)
-                            .frame(minHeight: DesignSystem.minTouchTarget)
-                            .background(Capsule().fill(DesignSystem.contentSurfaceElevated))
-                    }
-                }
-                
+                Text("Elapsed \(adhdVM.focusElapsedString)")
+                    .font(.system(size: 13, weight: .medium, design: .default))
+                    .foregroundColor(.white.opacity(0.4))
+
                 // Hyperfocus warning
                 if adhdVM.focusBreakReminder {
                     HStack {
@@ -223,35 +216,68 @@ struct FocusSessionView: View {
                         Text("You've been focused for a long time. Take a break?")
                     }
                     .font(.dsBody(weight: .semibold))
-                    .foregroundColor(DesignSystem.textSecondary)
+                    .foregroundColor(.white.opacity(0.85))
                     .padding()
-                    .elevatedSurface(cornerRadius: DesignSystem.radiusMD)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignSystem.radiusMD)
+                            .fill(Color.white.opacity(0.08))
+                    )
                     .transition(.scale.combined(with: .opacity))
                 }
-                
-                Spacer()
-                
-                // Main controls
-                HStack(spacing: DesignSystem.spacingXL) {
-                    // Pause / Resume
-                    Button(action: {
-                        HapticManager.impact(.medium)
-                        if adhdVM.isPaused {
-                            adhdVM.resumeFocusSession()
-                        } else {
-                            adhdVM.pauseFocusSession()
-                        }
-                    }) {
-                        Image(systemName: adhdVM.isPaused ? "play.fill" : "pause.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(
-                                Circle()
-                                    .fill(DesignSystem.contentSurfaceElevated)
-                            )
+
+                Spacer(minLength: DesignSystem.spacingLG)
+
+                // Primary control — a single, unmistakable pause/resume action.
+                Button(action: {
+                    HapticManager.impact(.medium)
+                    if adhdVM.isPaused {
+                        adhdVM.resumeFocusSession()
+                    } else {
+                        adhdVM.pauseFocusSession()
                     }
-                    .accessibilityIdentifier("focus-session-pause-toggle")
+                }) {
+                    HStack(spacing: 10) {
+                        Image(systemName: adhdVM.isPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 18, weight: .bold))
+                        Text(adhdVM.isPaused ? "RESUME" : "PAUSE")
+                            .font(.system(size: 16, weight: .bold, design: .default))
+                            .tracking(1.0)
+                    }
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 58)
+                    .background(Capsule().fill(DesignSystem.accentPrimary))
+                }
+                .padding(.horizontal, DesignSystem.spacingXL)
+                .accessibilityIdentifier("focus-session-pause-toggle")
+
+                // Secondary controls: adjust duration, skip break, end session.
+                HStack(spacing: DesignSystem.spacingMD) {
+                    Button(action: { adhdVM.reduceTime(minutes: 5) }) {
+                        Text("-5 min")
+                            .font(.system(size: 13, weight: .bold, design: .default))
+                            .foregroundColor(.white.opacity(0.6))
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .background(Capsule().fill(Color.white.opacity(0.08)))
+                    }
+
+                    Button(action: { showingDurationPicker = true }) {
+                        Image(systemName: "timer")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(accent)
+                            .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                            .background(Circle().fill(Color.white.opacity(0.08)))
+                    }
+
+                    Button(action: { adhdVM.addTime(minutes: 5) }) {
+                        Text("+5 min")
+                            .font(.system(size: 13, weight: .bold, design: .default))
+                            .foregroundColor(.white.opacity(0.6))
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: DesignSystem.minTouchTarget)
+                            .background(Capsule().fill(Color.white.opacity(0.08)))
+                    }
 
                     if adhdVM.isOnBreak {
                         Button(action: {
@@ -259,35 +285,28 @@ struct FocusSessionView: View {
                             adhdVM.skipBreak()
                         }) {
                             Image(systemName: "forward.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(DesignSystem.textMuted)
-                                .frame(width: 56, height: 56)
-                                .background(
-                                    Circle()
-                                        .fill(DesignSystem.contentSurfaceElevated)
-                                )
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.white.opacity(0.6))
+                                .frame(width: DesignSystem.minTouchTarget, height: DesignSystem.minTouchTarget)
+                                .background(Circle().fill(Color.white.opacity(0.08)))
                         }
                     }
-
-                    Button(action: {
-                        HapticManager.notification(.warning)
-                        adhdVM.endFocusSession()
-                    }) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(DesignSystem.textMuted)
-                            .frame(width: 56, height: 56)
-                            .background(
-                                Circle()
-                                    .fill(DesignSystem.contentSurfaceElevated)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("focus-session-stop")
                 }
-                
-                Spacer()
+
+                Button(action: {
+                    HapticManager.notification(.warning)
+                    adhdVM.endFocusSession()
+                }) {
+                    Text("End Session")
+                        .font(.system(size: 14, weight: .semibold, design: .default))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+                .padding(.bottom, DesignSystem.spacingLG)
+                .accessibilityIdentifier("focus-session-stop")
             }
+            .padding(.horizontal, DesignSystem.spacingMD)
         }
         .sheet(isPresented: $showingDurationPicker) {
             NavigationStack {
@@ -330,15 +349,15 @@ struct FocusSessionView: View {
         if reduceMotion {
             Circle()
                 .fill(glowColor)
-                .frame(width: 240, height: 240)
-                .blur(radius: 28)
+                .frame(width: 300, height: 300)
+                .blur(radius: 32)
         } else {
             PhaseAnimator([false, true]) { phase in
                 Circle()
                     .fill(glowColor)
-                    .frame(width: 240, height: 240)
-                    .scaleEffect(phase ? 1.12 : 0.88)
-                    .blur(radius: 28)
+                    .frame(width: 300, height: 300)
+                    .scaleEffect(phase ? 1.10 : 0.90)
+                    .blur(radius: 32)
             } animation: { _ in
                 .easeInOut(duration: 4)
             }

@@ -145,7 +145,15 @@ private struct ExperienceRootSyncModifier: ViewModifier {
                 }
             }
             .onChange(of: firebase.isAuthenticated) { wasAuthenticated, authenticated in
-                guard authenticated else { return }
+                guard authenticated else {
+                    // Signed out / account switched — wipe shared widget state so the next
+                    // account (or a logged-out home screen) never shows the previous user's
+                    // tasks, energy, or pinned Live Activity content.
+                    if wasAuthenticated {
+                        WidgetSyncService.shared.clearForSignOut()
+                    }
+                    return
+                }
                 showOnboarding = !UserLifeProfileStore.hasCompletedOnboarding
                 // Launch while already signed in is handled by `.task` → configureOnLaunch.
                 guard !wasAuthenticated else { return }
