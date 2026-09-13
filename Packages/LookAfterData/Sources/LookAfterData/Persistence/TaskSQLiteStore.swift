@@ -10,6 +10,31 @@ public final class TaskSQLiteStore: @unchecked Sendable {
     private let dbQueue: DatabaseQueue
     private let documentsDirectory: URL
 
+    // Serializes fire-and-forget writes (`upsertAsync`/`deleteRowAsync`/
+    // `replaceAllAsync`) so they land in call order. GRDB's `dbQueue.write`
+    // serializes the actual DB access, but independent `Task.detached`
+    // blocks can reach their `await dbQueue.write` in any order, letting a
+    // quick edit-then-delete (or vice versa) persist out of order. Chaining
+    // each write onto the previous one preserves FIFO ordering while
+    // remaining non-blocking for callers.
+    private let writeChainLock = NSLock()
+    private var writeChain: Task<Void, Never> = Task {}
+
+    private func enqueueWrite(_ operation: @escaping @Sendable (Database) throws -> Void) {
+        let dbQueue = dbQueue
+        writeChainLock.lock()
+        let previous = writeChain
+        writeChain = Task.detached(priority: .userInitiated) {
+            _ = await previous.value
+            do {
+                try await dbQueue.write(operation)
+            } catch {
+                print("[TaskSQLiteStore] queued write failed: \(error)")
+            }
+        }
+        writeChainLock.unlock()
+    }
+
     private static let jsonEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
@@ -56,7 +81,15 @@ public final class TaskSQLiteStore: @unchecked Sendable {
                 prepare: Self.createSchema
             )
         } catch {
-            fatalError("[TaskSQLiteStore] Failed to open database even after quarantine/recreate: \(error)")
+            // Even quarantine+recreate failed (e.g. disk full, sandbox
+            // permissions). Fall back to an in-memory database rather than
+            // crashing the app on every launch — data won't persist across
+            // launches, but the app remains usable for the current session.
+            print("[TaskSQLiteStore] Failed to open database even after quarantine/recreate: \(error). Falling back to in-memory store.")
+            // swiftlint:disable:next force_try
+            let fallback = try! DatabaseQueue()
+            try? fallback.write(Self.createSchema)
+            dbQueue = fallback
         }
 
         if migrateFromJSON {
@@ -99,15 +132,8 @@ public final class TaskSQLiteStore: @unchecked Sendable {
 
     /// Fire-and-forget full replace — matches legacy JSON save semantics.
     public func replaceAllAsync(_ tasks: [LifeTask]) {
-        let dbQueue = dbQueue
-        Task.detached(priority: .userInitiated) {
-            do {
-                try await dbQueue.write { db in
-                    try Self.replaceAll(tasks, in: db)
-                }
-            } catch {
-                print("[TaskSQLiteStore] replaceAllAsync failed: \(error)")
-            }
+        enqueueWrite { db in
+            try Self.replaceAll(tasks, in: db)
         }
     }
 
@@ -138,30 +164,16 @@ public final class TaskSQLiteStore: @unchecked Sendable {
     /// (`TaskRepository.cachedAll`) has not been warmed yet on a cold process — it cannot
     /// wipe previously persisted tasks belonging to this or any other user.
     public func upsertAsync(_ task: LifeTask) {
-        let dbQueue = dbQueue
-        Task.detached(priority: .userInitiated) {
-            do {
-                let record = try TaskRecord(task: task)
-                try await dbQueue.write { db in
-                    try record.save(db)
-                }
-            } catch {
-                print("[TaskSQLiteStore] upsertAsync failed: \(error)")
-            }
+        enqueueWrite { db in
+            let record = try TaskRecord(task: task)
+            try record.save(db)
         }
     }
 
     /// Fire-and-forget single-row delete by id. Safe pre-warm for the same reason as `upsertAsync`.
     public func deleteRowAsync(_ id: String) {
-        let dbQueue = dbQueue
-        Task.detached(priority: .userInitiated) {
-            do {
-                try await dbQueue.write { db in
-                    _ = try TaskRecord.deleteOne(db, key: id)
-                }
-            } catch {
-                print("[TaskSQLiteStore] deleteRowAsync failed: \(error)")
-            }
+        enqueueWrite { db in
+            _ = try TaskRecord.deleteOne(db, key: id)
         }
     }
 

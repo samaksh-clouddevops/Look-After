@@ -82,9 +82,12 @@ public final class JSONEntitySQLiteStore: @unchecked Sendable {
         try dbQueue.read { db in
             let rows: [Row]
             if let userId, !userId.isEmpty {
+                // Strict match — no wildcard fallback to rows with an empty
+                // user_id, which would otherwise leak legacy/unassigned rows
+                // (or rows written under a different account) across users.
                 rows = try Row.fetchAll(
                     db,
-                    sql: "SELECT payload FROM \(table) WHERE user_id = ? OR user_id = '' ORDER BY updated_at DESC",
+                    sql: "SELECT payload FROM \(table) WHERE user_id = ? ORDER BY updated_at DESC",
                     arguments: [userId]
                 )
             } else {

@@ -10,7 +10,8 @@ public final class GLMService: @unchecked Sendable {
     private let usageLogger: GLMUsageLogger
     private let session: URLSession
 
-    /// When set, unused — AI calls use on-device GLM API keys directly (proxy optional / skipped).
+    /// Azure auth-proxy client. When `isProxyOnlyMode` is true, `sendMessage`/`complete`
+    /// route exclusively through this proxy — no on-device API key is ever used.
     public var authProxyClient: AuthProxyClient?
     public var licenseStatusProvider: (any LicenseStatusProviding)?
 
@@ -48,7 +49,7 @@ public final class GLMService: @unchecked Sendable {
         !keyManager.attemptableKeyPairs().isEmpty
     }
 
-    /// Licensed Azure proxy path — retained for compatibility; chat uses direct keys.
+    /// True when a licensed Azure proxy is configured and available for use.
     public var usesLicensedProxy: Bool {
         authProxyClient != nil && (licenseStatusProvider?.isLicensed == true)
     }
@@ -59,15 +60,21 @@ public final class GLMService: @unchecked Sendable {
     }
 
     private func requireLicensedProxy() throws -> AuthProxyClient {
-        // Direct z.ai key path is intentionally not used for chat/complete.
-        // When proxy-only is on (default Release), missing proxy is a hard error.
-        if isProxyOnlyMode {
-            guard authProxyClient != nil else { throw GLMServiceError.proxyNotConfigured }
-        }
-        guard authProxyClient != nil else { throw GLMServiceError.proxyNotConfigured }
-        guard licenseStatusProvider?.isLicensed == true else { throw GLMServiceError.licenseRequired }
         guard let proxy = authProxyClient else { throw GLMServiceError.proxyNotConfigured }
+        guard licenseStatusProvider?.isLicensed == true else { throw GLMServiceError.licenseRequired }
         return proxy
+    }
+
+    private func historyPairs(from history: [ChatMessage]) -> [[String: String]] {
+        history.map { message in
+            let role: String
+            switch message.role {
+            case .assistant: role = "assistant"
+            case .system: role = "system"
+            case .user: role = "user"
+            }
+            return ["role": role, "content": message.content]
+        }
     }
 
 #if DEBUG
@@ -91,6 +98,22 @@ public final class GLMService: @unchecked Sendable {
             return try await debugSendMessageHandler(message, systemPrompt, history, tier)
         }
 #endif
+        if isProxyOnlyMode {
+            let proxy = try requireLicensedProxy()
+            let config = configurationStore.load()
+            let result = try await proxy.chat(
+                message: message,
+                systemPrompt: systemPrompt,
+                history: historyPairs(from: history),
+                model: config.model(for: tier),
+                maxTokens: maxTokens
+            )
+            guard !result.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw GLMServiceError.parseError("Empty model response")
+            }
+            return result.content
+        }
+
         let config = configurationStore.load()
         var lastError: Error?
 
@@ -127,6 +150,20 @@ public final class GLMService: @unchecked Sendable {
 #endif
         let system = systemPrompt ?? LookAfterPrompts.structuredOutputSystem
         let config = configurationStore.load()
+
+        if isProxyOnlyMode {
+            let proxy = try requireLicensedProxy()
+            let result = try await proxy.complete(
+                prompt: prompt,
+                systemPrompt: system,
+                model: config.model(for: tier)
+            )
+            guard !result.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw GLMServiceError.parseError("Empty model response")
+            }
+            return result.content
+        }
+
         var lastError: Error?
 
         for attemptTier in config.fallbackTiers(startingAt: tier) {
@@ -160,7 +197,9 @@ public final class GLMService: @unchecked Sendable {
             Task {
                 do {
                     let config = self.configurationStore.load()
-                    guard config.streamingEnabled else {
+                    // Proxy-only mode has no token-streaming endpoint — fall back to a
+                    // single non-streamed response routed through the licensed proxy.
+                    guard config.streamingEnabled, !self.isProxyOnlyMode else {
                         let text = try await self.sendMessage(
                             message,
                             systemPrompt: systemPrompt,

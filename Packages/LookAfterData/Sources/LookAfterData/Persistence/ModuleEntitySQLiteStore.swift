@@ -67,7 +67,15 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
                 )
             }
         } catch {
-            fatalError("[ModuleEntitySQLiteStore] Failed to open database even after quarantine/recreate: \(error)")
+            // Even quarantine+recreate failed (e.g. disk full, sandbox
+            // permissions). Fall back to an in-memory database rather than
+            // crashing the app on every launch — data won't persist across
+            // launches, but the app remains usable for the current session.
+            print("[ModuleEntitySQLiteStore] Failed to open database even after quarantine/recreate: \(error). Falling back to in-memory store.")
+            // swiftlint:disable:next force_try
+            let fallback = try! DatabaseQueue()
+            try? fallback.write(Self.createSchema)
+            dbQueue = fallback
         }
 
         if migrateFromJSON {

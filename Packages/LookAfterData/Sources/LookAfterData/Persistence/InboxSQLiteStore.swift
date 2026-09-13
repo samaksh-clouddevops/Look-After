@@ -52,7 +52,15 @@ public final class InboxSQLiteStore: @unchecked Sendable {
                 ofItemAtPath: databaseURL.path
             )
         } catch {
-            fatalError("[InboxSQLiteStore] Failed to open database even after quarantine/recreate: \(error)")
+            // Even quarantine+recreate failed (e.g. disk full, sandbox
+            // permissions). Fall back to an in-memory database rather than
+            // crashing the app on every launch — data won't persist across
+            // launches, but the app remains usable for the current session.
+            print("[InboxSQLiteStore] Failed to open database even after quarantine/recreate: \(error). Falling back to in-memory store.")
+            // swiftlint:disable:next force_try
+            let fallback = try! DatabaseQueue()
+            try? fallback.write(Self.createSchema)
+            dbQueue = fallback
         }
     }
 
@@ -62,8 +70,11 @@ public final class InboxSQLiteStore: @unchecked Sendable {
             if userId.isEmpty {
                 records = try InboxRecord.fetchAll(db)
             } else {
+                // Strict match — no wildcard fallback to rows with an empty
+                // user_id, which would otherwise leak legacy/unassigned rows
+                // (or rows from another account) across users.
                 records = try InboxRecord
-                    .filter(InboxRecord.Columns.userId == userId || InboxRecord.Columns.userId == "")
+                    .filter(InboxRecord.Columns.userId == userId)
                     .fetchAll(db)
             }
             return try records.map { try $0.inboxItem() }

@@ -103,12 +103,16 @@ public final class CloudSyncOutbox {
 
         guard firebase.isCloudSyncAvailable else { return 0 }
 
-        var completed = 0
-        var stillPending: [Entry] = []
+        // Snapshot to iterate, but only track which entry ids actually completed.
+        // The queue is re-read (not overwritten wholesale) when persisting below,
+        // so any entry enqueued by a concurrent `enqueue()` call while we were
+        // `await`ing network calls here is preserved instead of being silently
+        // dropped by an overwrite from a stale snapshot.
+        let snapshot = loadAll()
+        var completedIds = Set<String>()
 
-        for entry in loadAll() {
+        for entry in snapshot {
             guard let ref = firebase.userCollection(entry.collection) else {
-                stillPending.append(entry)
                 continue
             }
             do {
@@ -118,19 +122,20 @@ public final class CloudSyncOutbox {
                 case .upsert, .upsertMerge:
                     guard let payload = entry.payloadJSON,
                           let dict = try JSONSerialization.jsonObject(with: payload) as? [String: Any] else {
-                        stillPending.append(entry)
                         continue
                     }
                     try await ref.document(entry.documentId).setData(dict, merge: entry.operation == .upsertMerge)
                 }
-                completed += 1
+                completedIds.insert(entry.id)
             } catch {
-                stillPending.append(entry)
+                // Leave in queue for the next drain attempt.
             }
         }
 
-        persistence.save(stillPending, filename: filename)
-        return completed
+        guard !completedIds.isEmpty else { return 0 }
+        let current = loadAll().filter { !completedIds.contains($0.id) }
+        persistence.save(current, filename: filename)
+        return completedIds.count
     }
 
     public func clearAll() {
