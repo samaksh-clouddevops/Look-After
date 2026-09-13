@@ -8,26 +8,47 @@ import LookAfterFeatures
 struct LocationPickerSheet: View {
     let title: String
     let initialCoordinate: CLLocationCoordinate2D?
-    let onSave: (CLLocationCoordinate2D) -> Void
+    /// When true, shows an editable "Place name" field (for custom places like "Gym").
+    var showsNameField: Bool = false
+    var initialName: String = ""
+    let onSave: (String, CLLocationCoordinate2D) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: MapCameraPosition
     @State private var pinCoordinate: CLLocationCoordinate2D
+    @State private var customName: String
     @State private var searchText = ""
     @State private var isSearching = false
     @State private var searchError: String?
     @State private var isLocatingCurrent = false
     private let locationCaptureService = LocationCaptureService()
 
-    init(title: String, initialCoordinate: CLLocationCoordinate2D?, onSave: @escaping (CLLocationCoordinate2D) -> Void) {
+    init(
+        title: String,
+        initialCoordinate: CLLocationCoordinate2D?,
+        showsNameField: Bool = false,
+        initialName: String = "",
+        onSave: @escaping (String, CLLocationCoordinate2D) -> Void
+    ) {
         self.title = title
         self.initialCoordinate = initialCoordinate
+        self.showsNameField = showsNameField
+        self.initialName = initialName
         self.onSave = onSave
         let start = initialCoordinate ?? CLLocationCoordinate2D(latitude: 37.3346, longitude: -122.0090)
         _pinCoordinate = State(initialValue: start)
+        _customName = State(initialValue: initialName)
         _cameraPosition = State(initialValue: .region(
             MKCoordinateRegion(center: start, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02))
         ))
+    }
+
+    private var trimmedName: String {
+        customName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSave: Bool {
+        !showsNameField || !trimmedName.isEmpty
     }
 
     var body: some View {
@@ -49,6 +70,9 @@ struct LocationPickerSheet: View {
                 }
 
                 VStack {
+                    if showsNameField {
+                        nameField
+                    }
                     searchBar
                     Spacer()
                     currentLocationButton
@@ -65,12 +89,20 @@ struct LocationPickerSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(pinCoordinate)
+                        onSave(trimmedName, pinCoordinate)
                         dismiss()
                     }
+                    .disabled(!canSave)
                 }
             }
         }
+    }
+
+    private var nameField: some View {
+        TextField("Place name (e.g. Gym)", text: $customName)
+            .textFieldStyle(.roundedBorder)
+            .padding(10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var searchBar: some View {

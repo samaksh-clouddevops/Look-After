@@ -1,6 +1,21 @@
 import Foundation
 import Synchronization
 
+/// A user-named saved location (e.g. "Gym", "Kid's School") beyond the built-in Home/Office.
+public struct SavedPlace: Codable, Sendable, Equatable, Identifiable {
+    public var id: String
+    public var name: String
+    public var latitude: Double
+    public var longitude: Double
+
+    public init(id: String = UUID().uuidString, name: String, latitude: Double, longitude: Double) {
+        self.id = id
+        self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+}
+
 /// Structured life context the planner uses for scheduling and tone.
 public struct UserLifeProfile: Codable, Sendable, Equatable {
     public var hasCompletedOnboarding: Bool
@@ -35,6 +50,8 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
     /// Saved "Office" coordinate for location-based context.
     public var officeLatitude: Double?
     public var officeLongitude: Double?
+    /// User-named custom saved places (e.g. "Gym", "Kid's School") for location-based context.
+    public var customPlaces: [SavedPlace]
 
     public init(
         hasCompletedOnboarding: Bool = false,
@@ -58,7 +75,8 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         homeLatitude: Double? = nil,
         homeLongitude: Double? = nil,
         officeLatitude: Double? = nil,
-        officeLongitude: Double? = nil
+        officeLongitude: Double? = nil,
+        customPlaces: [SavedPlace] = []
     ) {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.profileText = profileText
@@ -82,6 +100,7 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         self.homeLongitude = homeLongitude
         self.officeLatitude = officeLatitude
         self.officeLongitude = officeLongitude
+        self.customPlaces = customPlaces
     }
 
     public init(from decoder: Decoder) throws {
@@ -108,6 +127,7 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         homeLongitude = try container.decodeIfPresent(Double.self, forKey: .homeLongitude)
         officeLatitude = try container.decodeIfPresent(Double.self, forKey: .officeLatitude)
         officeLongitude = try container.decodeIfPresent(Double.self, forKey: .officeLongitude)
+        customPlaces = try container.decodeIfPresent([SavedPlace].self, forKey: .customPlaces) ?? []
     }
 
     /// Apply focus preference → internal peak hours used by schedulers.
@@ -175,7 +195,7 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         case workStartHour, workStartMinute, workEndHour, workEndMinute
         case peakStartHour, peakEndHour, focusTimePreference, fixedScheduleNotes, preferredName, hasSeededInitialTasks, gender
         case desiredWakeHour, desiredWakeMinute, desiredSleepHour, desiredSleepMinute, hasSetSleepWakePreference
-        case homeLatitude, homeLongitude, officeLatitude, officeLongitude
+        case homeLatitude, homeLongitude, officeLatitude, officeLongitude, customPlaces
     }
 }
 

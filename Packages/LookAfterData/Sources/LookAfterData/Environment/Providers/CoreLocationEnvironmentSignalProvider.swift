@@ -67,6 +67,7 @@ public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalPr
     private let fetcher = LocationFetcher()
     private let homeCoordinate: CLLocationCoordinate2D?
     private let officeCoordinate: CLLocationCoordinate2D?
+    private let customPlaces: [SavedPlace]
     private let proximityRadiusMeters: Double
 
     public init(
@@ -74,6 +75,7 @@ public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalPr
         homeLongitude: Double?,
         officeLatitude: Double?,
         officeLongitude: Double?,
+        customPlaces: [SavedPlace] = [],
         proximityRadiusMeters: Double = 150
     ) {
         if let lat = homeLatitude, let lon = homeLongitude {
@@ -86,6 +88,7 @@ public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalPr
         } else {
             self.officeCoordinate = nil
         }
+        self.customPlaces = customPlaces
         self.proximityRadiusMeters = proximityRadiusMeters
     }
 
@@ -97,20 +100,26 @@ public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalPr
         guard let current = await fetcher.currentLocation() else {
             return .unavailable
         }
-        let context = classify(current)
-        return LocationEnvironmentSignals(locationContext: context, isAvailable: true, permissionDenied: false)
+        let (context, placeName) = classify(current)
+        return LocationEnvironmentSignals(locationContext: context, isAvailable: true, permissionDenied: false, customPlaceName: placeName)
     }
 
-    private func classify(_ location: CLLocation) -> LocationContext {
+    private func classify(_ location: CLLocation) -> (LocationContext, String?) {
         if let home = homeCoordinate,
            location.distance(from: CLLocation(latitude: home.latitude, longitude: home.longitude)) <= proximityRadiusMeters {
-            return .home
+            return (.home, nil)
         }
         if let office = officeCoordinate,
            location.distance(from: CLLocation(latitude: office.latitude, longitude: office.longitude)) <= proximityRadiusMeters {
-            return .office
+            return (.office, nil)
         }
-        return .other
+        if let nearest = customPlaces
+            .map({ ($0, location.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))) })
+            .filter({ $0.1 <= proximityRadiusMeters })
+            .min(by: { $0.1 < $1.1 }) {
+            return (.other, nearest.0.name)
+        }
+        return (.other, nil)
     }
 }
 #endif

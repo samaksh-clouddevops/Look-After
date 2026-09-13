@@ -174,15 +174,20 @@ public struct LocationEnvironmentSignals: Sendable, Equatable {
     public var locationContext: LocationContext
     public var isAvailable: Bool
     public var permissionDenied: Bool
+    /// Name of the nearest matching user-defined custom place (e.g. "Gym"), if `locationContext == .other`
+    /// and a custom place was within range. Nil when at Home/Office or no custom place matched.
+    public var customPlaceName: String?
 
     public init(
         locationContext: LocationContext = .unknown,
         isAvailable: Bool = false,
-        permissionDenied: Bool = false
+        permissionDenied: Bool = false,
+        customPlaceName: String? = nil
     ) {
         self.locationContext = locationContext
         self.isAvailable = isAvailable
         self.permissionDenied = permissionDenied
+        self.customPlaceName = customPlaceName
     }
 
     public static let unavailable = LocationEnvironmentSignals()

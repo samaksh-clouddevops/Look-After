@@ -42,14 +42,15 @@ public final class ContextOrchestrator: ObservableObject {
     /// entitlement required — uses only `NSLocationWhenInUseUsageDescription`.
     private static func makeLocationProvider() -> LocationEnvironmentSignalProviderProtocol {
         let profile = UserLifeProfileStore.load()
-        guard profile.homeLatitude != nil || profile.officeLatitude != nil else {
+        guard profile.homeLatitude != nil || profile.officeLatitude != nil || !profile.customPlaces.isEmpty else {
             return UnavailableLocationEnvironmentSignalProvider()
         }
         return CoreLocationEnvironmentSignalProvider(
             homeLatitude: profile.homeLatitude,
             homeLongitude: profile.homeLongitude,
             officeLatitude: profile.officeLatitude,
-            officeLongitude: profile.officeLongitude
+            officeLongitude: profile.officeLongitude,
+            customPlaces: profile.customPlaces
         )
     }
 

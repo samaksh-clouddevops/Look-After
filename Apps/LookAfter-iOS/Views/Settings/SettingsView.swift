@@ -26,6 +26,7 @@ struct SettingsView: View {
     @State private var locationCaptureMessage: String?
     @State private var showHomeLocationPicker = false
     @State private var showOfficeLocationPicker = false
+    @State private var showAddCustomPlace = false
     @State private var cyclePreferences = CyclePreferencesStore.load()
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
     @AppStorage("userName") private var userName: String = ""
@@ -866,6 +867,22 @@ struct SettingsView: View {
                         }
                     }
                     .foregroundColor(DesignSystem.textPrimary)
+
+                    ForEach(lifeProfile.customPlaces) { place in
+                        HStack {
+                            Label(place.name, systemImage: "mappin.circle.fill")
+                            Spacer()
+                        }
+                    }
+                    .onDelete { offsets in
+                        lifeProfile.customPlaces.remove(atOffsets: offsets)
+                        UserLifeProfileStore.save(lifeProfile)
+                    }
+
+                    Button(action: { showAddCustomPlace = true }) {
+                        Label("Add custom place (Gym, School…)", systemImage: "plus.circle")
+                    }
+                    .foregroundColor(DesignSystem.textPrimary)
                 }, header: {
                     Text("Brain context")
                 }, footer: {
@@ -972,7 +989,7 @@ struct SettingsView: View {
                     initialCoordinate: lifeProfile.homeLatitude.map {
                         CLLocationCoordinate2D(latitude: $0, longitude: lifeProfile.homeLongitude ?? 0)
                     }
-                ) { coordinate in
+                ) { _, coordinate in
                     saveLocation(coordinate, as: .home)
                 }
             }
@@ -982,8 +999,17 @@ struct SettingsView: View {
                     initialCoordinate: lifeProfile.officeLatitude.map {
                         CLLocationCoordinate2D(latitude: $0, longitude: lifeProfile.officeLongitude ?? 0)
                     }
-                ) { coordinate in
+                ) { _, coordinate in
                     saveLocation(coordinate, as: .office)
+                }
+            }
+            .sheet(isPresented: $showAddCustomPlace) {
+                LocationPickerSheet(
+                    title: "Add Place",
+                    initialCoordinate: nil,
+                    showsNameField: true
+                ) { name, coordinate in
+                    addCustomPlace(name: name, coordinate: coordinate)
                 }
             }
             .sheet(isPresented: $showHealthVerification) {
@@ -1149,6 +1175,15 @@ struct SettingsView: View {
             lifeProfile.officeLongitude = coordinate.longitude
             locationCaptureMessage = "Office location saved."
         }
+        UserLifeProfileStore.save(lifeProfile)
+    }
+
+    private func addCustomPlace(name: String, coordinate: CLLocationCoordinate2D) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        lifeProfile.customPlaces.append(
+            SavedPlace(name: trimmed, latitude: coordinate.latitude, longitude: coordinate.longitude)
+        )
         UserLifeProfileStore.save(lifeProfile)
     }
 
