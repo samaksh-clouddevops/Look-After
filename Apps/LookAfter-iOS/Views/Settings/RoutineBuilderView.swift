@@ -10,6 +10,7 @@ struct RoutineBuilderView: View {
     @State private var showAddSheet = false
     @State private var importCandidates: [RoutineBlock] = []
     @State private var importMessage: String?
+    @State private var editingCandidate: RoutineBlock?
 
     var body: some View {
         ZStack {
@@ -18,20 +19,39 @@ struct RoutineBuilderView: View {
                 if !importCandidates.isEmpty {
                     Section(content: {
                         ForEach(importCandidates) { candidate in
-                            HStack {
-                                Text(candidate.title)
-                                Spacer()
-                                Text(candidate.timeRangeLabel())
-                                    .font(.system(size: 12))
-                                    .foregroundColor(DesignSystem.textMuted)
+                            Button(action: { editingCandidate = candidate }) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(candidate.title)
+                                            .foregroundColor(DesignSystem.textPrimary)
+                                        Text(candidate.timeRangeLabel())
+                                            .font(.system(size: 12))
+                                            .foregroundColor(DesignSystem.textMuted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(DesignSystem.textMuted)
+                                }
+                            }
+                            .listRowBackground(DesignSystem.contentSurface)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    importCandidates.removeAll { $0.id == candidate.id }
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
                             }
                         }
-                        .listRowBackground(DesignSystem.contentSurface)
                         Button("Import These Into My Routine") { importSuggested() }
                             .listRowBackground(DesignSystem.contentSurface)
                         Button("Dismiss", role: .cancel) { importCandidates = [] }
                             .listRowBackground(DesignSystem.contentSurface)
-                    }, header: { Text("Found in your fixed schedule notes") })
+                    }, header: { Text("Found in your fixed schedule notes") }, footer: {
+                        Text("Tap a suggestion to edit its title or time before importing, or swipe to remove one you don't want.")
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.textMuted)
+                    })
                 }
 
                 if let importMessage {
@@ -110,6 +130,15 @@ struct RoutineBuilderView: View {
             } onDelete: {
                 blocks.removeAll { $0.id == block.id }
                 RoutineBlockStore.save(blocks)
+            }
+        }
+        .sheet(item: $editingCandidate) { candidate in
+            RoutineBlockEditorSheet(mode: .edit(candidate)) { updated in
+                if let index = importCandidates.firstIndex(where: { $0.id == updated.id }) {
+                    importCandidates[index] = updated
+                }
+            } onDelete: {
+                importCandidates.removeAll { $0.id == candidate.id }
             }
         }
         .accessibilityIdentifier("screen-routine-builder")
