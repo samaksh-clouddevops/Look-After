@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import LookAfterCore
+import os
 
 /// On-device SQLite persistence for tasks — replaces `tasks.json` full-file rewrites.
 public final class TaskSQLiteStore: @unchecked Sendable {
@@ -17,22 +18,24 @@ public final class TaskSQLiteStore: @unchecked Sendable {
     // quick edit-then-delete (or vice versa) persist out of order. Chaining
     // each write onto the previous one preserves FIFO ordering while
     // remaining non-blocking for callers.
-    private let writeChainLock = NSLock()
-    private var writeChain: Task<Void, Never> = Task {}
+    //
+    // OSAllocatedUnfairLock (scoped `withLock`) is required so async readers
+    // can snapshot the chain — `NSLock.lock()` is unavailable from async contexts.
+    private let writeChain = OSAllocatedUnfairLock(initialState: Task<Void, Never> {})
 
     private func enqueueWrite(_ operation: @escaping @Sendable (Database) throws -> Void) {
         let dbQueue = dbQueue
-        writeChainLock.lock()
-        let previous = writeChain
-        writeChain = Task.detached(priority: .userInitiated) {
-            _ = await previous.value
-            do {
-                try await dbQueue.write(operation)
-            } catch {
-                print("[TaskSQLiteStore] queued write failed: \(error)")
+        writeChain.withLock { chain in
+            let previous = chain
+            chain = Task.detached(priority: .userInitiated) {
+                _ = await previous.value
+                do {
+                    try await dbQueue.write(operation)
+                } catch {
+                    print("[TaskSQLiteStore] queued write failed: \(error)")
+                }
             }
         }
-        writeChainLock.unlock()
     }
 
     private static let jsonEncoder: JSONEncoder = {
@@ -121,9 +124,7 @@ public final class TaskSQLiteStore: @unchecked Sendable {
         // the actual DB access, but nothing previously ordered this unchained `dbQueue.read`
         // after a still-pending chained write, so the just-written row could be silently
         // missing from the snapshot returned here.
-        writeChainLock.lock()
-        let pendingWrites = writeChain
-        writeChainLock.unlock()
+        let pendingWrites = writeChain.withLock { $0 }
         _ = await pendingWrites.value
 
         do {
