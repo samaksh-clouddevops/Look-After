@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import CoreLocation
 import LookAfterCore
 import LookAfterAI
 import LookAfterData
@@ -22,9 +23,9 @@ struct SettingsView: View {
     @State private var isSyncingTasks = false
     @State private var isImportingReminders = false
     @State private var remindersImportMessage: String?
-    @State private var isCapturingLocation = false
     @State private var locationCaptureMessage: String?
-    private let locationCaptureService = LocationCaptureService()
+    @State private var showHomeLocationPicker = false
+    @State private var showOfficeLocationPicker = false
     @State private var cyclePreferences = CyclePreferencesStore.load()
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
     @AppStorage("userName") private var userName: String = ""
@@ -840,34 +841,30 @@ struct SettingsView: View {
                     .disabled(isImportingReminders)
                     .foregroundColor(DesignSystem.textPrimary)
 
-                    Button(action: { Task { await captureCurrentLocation(as: .home) } }) {
+                    Button(action: { showHomeLocationPicker = true }) {
                         HStack {
                             Label(
-                                lifeProfile.homeLatitude == nil ? "Set current location as Home" : "Update Home location",
+                                lifeProfile.homeLatitude == nil ? "Set Home location" : "Update Home location",
                                 systemImage: "house.fill"
                             )
                             Spacer()
-                            if isCapturingLocation {
-                                ProgressView()
-                            }
+                            Image(systemName: "map")
+                                .foregroundColor(DesignSystem.textMuted)
                         }
                     }
-                    .disabled(isCapturingLocation)
                     .foregroundColor(DesignSystem.textPrimary)
 
-                    Button(action: { Task { await captureCurrentLocation(as: .office) } }) {
+                    Button(action: { showOfficeLocationPicker = true }) {
                         HStack {
                             Label(
-                                lifeProfile.officeLatitude == nil ? "Set current location as Office" : "Update Office location",
+                                lifeProfile.officeLatitude == nil ? "Set Office location" : "Update Office location",
                                 systemImage: "building.2.fill"
                             )
                             Spacer()
-                            if isCapturingLocation {
-                                ProgressView()
-                            }
+                            Image(systemName: "map")
+                                .foregroundColor(DesignSystem.textMuted)
                         }
                     }
-                    .disabled(isCapturingLocation)
                     .foregroundColor(DesignSystem.textPrimary)
                 }, header: {
                     Text("Brain context")
@@ -968,6 +965,26 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) { remindersImportMessage = nil }
             } message: {
                 Text(remindersImportMessage ?? "")
+            }
+            .sheet(isPresented: $showHomeLocationPicker) {
+                LocationPickerSheet(
+                    title: "Home Location",
+                    initialCoordinate: lifeProfile.homeLatitude.map {
+                        CLLocationCoordinate2D(latitude: $0, longitude: lifeProfile.homeLongitude ?? 0)
+                    }
+                ) { coordinate in
+                    saveLocation(coordinate, as: .home)
+                }
+            }
+            .sheet(isPresented: $showOfficeLocationPicker) {
+                LocationPickerSheet(
+                    title: "Office Location",
+                    initialCoordinate: lifeProfile.officeLatitude.map {
+                        CLLocationCoordinate2D(latitude: $0, longitude: lifeProfile.officeLongitude ?? 0)
+                    }
+                ) { coordinate in
+                    saveLocation(coordinate, as: .office)
+                }
             }
             .sheet(isPresented: $showHealthVerification) {
                 NavigationStack {
@@ -1121,29 +1138,18 @@ struct SettingsView: View {
         case office
     }
 
-    private func captureCurrentLocation(as kind: SavedLocationKind) async {
-        guard !isCapturingLocation else { return }
-        isCapturingLocation = true
-        defer { isCapturingLocation = false }
-
-        do {
-            let coordinate = try await locationCaptureService.currentCoordinate()
-            switch kind {
-            case .home:
-                lifeProfile.homeLatitude = coordinate.latitude
-                lifeProfile.homeLongitude = coordinate.longitude
-                locationCaptureMessage = "Home location saved."
-            case .office:
-                lifeProfile.officeLatitude = coordinate.latitude
-                lifeProfile.officeLongitude = coordinate.longitude
-                locationCaptureMessage = "Office location saved."
-            }
-            UserLifeProfileStore.save(lifeProfile)
-        } catch LocationCaptureError.accessDenied {
-            locationCaptureMessage = "Location access denied. Enable it in iOS Settings → Look After → Location."
-        } catch {
-            locationCaptureMessage = "Couldn't get current location: \(error.localizedDescription)"
+    private func saveLocation(_ coordinate: CLLocationCoordinate2D, as kind: SavedLocationKind) {
+        switch kind {
+        case .home:
+            lifeProfile.homeLatitude = coordinate.latitude
+            lifeProfile.homeLongitude = coordinate.longitude
+            locationCaptureMessage = "Home location saved."
+        case .office:
+            lifeProfile.officeLatitude = coordinate.latitude
+            lifeProfile.officeLongitude = coordinate.longitude
+            locationCaptureMessage = "Office location saved."
         }
+        UserLifeProfileStore.save(lifeProfile)
     }
 
     private func syncTasksFromProfile(showOrganizeContext: Bool = false) async {
