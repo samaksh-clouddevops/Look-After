@@ -115,6 +115,17 @@ public final class TaskSQLiteStore: @unchecked Sendable {
     }
 
     public func loadAllAsync() async -> [LifeTask] {
+        // Drain any writes already queued via `enqueueWrite` (upsert/delete/replaceAll)
+        // before reading, otherwise a create/update/delete issued just before the first
+        // `warmLocalCache()` call on a cold process can race this read: GRDB serializes
+        // the actual DB access, but nothing previously ordered this unchained `dbQueue.read`
+        // after a still-pending chained write, so the just-written row could be silently
+        // missing from the snapshot returned here.
+        writeChainLock.lock()
+        let pendingWrites = writeChain
+        writeChainLock.unlock()
+        _ = await pendingWrites.value
+
         do {
             return try await dbQueue.read { db in
                 try TaskRecord.fetchAll(db).map { try $0.lifeTask() }
