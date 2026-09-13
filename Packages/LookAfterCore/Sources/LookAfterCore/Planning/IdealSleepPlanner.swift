@@ -163,6 +163,12 @@ public enum IdealSleepPlanner {
             }
         }
 
+        // No fixed commitment tomorrow — fall back to the user's soft preferred wake time, if set.
+        if input.profile.hasSetSleepWakePreference,
+           let date = date(on: tomorrow, hour: input.profile.desiredWakeHour, minute: input.profile.desiredWakeMinute, calendar: input.calendar) {
+            return WakeAnchor(date: date, label: "\(formatTime(date, calendar: input.calendar)) (your usual wake time)")
+        }
+
         if let date = date(on: tomorrow, hour: 9, minute: 0, calendar: input.calendar) {
             return WakeAnchor(date: date, label: "9:00 AM")
         }

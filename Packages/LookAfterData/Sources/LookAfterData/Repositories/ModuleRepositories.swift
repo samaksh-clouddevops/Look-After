@@ -40,6 +40,14 @@ enum ModuleLocalStore {
         try? sqlite.replaceAll(items, collection: .journalEntries, id: { $0.id })
     }
 
+    static func loadHydration() -> [HydrationLog] {
+        (try? sqlite.loadAll(HydrationLog.self, collection: .hydrationLogs)) ?? []
+    }
+
+    static func saveHydration(_ items: [HydrationLog]) {
+        try? sqlite.replaceAll(items, collection: .hydrationLogs, id: { $0.id })
+    }
+
     static func enqueueUpsert<T: Encodable>(_ item: T, collection: String, id: String, userId: String, merge: Bool) {
         CloudSyncOutbox.shared.enqueueCodable(
             item,
@@ -257,6 +265,53 @@ public final class JournalRepository: ObservableObject {
         var items = ModuleLocalStore.loadJournal()
         items.removeAll { $0.id == item.id }
         ModuleLocalStore.saveJournal(items)
+        ModuleLocalStore.enqueueDelete(collection: collection, id: item.id, userId: item.userId)
+    }
+}
+
+// MARK: - Hydration Repository
+
+@MainActor
+public final class HydrationRepository: ObservableObject {
+    private let firebase: FirebaseManager
+    private let collection = "hydration_logs"
+
+    public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
+
+    /// Returns only today's logs — hydration is a daily-reset metric, not a running history.
+    public func getToday(for userId: String) async throws -> [HydrationLog] {
+        let local = ModuleLocalStore.loadHydration().filter { Calendar.current.isDateInToday($0.loggedAt) }
+        guard let ref = firebase.userCollection(collection) else {
+            return local.sorted { $0.loggedAt < $1.loggedAt }
+        }
+        do {
+            let snapshot = try await ref.order(by: "loggedAt", descending: true).getDocuments()
+            let remote = try snapshot.documents.compactMap { try firebase.decode(HydrationLog.self, from: $0) }
+            let remoteToday = remote.filter { Calendar.current.isDateInToday($0.loggedAt) }
+            let merged = ModuleEntityMerge.merge(local: local, remote: remoteToday, id: \.id)
+            // Preserve any older (non-today) logs already on disk instead of pruning them here —
+            // stale-day cleanup is a separate concern from this read path.
+            let stale = ModuleLocalStore.loadHydration().filter { !Calendar.current.isDateInToday($0.loggedAt) }
+            ModuleLocalStore.saveHydration(stale + merged)
+            return merged.sorted { $0.loggedAt < $1.loggedAt }
+        } catch {
+            return local.sorted { $0.loggedAt < $1.loggedAt }
+        }
+    }
+
+    public func create(_ item: HydrationLog) async throws {
+        var mutable = item
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        var items = ModuleLocalStore.loadHydration()
+        items.append(mutable)
+        ModuleLocalStore.saveHydration(items)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: collection, id: mutable.id, userId: mutable.userId, merge: false)
+    }
+
+    public func delete(_ item: HydrationLog) async throws {
+        var items = ModuleLocalStore.loadHydration()
+        items.removeAll { $0.id == item.id }
+        ModuleLocalStore.saveHydration(items)
         ModuleLocalStore.enqueueDelete(collection: collection, id: item.id, userId: item.userId)
     }
 }

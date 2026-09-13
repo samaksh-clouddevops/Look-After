@@ -458,6 +458,7 @@ struct TaskFormSheet: View {
     @State private var title = ""
     @State private var description = ""
     @State private var lifeArea: LifeArea = .personal
+    @State private var workCategory: WorkTaskCategory = .task
     @State private var priority: Priority = .medium
     @State private var difficulty: TaskDifficulty = .medium
     @State private var estimatedMinutes = 30
@@ -520,6 +521,15 @@ struct TaskFormSheet: View {
                                 ForEach(LifeArea.allCases) { area in
                                     Label(area.rawValue, systemImage: area.icon)
                                         .tag(area)
+                                }
+                            }
+
+                            if lifeArea == .work {
+                                Picker("Work Type", selection: $workCategory) {
+                                    ForEach(WorkTaskCategory.allCases) { category in
+                                        Label(category.rawValue, systemImage: category.icon)
+                                            .tag(category)
+                                    }
                                 }
                             }
 
@@ -663,6 +673,7 @@ struct TaskFormSheet: View {
             title = task.title
             description = task.description
             lifeArea = task.lifeArea
+            workCategory = task.workCategory ?? .task
             priority = task.priority
             difficulty = task.difficulty
             estimatedMinutes = task.estimatedMinutes
@@ -797,7 +808,8 @@ struct TaskFormSheet: View {
                 recurrenceWeekdays: weekdays,
                 schedulingMode: scheduling,
                 scheduledEndTime: endTime,
-                userId: userId
+                userId: userId,
+                workCategory: lifeArea == .work ? workCategory : nil
             )
             HapticManager.impact(.medium)
             tasksVM.createTask(task)
@@ -806,6 +818,7 @@ struct TaskFormSheet: View {
             updated.title = title
             updated.description = description
             updated.lifeArea = lifeArea
+            updated.workCategory = lifeArea == .work ? workCategory : nil
             updated.priority = priority
             updated.difficulty = difficulty
             updated.estimatedMinutes = estimatedMinutes

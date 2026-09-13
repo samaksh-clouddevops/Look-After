@@ -4,9 +4,16 @@ import Foundation
 public enum LifeTimelineKindResolver {
 
     public static func kind(for task: LifeTask) -> LifeTimelineEventKind {
+        // Explicit user choice wins — Work tasks are only "meeting" if the user marked them as such.
+        if task.lifeArea == .work, let workCategory = task.workCategory {
+            return workCategory.timelineKind
+        }
+
         let profile = TaskSemanticProfileBuilder.classificationProfile(for: task)
         let base = kind(for: profile, task: task)
 
+        // No explicit sub-category set — fall back to the previous heuristic (fixed-time Work ⇒ meeting)
+        // for tasks created before this feature existed.
         if task.isFixedTimeEvent, base == .work {
             return .meeting
         }

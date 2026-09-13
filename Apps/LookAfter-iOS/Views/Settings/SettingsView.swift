@@ -847,8 +847,27 @@ struct SettingsView: View {
                     
                     Slider(value: $targetSleepHours, in: 5...10, step: 0.5)
                         .tint(DesignSystem.accentPrimary)
+
+                    Toggle("Set ideal wake & sleep time", isOn: Binding(
+                        get: { lifeProfile.hasSetSleepWakePreference },
+                        set: { newValue in
+                            lifeProfile.hasSetSleepWakePreference = newValue
+                            UserLifeProfileStore.save(lifeProfile)
+                        }
+                    ))
+
+                    if lifeProfile.hasSetSleepWakePreference {
+                        wakeSleepTimeRow(title: "Ideal wake-up", hour: $lifeProfile.desiredWakeHour, minute: $lifeProfile.desiredWakeMinute)
+                        wakeSleepTimeRow(title: "Ideal bedtime", hour: $lifeProfile.desiredSleepHour, minute: $lifeProfile.desiredSleepMinute)
+                    }
                 }, header: {
                     Text("Energy Profile")
+                }, footer: {
+                    Group {
+                        if lifeProfile.hasSetSleepWakePreference {
+                            Text("The AI uses this as a soft target when suggesting timing — it won't strictly enforce it since your days vary.")
+                        }
+                    }
                 })
 
                 // About
@@ -1051,6 +1070,25 @@ struct SettingsView: View {
             set: { newDate in
                 hour.wrappedValue = Calendar.current.component(.hour, from: newDate)
                 minute.wrappedValue = Calendar.current.component(.minute, from: newDate)
+            }
+        )
+        return HStack {
+            Text(title)
+            Spacer()
+            DatePicker("", selection: binding, displayedComponents: .hourAndMinute)
+                .labelsHidden()
+        }
+    }
+
+    private func wakeSleepTimeRow(title: String, hour: Binding<Int>, minute: Binding<Int>) -> some View {
+        let binding = Binding<Date>(
+            get: {
+                Calendar.current.date(bySettingHour: hour.wrappedValue, minute: minute.wrappedValue, second: 0, of: Date()) ?? Date()
+            },
+            set: { newDate in
+                hour.wrappedValue = Calendar.current.component(.hour, from: newDate)
+                minute.wrappedValue = Calendar.current.component(.minute, from: newDate)
+                UserLifeProfileStore.save(lifeProfile)
             }
         )
         return HStack {

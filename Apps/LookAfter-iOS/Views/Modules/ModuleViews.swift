@@ -450,10 +450,10 @@ struct HydrationNutritionView: View {
                 
                 // Quick log buttons
                 HStack(spacing: DesignSystem.spacingMD) {
-                    Button("+ 250ml Water") { modulesVM.logWater(amountMl: 250) }
+                    Button("+ 250ml Water") { Task { await modulesVM.logWater(amountMl: 250) } }
                         .buttonStyle(PremiumPrimaryButtonStyle())
-                    
-                    Button("+ 500ml Water") { modulesVM.logWater(amountMl: 500) }
+
+                    Button("+ 500ml Water") { Task { await modulesVM.logWater(amountMl: 500) } }
                         .buttonStyle(PremiumPrimaryButtonStyle())
                 }
                 
@@ -475,7 +475,7 @@ struct HydrationNutritionView: View {
                                         .foregroundColor(DesignSystem.textMuted)
                                     Button(action: {
                                         HapticManager.notification(.warning)
-                                        modulesVM.removeWaterLog(log)
+                                        Task { await modulesVM.removeWaterLog(log) }
                                     }) {
                                         Image(systemName: "trash")
                                             .foregroundColor(DesignSystem.error)
@@ -486,7 +486,7 @@ struct HydrationNutritionView: View {
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive, action: {
                                         HapticManager.notification(.warning)
-                                        modulesVM.removeWaterLog(log)
+                                        Task { await modulesVM.removeWaterLog(log) }
                                     }, label: {
                                         Label("Remove", systemImage: "trash")
                                     })
@@ -1103,9 +1103,21 @@ struct ReflectionJournalView: View {
                                 .padding(.horizontal, DesignSystem.screenHorizontal)
                             ForEach(modulesVM.journalEntries.prefix(5)) { entry in
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(entry.createdAt.shortDateString)
-                                        .font(.dsMetadata(weight: .semibold))
-                                        .foregroundColor(DesignSystem.accentPrimary)
+                                    HStack {
+                                        Text(entry.createdAt.shortDateString)
+                                            .font(.dsMetadata(weight: .semibold))
+                                            .foregroundColor(DesignSystem.accentPrimary)
+                                        Spacer()
+                                        Button(action: {
+                                            HapticManager.notification(.warning)
+                                            Task { await modulesVM.deleteJournalEntry(entry) }
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .foregroundColor(DesignSystem.error)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Remove reflection")
+                                    }
                                     Text(entry.content)
                                         .font(.dsSecondary())
                                         .foregroundColor(DesignSystem.textPrimary)
@@ -1118,6 +1130,13 @@ struct ReflectionJournalView: View {
                                         .fill(DesignSystem.contentSurfaceElevated)
                                 )
                                 .padding(.horizontal, DesignSystem.screenHorizontal)
+                                .contextMenu {
+                                    Button(role: .destructive, action: {
+                                        Task { await modulesVM.deleteJournalEntry(entry) }
+                                    }, label: {
+                                        Label("Remove", systemImage: "trash")
+                                    })
+                                }
                             }
                         }
                     }

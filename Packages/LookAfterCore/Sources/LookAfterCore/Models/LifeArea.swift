@@ -57,3 +57,32 @@ public enum LifeArea: String, Codable, CaseIterable, Identifiable, Sendable {
         "A5ABB5"
     }
 }
+
+/// Sub-category for `.work` tasks only — lets the user distinguish a meeting from
+/// a general work task, call, or email instead of every fixed-time Work item being
+/// treated as a meeting on the timeline.
+public enum WorkTaskCategory: String, Codable, CaseIterable, Identifiable, Sendable {
+    case task = "Task"
+    case meeting = "Meeting"
+    case call = "Call"
+    case email = "Email"
+
+    public var id: String { rawValue }
+
+    public var icon: String {
+        switch self {
+        case .task: return "checklist"
+        case .meeting: return "calendar"
+        case .call: return "phone.fill"
+        case .email: return "envelope.fill"
+        }
+    }
+
+    public var timelineKind: LifeTimelineEventKind {
+        switch self {
+        case .task: return .work
+        case .meeting: return .meeting
+        case .call, .email: return .work
+        }
+    }
+}

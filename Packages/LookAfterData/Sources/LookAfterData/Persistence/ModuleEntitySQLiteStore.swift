@@ -11,6 +11,7 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
         case shoppingItems = "shopping_items"
         case relationships
         case journalEntries = "journal_entries"
+        case hydrationLogs = "hydration_logs"
     }
 
     private let dbQueue: DatabaseQueue
@@ -189,6 +190,10 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
                     guard let data = try? encode(item) else { return nil }
                     return (item.id, data)
                 }
+            case .hydrationLogs:
+                // No legacy JSON file ever existed for hydration logs — this module
+                // was never persisted before SQLite support was added.
+                rawItems = []
             }
 
             for item in rawItems {

@@ -27,19 +27,22 @@ public final class LifeModulesViewModel: ObservableObject {
     private let shoppingRepo: ShoppingRepository
     private let relRepo: RelationshipRepository
     private let journalRepo: JournalRepository
+    private let hydrationRepo: HydrationRepository
     private let semanticStore: SemanticMemoryStore
-    
+
     public init(
         billRepo: BillRepository? = nil,
         shoppingRepo: ShoppingRepository? = nil,
         relRepo: RelationshipRepository? = nil,
         journalRepo: JournalRepository? = nil,
+        hydrationRepo: HydrationRepository? = nil,
         semanticStore: SemanticMemoryStore = SemanticMemoryStore()
     ) {
         self.billRepo = billRepo ?? BillRepository()
         self.shoppingRepo = shoppingRepo ?? ShoppingRepository()
         self.relRepo = relRepo ?? RelationshipRepository()
         self.journalRepo = journalRepo ?? JournalRepository()
+        self.hydrationRepo = hydrationRepo ?? HydrationRepository()
         self.semanticStore = semanticStore
     }
     
@@ -58,6 +61,7 @@ public final class LifeModulesViewModel: ObservableObject {
         async let shoppingLoad = shoppingRepo.getAll(for: userId)
         async let relLoad = relRepo.getAll(for: userId)
         async let journalLoad = journalRepo.getAll(for: userId)
+        async let hydrationLoad = hydrationRepo.getToday(for: userId)
 
         var errors: [String] = []
 
@@ -79,6 +83,12 @@ public final class LifeModulesViewModel: ObservableObject {
         }
         do {
             self.journalEntries = try await journalLoad
+        } catch {
+            errors.append(error.localizedDescription)
+        }
+        do {
+            self.waterLogs = try await hydrationLoad
+            self.totalWaterTodayMl = self.waterLogs.reduce(0) { $0 + $1.amountMl }
         } catch {
             errors.append(error.localizedDescription)
         }
@@ -191,10 +201,17 @@ public final class LifeModulesViewModel: ObservableObject {
         try? await shoppingRepo.delete(item)
     }
     
-    public func logWater(amountMl: Double = 250) {
+    public func logWater(amountMl: Double = 250) async {
         let log = HydrationLog(amountMl: amountMl)
         waterLogs.append(log)
         totalWaterTodayMl += amountMl
+        do {
+            try await hydrationRepo.create(log)
+        } catch {
+            waterLogs.removeAll { $0.id == log.id }
+            totalWaterTodayMl = max(0, totalWaterTodayMl - amountMl)
+            self.error = "Couldn't log water: \(error.localizedDescription)"
+        }
     }
     
     public func addContact(name: String, relationship: String, targetFrequencyDays: Int) async {
@@ -252,10 +269,11 @@ public final class LifeModulesViewModel: ObservableObject {
         }
     }
     
-    public func removeWaterLog(_ log: HydrationLog) {
+    public func removeWaterLog(_ log: HydrationLog) async {
         guard let index = waterLogs.firstIndex(where: { $0.id == log.id }) else { return }
         totalWaterTodayMl = max(0, totalWaterTodayMl - waterLogs[index].amountMl)
         waterLogs.remove(at: index)
+        try? await hydrationRepo.delete(log)
     }
     
     public func performSemanticSearch(query: String) {

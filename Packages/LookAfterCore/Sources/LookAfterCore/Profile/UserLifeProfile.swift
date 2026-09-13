@@ -21,6 +21,14 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
     public var hasSeededInitialTasks: Bool
     /// Self-reported gender — used to personalize features like cycle tracking.
     public var gender: UserGender?
+    /// Desired wake-up time — a soft target the AI uses for tone/timing context, not a hard schedule.
+    public var desiredWakeHour: Int
+    public var desiredWakeMinute: Int
+    /// Desired sleep (bedtime) time — a soft target, not strictly enforced since days vary.
+    public var desiredSleepHour: Int
+    public var desiredSleepMinute: Int
+    /// Whether the user has explicitly set wake/sleep preferences (vs. using defaults).
+    public var hasSetSleepWakePreference: Bool
 
     public init(
         hasCompletedOnboarding: Bool = false,
@@ -35,7 +43,12 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         fixedScheduleNotes: String = "",
         preferredName: String = "",
         hasSeededInitialTasks: Bool = false,
-        gender: UserGender? = nil
+        gender: UserGender? = nil,
+        desiredWakeHour: Int = 7,
+        desiredWakeMinute: Int = 0,
+        desiredSleepHour: Int = 23,
+        desiredSleepMinute: Int = 0,
+        hasSetSleepWakePreference: Bool = false
     ) {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.profileText = profileText
@@ -50,6 +63,11 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         self.preferredName = preferredName
         self.hasSeededInitialTasks = hasSeededInitialTasks
         self.gender = gender
+        self.desiredWakeHour = desiredWakeHour
+        self.desiredWakeMinute = desiredWakeMinute
+        self.desiredSleepHour = desiredSleepHour
+        self.desiredSleepMinute = desiredSleepMinute
+        self.hasSetSleepWakePreference = hasSetSleepWakePreference
     }
 
     public init(from decoder: Decoder) throws {
@@ -67,6 +85,11 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         preferredName = try container.decodeIfPresent(String.self, forKey: .preferredName) ?? ""
         hasSeededInitialTasks = try container.decodeIfPresent(Bool.self, forKey: .hasSeededInitialTasks) ?? false
         gender = try container.decodeIfPresent(UserGender.self, forKey: .gender)
+        desiredWakeHour = try container.decodeIfPresent(Int.self, forKey: .desiredWakeHour) ?? 7
+        desiredWakeMinute = try container.decodeIfPresent(Int.self, forKey: .desiredWakeMinute) ?? 0
+        desiredSleepHour = try container.decodeIfPresent(Int.self, forKey: .desiredSleepHour) ?? 23
+        desiredSleepMinute = try container.decodeIfPresent(Int.self, forKey: .desiredSleepMinute) ?? 0
+        hasSetSleepWakePreference = try container.decodeIfPresent(Bool.self, forKey: .hasSetSleepWakePreference) ?? false
     }
 
     /// Apply focus preference → internal peak hours used by schedulers.
@@ -89,6 +112,9 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         }
         if !fixedScheduleNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             lines.append("Fixed timings (never reschedule): \(fixedScheduleNotes.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
+        if hasSetSleepWakePreference {
+            lines.append("Ideal wake time: \(Self.formatTime(hour: desiredWakeHour, minute: desiredWakeMinute)) · Ideal bedtime: \(Self.formatTime(hour: desiredSleepHour, minute: desiredSleepMinute)) (soft targets — not strict, days vary)")
         }
         return lines.joined(separator: "\n")
     }
@@ -130,6 +156,7 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         case hasCompletedOnboarding, profileText
         case workStartHour, workStartMinute, workEndHour, workEndMinute
         case peakStartHour, peakEndHour, focusTimePreference, fixedScheduleNotes, preferredName, hasSeededInitialTasks, gender
+        case desiredWakeHour, desiredWakeMinute, desiredSleepHour, desiredSleepMinute, hasSetSleepWakePreference
     }
 }
 

@@ -202,7 +202,9 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     public var userPlacedScheduleAt: Date?
     /// Stable anchor from compiled `DayStructure` (e.g. `routine.dinner`).
     public var scheduleAnchorID: String?
-    
+    /// User-chosen sub-category — only meaningful when `lifeArea == .work` (Task vs Meeting vs Call vs Email).
+    public var workCategory: WorkTaskCategory?
+
     public init(
         id: String = UUID().uuidString,
         title: String,
@@ -242,7 +244,8 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         semanticProfile: TaskSemanticProfile? = nil,
         calendarEventIdentifier: String? = nil,
         userPlacedScheduleAt: Date? = nil,
-        scheduleAnchorID: String? = nil
+        scheduleAnchorID: String? = nil,
+        workCategory: WorkTaskCategory? = nil
     ) {
         self.id = id
         self.title = title
@@ -284,6 +287,7 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         self.calendarEventIdentifier = calendarEventIdentifier
         self.userPlacedScheduleAt = userPlacedScheduleAt
         self.scheduleAnchorID = scheduleAnchorID
+        self.workCategory = workCategory
     }
     
     // MARK: - Computed Properties
