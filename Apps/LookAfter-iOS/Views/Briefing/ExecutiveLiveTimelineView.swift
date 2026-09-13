@@ -61,12 +61,12 @@ struct ExecutiveLiveTimelineView: View {
     var onViewAll: () -> Void
     var onPlan: (() -> Void)?
     var onCapture: (() -> Void)?
-    var onCompleteTask: ((String) -> Void)?
-    var onUncompleteTask: ((String) -> Void)?
+    var onCompleteTask: ((String) async -> Void)?
+    var onUncompleteTask: ((String) async -> Void)?
     var onStartTask: ((String) -> Void)?
     var onEditTask: ((String) -> Void)?
-    var onRescheduleTask: ((String) -> Void)?
-    var onRemoveFromTimelineTask: ((String) -> Void)?
+    var onRescheduleTask: ((String) async -> Void)?
+    var onRemoveFromTimelineTask: ((String) async -> Void)?
     /// Persist a suggested display-only slot onto the real task.
     var onAddSuggestedTask: ((String, Date) -> Void)?
     var onPersistScheduleChange: ((LifeTask) -> Void)?
@@ -315,48 +315,48 @@ struct ExecutiveLiveTimelineView: View {
                         onDoubleTapComplete: row.taskId.flatMap { taskId in
                             if row.isCompleted {
                                 guard let onUncompleteTask else { return nil }
+                                guard !uncompletingTaskIds.contains(taskId) else { return nil }
                                 return {
                                     withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                                         uncompletingTaskIds.insert(taskId)
-                                        onUncompleteTask(taskId)
                                     }
                                     Task {
-                                        try? await Task.sleep(nanoseconds: 600_000_000)
+                                        await onUncompleteTask(taskId)
                                         uncompletingTaskIds.remove(taskId)
                                     }
                                 }
                             }
                             guard let onCompleteTask else { return nil }
+                            guard !completingTaskIds.contains(taskId) else { return nil }
                             return {
                                 withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                                     completingTaskIds.insert(taskId)
-                                    onCompleteTask(taskId)
                                 }
                                 Task {
-                                    try? await Task.sleep(nanoseconds: 600_000_000)
+                                    await onCompleteTask(taskId)
                                     completingTaskIds.remove(taskId)
                                 }
                             }
                         },
                         onReschedule: row.canReschedule ? row.taskId.flatMap { taskId in
                             guard let onRescheduleTask else { return nil }
+                            guard !reschedulingTaskIds.contains(taskId) else { return nil }
                             return {
                                 reschedulingTaskIds.insert(taskId)
-                                onRescheduleTask(taskId)
                                 Task {
-                                    try? await Task.sleep(nanoseconds: 800_000_000)
+                                    await onRescheduleTask(taskId)
                                     reschedulingTaskIds.remove(taskId)
                                 }
                             }
                         } : nil,
                         onRemoveFromTimeline: row.canRemoveFromTimeline ? row.taskId.flatMap { taskId in
                             guard let onRemoveFromTimelineTask else { return nil }
+                            guard !removingFromTimelineTaskIds.contains(taskId) else { return nil }
                             return {
                                 removingFromTimelineTaskIds.insert(taskId)
                                 expandedRowId = nil
-                                onRemoveFromTimelineTask(taskId)
                                 Task {
-                                    try? await Task.sleep(nanoseconds: 800_000_000)
+                                    await onRemoveFromTimelineTask(taskId)
                                     removingFromTimelineTaskIds.remove(taskId)
                                 }
                             }
@@ -672,9 +672,10 @@ private struct EventTimelineCard: View {
                         .font(.dsBody())
                         .fontWeight(phase == .current && !row.isCompleted ? .semibold : .regular)
                         .foregroundColor(titleColor)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .truncationMode(.tail)
                         .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityLabel(titleWithStatusAccessibilityLabel)
 

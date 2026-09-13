@@ -570,7 +570,6 @@ struct ExecutivePlanningConversationView: View {
         HStack(spacing: DesignSystem.spacingSM) {
             PremiumIconButton(speechManager.isListening ? "stop.circle.fill" : "mic.fill") {
                 HapticManager.impact(.medium)
-                onStartVoice()
                 Task {
                     if speechManager.isListening {
                         speechManager.stopListening()
@@ -579,6 +578,7 @@ struct ExecutivePlanningConversationView: View {
                             onSubmit(transcript, true)
                         }
                     } else {
+                        onStartVoice()
                         planningVM.setInputMode(.voice)
                         await speechManager.startListening()
                     }

@@ -332,20 +332,25 @@ public struct AuthView: View {
     
     private func performGuestSignIn() {
         isLoading = true
+        errorMessage = nil
         Task {
-            try? await firebase.signInAnonymously()
-            welcomeName = "Guest"
-            
-            HapticManager.notification(.success)
-            
-            withAnimation {
-                isLoading = false
-                authSuccess = true
+            do {
+                try await firebase.signInAnonymously()
+                welcomeName = "Guest"
+
+                HapticManager.notification(.success)
+
+                withAnimation {
+                    isLoading = false
+                    authSuccess = true
+                }
+
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                onGuestContinue?()
+                dismiss()
+            } catch {
+                failAuth(error)
             }
-            
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            onGuestContinue?()
-            dismiss()
         }
     }
 

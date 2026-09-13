@@ -143,6 +143,9 @@ public enum TaskEphemeralityDefaults {
             return TemporalBoundingBox(earliestStartHour: 6, latestStartHour: 23)
         case .errand where task.semanticProfile?.subtype == "meal":
             return mealBoundingBox(title: task.title.lowercased())
+        case .physicalActivity:
+            // Gym/workout/exercise — never a legitimate default at night regardless of title wording.
+            return TemporalBoundingBox(earliestStartHour: 5, latestStartHour: 22)
         default:
             break
         }
@@ -162,7 +165,17 @@ public enum TaskEphemeralityDefaults {
         if task.semanticProfile?.semanticType == .medication {
             return TemporalBoundingBox(earliestStartHour: 6, latestStartHour: 22)
         }
+        // Title-keyword fallback for physical activity when no semantic profile has been attached yet
+        // (e.g. a freshly created task before background enrichment runs).
+        if task.semanticProfile == nil, isPhysicalActivityTitle(title) {
+            return TemporalBoundingBox(earliestStartHour: 5, latestStartHour: 22)
+        }
         return nil
+    }
+
+    private static func isPhysicalActivityTitle(_ lowercasedTitle: String) -> Bool {
+        let keywords = ["gym", "workout", "work out", "exercise", "run", "jog", "yoga", "cardio", "lift weights", "training session"]
+        return keywords.contains { lowercasedTitle.contains($0) }
     }
 
     private static func mealBoundingBox(title: String) -> TemporalBoundingBox {

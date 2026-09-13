@@ -62,6 +62,12 @@ struct ExecutiveAssistantSheet: View {
                 VoiceSessionKeepAlive.end("planning-voice-processing")
             }
         }
+        .onDisappear {
+            // Safety net: if the sheet is dismissed (Done tap, swipe-down, or programmatic
+            // dismiss) while a voice-mode processing session is still active, the `onChange`
+            // above never fires again, so the keepalive token would otherwise leak forever.
+            VoiceSessionKeepAlive.end("planning-voice-processing")
+        }
         .accessibilityIdentifier("screen-assistant-sheet")
     }
 

@@ -28,6 +28,12 @@ struct AppFeatureTourOverlay: View {
                     .contentShape(Rectangle())
                     .ignoresSafeArea()
                     .allowsHitTesting(!coordinator.currentStep.allowsTargetInteraction)
+                    // Escape hatch: if the card ever fails to render/hit-test (bad geometry,
+                    // off-screen anchor, etc.), a tap on the scrim still advances the tour
+                    // instead of trapping every touch on screen until force-quit.
+                    .onTapGesture {
+                        coordinator.advance()
+                    }
 
                 tourDialog(
                     localCard: localCard,

@@ -810,8 +810,12 @@ public final class DailyBriefingViewModel: ObservableObject {
         let visibleCompleted = Array(dedupedCompleted.prefix(completedCap))
         let hiddenCompleted = max(0, dedupedCompleted.count - visibleCompleted.count)
 
+        let pendingCap = 6
+        let visiblePending = Array(pending.prefix(pendingCap))
+        let hiddenPending = max(0, pending.count - visiblePending.count)
+
         var items: [BriefingMissionTask] = visibleCompleted.map { missionTask(from: $0, isCompleted: true) }
-        items += pending.prefix(6).map { missionTask(from: $0, isCompleted: false) }
+        items += visiblePending.map { missionTask(from: $0, isCompleted: false) }
 
         let totalScheduled = Set(dedupedCompleted.map(\.id) + dedupedActive.map(\.id)).count
         let done = dedupedCompleted.count
@@ -820,7 +824,8 @@ public final class DailyBriefingViewModel: ObservableObject {
         mission = BriefingMissionData(
             tasks: items,
             completionPercent: percent,
-            hiddenCompletedCount: hiddenCompleted
+            hiddenCompletedCount: hiddenCompleted,
+            hiddenPendingCount: hiddenPending
         )
     }
 

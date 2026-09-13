@@ -19,10 +19,16 @@ struct LookAfterApp: App {
     init() {
         LookAfterFirebaseConfiguration.configureIfNeeded()
         AuthProxyBootstrap.configureIfNeeded()
-        // Prefer direct z.ai / OpenAI keys — sync from ~/ADHD/credentials on every launch.
-        _ = GLMKeyManager.shared.syncDeveloperCredentials()
-        _ = GLMKeyManager.shared.syncOpenAIDeveloperCredentials()
         UITestLaunchConfiguration.applyIfNeeded()
+        // Prefer direct z.ai / OpenAI keys — sync from ~/ADHD/credentials on every launch.
+        // Moved off the launch-blocking path: this chains several synchronous Keychain
+        // round-trips + a filesystem read, which previously delayed time-to-first-frame
+        // on every cold launch. Deferring to a background task after init() lets
+        // WindowGroup/ContentView render first.
+        Task.detached(priority: .utility) {
+            _ = GLMKeyManager.shared.syncDeveloperCredentials()
+            _ = GLMKeyManager.shared.syncOpenAIDeveloperCredentials()
+        }
     }
     
     var body: some Scene {

@@ -66,6 +66,17 @@ final class LookAfterAppDelegate: NSObject, UIApplicationDelegate, UNUserNotific
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        // Notifications delivered while the app was backgrounded/not running never trigger
+        // `willPresent` (that only fires for foreground delivery), so this is the only chance
+        // to count them toward the daily proactive cap. `recordDelivered` is idempotent per
+        // candidateID, so this is a no-op if `willPresent` already counted it.
+        let userInfo = response.notification.request.content.userInfo
+        if let candidateID = userInfo[NotificationPayloadKeys.candidateID] as? String,
+           let kindRaw = userInfo[NotificationPayloadKeys.kind] as? String,
+           let kind = NotificationKind(rawValue: kindRaw),
+           kind.countsTowardDailyCap {
+            NotificationDailyBudgetStore.recordDelivered(candidateID: candidateID)
+        }
         Task { @MainActor in
             NotificationRouter.shared.handleNotificationResponse(response)
         }

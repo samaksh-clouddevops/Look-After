@@ -148,11 +148,25 @@ public final class DayReplanEngine {
         let prompt = buildPrompt(context: context)
         let system = systemPrompt(for: context.trigger)
 
-        let raw: String
-        do {
-            raw = try await glm.sendMessage(prompt, systemPrompt: system, history: [], tier: .premium)
-        } catch {
-            print("[DayReplan] AI unavailable: \(error.localizedDescription)")
+        // AI review is compulsory, not a fallback: retry the network call once before silently
+        // degrading to the deterministic local replan with zero AI reasoning about the day's
+        // actual context. Decode failures (malformed AI response) still propagate as before —
+        // only transport/availability failures trigger the retry-then-fallback path.
+        var raw: String?
+        var lastError: Error?
+        for attempt in 0..<2 {
+            do {
+                raw = try await glm.sendMessage(prompt, systemPrompt: system, history: [], tier: .premium)
+                break
+            } catch {
+                lastError = error
+                if attempt == 0 {
+                    print("[DayReplan] AI attempt failed, retrying: \(error.localizedDescription)")
+                }
+            }
+        }
+        guard let raw else {
+            print("[DayReplan] AI unavailable after retry: \(lastError?.localizedDescription ?? "unknown error")")
             return localFallback(context: context)
         }
         return try decode(raw: raw, context: context)

@@ -91,6 +91,12 @@ struct LifeBlockView<Content: View>: View {
                 viewModel.handle(.setConstraint(taskID: taskID, .fluid))
                 thresholdPulse.toggle()
             }
+            .onDisappear {
+                // Safety net: if this row is torn down mid-gesture (e.g. removed/reordered by a
+                // background refresh) SwiftUI never delivers `.onEnded`, so the shared
+                // `scrollDisabled` binding and `dragCoordinator` state would otherwise be stuck.
+                cancelLift()
+            }
     }
 
     private var accessibilityHintText: String {

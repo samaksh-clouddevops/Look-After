@@ -115,9 +115,13 @@ public final class TaskStore: ObservableObject, TaskStoring {
         republishAfterMutation(userId: task.userId)
     }
 
-    public func delete(_ id: String) async throws {
-        try await taskRepo.delete(id)
-        republishAfterMutation(userId: lastUserId)
+    /// `userId` should be the owning user of the task being deleted (e.g. `task.userId`).
+    /// Falling back to `lastUserId` here would attribute the delete/republish to whichever
+    /// account happens to be current when this async call resumes, which can be a different
+    /// user than the one who initiated the delete (account-switch race).
+    public func delete(_ id: String, userId: String) async throws {
+        try await taskRepo.delete(id, userId: userId)
+        republishAfterMutation(userId: userId)
     }
 
     @discardableResult

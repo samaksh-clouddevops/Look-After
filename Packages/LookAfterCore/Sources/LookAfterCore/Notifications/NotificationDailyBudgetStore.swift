@@ -22,8 +22,14 @@ public enum NotificationDailyBudgetStore {
         }
     }
 
+    /// Records a delivered notification toward the daily cap. Idempotent per `candidateID` so
+    /// it is safe to call from both `willPresent` (foreground delivery) and `didReceive`
+    /// (background-delivered notification the user later tapped) without double-counting the
+    /// same notification.
     public static func recordDelivered(candidateID: String, now: Date = Date(), calendar: Calendar = .current) {
         var budget = load(now: now, calendar: calendar)
+        guard !budget.countedCandidateIDs.contains(candidateID) else { return }
+        budget.countedCandidateIDs.append(candidateID)
         budget.deliveredCount += 1
         save(budget)
     }

@@ -8,6 +8,9 @@ struct GeneratedTasksReviewView: View {
     @Binding var keptTaskIDs: Set<String>
 
     @State private var editingTask: LifeTask?
+    /// Tracks whether `keptTaskIDs` has been seeded at least once, so an intentional
+    /// "uncheck everything" selection isn't mistaken for the not-yet-seeded state.
+    @State private var hasSeededKeptIDs = false
 
     private var reviewableTasks: [LifeTask] {
         Self.reviewableTasks(from: tasksVM.tasks)
@@ -67,9 +70,10 @@ struct GeneratedTasksReviewView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(task.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.dsCardTitle())
                         .foregroundColor(DesignSystem.textPrimary)
                         .multilineTextAlignment(.leading)
+                        .dsPrimaryText(lineLimit: 3)
 
                     MetadataTagRow(tags: task.metadataTags(timeLabel: scheduleLabel(for: task)))
                 }
@@ -87,14 +91,18 @@ struct GeneratedTasksReviewView: View {
     }
 
     private func seedKeptIDsIfNeeded() {
-        guard keptTaskIDs.isEmpty else { return }
+        guard !hasSeededKeptIDs else { return }
+        hasSeededKeptIDs = true
         keptTaskIDs = Set(reviewableTasks.map(\.id))
     }
 
     private func syncKeptIDsWithReviewableTasks() {
         let valid = Set(reviewableTasks.map(\.id))
         keptTaskIDs = keptTaskIDs.intersection(valid)
-        if keptTaskIDs.isEmpty, !valid.isEmpty {
+        // Only re-seed from an empty selection if seeding hasn't happened yet — once seeded,
+        // an empty set means the user intentionally unchecked every task, so leave it as-is.
+        if !hasSeededKeptIDs, keptTaskIDs.isEmpty, !valid.isEmpty {
+            hasSeededKeptIDs = true
             keptTaskIDs = valid
         }
     }

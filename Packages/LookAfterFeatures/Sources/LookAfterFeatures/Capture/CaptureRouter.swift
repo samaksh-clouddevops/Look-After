@@ -12,6 +12,8 @@ public final class CaptureRouter {
     public var onJournalEntry: ((String, String) async throws -> String)?
     public var onHealthLog: ((String, String?, String) async throws -> Void)?
     public var onInboxItemsChanged: (() async -> Void)?
+    /// Supplies open/recent task titles for AI duplicate-detection during classification.
+    public var existingTaskTitlesProvider: (() -> [String])?
 
     private let inboxRepo = InboxRepository()
     private let glm = GLMService.shared
@@ -36,7 +38,12 @@ public final class CaptureRouter {
             return CaptureRouteResult(outcome: .needsReview(inboxId: inboxItem.id, preview: trimmed))
         }
 
-        let decision = await CaptureIntentClassifier.classify(request: request, glm: glm)
+        let existingTaskTitles = existingTaskTitlesProvider?() ?? []
+        let decision = await CaptureIntentClassifier.classify(
+            request: request,
+            existingTaskTitles: existingTaskTitles,
+            glm: glm
+        )
 
         if decision.intent == .auto && decision.confidence >= 0.85 {
             inboxItem.status = .archived
@@ -77,7 +84,7 @@ public final class CaptureRouter {
     }
 
     public func undoTask(taskId: String, inboxItemId: String?, userId: String, taskRepo: TaskRepository) async {
-        try? await taskRepo.delete(taskId)
+        try? await taskRepo.delete(taskId, userId: userId)
         if let inboxItemId {
             try? await inboxRepo.delete(inboxItemId)
         }
@@ -96,6 +103,14 @@ public final class CaptureRouter {
         let title = (decision.title ?? preview).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, let handler = onCreateTask else {
             return await fallbackReview(inboxItem: inboxItem, preview: preview)
+        }
+        // AI flagged this as a likely duplicate of an existing open task — surface for review
+        // instead of silently creating a second copy.
+        if let duplicateTitle = decision.possibleDuplicateOfTitle {
+            return await fallbackReview(
+                inboxItem: inboxItem,
+                preview: "\(preview) (possible duplicate of \"\(duplicateTitle)\")"
+            )
         }
 
         let draft = InboxTaskDraft(

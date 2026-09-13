@@ -159,16 +159,16 @@ struct QuickTaskEditSheet: View {
 
         Task {
             let userId = updated.userId.isEmpty ? task.userId : updated.userId
-            await tasksVM.scheduleMutation.persist(
+            let succeeded = await tasksVM.scheduleMutation.persist(
                 updated,
                 userId: userId,
                 userPlaced: schedulingMode == .fixedTime
             )
             isSaving = false
-            if tasksVM.error == nil {
+            if succeeded {
                 dismiss()
             } else {
-                saveError = tasksVM.error
+                saveError = tasksVM.error ?? "Couldn't save your changes. Please try again."
             }
         }
     }

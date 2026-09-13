@@ -9,8 +9,10 @@ public struct PhysiologicalResetView: View {
     @State private var scale: CGFloat = 0.6
     @State private var phaseText = "Inhale Deeply..."
     @State private var secondsRemaining = 60
+    @State private var hasCompleted = false
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    let phaseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     public init() {}
 
@@ -81,12 +83,18 @@ public struct PhysiologicalResetView: View {
             startBreathingAnimation()
         }
         .onReceive(timer) { _ in
+            guard !hasCompleted else { return }
             if secondsRemaining > 0 {
                 secondsRemaining -= 1
             } else {
+                hasCompleted = true
                 HapticManager.notification(.success)
                 dismiss()
             }
+        }
+        .onReceive(phaseTimer) { _ in
+            guard !reduceMotion else { return }
+            phaseText = phaseText == "Inhale Deeply..." ? "Exhale Slowly..." : "Inhale Deeply..."
         }
         .accessibilityIdentifier("screen-physiological-reset")
     }

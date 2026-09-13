@@ -160,6 +160,8 @@ public struct CaptureRoutingDecision: Sendable {
     public var priority: Priority?
     public var difficulty: TaskDifficulty?
     public var estimatedMinutes: Int?
+    /// Title of an existing open task the AI believes this capture duplicates — nil when no match.
+    public var possibleDuplicateOfTitle: String?
 
     public init(
         intent: CaptureIntent,
@@ -172,7 +174,8 @@ public struct CaptureRoutingDecision: Sendable {
         lifeArea: LifeArea? = nil,
         priority: Priority? = nil,
         difficulty: TaskDifficulty? = nil,
-        estimatedMinutes: Int? = nil
+        estimatedMinutes: Int? = nil,
+        possibleDuplicateOfTitle: String? = nil
     ) {
         self.intent = intent
         self.confidence = confidence
@@ -185,5 +188,6 @@ public struct CaptureRoutingDecision: Sendable {
         self.priority = priority
         self.difficulty = difficulty
         self.estimatedMinutes = estimatedMinutes
+        self.possibleDuplicateOfTitle = possibleDuplicateOfTitle
     }
 }

@@ -310,15 +310,19 @@ public struct BriefingMissionData: Sendable, Equatable {
     public var completionPercent: Int
     /// Completed tasks not shown in the visible list (after dedupe / row cap).
     public var hiddenCompletedCount: Int
+    /// Pending (incomplete) tasks not shown in the visible list (after row cap).
+    public var hiddenPendingCount: Int
 
     public init(
         tasks: [BriefingMissionTask],
         completionPercent: Int,
-        hiddenCompletedCount: Int = 0
+        hiddenCompletedCount: Int = 0,
+        hiddenPendingCount: Int = 0
     ) {
         self.tasks = tasks
         self.completionPercent = completionPercent
         self.hiddenCompletedCount = hiddenCompletedCount
+        self.hiddenPendingCount = hiddenPendingCount
     }
 }
 

@@ -21,6 +21,9 @@ public final class DailyPlannerViewModel: ObservableObject {
     private let calendarSyncService: CalendarSyncService
     private var lastHealthContext: String?
     private var planningDay: Date = Calendar.current.startOfDay(for: Date())
+    /// R1 advisory behavioral history — loaded lazily before each reschedule proposal, `nil`
+    /// until first load or when the store is unavailable. Additive; absence is safe.
+    private var behaviorSnapshot: BehaviorMemorySnapshot?
 
     public init(
         taskStore: TaskStore = .shared,
@@ -89,6 +92,10 @@ public final class DailyPlannerViewModel: ObservableObject {
         isScheduling = true
         error = nil
         defer { isScheduling = false }
+
+        if TaskManagementPreferences.behaviorPersonalizedSchedulingEnabled {
+            behaviorSnapshot = await ProactiveActionsBuilder.loadBehaviorMemory()
+        }
 
         do {
             let tier: AIModelTier = TaskManagementPreferences.highQualitySchedulingEnabled ? .premium : .standard
@@ -260,6 +267,9 @@ public final class DailyPlannerViewModel: ObservableObject {
         )
         let analyticsBlock = healthContext.map { "\($0)\n" } ?? ""
         let movable = schedulableFlexibleTasks()
+        let behaviorBlock = TaskManagementPreferences.behaviorPersonalizedSchedulingEnabled
+            ? PlanningPromptContextBuilder.behaviorContextBlock(behaviorSnapshot)
+            : ""
 
         return """
         PLANNING TARGET: \(dayLabel.capitalized)
@@ -269,6 +279,7 @@ public final class DailyPlannerViewModel: ObservableObject {
         \(PlanningPromptContextBuilder.sleepBoundaryBlock(now: Date(), profile: profile))
         \(PlanningPromptContextBuilder.combinedLifeContextBlock(profile: profile))
         \(supplemental.isEmpty ? "" : "\(supplemental)\n")
+        \(behaviorBlock.isEmpty ? "" : "\(behaviorBlock)\n")
         \(analyticsBlock)
         \(PlanningPromptContextBuilder.medicationsBlock(MedicationStore.load()))
         \(PlanningPromptContextBuilder.tasksBlock(todayTasks.filter(\.isFixedTimeEvent), style: .schedulingFixed))
@@ -324,7 +335,8 @@ public final class DailyPlannerViewModel: ObservableObject {
                 id: $0.id,
                 startHour: $0.startHour,
                 startMinute: $0.startMinute,
-                reason: $0.reason ?? ""
+                reason: $0.reason ?? "",
+                isAIGenerated: true
             )
         }
     }
@@ -379,6 +391,20 @@ public final class DailyPlannerViewModel: ObservableObject {
 
             proposed = enforceBuffer(for: proposed, task: task, existing: changes, taskByID: taskByID)
 
+            // Compulsory re-check before committing: a suggestion built by the local deterministic
+            // allocator never received AI review, so it must still clear the same placement guard
+            // AI-sourced suggestions clear in AIScheduleSlotService.applySuggestions. Without this,
+            // a slot the allocator treated as "searchable but ambiguous" (.needsAI) could be written
+            // straight to the task store with zero review — silently reintroducing the fallback
+            // pattern AI review is meant to close.
+            guard shouldCommit(
+                suggestion: suggestion,
+                proposed: proposed,
+                task: task,
+                changes: changes,
+                taskByID: taskByID
+            ) else { continue }
+
             let previous = task.scheduledTime
             let moved = previous.map { abs($0.timeIntervalSince(proposed)) > 60 } ?? true
             changes.append(DayScheduleChange(
@@ -403,6 +429,38 @@ public final class DailyPlannerViewModel: ObservableObject {
             suggestions: merged,
             source: source
         )
+    }
+
+    /// Final placement gate for a merged suggestion, run once per task right before it becomes a
+    /// `DayScheduleChange`. Mirrors `AIScheduleSlotService.applySuggestions`'s trust rule: an
+    /// ambiguous (`.needsAI`) verdict is only accepted when the suggestion already went through
+    /// real AI review (`isAIGenerated`); a locally-guessed slot that is still ambiguous is dropped
+    /// rather than silently committed.
+    private func shouldCommit(
+        suggestion: DayScheduleSuggestion,
+        proposed: Date,
+        task: LifeTask,
+        changes: [DayScheduleChange],
+        taskByID: [String: LifeTask]
+    ) -> Bool {
+        let neighbors = changes.compactMap { taskByID[$0.id] }
+        let occupied = TaskScheduleInterval.intervals(from: neighbors, on: planningDay, calendar: calendar)
+        switch SchedulePlacementGuard.evaluate(
+            proposedStart: proposed,
+            durationMinutes: task.estimatedMinutes,
+            task: task,
+            occupied: occupied,
+            calendar: calendar,
+            mode: .rejectOutsideBox,
+            neighborTasks: neighbors
+        ) {
+        case .accepted, .snapped:
+            return true
+        case .needsAI:
+            return suggestion.isAIGenerated
+        case .rejected:
+            return false
+        }
     }
 
     private func buildLocalProposal() -> DayRescheduleProposal {

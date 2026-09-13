@@ -13,6 +13,10 @@ public enum AIScheduleSlotService {
         public let model: LifeModel?
         public let healthContext: String?
         public let now: Date
+        /// Advisory behavioral history (R1). `nil` by default — fully additive, no existing
+        /// call site breaks. Only surfaced in the prompt at `.medium`/`.high` confidence; see
+        /// `PlanningPromptContextBuilder.behaviorContextBlock`.
+        public let behaviorSnapshot: BehaviorMemorySnapshot?
 
         public init(
             day: Date,
@@ -20,7 +24,8 @@ public enum AIScheduleSlotService {
             unslotted: [LifeTask],
             model: LifeModel? = LifeModelStore.load(),
             healthContext: String? = nil,
-            now: Date = Date()
+            now: Date = Date(),
+            behaviorSnapshot: BehaviorMemorySnapshot? = nil
         ) {
             self.day = day
             self.allTasks = allTasks
@@ -28,6 +33,7 @@ public enum AIScheduleSlotService {
             self.model = model
             self.healthContext = healthContext
             self.now = now
+            self.behaviorSnapshot = behaviorSnapshot
         }
     }
 
@@ -109,7 +115,15 @@ public enum AIScheduleSlotService {
             switch placement {
             case .accepted(let date), .snapped(let date):
                 start = date
-            case .needsAI, .rejected:
+            case .needsAI(_, let date):
+                // The deterministic guard is unsure, but if this slot already came from a
+                // real AI judgment call (the daily scheduler prompt already reasoned about
+                // title/duration/context), trust that answer instead of discarding it — AI
+                // review must not be thrown away once it has actually happened. A locally
+                // guessed slot never got AI review, so it stays discarded when ambiguous.
+                guard suggestion.isAIGenerated else { continue }
+                start = date
+            case .rejected:
                 continue
             }
 
@@ -132,19 +146,24 @@ public enum AIScheduleSlotService {
         glm: GLMService,
         calendar: Calendar
     ) async -> [DayScheduleSuggestion]? {
-        do {
-            let tier: AIModelTier = TaskManagementPreferences.highQualitySchedulingEnabled ? .premium : .standard
-            let response = try await glm.complete(
-                prompt: schedulingPrompt(for: context, calendar: calendar),
-                systemPrompt: LookAfterPrompts.dailySchedulerSystem,
-                tier: tier
-            )
-            let decoded = try decodeSuggestions(from: response)
-            let validated = DayScheduleSuggestionValidator.validated(decoded, allowedTaskIDs: movableIDs)
-            return validated.isEmpty ? nil : validated
-        } catch {
-            return nil
+        // AI review is compulsory, not a fallback: retry once on failure before letting the
+        // caller silently drop to the fully deterministic local allocator with zero AI review.
+        for attempt in 0..<2 {
+            do {
+                let tier: AIModelTier = TaskManagementPreferences.highQualitySchedulingEnabled ? .premium : .standard
+                let response = try await glm.complete(
+                    prompt: schedulingPrompt(for: context, calendar: calendar),
+                    systemPrompt: LookAfterPrompts.dailySchedulerSystem,
+                    tier: tier
+                )
+                let decoded = try decodeSuggestions(from: response)
+                let validated = DayScheduleSuggestionValidator.validated(decoded, allowedTaskIDs: movableIDs)
+                return validated.isEmpty ? nil : validated
+            } catch {
+                if attempt == 1 { return nil }
+            }
         }
+        return nil
     }
 
     private static func schedulingPrompt(for context: DayContext, calendar: Calendar) -> String {
@@ -164,6 +183,9 @@ public enum AIScheduleSlotService {
         let fixed = slotted.filter { !$0.isSchedulerMovable || $0.isFixedTimeEvent || $0.isLifeCommitmentTask }
         let movable = context.unslotted.filter(\.isSchedulerMovable)
         let analyticsBlock = context.healthContext.map { "\($0)\n" } ?? ""
+        let behaviorBlock = TaskManagementPreferences.behaviorPersonalizedSchedulingEnabled
+            ? PlanningPromptContextBuilder.behaviorContextBlock(context.behaviorSnapshot)
+            : ""
 
         return """
         AUTO-ASSIGN FLEXIBLE SLOTS (silent background reconcile — no user preview)
@@ -173,6 +195,7 @@ public enum AIScheduleSlotService {
         \(PlanningPromptContextBuilder.sleepBoundaryBlock(now: context.now, profile: profile))
         \(PlanningPromptContextBuilder.combinedLifeContextBlock(profile: profile))
         \(supplemental.isEmpty ? "" : "\(supplemental)\n")
+        \(behaviorBlock.isEmpty ? "" : "\(behaviorBlock)\n")
         \(analyticsBlock)
         \(PlanningPromptContextBuilder.medicationsBlock(MedicationStore.load()))
         \(PlanningPromptContextBuilder.tasksBlock(fixed, style: .schedulingFixed))
@@ -250,7 +273,8 @@ public enum AIScheduleSlotService {
                 id: $0.id,
                 startHour: $0.startHour,
                 startMinute: $0.startMinute,
-                reason: $0.reason ?? ""
+                reason: $0.reason ?? "",
+                isAIGenerated: true
             )
         }
     }

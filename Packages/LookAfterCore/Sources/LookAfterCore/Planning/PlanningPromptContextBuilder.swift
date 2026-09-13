@@ -396,6 +396,41 @@ public enum PlanningPromptContextBuilder {
         return block.isEmpty ? "" : block
     }
 
+    /// Advisory behavioral-history block for the scheduling prompt (R1).
+    ///
+    /// Only surfaces signals at `.medium`/`.high` confidence — `.low`/`nil` patterns are
+    /// omitted entirely rather than shown as a weak hint, per the plan's neutral-phrasing
+    /// and false-preference-avoidance requirements. Phrased as historical observation, not
+    /// a proven preference (`typicalDeepWorkHour` may reflect a schedule artifact).
+    public static func behaviorContextBlock(_ snapshot: BehaviorMemorySnapshot?) -> String {
+        guard let snapshot else { return "" }
+        var lines: [String] = []
+
+        if let hour = snapshot.typicalDeepWorkHour,
+           let confidence = snapshot.typicalDeepWorkHourConfidence,
+           confidence >= .medium,
+           let count = snapshot.typicalDeepWorkHourSampleCount {
+            lines.append(
+                "- User has historically completed long-focus tasks (30+ min) around \(hour):00 (\(count) occurrences). Advisory only — do not treat as a fixed preference."
+            )
+        }
+
+        if let minutes = snapshot.preferredFlowDurationMinutes,
+           let confidence = snapshot.preferredFlowDurationConfidence,
+           confidence >= .medium,
+           let count = snapshot.preferredFlowDurationSampleCount {
+            lines.append(
+                "- User's focus sessions have historically run ~\(minutes) minutes (\(count) sessions). Advisory only."
+            )
+        }
+
+        guard !lines.isEmpty else { return "" }
+        return """
+        BEHAVIORAL HISTORY (advisory signal, never overrides hard constraints/calendar/user request):
+        \(lines.joined(separator: "\n"))
+        """
+    }
+
     public static func supplementalContextBlock(
         analytics: CachedAIContextSummary? = nil,
         includeCalibration: Bool = true

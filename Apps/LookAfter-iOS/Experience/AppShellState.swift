@@ -295,6 +295,12 @@ final class AppShellState: ObservableObject {
             await self.inboxVM.loadItems(userId: userId)
             self.refreshWidgetData()
         }
+        router.existingTaskTitlesProvider = { [weak self] in
+            guard let self else { return [] }
+            return self.tasksVM.activeTasks
+                .sorted { $0.createdAt > $1.createdAt }
+                .map(\.title)
+        }
         CaptureOfflineQueue.shared.onConnectivityRestored = { [weak self] uid in
             guard let self else { return }
             await self.inboxVM.processOfflineCaptureQueue(userId: uid)

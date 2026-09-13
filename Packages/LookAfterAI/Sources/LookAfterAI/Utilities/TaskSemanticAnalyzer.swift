@@ -41,14 +41,32 @@ public final class TaskSemanticAnalyzer: @unchecked Sendable {
         proposedStart: Date,
         durationMinutes: Int,
         neighborTasks: [LifeTask],
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        now: Date = Date(),
+        allDayTasks: [LifeTask]? = nil,
+        calendarEvents: [BriefingCalendarEvent] = [],
+        todayHealthSummary: HealthSummary? = nil,
+        todayEnergy: EnergyReport? = nil,
+        previousDayHealthSummary: HealthSummary? = nil,
+        previousDayEnergy: EnergyReport? = nil,
+        weatherSummary: String? = nil,
+        previousAcceptedSameSlot: Bool = false
     ) async throws -> PlacementJudgment {
         let prompt = LookAfterPrompts.placementSensePrompt(
             task: task,
             proposedStart: proposedStart,
             durationMinutes: durationMinutes,
             neighborTasks: neighborTasks,
-            calendar: calendar
+            calendar: calendar,
+            now: now,
+            allDayTasks: allDayTasks,
+            calendarEvents: calendarEvents,
+            todayHealthSummary: todayHealthSummary,
+            todayEnergy: todayEnergy,
+            previousDayHealthSummary: previousDayHealthSummary,
+            previousDayEnergy: previousDayEnergy,
+            weatherSummary: weatherSummary,
+            previousAcceptedSameSlot: previousAcceptedSameSlot
         )
         let response = try await glm.complete(
             prompt: prompt,
@@ -68,7 +86,8 @@ public final class TaskSemanticAnalyzer: @unchecked Sendable {
             allowed: json["allowed"] as? Bool ?? false,
             reason: json["reason"] as? String ?? "",
             suggestedStartHour: json["suggestedStartHour"] as? Int,
-            suggestedStartMinute: json["suggestedStartMinute"] as? Int
+            suggestedStartMinute: json["suggestedStartMinute"] as? Int,
+            confidence: (json["confidence"] as? Double) ?? (json["confidence"] as? Int).map(Double.init) ?? 1.0
         )
     }
 
@@ -136,17 +155,22 @@ public struct PlacementJudgment: Sendable, Equatable {
     public var reason: String
     public var suggestedStartHour: Int?
     public var suggestedStartMinute: Int?
+    /// AI's confidence in this verdict, 0.0-1.0. Defaults to 1.0 for back-compat with
+    /// legacy-shaped responses that omit the field.
+    public var confidence: Double
 
     public init(
         allowed: Bool,
         reason: String,
         suggestedStartHour: Int? = nil,
-        suggestedStartMinute: Int? = nil
+        suggestedStartMinute: Int? = nil,
+        confidence: Double = 1.0
     ) {
         self.allowed = allowed
         self.reason = reason
         self.suggestedStartHour = suggestedStartHour
         self.suggestedStartMinute = suggestedStartMinute
+        self.confidence = confidence
     }
 }
 

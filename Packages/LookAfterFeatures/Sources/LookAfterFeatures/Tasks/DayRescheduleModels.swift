@@ -68,11 +68,17 @@ public struct DayScheduleSuggestion: Sendable, Equatable {
     public let startHour: Int
     public let startMinute: Int
     public let reason: String
+    /// True when this slot came from an actual AI judgment call (e.g. the daily scheduler
+    /// prompt), false when it was filled in by the deterministic local allocator as a
+    /// backstop. Placement re-validation trusts an ambiguous (`.needsAI`) verdict only when
+    /// the suggestion already went through real AI review — a local guess never did.
+    public let isAIGenerated: Bool
 
-    public init(id: String, startHour: Int, startMinute: Int, reason: String = "") {
+    public init(id: String, startHour: Int, startMinute: Int, reason: String = "", isAIGenerated: Bool = false) {
         self.id = id
         self.startHour = startHour
         self.startMinute = startMinute
         self.reason = reason
+        self.isAIGenerated = isAIGenerated
     }
 }

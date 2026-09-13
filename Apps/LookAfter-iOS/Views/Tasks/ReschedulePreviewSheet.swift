@@ -10,6 +10,7 @@ struct ReschedulePreviewSheet: View {
     var tasksViewModel: TasksViewModel? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @State private var applyError: String?
 
     var body: some View {
         NavigationStack {
@@ -72,7 +73,11 @@ struct ReschedulePreviewSheet: View {
                                 userId: userId,
                                 tasksViewModel: tasksViewModel
                             )
-                            dismiss()
+                            if plannerVM.error == nil {
+                                dismiss()
+                            } else {
+                                applyError = plannerVM.error
+                            }
                         }
                     }
                     .buttonStyle(.glassProminent)
@@ -82,6 +87,14 @@ struct ReschedulePreviewSheet: View {
             }
         }
         .accessibilityIdentifier("screen-reschedule-preview")
+        .alert("Couldn't apply changes", isPresented: Binding(
+            get: { applyError != nil },
+            set: { if !$0 { applyError = nil } }
+        )) {
+            Button("OK", role: .cancel) { applyError = nil }
+        } message: {
+            Text(applyError ?? "Please try again.")
+        }
     }
 
     private var planSourceLabel: String {

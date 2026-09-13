@@ -25,7 +25,8 @@ public enum DayScheduleSuggestionValidator {
                     id: suggestion.id,
                     startHour: hour,
                     startMinute: minute,
-                    reason: suggestion.reason
+                    reason: suggestion.reason,
+                    isAIGenerated: suggestion.isAIGenerated
                 )
             )
         }

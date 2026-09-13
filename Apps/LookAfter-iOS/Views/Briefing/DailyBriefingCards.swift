@@ -211,6 +211,12 @@ struct BriefingMissionCard: View {
                             .foregroundColor(DesignSystem.textSecondary)
                     }
 
+                    if mission.hiddenPendingCount > 0 {
+                        Text("+\(mission.hiddenPendingCount) more to do")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(DesignSystem.textSecondary)
+                    }
+
                     if let onReplanDay {
                         Button(action: onReplanDay) {
                             Label("Adjust schedule", systemImage: "sparkles")

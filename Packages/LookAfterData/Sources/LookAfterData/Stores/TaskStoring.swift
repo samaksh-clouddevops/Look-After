@@ -14,7 +14,7 @@ public protocol TaskStoring {
     func getAll(for userId: String) async throws -> [LifeTask]
     func create(_ task: LifeTask) async throws
     func update(_ task: LifeTask) async throws
-    func delete(_ id: String) async throws
+    func delete(_ id: String, userId: String) async throws
     @discardableResult
     func pruneTerminalRecurrenceOccurrences(for userId: String, retentionDays: Int) -> Int
     @discardableResult

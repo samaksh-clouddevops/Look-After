@@ -402,8 +402,8 @@ public struct LookAfterRootCanvas: View {
             guard summary != nil else { return }
             Task { await triggerCalendarChangeReplan() }
         }
-        .onChange(of: planningVM.contextualReplanResult?.summary) { _, summary in
-            if summary != nil, planningVM.contextualReplanTrigger == .calendarChange {
+        .onChange(of: planningVM.contextualReplanGeneration) { _, _ in
+            if planningVM.contextualReplanResult != nil, planningVM.contextualReplanTrigger == .calendarChange {
                 showContextualReplanPreview = true
             }
         }
@@ -596,16 +596,16 @@ public struct LookAfterRootCanvas: View {
                 onOpenHealthDetail: { showHealthDetail = true },
                 onOpenMedication: { showMedication = true },
                 onCompleteTimelineTask: { taskId in
-                    Task { await completeTimelineTask(taskId: taskId) }
+                    await completeTimelineTask(taskId: taskId)
                 },
                 onUncompleteTimelineTask: { taskId in
-                    Task { await uncompleteTimelineTask(taskId: taskId) }
+                    await uncompleteTimelineTask(taskId: taskId)
                 },
                 onRescheduleTimelineTask: { taskId in
-                    Task { await rescheduleTimelineTask(taskId: taskId) }
+                    await rescheduleTimelineTask(taskId: taskId)
                 },
                 onRemoveFromTimelineTask: { taskId in
-                    Task { await removeFromTimelineAndReplanSlot(taskId: taskId) }
+                    await removeFromTimelineAndReplanSlot(taskId: taskId)
                 },
                 onStartTask: { task in startBrainHeroTask(task, instant: true) },
                 onEditTask: { task in
@@ -1235,10 +1235,10 @@ public struct LookAfterRootCanvas: View {
                     showsFullTimelineButton: false,
                     onViewAll: {},
                     onCompleteTask: { taskId in
-                        Task { await completeTimelineTask(taskId: taskId) }
+                        await completeTimelineTask(taskId: taskId)
                     },
                     onUncompleteTask: { taskId in
-                        Task { await uncompleteTimelineTask(taskId: taskId) }
+                        await uncompleteTimelineTask(taskId: taskId)
                     },
                     onStartTask: { taskId in
                         if let task = resolveTimelineTask(id: taskId) {
@@ -1254,10 +1254,10 @@ public struct LookAfterRootCanvas: View {
                         }
                     },
                     onRescheduleTask: { taskId in
-                        Task { await rescheduleTimelineTask(taskId: taskId) }
+                        await rescheduleTimelineTask(taskId: taskId)
                     },
                     onRemoveFromTimelineTask: { taskId in
-                        Task { await removeFromTimelineAndReplanSlot(taskId: taskId) }
+                        await removeFromTimelineAndReplanSlot(taskId: taskId)
                     },
                     onAddSuggestedTask: { sourceId, start in
                         Task { await addSuggestedTimelineSlot(sourceId: sourceId, start: start) }

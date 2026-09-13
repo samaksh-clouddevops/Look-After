@@ -418,7 +418,7 @@ public final class TasksViewModel: ObservableObject {
                     && $0.id != task.id
             }
             if matchingTemplate != nil {
-                try await taskRepo.delete(task.id)
+                try await taskRepo.delete(task.id, userId: userId)
 #if DEBUG
                 print("[Tasks] removed duplicate legacy recurring id=\(task.id.prefix(8)) title=\"\(task.title)\"")
 #endif
@@ -728,7 +728,7 @@ public final class TasksViewModel: ObservableObject {
         guard !junkIDs.isEmpty else { return }
 
         for id in junkIDs {
-            try? await taskRepo.delete(id)
+            try? await taskRepo.delete(id, userId: userId)
         }
         tasks.removeAll { junkIDs.contains($0.id) }
         completedToday.removeAll { junkIDs.contains($0.id) }
@@ -753,7 +753,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         for templateID in plan.templateIDsToDelete {
-            try await taskRepo.delete(templateID)
+            try await taskRepo.delete(templateID, userId: userId)
             tasks.removeAll { $0.id == templateID }
             completedToday.removeAll { $0.id == templateID }
 #if DEBUG
@@ -990,6 +990,13 @@ public final class TasksViewModel: ObservableObject {
         }
     }
     
+    /// Extracts a review-ready draft from free-text natural language input (R3).
+    /// Returns a draft for review, not a direct commit — route the confirmed result through
+    /// `createFromInbox`/`createScheduledFromCapture` to match the existing inbox trust model.
+    public func createFromNaturalLanguage(_ text: String, glm: GLMService) async throws -> NaturalLanguageTaskDraft {
+        try await NaturalLanguageTaskCaptureService.extractDraft(from: text, glm: glm)
+    }
+
     /// Create a task from AI-processed inbox capture.
     public func createFromInbox(_ draft: InboxTaskDraft, userId: String, sourceInboxItemId: String? = nil) async throws -> LifeTask {
         var task = LifeTask(
@@ -1041,7 +1048,12 @@ public final class TasksViewModel: ObservableObject {
     }
 
     /// Awaitable update path — use from sheets so dismiss happens after save completes.
-    public func updateTaskAndPersist(_ task: LifeTask) async {
+    /// Returns `true` if this specific save succeeded, `false` otherwise. Callers should
+    /// use this return value rather than the shared `error` property to determine the
+    /// outcome of *their* save, since `error` is a long-lived flag mutated by many
+    /// unrelated background operations and is never reset to `nil` on success.
+    @discardableResult
+    public func updateTaskAndPersist(_ task: LifeTask) async -> Bool {
         var didPersist = false
         isSuppressingStoreSync = true
         defer {
@@ -1093,7 +1105,9 @@ public final class TasksViewModel: ObservableObject {
             revertOptimisticUpdate(saved: materialized, previous: previous, originalID: task.id)
             bumpTasksRevision()
             self.error = error.localizedDescription
+            return false
         }
+        return true
     }
 
     private func applyOptimisticUpdate(_ task: LifeTask, replacing originalID: String) {
@@ -1347,6 +1361,12 @@ public final class TasksViewModel: ObservableObject {
 
         let result = await withTaskGroup(of: RaceResult.self) { group in
             group.addTask { [semanticAnalyzer] in
+                // AI review is compulsory, not a fallback: retry once before giving up so a single
+                // transient GLM error/timeout doesn't silently and permanently downgrade this task
+                // to the deterministic-only profile for its whole lifetime.
+                if let llm = try? await semanticAnalyzer.analyze(task: task) {
+                    return .profile(llm)
+                }
                 if let llm = try? await semanticAnalyzer.analyze(task: task) {
                     return .profile(llm)
                 }
@@ -1817,7 +1837,7 @@ public final class TasksViewModel: ObservableObject {
 
         for id in idsToDelete {
             do {
-                try await taskRepo.delete(id)
+                try await taskRepo.delete(id, userId: task.userId)
             } catch {
                 self.error = error.localizedDescription
             }
@@ -2041,7 +2061,53 @@ public final class TasksViewModel: ObservableObject {
         )
         pendingForceReplan = false
 
-        if SchedulePlannerFlags.useUnifiedDayPlanner, needsFullReplan {
+        // P-03: bounding-box drift is its own trigger/fix — a task with a concrete
+        // clock time outside its TemporalBoundingBox must be caught and restored
+        // even when it has no overlap with any other task and isn't a life
+        // commitment. `shouldRestore` already excludes user-placed tasks, so this
+        // never fights Phase 1's "snap user-placed as-is" behavior. Runs
+        // unconditionally (not gated by `needsFullReplan`) since drift can exist
+        // without triggering the coarser replan heuristics below.
+        let activePool = TaskScheduleQuery.scheduledActiveTasks(from: tasks, on: day, calendar: calendar)
+        if !activePool.isEmpty {
+            let syncedPool = activePool.map {
+                DayScheduleReconciler.syncCommitmentTimes($0, model: model, day: day, calendar: calendar)
+            }
+            let reconcileProfile = UserLifeProfileStore.load()
+            for task in syncedPool {
+                guard let anchor = RoutineScheduleAnchorResolver.resolve(
+                    for: task,
+                    on: day,
+                    model: model,
+                    profile: reconcileProfile,
+                    calendar: calendar
+                ), RoutineScheduleAnchorResolver.shouldRestore(
+                    task: task,
+                    anchor: anchor,
+                    calendar: calendar
+                ) else { continue }
+
+                var restored = task
+                restored.scheduledDate = day
+                restored.scheduledTime = anchor.start
+                restored.scheduledEndTime = anchor.end
+                restored.updatedAt = Date()
+                if let index = tasks.firstIndex(where: { $0.id == restored.id }) {
+                    tasks[index] = restored
+                }
+                if let index = completedToday.firstIndex(where: { $0.id == restored.id }) {
+                    completedToday[index] = restored
+                }
+                do {
+                    try await taskRepo.update(restored)
+                    allChangedIDs.insert(restored.id)
+                } catch {
+                    self.error = error.localizedDescription
+                }
+            }
+        }
+
+        if needsFullReplan {
             let plan = DaySchedulePlanner.plan(
                 tasks: tasks + completedToday,
                 on: day,
@@ -2060,49 +2126,6 @@ public final class TasksViewModel: ObservableObject {
                     allChangedIDs.insert(task.id)
                 } catch {
                     self.error = error.localizedDescription
-                }
-            }
-        } else {
-            let activePool = TaskScheduleQuery.scheduledActiveTasks(from: tasks, on: day, calendar: calendar)
-
-            if !activePool.isEmpty {
-                let syncedPool = activePool.map {
-                    DayScheduleReconciler.syncCommitmentTimes($0, model: model, day: day, calendar: calendar)
-                }
-                let commitmentDrift = zip(activePool, syncedPool).contains { original, synced in
-                    original.scheduledTime != synced.scheduledTime
-                        || original.scheduledEndTime != synced.scheduledEndTime
-                        || original.estimatedMinutes != synced.estimatedMinutes
-                }
-
-                if commitmentDrift || DayScheduleReconciler.hasOverlap(
-                    syncedPool,
-                    on: day,
-                    calendar: calendar,
-                    calendarEvents: calendarEventsProvider?(day) ?? [],
-                    model: model
-                ) {
-                    let result = DayScheduleReconciler.reconcile(
-                        tasks: activePool,
-                        on: day,
-                        model: model,
-                        calendar: calendar,
-                        calendarEvents: calendarEventsProvider?(day) ?? []
-                    )
-                    for updated in result.tasks where result.changedTaskIDs.contains(updated.id) {
-                        if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
-                            tasks[index] = updated
-                        }
-                        if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
-                            completedToday[index] = updated
-                        }
-                        do {
-                            try await taskRepo.update(updated)
-                            allChangedIDs.insert(updated.id)
-                        } catch {
-                            self.error = error.localizedDescription
-                        }
-                    }
                 }
             }
         }
@@ -2132,7 +2155,7 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
-    /// Mandatory overlap repair — runs after planner/legacy branches regardless of ReconcilePolicy.
+    /// Mandatory overlap repair — runs after the planner pass regardless of ReconcilePolicy.
     private func resolveOverlapsIfNeeded(
         for day: Date,
         userId: String,
@@ -2586,12 +2609,16 @@ public final class TasksViewModel: ObservableObject {
             let healthContext = userId.isEmpty
                 ? nil
                 : BackgroundAnalyticsService.shared.cachedAIContext(userId: userId)?.promptBlock
+            let behaviorSnapshot = TaskManagementPreferences.behaviorPersonalizedSchedulingEnabled
+                ? await ProactiveActionsBuilder.loadBehaviorMemory()
+                : nil
             let context = AIScheduleSlotService.DayContext(
                 day: day,
                 allTasks: tasks,
                 unslotted: toAllocate,
                 model: model,
-                healthContext: healthContext
+                healthContext: healthContext,
+                behaviorSnapshot: behaviorSnapshot
             )
             let suggestions = await AIScheduleSlotService.suggestSlots(for: context)
             if !suggestions.isEmpty {
@@ -2799,7 +2826,7 @@ public final class TasksViewModel: ObservableObject {
             tasks.removeAll { $0.id == id }
             completedToday.removeAll { $0.id == id }
             do {
-                try await taskRepo.delete(id)
+                try await taskRepo.delete(id, userId: userId)
             } catch {
                 self.error = error.localizedDescription
             }
@@ -2939,7 +2966,7 @@ public final class TasksViewModel: ObservableObject {
         for id in Set(idsToDelete) {
             tasks.removeAll { $0.id == id }
             completedToday.removeAll { $0.id == id }
-            try? await taskRepo.delete(id)
+            try? await taskRepo.delete(id, userId: userId)
             didMutate = true
         }
 
@@ -2975,7 +3002,7 @@ public final class TasksViewModel: ObservableObject {
         case .completed(let restoredTask, let wasInActive, let activeIndex, let spawnedId):
             if let spawnedId {
                 tasks.removeAll { $0.id == spawnedId }
-                try? await taskRepo.delete(spawnedId)
+                try? await taskRepo.delete(spawnedId, userId: restoredTask.userId)
             }
 
             completedToday.removeAll { $0.id == restoredTask.id }

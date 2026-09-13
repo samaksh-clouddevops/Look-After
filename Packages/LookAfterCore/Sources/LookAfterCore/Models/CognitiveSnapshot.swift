@@ -293,8 +293,6 @@ public struct UserProfile: Identifiable, Codable, Sendable {
     public var medications: [MedicationSchedule]
     public var preferredTaskDuration: Int   // in minutes, default 5
     public var enableHealthTracking: Bool
-    /// Deprecated leftover — never encoded. Kept so call sites compile; always nil after decode.
-    public var geminiApiKey: String?
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -318,7 +316,6 @@ public struct UserProfile: Identifiable, Codable, Sendable {
         medications: [MedicationSchedule] = [],
         preferredTaskDuration: Int = 5,
         enableHealthTracking: Bool = true,
-        geminiApiKey: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -333,10 +330,8 @@ public struct UserProfile: Identifiable, Codable, Sendable {
         self.medications = medications
         self.preferredTaskDuration = preferredTaskDuration
         self.enableHealthTracking = enableHealthTracking
-        self.geminiApiKey = nil
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        _ = geminiApiKey
     }
 
     public init(from decoder: Decoder) throws {
@@ -354,7 +349,6 @@ public struct UserProfile: Identifiable, Codable, Sendable {
         enableHealthTracking = try c.decodeIfPresent(Bool.self, forKey: .enableHealthTracking) ?? true
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
-        geminiApiKey = nil
     }
 
     public func encode(to encoder: Encoder) throws {

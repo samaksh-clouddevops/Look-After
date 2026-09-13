@@ -12,6 +12,9 @@ struct InboxView: View {
     @State private var showQuickCapture = false
     @StateObject private var speechManager = SpeechRecognitionManager()
     @FocusState private var isCaptureFieldFocused: Bool
+    /// Text present before the current voice session started, so live transcript
+    /// updates are appended rather than clobbering any manual edits already typed.
+    @State private var voiceBaseText = ""
 
     private var reviewItems: [InboxItem] {
         inboxVM.items.filter { $0.status == .unprocessed || $0.status == .needsReview }
@@ -36,7 +39,8 @@ struct InboxView: View {
         .keyboardDismissToolbar(label: "Done")
         .onChange(of: speechManager.transcript) { _, transcript in
             guard !transcript.isEmpty else { return }
-            captureText = transcript
+            let separator = voiceBaseText.isEmpty ? "" : " "
+            captureText = voiceBaseText + separator + transcript
         }
         .accessibilityIdentifier("screen-inbox")
     }
@@ -178,6 +182,7 @@ struct InboxView: View {
         if speechManager.isListening {
             speechManager.stopListening()
         } else {
+            voiceBaseText = captureText
             Task { await speechManager.startListening() }
         }
     }

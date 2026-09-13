@@ -228,8 +228,10 @@ struct BrainDashboardView: View {
     // MARK: - Voice flow
 
     private func scheduleProactiveWelcome() {
+        // Don't replay the proactive welcome every time this view re-appears (e.g. switching
+        // tabs and back) within the same session — only the first appearance should trigger it.
+        guard !didDeliverProactiveWelcome else { return }
         proactiveWelcomeTask?.cancel()
-        didDeliverProactiveWelcome = false
 
         proactiveWelcomeTask = Task {
             try? await Task.sleep(nanoseconds: proactiveWelcomeDelayNs)

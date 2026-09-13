@@ -57,6 +57,12 @@ public final class ADHDViewModel: ObservableObject {
     private var bodyDoublingTask: Task<Void, Never>?
     private var countdownTask: Task<Void, Never>?
     private var pausedElapsed: TimeInterval = 0
+    /// Wall-clock instant corresponding to `focusSessionElapsed == 0` for the current phase.
+    /// Elapsed time is always recomputed from this anchor (not accumulated tick-by-tick) so the
+    /// visual clock/timer stays accurate even if ticks are delayed or suspended (e.g. app
+    /// backgrounded, thermal throttling, run-loop jitter) — it self-corrects on the next tick
+    /// instead of silently drifting behind real elapsed time.
+    private var focusPhaseAnchorDate: Date?
     
     public init() {
         // Load saved timer settings
@@ -138,6 +144,7 @@ public final class ADHDViewModel: ObservableObject {
             cancelCountdownIfNeeded()
             stopFocusTick()
             focusSessionElapsed = 0
+            focusPhaseAnchorDate = Date()
             focusSessionTarget = TimeInterval(duration * 60)
             focusProgressBucket = -1
             focusBreakReminder = false
@@ -188,9 +195,12 @@ public final class ADHDViewModel: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled, isFocusSessionActive else { return }
-                guard !isPaused else { continue }
+                guard !isPaused, let anchor = focusPhaseAnchorDate else { continue }
 
-                focusSessionElapsed += 1
+                // Recompute from the wall-clock anchor rather than accumulating +1 per tick,
+                // so a delayed/suspended tick (backgrounding, throttling) self-corrects instead
+                // of permanently drifting behind real elapsed time.
+                focusSessionElapsed = max(0, Date().timeIntervalSince(anchor))
                 publishFocusProgressBucketIfNeeded()
 
                 if focusSessionElapsed >= focusSessionTarget {
@@ -218,6 +228,7 @@ public final class ADHDViewModel: ObservableObject {
     private func startBreak() {
         isOnBreak = true
         focusSessionElapsed = 0
+        focusPhaseAnchorDate = Date()
         focusProgressBucket = -1
         
         // Long break every N sessions
@@ -230,6 +241,11 @@ public final class ADHDViewModel: ObservableObject {
     
     /// Pause the focus session.
     public func pauseFocusSession() {
+        // Capture the true elapsed time from the anchor (not the last tick's possibly-stale
+        // value) so pausing right before a tick can't lose or gain time.
+        if let anchor = focusPhaseAnchorDate {
+            focusSessionElapsed = max(0, Date().timeIntervalSince(anchor))
+        }
         stopFocusTick()
         isPaused = true
         pausedElapsed = focusSessionElapsed
@@ -247,6 +263,9 @@ public final class ADHDViewModel: ObservableObject {
         isPaused = false
         showContextRecovery = false
         focusSessionElapsed = pausedElapsed
+        // Re-anchor so the elapsed-so-far (pausedElapsed) is preserved: the phase "began"
+        // pausedElapsed seconds before now, from the recomputed-elapsed clock's perspective.
+        focusPhaseAnchorDate = Date(timeIntervalSinceNow: -pausedElapsed)
         startFocusTimer()
     }
     
@@ -278,6 +297,7 @@ public final class ADHDViewModel: ObservableObject {
     public func resetTimer() {
         stopFocusTick()
         focusSessionElapsed = 0
+        focusPhaseAnchorDate = Date()
         focusProgressBucket = -1
         if isOnBreak {
             let isLongBreak = currentSessionNumber % sessionsBeforeLongBreak == 0
@@ -303,6 +323,7 @@ public final class ADHDViewModel: ObservableObject {
         cancelCountdownIfNeeded()
         isFocusSessionActive = false
         focusSessionElapsed = 0
+        focusPhaseAnchorDate = nil
         focusProgressBucket = -1
         focusBreakReminder = false
         currentFocusTask = nil

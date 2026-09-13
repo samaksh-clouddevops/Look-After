@@ -345,6 +345,27 @@ struct OnboardingView: View {
                 .foregroundColor(DesignSystem.textMuted)
 
             LifeProfileImportView(markdown: $lifeProfileMarkdown)
+                .onChange(of: lifeProfileMarkdown) { _, newValue in
+                    structuredSections = LifeProfileComposer.parse(newValue)
+                }
+
+            Button(action: { Task { await organizeProfileWithAI() } }) {
+                HStack(spacing: 6) {
+                    if isOrganizing {
+                        ProgressView().scaleEffect(0.8)
+                    }
+                    Text(isOrganizing ? "Organizing with AI…" : "Organize with AI")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(isOrganizing || lifeProfileMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            if let organizeError {
+                Text(organizeError)
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.error)
+            }
         }
     }
 
@@ -768,12 +789,15 @@ struct OnboardingView: View {
             let trimmed = polished.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
                 structuredSections = LifeProfileComposer.organizeLocally(structuredSections)
+                lifeProfileMarkdown = LifeProfileComposer.compile(structuredSections)
                 organizeError = "AI returned empty — formatted locally."
                 return
             }
             structuredSections = LifeProfileComposer.parse(trimmed)
+            lifeProfileMarkdown = LifeProfileComposer.compile(structuredSections)
         } catch {
             structuredSections = LifeProfileComposer.organizeLocally(structuredSections)
+            lifeProfileMarkdown = LifeProfileComposer.compile(structuredSections)
             organizeError = "AI unavailable — formatted locally."
         }
     }

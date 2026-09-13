@@ -208,7 +208,8 @@ private final class RescheduleTestTaskStore: TaskStoring {
     }
 
     @MainActor
-    func delete(_ id: String) async throws {
+    func delete(_ id: String, userId: String) async throws {
+        _ = userId
         tasks.removeAll { $0.id == id }
     }
 

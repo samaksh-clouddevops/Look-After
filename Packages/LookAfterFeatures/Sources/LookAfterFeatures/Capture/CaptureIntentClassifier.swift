@@ -7,13 +7,14 @@ public enum CaptureIntentClassifier {
 
     public static func classify(
         request: CaptureRequest,
+        existingTaskTitles: [String] = [],
         glm: GLMService = .shared
     ) async -> CaptureRoutingDecision {
         if let hint = request.hintedIntent, hint != .auto {
             return heuristicDecision(for: request, forcedIntent: hint)
         }
 
-        if let aiDecision = await classifyWithAI(request: request, glm: glm),
+        if let aiDecision = await classifyWithAI(request: request, existingTaskTitles: existingTaskTitles, glm: glm),
            aiDecision.confidence >= lowConfidenceThreshold {
             return aiDecision
         }
@@ -23,12 +24,14 @@ public enum CaptureIntentClassifier {
 
     private static func classifyWithAI(
         request: CaptureRequest,
+        existingTaskTitles: [String],
         glm: GLMService
     ) async -> CaptureRoutingDecision? {
         let prompt = LookAfterPrompts.captureRoutingPrompt(
             text: request.text,
             hintedIntent: request.hintedIntent?.rawValue,
-            contextScreen: request.contextHints.screen
+            contextScreen: request.contextHints.screen,
+            existingTaskTitles: existingTaskTitles
         )
         do {
             let response = try await glm.complete(
@@ -36,13 +39,17 @@ public enum CaptureIntentClassifier {
                 systemPrompt: LookAfterPrompts.captureRoutingSystem,
                 tier: .standard
             )
-            return parseDecision(from: response, fallbackText: request.text)
+            return parseDecision(from: response, fallbackText: request.text, existingTaskTitles: existingTaskTitles)
         } catch {
             return nil
         }
     }
 
-    static func parseDecision(from response: String, fallbackText: String) -> CaptureRoutingDecision? {
+    static func parseDecision(
+        from response: String,
+        fallbackText: String,
+        existingTaskTitles: [String] = []
+    ) -> CaptureRoutingDecision? {
         let cleaned = response
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
@@ -86,6 +93,13 @@ public enum CaptureIntentClassifier {
             difficulty = TaskDifficulty.allCases.first { $0.rawValue == diffStr }
         }
 
+        // Guard against fabricated titles: only trust the flag when it exactly matches a title
+        // we actually gave the AI — never let a hallucinated title reach the caller.
+        var possibleDuplicateOfTitle: String?
+        if let duplicateRaw = json["possibleDuplicateOfTitle"] as? String {
+            possibleDuplicateOfTitle = existingTaskTitles.first { $0 == duplicateRaw }
+        }
+
         return CaptureRoutingDecision(
             intent: intent,
             confidence: confidence,
@@ -97,7 +111,8 @@ public enum CaptureIntentClassifier {
             lifeArea: lifeArea,
             priority: priority,
             difficulty: difficulty,
-            estimatedMinutes: json["estimatedMinutes"] as? Int
+            estimatedMinutes: json["estimatedMinutes"] as? Int,
+            possibleDuplicateOfTitle: possibleDuplicateOfTitle
         )
     }
 

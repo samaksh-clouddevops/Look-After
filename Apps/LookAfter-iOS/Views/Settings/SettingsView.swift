@@ -881,7 +881,11 @@ struct SettingsView: View {
                                                     await refreshAfterHealthSync(userId: userId)
                                                 }
                                             },
-                                            onOpenSettings: { }
+                                            onOpenSettings: {
+                                                // Already inside Settings — dismiss this sheet so the
+                                                // Health Tracking toggle a few sections above is visible.
+                                                showHealthVerification = false
+                                            }
                                         )
                                     }
                                 )

@@ -223,6 +223,55 @@ final class SemanticPlacementSenseTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(start.timeIntervalSince(lunch.scheduledEndTime!), 45 * 60 - 1)
     }
 
+    /// A boxless, high-flexibility, anytime-preferred task with no matching rule branch used to
+    /// silently return `.makesSense` at any hour, including 2 AM. AI review must be compulsory,
+    /// not a fallback — this should now route to AI instead of a silent pass-through.
+    func testBoxlessHighFlexibilityTaskAtNightNeedsAI() throws {
+        let day = try day()
+        let lateNight = try date(hour: 2, on: day)
+        var task = LifeTask(title: "Review notes", estimatedMinutes: 30, scheduledDate: day)
+        task.semanticProfile = TaskSemanticProfile(
+            semanticType: .administrative,
+            flexibility: .high,
+            confidence: 0.9
+        )
+        let verdict = SemanticPlacementSense.judge(
+            SemanticPlacementSense.Input(
+                task: task,
+                proposedStart: lateNight,
+                durationMinutes: 30,
+                calendar: calendar
+            )
+        )
+        if case .needsAI = verdict {
+            // expected — no deterministic fence exists for this placement, so AI must review it.
+        } else {
+            XCTFail("Boxless task at 2 AM with no deterministic fence should need AI, got \(verdict)")
+        }
+    }
+
+    /// Same boxless task at an ordinary daytime hour should still resolve deterministically —
+    /// compulsory AI review should not block normal daytime scheduling.
+    func testBoxlessHighFlexibilityTaskAtOrdinaryHourMakesSense() throws {
+        let day = try day()
+        let midday = try date(hour: 13, on: day)
+        var task = LifeTask(title: "Review notes", estimatedMinutes: 30, scheduledDate: day)
+        task.semanticProfile = TaskSemanticProfile(
+            semanticType: .administrative,
+            flexibility: .high,
+            confidence: 0.9
+        )
+        let verdict = SemanticPlacementSense.judge(
+            SemanticPlacementSense.Input(
+                task: task,
+                proposedStart: midday,
+                durationMinutes: 30,
+                calendar: calendar
+            )
+        )
+        XCTAssertEqual(verdict, .makesSense)
+    }
+
     private func day() throws -> Date {
         try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 9, day: 9)))
     }

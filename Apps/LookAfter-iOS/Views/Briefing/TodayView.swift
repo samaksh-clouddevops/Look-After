@@ -43,10 +43,10 @@ struct TodayView: View {
     var onOpenSleepDetail: () -> Void = {}
     var onOpenHealthDetail: () -> Void = {}
     var onOpenMedication: () -> Void = {}
-    var onCompleteTimelineTask: (String) -> Void = { _ in }
-    var onUncompleteTimelineTask: (String) -> Void = { _ in }
-    var onRescheduleTimelineTask: (String) -> Void = { _ in }
-    var onRemoveFromTimelineTask: (String) -> Void = { _ in }
+    var onCompleteTimelineTask: (String) async -> Void = { _ in }
+    var onUncompleteTimelineTask: (String) async -> Void = { _ in }
+    var onRescheduleTimelineTask: (String) async -> Void = { _ in }
+    var onRemoveFromTimelineTask: (String) async -> Void = { _ in }
     var onStartTask: (LifeTask) -> Void = { _ in }
     var onEditTask: (LifeTask) -> Void = { _ in }
     var onCapture: () -> Void = {}
@@ -108,7 +108,7 @@ struct TodayView: View {
             #endif
         }
         .accessibilityIdentifier("screen-today")
-        .onChange(of: selectedDay) { _, _ in
+        .onChange(of: selectedCalendarDate) { _, _ in
             refreshPreWindowFitIfNeeded()
             refreshProactiveIfNeeded()
         }
@@ -239,7 +239,7 @@ struct TodayView: View {
                             onOpenTasks: onOpenTasks,
                             onStartTask: onStartTask,
                             onEditTask: onEditTask,
-                            onCompleteTimelineTask: onCompleteTimelineTask
+                            onCompleteTimelineTask: { id in Task { await onCompleteTimelineTask(id) } }
                         )
                         TodayScheduleSection(
                             planningVM: planningVM,
@@ -307,7 +307,7 @@ struct TodayView: View {
             .onChange(of: showPlanningAssistant) { _, isOpen in
                 if !isOpen { scrollTodayToHero(using: proxy) }
             }
-            .onChange(of: selectedDay) { _, _ in
+            .onChange(of: selectedCalendarDate) { _, _ in
                 scrollTodayToHero(using: proxy)
             }
             .onChange(of: planningVM.nowTaskId) { _, _ in
@@ -424,15 +424,6 @@ struct TodayView: View {
     /// Extra scroll clearance above the floating tab bar so End of day isn’t clipped.
     private var scrollBottomInset: CGFloat {
         DesignSystem.BriefingViewport.scrollBottomClearance
-    }
-
-    private var timelineDayPicker: some View {
-        Picker("Day", selection: $selectedDay) {
-            ForEach(TimelineDaySelection.allCases) { day in
-                Text(day.rawValue).tag(day)
-            }
-        }
-        .pickerStyle(.segmented)
     }
 
     private var tomorrowHeadsUpCard: some View {
@@ -1016,10 +1007,10 @@ private struct TodayScheduleSection: View {
     @Binding var timelineScrollDisabled: Bool
     var onViewTimeline: () -> Void
     var onPlanTomorrow: () -> Void
-    var onCompleteTimelineTask: (String) -> Void
-    var onUncompleteTimelineTask: (String) -> Void
-    var onRescheduleTimelineTask: (String) -> Void
-    var onRemoveFromTimelineTask: (String) -> Void
+    var onCompleteTimelineTask: (String) async -> Void
+    var onUncompleteTimelineTask: (String) async -> Void
+    var onRescheduleTimelineTask: (String) async -> Void
+    var onRemoveFromTimelineTask: (String) async -> Void
     var onStartTask: (LifeTask) -> Void
     var onEditTask: (LifeTask) -> Void
     var onCapture: () -> Void = {}

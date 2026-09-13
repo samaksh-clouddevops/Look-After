@@ -142,17 +142,6 @@ public extension View {
     }
 }
 
-// MARK: - Legacy Background Alias
-
-/// Deprecated — use `PremiumBackground` directly.
-public struct AnimatedGradientBackground: View {
-    public init() {}
-
-    public var body: some View {
-        PremiumBackground()
-    }
-}
-
 // MARK: - List Row
 
 public struct PremiumListRow: View {

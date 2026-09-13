@@ -266,7 +266,12 @@ public struct PlanMutationApplier {
                 task.scheduledDate = tomorrow
                 task.scheduledTime = nil
                 task.scheduledEndTime = nil
-                tasksVM.updateTask(task)
+                // Must be awaited: `apply()` proceeds straight into `reconcileTodaySchedule`
+                // below, which authoritatively re-reads persisted state from disk. The
+                // fire-and-forget `updateTask(_:)` (detached, unawaited) previously let that
+                // re-read race ahead of the persist, silently re-including the deferred/removed
+                // task in today's schedule even though `appliedCount` already reported success.
+                await tasksVM.updateTaskAndPersist(task)
                 result.appliedCount += 1
                 Task {
                     if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
@@ -433,8 +438,12 @@ public struct PlanMutationApplier {
                 proposedStart: proposedStart,
                 durationMinutes: durationMinutes,
                 neighborTasks: neighbors,
-                calendar: calendar
+                calendar: calendar,
+                allDayTasks: neighbors
             )
+            if judgment.confidence < 0.5 {
+                print("[PlanMutationApplier] Low-confidence placement judgment (\(judgment.confidence)) for \(task.title): \(judgment.reason)")
+            }
             if judgment.allowed {
                 return proposedStart
             }
@@ -450,7 +459,13 @@ public struct PlanMutationApplier {
                         calendar: calendar
                     )
                 ) {
-                case .makesSense, .needsAI:
+                case .makesSense:
+                    return suggested
+                case .needsAI:
+                    // This exact time already came from the AI's own placement judgment above
+                    // (judgment.suggestedStartHour/Minute) — not a locally-guessed slot — so an
+                    // ambiguous deterministic re-check is trusted rather than discarded, matching
+                    // the isAIGenerated trust model used for AI-sourced schedule suggestions.
                     return suggested
                 case .doesNotMakeSense:
                     return nil

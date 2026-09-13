@@ -34,6 +34,27 @@ public enum BehaviorPatternCategory: String, Codable, Sendable, CaseIterable {
     case contextPreference
 }
 
+/// Confidence band for a deterministically-inferred numeric pattern (e.g. typical hour,
+/// preferred duration). Gated on both sample size and distribution concentration —
+/// see `BehaviorMemorySnapshotBuilder` for the exact thresholds.
+public enum PatternConfidence: String, Codable, Sendable, CaseIterable, Comparable {
+    case low
+    case medium
+    case high
+
+    private var rank: Int {
+        switch self {
+        case .low: return 0
+        case .medium: return 1
+        case .high: return 2
+        }
+    }
+
+    public static func < (lhs: PatternConfidence, rhs: PatternConfidence) -> Bool {
+        lhs.rank < rhs.rank
+    }
+}
+
 /// Deferral record for a specific task, used to trigger coach moments.
 public struct TaskDeferralRecord: Codable, Sendable, Equatable {
     public var taskID: String
@@ -54,10 +75,23 @@ public struct BehaviorMemorySnapshot: Codable, Sendable, Equatable {
     public var patterns: [BehaviorPattern]
     /// Aggregated deferral counts derived from raw deferral events.
     public var deferralRecords: [TaskDeferralRecord]
-    /// Reserved for inference milestone.
+    /// Median `durationMinutes` across `flowSessionEnded` events. Only emitted when
+    /// `preferredFlowDurationSampleCount` meets the minimum-sample threshold.
     public var preferredFlowDurationMinutes: Int?
-    /// Reserved for inference milestone.
+    /// Number of `flowSessionEnded` events the duration median was computed from.
+    public var preferredFlowDurationSampleCount: Int?
+    /// Confidence band for `preferredFlowDurationMinutes`, gated on sample size and
+    /// distribution concentration. `nil` whenever the value itself is `nil`.
+    public var preferredFlowDurationConfidence: PatternConfidence?
+    /// Mode of `hourOfDay` across long (`durationMinutes >= 30`) `taskCompletion` events.
+    /// Represents "typical hour long-focus tasks are completed" — NOT a proven deep-work
+    /// preference; it may simply reflect calendar/work-schedule constraints.
     public var typicalDeepWorkHour: Int?
+    /// Number of qualifying completion events the hour mode was computed from.
+    public var typicalDeepWorkHourSampleCount: Int?
+    /// Confidence band for `typicalDeepWorkHour`, gated on sample size and distribution
+    /// concentration (mode count / total count). `nil` whenever the value itself is `nil`.
+    public var typicalDeepWorkHourConfidence: PatternConfidence?
     /// Total append-only events stored locally.
     public var recordedEventCount: Int
     public var completionEventCount: Int
@@ -69,7 +103,11 @@ public struct BehaviorMemorySnapshot: Codable, Sendable, Equatable {
         patterns: [BehaviorPattern] = [],
         deferralRecords: [TaskDeferralRecord] = [],
         preferredFlowDurationMinutes: Int? = nil,
+        preferredFlowDurationSampleCount: Int? = nil,
+        preferredFlowDurationConfidence: PatternConfidence? = nil,
         typicalDeepWorkHour: Int? = nil,
+        typicalDeepWorkHourSampleCount: Int? = nil,
+        typicalDeepWorkHourConfidence: PatternConfidence? = nil,
         recordedEventCount: Int = 0,
         completionEventCount: Int = 0,
         deferralEventCount: Int = 0,
@@ -79,7 +117,11 @@ public struct BehaviorMemorySnapshot: Codable, Sendable, Equatable {
         self.patterns = patterns
         self.deferralRecords = deferralRecords
         self.preferredFlowDurationMinutes = preferredFlowDurationMinutes
+        self.preferredFlowDurationSampleCount = preferredFlowDurationSampleCount
+        self.preferredFlowDurationConfidence = preferredFlowDurationConfidence
         self.typicalDeepWorkHour = typicalDeepWorkHour
+        self.typicalDeepWorkHourSampleCount = typicalDeepWorkHourSampleCount
+        self.typicalDeepWorkHourConfidence = typicalDeepWorkHourConfidence
         self.recordedEventCount = max(recordedEventCount, 0)
         self.completionEventCount = max(completionEventCount, 0)
         self.deferralEventCount = max(deferralEventCount, 0)

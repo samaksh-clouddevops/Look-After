@@ -57,7 +57,12 @@ public enum TravelDisruptionDetector {
             return nil
         }
 
-        if let event = travelEvents.first {
+        // Same date filter as the "unchanged" branch above: only surface a travel-update
+        // prompt for an event that is actually upcoming today. Without this, any fingerprint
+        // change (including for a past or another-day travel event still present in
+        // `timelineEvents`) could trigger a high-severity "replan around it?" prompt for
+        // travel that is irrelevant to the current day's schedule.
+        if let event = travelEvents.first(where: { $0.date > now && calendar.isDate($0.date, inSameDayAs: now) }) {
             let timeLabel = ScheduleTimeFormatting.timeLabel(event.date, calendar: calendar)
             return TravelDisruption(
                 title: event.title,

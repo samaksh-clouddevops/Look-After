@@ -738,15 +738,17 @@ struct TaskFormSheet: View {
             isSaving = true
             Task {
                 let userId = updated.userId.isEmpty ? existing.userId : updated.userId
-                await tasksVM.scheduleMutation.persist(
+                let succeeded = await tasksVM.scheduleMutation.persist(
                     updated,
                     userId: userId,
                     userPlaced: scheduling == .fixedTime
                 )
                 isSaving = false
-                if tasksVM.error == nil {
+                if succeeded {
                     HapticManager.notification(.success)
                     dismiss()
+                } else {
+                    HapticManager.notification(.error)
                 }
             }
             return

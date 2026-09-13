@@ -97,6 +97,7 @@ public enum ConflictResolutionCascade {
         tasks: [LifeTask],
         on day: Date,
         model: LifeModel? = nil,
+        profile: UserLifeProfile = UserLifeProfileStore.load(),
         now: Date = Date(),
         calendar: Calendar = .current,
         bufferMinutes: Int = defaultBufferMinutes,
@@ -163,7 +164,24 @@ public enum ConflictResolutionCascade {
                 break
             }
 
-            guard var interval = TaskScheduleInterval.window(for: task, on: dayStart, calendar: calendar) else {
+            var resolvedWindow = TaskScheduleInterval.window(for: task, on: dayStart, calendar: calendar)
+            if resolvedWindow == nil,
+               let anchor = RoutineScheduleAnchorResolver.resolve(
+                   for: task,
+                   on: dayStart,
+                   model: model,
+                   profile: profile,
+                   calendar: calendar
+               ) {
+                applyStart(anchor.start, to: &task, on: dayStart, calendar: calendar)
+                resolvedWindow = TaskScheduleInterval.window(for: task, on: dayStart, calendar: calendar)
+            }
+
+            guard var interval = resolvedWindow else {
+                // Still unresolvable — leave the task untouched but make the gap visible
+                // instead of silently dropping it from `blocked`/`decisions`.
+                decisions.append(.init(taskID: task.id, action: .keep, reason: "unresolved_window_no_anchor"))
+                byID[task.id] = task
                 continue
             }
 

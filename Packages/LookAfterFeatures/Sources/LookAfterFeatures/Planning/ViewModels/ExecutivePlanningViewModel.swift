@@ -36,6 +36,13 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     @Published public private(set) var contextualReplanResult: DayReplanResult?
     @Published public private(set) var contextualReplanTrigger: DayReplanTrigger?
     @Published public private(set) var contextualReplanTitle: String = "Replan Preview"
+    /// Bumped every time a new contextual replan proposal is produced, even if the
+    /// resulting summary text happens to be identical to the previous proposal.
+    /// Views should key sheet-presentation `.onChange` off this instead of `summary`,
+    /// since SwiftUI's `.onChange` only fires on inequality and identical summaries
+    /// (e.g. re-triggering "going out" twice in a row) would otherwise fail to
+    /// reopen the sheet.
+    @Published public private(set) var contextualReplanGeneration: Int = 0
     /// AI mutations waiting for Approve / Reject (P1).
     @Published public private(set) var pendingApproval: PendingPlanApproval?
 
@@ -299,6 +306,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         do {
             let result = try await replanEngine.replan(context: context)
             contextualReplanResult = result
+            contextualReplanGeneration += 1
             planVariants = result.planVariants
             selectedVariantID = result.recommendedVariantID ?? result.planVariants?.first(where: \.recommended)?.id
             replanSummary = result.summary

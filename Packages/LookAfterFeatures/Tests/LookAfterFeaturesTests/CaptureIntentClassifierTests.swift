@@ -27,6 +27,32 @@ final class CaptureIntentClassifierTests: XCTestCase {
     }
 
     @MainActor
+    func testParseDecisionAcceptsMatchingDuplicateTitle() {
+        let json = """
+        {"intent":"task","confidence":0.8,"title":"Buy milk","summary":"s","possibleDuplicateOfTitle":"Buy milk 2%"}
+        """
+        let decision = CaptureIntentClassifier.parseDecision(
+            from: json,
+            fallbackText: "buy milk",
+            existingTaskTitles: ["Buy milk 2%", "Call dentist"]
+        )
+        XCTAssertEqual(decision?.possibleDuplicateOfTitle, "Buy milk 2%")
+    }
+
+    @MainActor
+    func testParseDecisionRejectsFabricatedDuplicateTitle() {
+        let json = """
+        {"intent":"task","confidence":0.8,"title":"Buy milk","summary":"s","possibleDuplicateOfTitle":"Nonexistent task"}
+        """
+        let decision = CaptureIntentClassifier.parseDecision(
+            from: json,
+            fallbackText: "buy milk",
+            existingTaskTitles: ["Buy milk 2%", "Call dentist"]
+        )
+        XCTAssertNil(decision?.possibleDuplicateOfTitle)
+    }
+
+    @MainActor
     func testOutcomeToastMessages() {
         let task = CaptureOutcome.taskCreated(taskId: "1", title: "Buy milk")
         XCTAssertTrue(task.plainToastMessage.contains("Buy milk"))

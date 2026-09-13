@@ -162,7 +162,19 @@ public enum SemanticPlacementSense {
             return .needsAI("Not sure what this task is — need a meaning check before locking an unusual clock")
         }
 
-        return .makesSense
+        // Compulsory AI review, not a fallback: a deterministic time fence (bounding box) or an
+        // ordinary daytime hour is the only way to accept a placement with high confidence and
+        // skip the AI check. Everything else that reaches this point has passed every rule but was
+        // never actually judged for whether the title/duration/context makes sense at this clock —
+        // that silent pass-through was the root cause behind cases like "Gym" landing at 1:30 AM,
+        // and it applies to *any* semantic type with no bounding box, not just physical activity.
+        if TaskEphemeralityDefaults.boundingBox(for: input.task) != nil {
+            return .makesSense
+        }
+        if isOrdinaryDaytime(window) {
+            return .makesSense
+        }
+        return .needsAI("No deterministic time fence for \(input.task.title) at this hour — confirm this placement makes sense")
     }
 
     /// Allocator search: only lock a slot the semantic layer is confident about.

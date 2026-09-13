@@ -97,7 +97,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             tab: .today,
             anchor: .todayAssistant,
             preferredSides: [.below, .floating, .above],
-            allowsTargetInteraction: false
+            allowsTargetInteraction: true
         ),
         AppFeatureTourStep(
             id: "review",
@@ -107,7 +107,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             tab: .you,
             anchor: .reviewHero,
             preferredSides: [.below, .floating, .center],
-            allowsTargetInteraction: false
+            allowsTargetInteraction: true
         ),
         AppFeatureTourStep(
             id: "capture",
@@ -117,7 +117,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             tab: nil,
             anchor: .tabCapture,
             preferredSides: [.above, .floating],
-            allowsTargetInteraction: false
+            allowsTargetInteraction: true
         ),
         AppFeatureTourStep(
             id: "brain",
@@ -127,7 +127,7 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             tab: .brain,
             anchor: .brainVoiceOrb,
             preferredSides: [.below, .above, .floating],
-            allowsTargetInteraction: false
+            allowsTargetInteraction: true
         ),
         AppFeatureTourStep(
             id: "you",
@@ -168,6 +168,13 @@ enum AppFeatureTourStore {
     private static let completedKey = "lookafter.hasCompletedFeatureTour"
     private static let stepKey = "lookafter.featureTour.stepIndex"
     private static let activeKey = "lookafter.featureTour.wasActive"
+    /// Tracks how many consecutive launches restored the tour still stuck on the same step,
+    /// so a step that never renders/advances properly (e.g. bad anchor geometry) can't force
+    /// the user to relaunch forever — see AppFeatureTourOverlay's escape-hatch tap-to-advance.
+    private static let stuckStepKey = "lookafter.featureTour.stuckStepIndex"
+    private static let stuckCountKey = "lookafter.featureTour.stuckStepCount"
+    /// After this many launches restoring the exact same unfinished step, auto-skip the tour.
+    private static let maxStuckRestores = 2
 
     static var shouldPresent: Bool {
         !UserDefaults.standard.bool(forKey: completedKey)
@@ -178,6 +185,8 @@ enum AppFeatureTourStore {
         defaults.set(true, forKey: completedKey)
         defaults.set(false, forKey: activeKey)
         defaults.set(0, forKey: stepKey)
+        defaults.removeObject(forKey: stuckStepKey)
+        defaults.removeObject(forKey: stuckCountKey)
     }
 
     static func reset() {
@@ -185,18 +194,42 @@ enum AppFeatureTourStore {
         defaults.removeObject(forKey: completedKey)
         defaults.removeObject(forKey: stepKey)
         defaults.removeObject(forKey: activeKey)
+        defaults.removeObject(forKey: stuckStepKey)
+        defaults.removeObject(forKey: stuckCountKey)
     }
 
     static func saveProgress(stepIndex: Int, isActive: Bool) {
         let defaults = UserDefaults.standard
         defaults.set(stepIndex, forKey: stepKey)
         defaults.set(isActive, forKey: activeKey)
+        // Any real progress (step changed) clears the stuck counter.
+        if defaults.integer(forKey: stuckStepKey) != stepIndex {
+            defaults.removeObject(forKey: stuckStepKey)
+            defaults.removeObject(forKey: stuckCountKey)
+        }
     }
 
+    /// Returns the step to restore, or `nil` if there's nothing to restore or the tour has
+    /// been stuck on the same step across too many launches (auto-skips instead).
     static func restoreProgress() -> (stepIndex: Int, wasActive: Bool)? {
         let defaults = UserDefaults.standard
         guard defaults.bool(forKey: activeKey) else { return nil }
-        return (max(0, defaults.integer(forKey: stepKey)), true)
+        let stepIndex = max(0, defaults.integer(forKey: stepKey))
+
+        if defaults.integer(forKey: stuckStepKey) == stepIndex {
+            let count = defaults.integer(forKey: stuckCountKey) + 1
+            defaults.set(count, forKey: stuckCountKey)
+            if count > maxStuckRestores {
+                // Never trap the user behind a tour that can't get past this step.
+                markCompleted()
+                return nil
+            }
+        } else {
+            defaults.set(stepIndex, forKey: stuckStepKey)
+            defaults.set(1, forKey: stuckCountKey)
+        }
+
+        return (stepIndex, true)
     }
 }
 

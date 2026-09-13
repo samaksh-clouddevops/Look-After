@@ -1,6 +1,8 @@
 import Foundation
 
-/// Single schedule engine — plan → diff → apply (behind `SchedulePlannerFlags.useUnifiedDayPlanner`).
+/// Single schedule engine — plan → diff → apply. The sole day-planning path
+/// used by `TasksViewModel.reconcileTodaySchedule` (legacy `DayScheduleReconciler`-only
+/// branch and its `SchedulePlannerFlags.useUnifiedDayPlanner` gate were removed).
 public enum DaySchedulePlanner {
 
     public struct PlannedSlot: Sendable, Equatable {
@@ -49,20 +51,24 @@ public enum DaySchedulePlanner {
             return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
         }
 
-        // Phase 1 — snap anchored / user-placed / structure-backed tasks.
+        // Phase 1 — snap anchored / user-placed / structure-backed tasks. These tasks are not
+        // `isSchedulerMovable`, so they must never be silently dropped here: if their preferred
+        // slot collides with something already placed, they are still appended (overlapping) so
+        // Phase 3's `ConflictResolutionCascade` gets a chance to shift/compress/park them instead
+        // of the task vanishing from the plan entirely (see bug-hunt-findings-2026-09.md #3).
         for task in active {
             if TaskConstraintAlignment.isUserPlaced(task),
                let start = task.scheduledTime,
                calendar.isDate(start, inSameDayAs: dayStart) {
                 let end = task.scheduledEndTime ?? start.addingTimeInterval(TimeInterval(max(task.estimatedMinutes, 15) * 60))
-                appendSlot(taskID: task.id, start: start, end: end, to: &slots, occupied: &occupied)
+                appendAnchoredSlot(taskID: task.id, start: start, end: end, to: &slots, occupied: &occupied)
                 continue
             }
 
             if let anchor = compiled.anchor(matching: task), anchor.treatAsFixed,
                let start = anchor.start(on: dayStart, calendar: calendar) {
                 let end = start.addingTimeInterval(TimeInterval(anchor.durationMinutes * 60))
-                appendSlot(taskID: task.id, start: start, end: end, to: &slots, occupied: &occupied)
+                appendAnchoredSlot(taskID: task.id, start: start, end: end, to: &slots, occupied: &occupied)
                 continue
             }
 
@@ -73,7 +79,7 @@ public enum DaySchedulePlanner {
                 profile: profile,
                 calendar: calendar
             ), resolved.treatAsFixed {
-                appendSlot(taskID: task.id, start: resolved.start, end: resolved.end, to: &slots, occupied: &occupied)
+                appendAnchoredSlot(taskID: task.id, start: resolved.start, end: resolved.end, to: &slots, occupied: &occupied)
             }
         }
 
@@ -229,6 +235,27 @@ public enum DaySchedulePlanner {
             occupied.append(interval)
             occupied.sort { $0.start < $1.start }
         }
+    }
+
+    /// Phase-1 variant for anchored/user-placed/structure-fixed tasks: these are not
+    /// `isSchedulerMovable`, so unlike `appendSlot` they must always be placed — even when
+    /// they overlap something already occupied — so Phase 3's `ConflictResolutionCascade`
+    /// can attempt to resolve the collision instead of the task disappearing from the plan.
+    private static func appendAnchoredSlot(
+        taskID: String,
+        start: Date,
+        end: Date,
+        to slots: inout [PlannedSlot],
+        occupied: inout [TaskScheduleInterval]
+    ) {
+        let interval = TaskScheduleInterval(taskID: taskID, start: start, end: end)
+        if let existingIndex = slots.firstIndex(where: { $0.taskID == taskID }) {
+            slots[existingIndex] = PlannedSlot(taskID: taskID, start: start, end: end)
+        } else {
+            slots.append(PlannedSlot(taskID: taskID, start: start, end: end))
+        }
+        occupied.append(interval)
+        occupied.sort { $0.start < $1.start }
     }
 
     private static func diffChangedIDs(

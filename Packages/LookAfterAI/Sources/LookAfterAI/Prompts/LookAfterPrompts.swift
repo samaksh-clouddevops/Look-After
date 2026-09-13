@@ -91,7 +91,27 @@ public enum LookAfterPrompts {
     Use archive only when nothing should be stored.
     """
 
-    public static func captureRoutingPrompt(text: String, hintedIntent: String?, contextScreen: String?) -> String {
+    public static let naturalLanguageTaskCaptureSystem = """
+    You extract structured task fields from a single free-text sentence for Look After, an ADHD-friendly task manager.
+    Return ONLY valid JSON exactly matching the requested schema. No markdown fences. No prose.
+    Every extractable field must report a status: "known" (explicitly stated), "inferred" (derived from an explicit \
+    default policy given to you, or clearly implied wording like "tomorrow"), "ambiguous" (the text hints at a value \
+    but doesn't pin it down, e.g. "sometime next week"), or "unknown" (not mentioned at all).
+    NEVER invent a value to fill a field — prefer "ambiguous" or "unknown" over guessing.
+    "value" must be null whenever status is "ambiguous" or "unknown".
+    Every field with status "known" or "inferred" must also report a "source": "explicit_user_text" (taken directly \
+    from the text), "deterministic_policy" (filled from a default policy explicitly given to you), or \
+    "model_inference" (you derived it from context, not a direct statement or policy).
+    Do NOT use "model_inference" as the source for priority or estimatedMinutes — if you cannot point to explicit \
+    text or a given policy for those two fields, mark them "unknown" with source null instead.
+    """
+
+    public static func captureRoutingPrompt(
+        text: String,
+        hintedIntent: String?,
+        contextScreen: String?,
+        existingTaskTitles: [String] = []
+    ) -> String {
         var prompt = """
         Route this capture for Look After.
 
@@ -102,6 +122,11 @@ public enum LookAfterPrompts {
         }
         if let contextScreen {
             prompt += "\nSCREEN: \(contextScreen)"
+        }
+        if !existingTaskTitles.isEmpty {
+            let recent = existingTaskTitles.prefix(15)
+            prompt += "\n\nRECENT/OPEN TASKS (most recent first — check if this capture duplicates one):\n"
+            prompt += recent.map { "- \($0)" }.joined(separator: "\n")
         }
         prompt += """
 
@@ -117,11 +142,14 @@ public enum LookAfterPrompts {
             "lifeArea": "<life area or null>",
             "priority": "<Critical|High|Medium|Low|Someday or null>",
             "taskDifficulty": "<Trivial|Easy|Medium|Hard|Intense or null>",
-            "estimatedMinutes": <int or null>
+            "estimatedMinutes": <int or null>,
+            "possibleDuplicateOfTitle": "<exact title from RECENT/OPEN TASKS this duplicates, or null>"
         }
 
         Valid lifeArea: \(LifeArea.allCases.map(\.rawValue).joined(separator: ", "))
-        Return ONLY the JSON object.
+        Only set possibleDuplicateOfTitle when the capture clearly refers to the same task as an
+        existing open task listed above — copy its title exactly. Do not fabricate a title that
+        isn't in the list. Return ONLY the JSON object.
         """
         return prompt
     }
@@ -465,59 +493,175 @@ public enum LookAfterPrompts {
         proposedStart: Date,
         durationMinutes: Int,
         neighborTasks: [LifeTask],
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        now: Date = Date(),
+        allDayTasks: [LifeTask]? = nil,
+        calendarEvents: [BriefingCalendarEvent] = [],
+        todayHealthSummary: HealthSummary? = nil,
+        todayEnergy: EnergyReport? = nil,
+        previousDayHealthSummary: HealthSummary? = nil,
+        previousDayEnergy: EnergyReport? = nil,
+        weatherSummary: String? = nil,
+        previousAcceptedSameSlot: Bool = false,
+        profile: UserLifeProfile = UserLifeProfileStore.load()
     ) -> String {
-        let profile = task.resolvedSemanticProfile
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "HH:mm"
-        let proposed = formatter.string(from: proposedStart)
+        let semantic = task.resolvedSemanticProfile
+        let dateTimeFormatter = DateFormatter()
+        dateTimeFormatter.calendar = calendar
+        dateTimeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateTimeFormatter.dateFormat = "EEEE, yyyy-MM-dd HH:mm"
+        let timeFormatter = DateFormatter()
+        timeFormatter.calendar = calendar
+        timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        timeFormatter.dateFormat = "HH:mm"
+
+        let proposed = dateTimeFormatter.string(from: proposedStart)
+        let nowLine = dateTimeFormatter.string(from: now)
         let window = TaskSemanticScheduler.currentTimeWindow(at: proposedStart, calendar: calendar)
-        let neighbors = neighborTasks
-            .filter { $0.id != task.id && $0.status.isActive }
-            .prefix(12)
+
+        let dayTasks = (allDayTasks ?? neighborTasks).filter { $0.id != task.id && $0.status.isActive }
+        let shown = dayTasks.prefix(12)
+        let neighborLines = shown
             .map { neighbor -> String in
-                let start = neighbor.scheduledTime.map { formatter.string(from: $0) } ?? "unslotted"
                 let minutes = max(neighbor.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
-                return "- \(neighbor.title) (\(neighbor.resolvedSemanticProfile.semanticType.rawValue), \(start), \(minutes)m)"
+                let start = neighbor.scheduledTime.map { timeFormatter.string(from: $0) } ?? "unslotted"
+                let end = neighbor.scheduledTime
+                    .map { timeFormatter.string(from: $0.addingTimeInterval(TimeInterval(minutes * 60))) } ?? "?"
+                return "- \(neighbor.title) (\(neighbor.resolvedSemanticProfile.semanticType.rawValue), \(start)\u2013\(end))"
             }
             .joined(separator: "\n")
+        let remaining = dayTasks.count - shown.count
+        let dayScheduleBlock = neighborLines.isEmpty
+            ? "- none"
+            : neighborLines + (remaining > 0 ? "\n- ...and \(remaining) more" : "")
+
+        let calendarBlock: String
+        if calendarEvents.isEmpty {
+            calendarBlock = ""
+        } else {
+            let lines = calendarEvents.prefix(12).map { event -> String in
+                let end = event.endDate.map { timeFormatter.string(from: $0) } ?? "?"
+                let busy = event.isBusy ? "" : " [free/transparent]"
+                return "- \(event.title) (\(timeFormatter.string(from: event.startDate))\u2013\(end))\(busy)"
+            }.joined(separator: "\n")
+            calendarBlock = "\nCALENDAR EVENTS TODAY (may double-book a slot that looks free in the task list):\n\(lines)\n"
+        }
+
+        let deadlineBlock: String
+        if let deadline = task.deadline {
+            let hoursRemaining = deadline.timeIntervalSince(now) / 3600
+            deadlineBlock = "\nDeadline: \(dateTimeFormatter.string(from: deadline)) (\(String(format: "%.1f", hoursRemaining))h remaining)\n"
+        } else {
+            deadlineBlock = ""
+        }
+
+        let isUserPlaced = task.userPlacedScheduleAt != nil
+        let healthBlock = placementHealthStateBlock(
+            today: todayHealthSummary,
+            todayEnergy: todayEnergy,
+            previousDay: previousDayHealthSummary,
+            previousDayEnergy: previousDayEnergy
+        )
+        let calibration = UserCalibrationStore.promptBlock(maxEntries: 5)
+        let cycle = CyclePreferencesStore.isActive
+            ? PlanningPromptContextBuilder.cycleBlock(
+                snapshot: CycleEngine.snapshot(CycleEngine.Input()),
+                logs: CycleLogStore.load()
+              )
+            : ""
+        let lifeContext = PlanningPromptContextBuilder.combinedLifeContextBlock(profile: profile)
+        let medRules = MedicationStore.medicalSafetyRulesBlock()
+        let weatherLine = weatherSummary.map { "\nWEATHER: \($0)\n" } ?? ""
+        let recurrenceLine = previousAcceptedSameSlot
+            ? "\nThis exact task was previously accepted at this same time \u2014 prefer consistency unless new context strongly disagrees.\n"
+            : ""
 
         return """
         You are the placement judge for Look After. Deterministic semantics could not decide whether this clock makes sense.
         Decide if this task belongs at this time, with this duration, given the rest of the day.
         Do NOT invent a new task. Do NOT ignore medical constraints.
 
+        NOW: \(nowLine)
+        PROPOSED START: \(proposed) (\(window.rawValue))
+        Proposed duration minutes: \(durationMinutes)
+        Placement source: \(isUserPlaced ? "USER manually placed this \u2014 raise the bar for rejecting it" : "AI/allocator guessed this slot")
+        \(deadlineBlock)\(recurrenceLine)
         Task title: "\(task.title)"
         Description: "\(task.description)"
-        Semantic type: \(profile.semanticType.rawValue)
-        Subtype: \(profile.subtype)
-        Preferred windows: \(profile.preferredTimeWindows.map(\.rawValue).joined(separator: ", "))
-        Forbidden windows: \(profile.forbiddenTimeWindows.map(\.rawValue).joined(separator: ", "))
-        Constraints: \(profile.schedulingConstraints.map(\.rawValue).joined(separator: ", "))
-        Flexibility: \(profile.flexibility.rawValue)
+        Life area: \(task.lifeArea.rawValue) | Priority: \(task.priority.label) | Difficulty: \(task.difficulty.rawValue)
+        Tags: \(task.tags.isEmpty ? "none" : task.tags.joined(separator: ", "))
+        Semantic type: \(semantic.semanticType.rawValue)
+        Subtype: \(semantic.subtype)
+        Preferred windows: \(semantic.preferredTimeWindows.map(\.rawValue).joined(separator: ", "))
+        Forbidden windows: \(semantic.forbiddenTimeWindows.map(\.rawValue).joined(separator: ", "))
+        Constraints: \(semantic.schedulingConstraints.map(\.rawValue).joined(separator: ", "))
+        Flexibility: \(semantic.flexibility.rawValue)
+        \(weatherLine)
+        HOW TODAY LOOKS (all active tasks):
+        \(dayScheduleBlock)
+        \(calendarBlock)
+        \(lifeContext)
 
-        Proposed start: \(proposed) (\(window.rawValue))
-        Proposed duration minutes: \(durationMinutes)
-
-        Other tasks already on this day:
-        \(neighbors.isEmpty ? "- none" : neighbors)
+        \(medRules)
+        \(healthBlock)\(calibration.isEmpty ? "" : "\n\(calibration)\n")\(cycle.isEmpty ? "" : "\n\(cycle)\n")
 
         Rules:
         1. Reject if the type of work does not belong at that hour (meals, meds, errands, deep work, sleep).
-        2. Reject if duration does not fit before the next real commitment.
+        2. Reject if duration does not fit before the next real commitment or calendar event.
         3. Allow unusual clocks only when the title and day context make them reasonable (e.g. packing before a dawn flight).
         4. If rejected, suggest a better startHour/startMinute on the same day, or null if it should stay untimed.
+        5. Do not reject a slot merely because it seems unusual \u2014 only reject based on conflicts actually present
+           in the context above (life context, medication rules, calendar events, deadlines).
+        6. A free/empty slot alone does not make a placement valid \u2014 it must also not conflict with life-context,
+           medication, or calendar rules.
+        7. Never invent times, task ids, or titles not present in the provided context.
+        8. If uncertain, prefer "allowed": false with a suggested alternative time rather than guessing true.
 
         Respond as JSON only:
         {
             "allowed": <true|false>,
             "reason": "<one short sentence>",
             "suggestedStartHour": <0-23 or null>,
-            "suggestedStartMinute": <0-59 or null>
+            "suggestedStartMinute": <0-59 or null>,
+            "confidence": <0.0-1.0>
         }
         """
+    }
+
+    /// Formats today + previous-day health/energy for `placementSensePrompt` \u2014 omitted entirely when no data exists.
+    private static func placementHealthStateBlock(
+        today: HealthSummary?,
+        todayEnergy: EnergyReport?,
+        previousDay: HealthSummary?,
+        previousDayEnergy: EnergyReport?
+    ) -> String {
+        guard today != nil || todayEnergy != nil || previousDay != nil || previousDayEnergy != nil else {
+            return ""
+        }
+        var lines = ["USER STATE:"]
+        if let today {
+            if let sleep = today.totalSleepMinutes {
+                lines.append("- Today sleep: \(String(format: "%.1f", sleep / 60.0))h")
+            }
+            if let hrv = today.hrvAverage {
+                lines.append("- Today HRV: \(Int(hrv))ms")
+            }
+        }
+        if let todayEnergy {
+            lines.append("- Today energy: \(todayEnergy.energy.rawValue)")
+        }
+        if let previousDay {
+            if let sleep = previousDay.totalSleepMinutes {
+                lines.append("- Yesterday sleep: \(String(format: "%.1f", sleep / 60.0))h")
+            }
+            if let hrv = previousDay.hrvAverage {
+                lines.append("- Yesterday HRV: \(Int(hrv))ms")
+            }
+        }
+        if let previousDayEnergy {
+            lines.append("- Yesterday energy: \(previousDayEnergy.energy.rawValue)")
+        }
+        return lines.joined(separator: "\n") + "\n"
     }
 
     // MARK: - Task Import Prompt
@@ -912,6 +1056,36 @@ public enum LookAfterPrompts {
         \(recentLogs.isEmpty ? "- none yet" : recentLogs)
 
         Return JSON: {"headline":"...","body":"...","actionKind":"protectEnergy|logSymptom|adjustPlan|recoveryMode|none"}
+        """
+    }
+
+    public static func naturalLanguageTaskCapturePrompt(text: String, now: Date = Date()) -> String {
+        let nowFormatter = DateFormatter()
+        nowFormatter.locale = Locale(identifier: "en_US_POSIX")
+        nowFormatter.dateFormat = "EEEE, yyyy-MM-dd HH:mm"
+        return """
+        CURRENT DATE/TIME: \(nowFormatter.string(from: now))
+
+        USER INPUT: "\(text)"
+
+        Valid lifeArea values: \(LifeArea.allCases.map(\.rawValue).joined(separator: ", "))
+        Valid priority values: Critical, High, Medium, Low, Someday
+        Valid difficulty values: Trivial, Easy, Medium, Hard, Intense
+        Valid timeConstraint values: anchored, flexible, fluid
+        Default duration policy if unspecified: 30 minutes (status "inferred", source "deterministic_policy") — \
+        only use this default if the text gives no duration cue at all; otherwise mark estimatedMinutes "unknown".
+
+        Respond as JSON only, matching this exact shape (dates as ISO8601 with timezone offset):
+        {
+          "title": "<short task title>",
+          "lifeArea": {"status": "known|inferred|ambiguous|unknown", "source": "explicit_user_text|deterministic_policy|model_inference|null", "value": "<lifeArea or null>"},
+          "priority": {"status": "...", "source": "...", "value": "<priority or null>"},
+          "difficulty": {"status": "...", "source": "...", "value": "<difficulty or null>"},
+          "estimatedMinutes": {"status": "...", "source": "...", "value": <minutes or null>},
+          "deadline": {"status": "...", "source": "...", "value": "<ISO8601 or null>"},
+          "scheduledAt": {"status": "...", "source": "...", "value": "<ISO8601 or null>"},
+          "timeConstraint": {"status": "...", "source": "...", "value": "<timeConstraint or null>"}
+        }
         """
     }
 

@@ -10,43 +10,48 @@ struct TodayEndOfDayGate: View {
 
     @State private var isExpanded = false
 
-    private var isEvening: Bool {
-        Calendar.current.component(.hour, from: Date()) >= 17
+    private func isEvening(at date: Date) -> Bool {
+        Calendar.current.component(.hour, from: date) >= 17
     }
 
     var body: some View {
-        if isEvening || isExpanded {
-            TodayEndOfDayJournalCard(
-                modulesVM: modulesVM,
-                tasksVM: tasksVM,
-                speechManager: speechManager
-            )
-        } else {
-            Button {
-                withAnimation(.easeInOut(duration: 0.22)) { isExpanded = true }
-            } label: {
-                HStack(spacing: DesignSystem.spacingSM) {
-                    Image(systemName: "moon.stars.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(DesignSystem.accentPrimary)
-                    Text("End of day reflection")
-                        .font(.dsCaption(weight: .semibold))
-                        .foregroundStyle(DesignSystem.textSecondary)
-                    Spacer(minLength: 0)
-                    Text("Open")
-                        .font(.dsCaption(weight: .semibold))
-                        .foregroundStyle(DesignSystem.accentPrimary)
-                }
-                .padding(.horizontal, DesignSystem.spacingMD)
-                .frame(maxWidth: .infinity, minHeight: DesignSystem.minTouchTarget)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                        .fill(DesignSystem.contentSurfaceSubtle)
+        // Ticks once a minute purely so `isEvening` gets re-evaluated against a fresh
+        // `Date()` while the view is already on screen — otherwise this would only
+        // update on incidental re-renders triggered by unrelated state changes.
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            if isEvening(at: context.date) || isExpanded {
+                TodayEndOfDayJournalCard(
+                    modulesVM: modulesVM,
+                    tasksVM: tasksVM,
+                    speechManager: speechManager
                 )
+            } else {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) { isExpanded = true }
+                } label: {
+                    HStack(spacing: DesignSystem.spacingSM) {
+                        Image(systemName: "moon.stars.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(DesignSystem.accentPrimary)
+                        Text("End of day reflection")
+                            .font(.dsCaption(weight: .semibold))
+                            .foregroundStyle(DesignSystem.textSecondary)
+                        Spacer(minLength: 0)
+                        Text("Open")
+                            .font(.dsCaption(weight: .semibold))
+                            .foregroundStyle(DesignSystem.accentPrimary)
+                    }
+                    .padding(.horizontal, DesignSystem.spacingMD)
+                    .frame(maxWidth: .infinity, minHeight: DesignSystem.minTouchTarget)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                            .fill(DesignSystem.contentSurfaceSubtle)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open end of day reflection")
+                .padding(.top, DesignSystem.spacingMD)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open end of day reflection")
-            .padding(.top, DesignSystem.spacingMD)
         }
     }
 }

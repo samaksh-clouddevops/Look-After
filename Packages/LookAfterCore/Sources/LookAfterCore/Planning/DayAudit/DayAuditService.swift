@@ -121,7 +121,12 @@ public enum DayAuditService {
             )
             faults.append(fault)
             if judgment, questions.count < input.maxQuestions {
+                // Stable ID derived from content (not a fresh random UUID) so that an answer
+                // recorded against this question on one audit run still matches the same
+                // question's ID the next time "Start my day" re-runs the audit.
+                let stableID = "proactive-\(suggestion.kind.rawValue)-\(suggestion.relatedTaskIDs.joined(separator: ","))"
                 questions.append(DayAuditQuestion(
+                    id: stableID,
                     prompt: suggestion.message,
                     options: suggestion.options,
                     relatedFaultID: fault.id,
@@ -141,6 +146,7 @@ public enum DayAuditService {
             ))
             if questions.count < input.maxQuestions {
                 questions.append(DayAuditQuestion(
+                    id: "day-audit-capacity-question",
                     prompt: "Today looks heavy for your energy. What should we protect?",
                     options: ["Keep deep work", "Cut flex work", "Keep as planned"],
                     relatedTaskIDs: []

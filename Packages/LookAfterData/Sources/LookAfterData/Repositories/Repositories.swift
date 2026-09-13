@@ -63,8 +63,7 @@ public final class TaskRepository: ObservableObject {
 
     /// All locally persisted tasks for a user — includes completed history beyond today.
     public func localAllTasks(for userId: String) -> [LifeTask] {
-        migrateAllTasksToCanonicalUserId()
-        return tasksForUser(userId)
+        tasksForUser(userId)
     }
 
     /// Moves tasks saved under a pre-auth fallback id to the real Firebase UID.
@@ -94,6 +93,25 @@ public final class TaskRepository: ObservableObject {
         let staleIds = Set(all.map(\.userId).filter { !$0.isEmpty && $0 != canonicalId })
         for staleId in staleIds {
             reassignTasks(from: staleId, to: canonicalId)
+        }
+        // Claim any tasks persisted with an empty userId (pre-auth guest fallback) so they
+        // stop matching the "visible to every user" wildcard in `tasksForUser` — otherwise
+        // they remain permanently visible to any account signed in on this device.
+        claimUnownedTasks(canonicalUserId: canonicalId)
+    }
+
+    /// Assigns any locally persisted task with an empty `userId` to `canonicalUserId`.
+    /// Unlike `reassignTasks(from:to:)`, this targets the empty-string owner specifically.
+    private func claimUnownedTasks(canonicalUserId: String) {
+        guard !canonicalUserId.isEmpty else { return }
+        var tasks = allLocalTasks()
+        var changed = false
+        for index in tasks.indices where tasks[index].userId.isEmpty {
+            tasks[index].userId = canonicalUserId
+            changed = true
+        }
+        if changed {
+            persistAllLocally(tasks)
         }
     }
 
@@ -177,34 +195,49 @@ public final class TaskRepository: ObservableObject {
         syncTaskToFirestore(mutableTask, merge: true)
     }
     
-    public func delete(_ id: String) async throws {
+    public func delete(_ id: String, userId: String) async throws {
         TaskDeletionRegistry.markDeleted(id)
-        var tasks = allLocalTasks()
-        tasks.removeAll { $0.id == id }
-        persistAllLocally(tasks)
+        // Single-row delete — never touches other rows, so it's safe even when `cachedAll`
+        // has not been warmed yet on a cold process (see cold-launch data-loss bug).
+        taskStore.deleteRowAsync(id)
+        if var cached = Self.cachedAll {
+            cached.removeAll { $0.id == id }
+            Self.cachedAll = cached
+        }
         TaskPersistenceLog.delete(id)
-        deleteTaskFromFirestore(id)
+        deleteTaskFromFirestore(id, userId: userId)
     }
-    
+
     /// Push task to Firestore via durable outbox (retries when offline / on drain).
     private func syncTaskToFirestore(_ task: LifeTask, merge: Bool = false) {
         TaskSyncOutbox.shared.enqueueUpsert(task, merge: merge)
     }
-    
-    private func deleteTaskFromFirestore(_ id: String) {
-        let userId = firebase.currentUserId ?? ""
-        TaskSyncOutbox.shared.enqueueDelete(taskId: id, userId: userId)
+
+    /// Uses the caller-provided owning userId; falls back to the current session only when the
+    /// caller could not resolve one (e.g. legacy call sites) — avoids attributing a delete to
+    /// whatever account happens to be signed in when the async operation completes.
+    private func deleteTaskFromFirestore(_ id: String, userId: String) {
+        let resolvedUserId = userId.isEmpty ? (firebase.currentUserId ?? "") : userId
+        TaskSyncOutbox.shared.enqueueDelete(taskId: id, userId: resolvedUserId)
     }
 
     private func saveLocally(_ task: LifeTask) {
         guard !TaskDeletionRegistry.load().contains(task.id) else { return }
-        var tasks = allLocalTasks()
-        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[index] = task
-        } else {
-            tasks.insert(task, at: 0)
+        // Single-row upsert — never touches other rows, so it's safe even when `cachedAll`
+        // has not been warmed yet on a cold process. Previously this built a "full list" from
+        // `allLocalTasks()` (which returns [] pre-warm) and destructively replaced the entire
+        // table with just this one task, wiping all previously persisted data. See
+        // Documentation/critical-bug-cold-launch-task-loss-2026-09.md.
+        taskStore.upsertAsync(task)
+        if var cached = Self.cachedAll {
+            if let index = cached.firstIndex(where: { $0.id == task.id }) {
+                cached[index] = task
+            } else {
+                cached.insert(task, at: 0)
+            }
+            Self.cachedAll = cached
         }
-        persistAllLocally(tasks)
+        TaskPersistenceLog.localSave(count: Self.cachedAll?.count ?? -1)
     }
 
     private static let perfLog = OSLog(subsystem: "com.samaksh.flowos.app", category: "TaskRepository")
@@ -248,14 +281,22 @@ public final class TaskRepository: ObservableObject {
     }
 
     private func tasksForUser(_ userId: String) -> [LifeTask] {
-        tasksForUser(allLocalTasks(), userId: userId)
+        // Ensure empty-userId tasks are claimed by the canonical user before filtering,
+        // regardless of entry point (localSnapshot vs. localAllTasks), so the strict
+        // ownership match below doesn't hide them from their rightful owner.
+        migrateAllTasksToCanonicalUserId()
+        return tasksForUser(allLocalTasks(), userId: userId)
     }
 
     private func tasksForUser(_ tasks: [LifeTask], userId: String) -> [LifeTask] {
         let deletedIDs = TaskDeletionRegistry.load()
         let visible = tasks.filter { !deletedIDs.contains($0.id) }
         guard !userId.isEmpty else { return visible }
-        return visible.filter { $0.userId.isEmpty || $0.userId == userId }
+        // Strict ownership match only. Empty-userId tasks are claimed by the canonical user
+        // via `claimUnownedTasks` during `migrateAllTasksToCanonicalUserId`; treating an empty
+        // userId as a wildcard here previously made such tasks visible to every account that
+        // ever signs in on the device (cross-user data leak on shared/reused devices).
+        return visible.filter { $0.userId == userId }
     }
 
     /// Drops terminal recurrence rows and duplicate same-day instances that bloat local storage.

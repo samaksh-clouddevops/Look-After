@@ -41,8 +41,8 @@ struct ContextualReplanSheetsModifier: ViewModifier {
                     )
                 }
             }
-            .onChange(of: planningVM.contextualReplanResult?.summary) { _, summary in
-                showContextualReplanPreview = summary != nil
+            .onChange(of: planningVM.contextualReplanGeneration) { _, _ in
+                showContextualReplanPreview = planningVM.contextualReplanResult != nil
             }
     }
 }

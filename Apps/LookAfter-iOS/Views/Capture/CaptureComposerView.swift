@@ -20,6 +20,9 @@ struct CaptureComposerView: View {
     @State private var eventDate = Date()
     @State private var isSaving = false
     @FocusState private var isFocused: Bool
+    /// Text present before the current voice session started, so live transcript
+    /// updates are appended rather than clobbering any manual edits already typed.
+    @State private var voiceBaseText = ""
 
     private let chips: [CaptureIntent] = [.task, .note, .event, .mood, .insight]
 
@@ -172,7 +175,8 @@ struct CaptureComposerView: View {
         }
         .onChange(of: speechManager.transcript) { _, transcript in
             guard !transcript.isEmpty else { return }
-            text = transcript
+            let separator = voiceBaseText.isEmpty ? "" : " "
+            text = voiceBaseText + separator + transcript
         }
     }
 
@@ -280,6 +284,7 @@ struct CaptureComposerView: View {
         if speechManager.isListening {
             speechManager.stopListening()
         } else {
+            voiceBaseText = text
             Task { await speechManager.startListening() }
         }
     }

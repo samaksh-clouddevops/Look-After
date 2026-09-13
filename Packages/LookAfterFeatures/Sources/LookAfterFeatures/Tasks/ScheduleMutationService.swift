@@ -11,12 +11,17 @@ public final class ScheduleMutationService {
     }
 
     /// Persists a task update and optionally reconciles when schedule fields changed.
+    /// Returns `true` if this specific save succeeded. Callers that need to know whether
+    /// *their* save succeeded (e.g. to decide whether to dismiss a sheet) should use this
+    /// return value instead of reading `viewModel.error`, which is a long-lived flag set
+    /// by many unrelated background operations and never reset on success.
+    @discardableResult
     public func persist(
         _ task: LifeTask,
         userId: String,
         userPlaced: Bool = false,
         reconcileSchedule: Bool = true
-    ) async {
+    ) async -> Bool {
         var updated = TaskConstraintAlignment.align(task)
         ScheduleNormalization.normalizeFields(&updated)
         if userPlaced {
@@ -24,7 +29,7 @@ public final class ScheduleMutationService {
         }
         let previous = viewModel.tasks.first(where: { $0.id == task.id })
             ?? viewModel.completedToday.first(where: { $0.id == task.id })
-        await viewModel.updateTaskAndPersist(updated)
+        let succeeded = await viewModel.updateTaskAndPersist(updated)
         let scheduleChanged = viewModel.scheduleFieldsChanged(from: previous, to: updated) || userPlaced
         if reconcileSchedule, scheduleChanged {
             let uid = userId.isEmpty ? updated.userId : userId
@@ -34,6 +39,7 @@ public final class ScheduleMutationService {
             // SoT: schedule writes always restamp timeline + widgets (W2).
             viewModel.onScheduleWriteCommitted?()
         }
+        return succeeded
     }
 
     /// Applies a day schedule change from the daily planner through the shared VM path.

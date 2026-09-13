@@ -168,17 +168,24 @@ public struct ProactiveDailyBudget: Codable, Sendable, Equatable {
     public var deliveredCount: Int
     public var dismissedCandidateIDs: [String]
     public var snoozedCandidateIDs: [String: Date]
+    /// Candidate IDs already counted toward `deliveredCount` today. Lets
+    /// `NotificationDailyBudgetStore.recordDelivered` be called from multiple delegate
+    /// callbacks (`willPresent` for foreground delivery, `didReceive` for background/tapped
+    /// delivery) without double-incrementing the same notification.
+    public var countedCandidateIDs: [String]
 
     public init(
         dayKey: String,
         deliveredCount: Int = 0,
         dismissedCandidateIDs: [String] = [],
-        snoozedCandidateIDs: [String: Date] = [:]
+        snoozedCandidateIDs: [String: Date] = [:],
+        countedCandidateIDs: [String] = []
     ) {
         self.dayKey = dayKey
         self.deliveredCount = deliveredCount
         self.dismissedCandidateIDs = dismissedCandidateIDs
         self.snoozedCandidateIDs = snoozedCandidateIDs
+        self.countedCandidateIDs = countedCandidateIDs
     }
 
     public static func dayKey(for date: Date, calendar: Calendar = .current) -> String {

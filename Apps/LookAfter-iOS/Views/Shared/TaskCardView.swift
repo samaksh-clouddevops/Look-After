@@ -110,17 +110,19 @@ struct TaskCardView: View {
                 Button(action: onOpen) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(TaskTitleDisplay.humanized(task.title))
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .font(.dsCardTitle())
                             .foregroundColor(DesignSystem.textPrimary)
                             .strikethrough(isCompleted)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         HStack(spacing: 6) {
                             LACategoryChip(task.lifeArea.shortLabel)
                             if let meta = listMetadataLine {
                                 Text(meta)
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(.dsCaption(weight: .medium))
                                     .foregroundColor(DesignSystem.textMuted)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.85)

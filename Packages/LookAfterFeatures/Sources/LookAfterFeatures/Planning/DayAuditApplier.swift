@@ -35,6 +35,12 @@ public enum DayAuditApplier {
                 )
 
             case .pullParked, .pullYesterday:
+                // Dead path by construction: DayAuditService.run never appends a fix of
+                // these kinds into `proposedFixes` — parked/yesterday pulls are only ever
+                // surfaced as `DayAuditPullCandidate` (possiblePulls/notPossible) and are
+                // applied above via `selectedPulls`, keyed off `pull.origin`. Kept as an
+                // explicit no-op (rather than removed) so the switch stays exhaustive if
+                // `DayAuditFixKind` gains real pull-fix support later.
                 break
             }
         }

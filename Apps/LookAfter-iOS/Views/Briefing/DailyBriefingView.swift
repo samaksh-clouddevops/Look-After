@@ -40,6 +40,7 @@ struct DailyBriefingView: View {
     @State private var hasUserScrolled = false
 
     private let chaptersAnchorID = "briefing-chapters-start"
+    private let dayAuditCheckCardAnchorID = "briefing-day-audit-check-card"
 
     private var showsScrollHint: Bool {
         !hasUserScrolled && scrollOffset < 24
@@ -62,7 +63,13 @@ struct DailyBriefingView: View {
                                     tasksVM: tasksVM,
                                     userId: userId
                                 )
-                                guard ok else { return }
+                                guard ok else {
+                                    HapticManager.notification(.warning)
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        proxy.scrollTo(dayAuditCheckCardAnchorID, anchor: .center)
+                                    }
+                                    return
+                                }
                                 hasUserScrolled = true
                                 onOpenToday()
                             }
@@ -212,6 +219,7 @@ struct DailyBriefingView: View {
             .disabled(briefingVM.isStartingDay)
 
             DayAuditCheckCard(briefingVM: briefingVM, tasksVM: tasksVM, userId: userId)
+                .id(dayAuditCheckCardAnchorID)
 
             if isPostWake, let onPostWake {
                 postWakeCard(onReplan: onPostWake, onDismiss: onDismissPostWake)

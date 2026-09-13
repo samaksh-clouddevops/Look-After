@@ -133,6 +133,38 @@ public final class TaskSQLiteStore: @unchecked Sendable {
         try replaceAllSync([])
     }
 
+    /// Fire-and-forget single-row insert-or-update. Unlike `replaceAllAsync`, this never
+    /// touches any other row, so it is safe to call even when the in-memory cache
+    /// (`TaskRepository.cachedAll`) has not been warmed yet on a cold process — it cannot
+    /// wipe previously persisted tasks belonging to this or any other user.
+    public func upsertAsync(_ task: LifeTask) {
+        let dbQueue = dbQueue
+        Task.detached(priority: .userInitiated) {
+            do {
+                let record = try TaskRecord(task: task)
+                try await dbQueue.write { db in
+                    try record.save(db)
+                }
+            } catch {
+                print("[TaskSQLiteStore] upsertAsync failed: \(error)")
+            }
+        }
+    }
+
+    /// Fire-and-forget single-row delete by id. Safe pre-warm for the same reason as `upsertAsync`.
+    public func deleteRowAsync(_ id: String) {
+        let dbQueue = dbQueue
+        Task.detached(priority: .userInitiated) {
+            do {
+                try await dbQueue.write { db in
+                    _ = try TaskRecord.deleteOne(db, key: id)
+                }
+            } catch {
+                print("[TaskSQLiteStore] deleteRowAsync failed: \(error)")
+            }
+        }
+    }
+
     // MARK: - Schema
 
     private static func createSchema(_ db: Database) throws {
