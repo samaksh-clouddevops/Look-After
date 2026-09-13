@@ -2,6 +2,21 @@ import SwiftUI
 import LookAfterCore
 import LookAfterFeatures
 
+/// Relative styles near the old golden-ratio sizes (body ~17 → header ~title2).
+enum BriefingTypeScale {
+    static var headerFont: Font {
+        .title2.weight(.bold)
+    }
+
+    static var bodyFont: Font {
+        .body
+    }
+
+    static var chipFont: Font {
+        .caption.weight(.medium)
+    }
+}
+
 /// Progressive disclosure top of Briefing:
 /// 1) AI narrative (SF Pro Display ~24)  2) Deterministic snapshot chips  3) timeline below.
 /// Read-only — no chat / mic. Haptic fade on text reveal.

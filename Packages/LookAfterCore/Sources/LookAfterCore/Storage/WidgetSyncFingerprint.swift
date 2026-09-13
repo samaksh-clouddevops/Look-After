@@ -4,28 +4,42 @@ import Foundation
 public enum WidgetSyncFingerprint {
     public static func compute(_ snapshot: WidgetSnapshot, now: Date = Date()) -> String {
         let progressBucket = Int((snapshot.pinProgressFraction * 100).rounded(.down) / 5)
-        let remainingBucket: String = {
-            guard let end = snapshot.pinWindowEnd else { return "na" }
+        let remainingBucket: String
+        if let end = snapshot.pinWindowEnd {
             let minutes = max(0, Int(end.timeIntervalSince(now) / 60))
-            return String(minutes)
-        }()
-        return [
-            snapshot.topTaskTitle ?? "",
-            String(snapshot.activeTaskCount),
-            String(snapshot.completedTodayCount),
-            String(snapshot.energyScore),
-            snapshot.heroTaskId ?? "",
-            snapshot.tasks.map(\.id).joined(separator: ","),
+            remainingBucket = String(minutes)
+        } else {
+            remainingBucket = "na"
+        }
+
+        let title = snapshot.topTaskTitle ?? ""
+        let activeCount = String(snapshot.activeTaskCount)
+        let completedCount = String(snapshot.completedTodayCount)
+        let energy = String(snapshot.energyScore)
+        let heroId = snapshot.heroTaskId ?? ""
+        let taskIds = snapshot.tasks.map(\.id).joined(separator: ",")
+        let sleep = snapshot.sleepHours.map { String(format: "%.1f", $0) } ?? ""
+        let steps = snapshot.stepCount.map(String.init) ?? ""
+        let hrv = snapshot.hrvMs.map(String.init) ?? ""
+
+        let parts: [String] = [
+            title,
+            activeCount,
+            completedCount,
+            energy,
+            heroId,
+            taskIds,
             snapshot.recommendation,
             snapshot.pinScheduleLabel,
             snapshot.pinConstraintLabel,
             String(progressBucket),
             remainingBucket,
             snapshot.pinNextUpSummary,
-            snapshot.sleepHours.map { String(format: "%.1f", $0) } ?? "",
-            snapshot.stepCount.map(String.init) ?? "",
-            snapshot.hrvMs.map(String.init) ?? "",
-        ].joined(separator: "|")
+            sleep,
+            steps,
+            hrv,
+        ]
+        return parts.joined(separator: "|")
     }
 
     /// `force` bypasses fingerprint equality (NOW complete restamp path).

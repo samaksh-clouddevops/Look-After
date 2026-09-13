@@ -527,7 +527,7 @@ public enum LookAfterPrompts {
                 let start = neighbor.scheduledTime.map { timeFormatter.string(from: $0) } ?? "unslotted"
                 let end = neighbor.scheduledTime
                     .map { timeFormatter.string(from: $0.addingTimeInterval(TimeInterval(minutes * 60))) } ?? "?"
-                return "- \(neighbor.title) (\(neighbor.resolvedSemanticProfile.semanticType.rawValue), \(start)\u2013\(end))"
+                return "- \(neighbor.title) (\(neighbor.resolvedSemanticProfile.semanticType.rawValue), \(start)\u{2013}\(end))"
             }
             .joined(separator: "\n")
         let remaining = dayTasks.count - shown.count
@@ -542,7 +542,7 @@ public enum LookAfterPrompts {
             let lines = calendarEvents.prefix(12).map { event -> String in
                 let end = event.endDate.map { timeFormatter.string(from: $0) } ?? "?"
                 let busy = event.isBusy ? "" : " [free/transparent]"
-                return "- \(event.title) (\(timeFormatter.string(from: event.startDate))\u2013\(end))\(busy)"
+                return "- \(event.title) (\(timeFormatter.string(from: event.startDate))\u{2013}\(end))\(busy)"
             }.joined(separator: "\n")
             calendarBlock = "\nCALENDAR EVENTS TODAY (may double-book a slot that looks free in the task list):\n\(lines)\n"
         }
@@ -573,7 +573,7 @@ public enum LookAfterPrompts {
         let medRules = MedicationStore.medicalSafetyRulesBlock()
         let weatherLine = weatherSummary.map { "\nWEATHER: \($0)\n" } ?? ""
         let recurrenceLine = previousAcceptedSameSlot
-            ? "\nThis exact task was previously accepted at this same time \u2014 prefer consistency unless new context strongly disagrees.\n"
+            ? "\nThis exact task was previously accepted at this same time \u{2014} prefer consistency unless new context strongly disagrees.\n"
             : ""
 
         return """
@@ -584,7 +584,7 @@ public enum LookAfterPrompts {
         NOW: \(nowLine)
         PROPOSED START: \(proposed) (\(window.rawValue))
         Proposed duration minutes: \(durationMinutes)
-        Placement source: \(isUserPlaced ? "USER manually placed this \u2014 raise the bar for rejecting it" : "AI/allocator guessed this slot")
+        Placement source: \(isUserPlaced ? "USER manually placed this \u{2014} raise the bar for rejecting it" : "AI/allocator guessed this slot")
         \(deadlineBlock)\(recurrenceLine)
         Task title: "\(task.title)"
         Description: "\(task.description)"
@@ -610,9 +610,9 @@ public enum LookAfterPrompts {
         2. Reject if duration does not fit before the next real commitment or calendar event.
         3. Allow unusual clocks only when the title and day context make them reasonable (e.g. packing before a dawn flight).
         4. If rejected, suggest a better startHour/startMinute on the same day, or null if it should stay untimed.
-        5. Do not reject a slot merely because it seems unusual \u2014 only reject based on conflicts actually present
+        5. Do not reject a slot merely because it seems unusual \u{2014} only reject based on conflicts actually present
            in the context above (life context, medication rules, calendar events, deadlines).
-        6. A free/empty slot alone does not make a placement valid \u2014 it must also not conflict with life-context,
+        6. A free/empty slot alone does not make a placement valid \u{2014} it must also not conflict with life-context,
            medication, or calendar rules.
         7. Never invent times, task ids, or titles not present in the provided context.
         8. If uncertain, prefer "allowed": false with a suggested alternative time rather than guessing true.
@@ -628,7 +628,7 @@ public enum LookAfterPrompts {
         """
     }
 
-    /// Formats today + previous-day health/energy for `placementSensePrompt` \u2014 omitted entirely when no data exists.
+    /// Formats today + previous-day health/energy for `placementSensePrompt` \u{2014} omitted entirely when no data exists.
     private static func placementHealthStateBlock(
         today: HealthSummary?,
         todayEnergy: EnergyReport?,
