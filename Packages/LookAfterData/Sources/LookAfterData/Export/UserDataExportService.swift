@@ -36,7 +36,7 @@ public enum UserDataExportService {
     @MainActor
     public static func buildBundle(userId: String) throws -> ExportBundle {
         let tasks = TaskStore.shared.localAllTasks(for: userId)
-        let inbox = (try? InboxSQLiteStore.shared.loadAll(userId: userId)) ?? []
+        let inbox = (try? InboxSQLiteStore.shared.loadAll(for: userId)) ?? []
         let health = ((try? HealthSummarySQLiteStore.shared.loadAll()) ?? [])
             .filter { $0.userId == userId || $0.userId.isEmpty }
         let bills = ModuleLocalStore.loadBills().filter { $0.userId == userId || $0.userId.isEmpty }

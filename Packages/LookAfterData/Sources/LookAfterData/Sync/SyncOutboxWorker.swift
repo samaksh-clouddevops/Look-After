@@ -6,6 +6,7 @@ import os
 ///
 /// Transport is injected so unit tests don't need Firestore.
 public protocol SyncOutboxTransporting: Sendable {
+    @MainActor
     func apply(_ record: SyncOutboxRecord) async throws
 }
 

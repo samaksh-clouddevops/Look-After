@@ -1616,6 +1616,7 @@ public final class TasksViewModel: ObservableObject {
 
         // Limited concurrency for AI refine.
         let maxConcurrent = 3
+        let refiner = focusStretchRefiner
         var index = 0
         while index < pendingAI.count {
             let slice = Array(pendingAI[index..<min(index + maxConcurrent, pendingAI.count)])
@@ -1624,8 +1625,8 @@ public final class TasksViewModel: ObservableObject {
             loadingTimeDisplayTaskIds.formUnion(loadingIds)
             await withTaskGroup(of: (String, TaskTimeDisplayInfo, TimeDisplayFingerprint)?.self) { group in
                 for (task, fingerprint) in slice {
-                    group.addTask { @MainActor in
-                        if let refined = await self.focusStretchRefiner.refine(
+                    group.addTask {
+                        if let refined = await refiner.refine(
                             task: task,
                             context: context,
                             estimatedMinutes: task.estimatedMinutes

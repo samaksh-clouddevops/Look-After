@@ -115,6 +115,15 @@ public final class TaskStore: ObservableObject, TaskStoring {
         republishAfterMutation(userId: task.userId)
     }
 
+    public func updateMany(_ tasks: [LifeTask]) async throws {
+        try await taskRepo.updateMany(tasks)
+        if let userId = tasks.first?.userId, !userId.isEmpty {
+            republishAfterMutation(userId: userId)
+        } else {
+            republishAfterMutation(userId: lastUserId)
+        }
+    }
+
     /// `userId` should be the owning user of the task being deleted (e.g. `task.userId`).
     /// Falling back to `lastUserId` here would attribute the delete/republish to whichever
     /// account happens to be current when this async call resumes, which can be a different

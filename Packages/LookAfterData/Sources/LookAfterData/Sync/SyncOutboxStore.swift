@@ -38,13 +38,15 @@ public final class SyncOutboxStore: @unchecked Sendable {
 
     public init(databaseURL: URL) {
         do {
-            dbQueue = try DatabaseQueue(path: databaseURL.path)
-            try Self.migrate(dbQueue)
+            let queue = try DatabaseQueue(path: databaseURL.path)
+            try Self.migrate(queue)
+            dbQueue = queue
         } catch {
             logger.error("Outbox open failed, falling back to memory: \(error.localizedDescription, privacy: .public)")
             // swiftlint:disable:next force_try
-            dbQueue = try! DatabaseQueue()
-            try? Self.migrate(dbQueue)
+            let fallback = try! DatabaseQueue()
+            try? Self.migrate(fallback)
+            dbQueue = fallback
         }
     }
 

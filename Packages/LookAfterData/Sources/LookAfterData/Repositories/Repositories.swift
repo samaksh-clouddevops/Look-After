@@ -194,7 +194,22 @@ public final class TaskRepository: ObservableObject {
         TaskPersistenceLog.update(mutableTask)
         syncTaskToFirestore(mutableTask, merge: true)
     }
-    
+
+    /// Batch local update via single-row upserts (PERF-005). Avoids `replaceAll` so cold-launch
+    /// caches that are not yet warm cannot wipe unrelated rows.
+    public func updateMany(_ tasks: [LifeTask]) async throws {
+        guard !tasks.isEmpty else { return }
+        let deleted = TaskDeletionRegistry.load()
+        for var task in tasks {
+            guard !deleted.contains(task.id) else { continue }
+            ScheduleNormalization.normalizeFields(&task)
+            task.updatedAt = Date()
+            saveLocally(task)
+            TaskPersistenceLog.update(task)
+            syncTaskToFirestore(task, merge: true)
+        }
+    }
+
     public func delete(_ id: String, userId: String) async throws {
         TaskDeletionRegistry.markDeleted(id)
         // Single-row delete — never touches other rows, so it's safe even when `cachedAll`

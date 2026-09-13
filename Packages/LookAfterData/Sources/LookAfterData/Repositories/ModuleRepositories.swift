@@ -5,7 +5,7 @@ import LookAfterCore
 // MARK: - Shared module helpers
 
 @MainActor
-private enum ModuleLocalStore {
+enum ModuleLocalStore {
     static let sqlite = ModuleEntitySQLiteStore.shared
 
     static func loadBills() -> [BillItem] {

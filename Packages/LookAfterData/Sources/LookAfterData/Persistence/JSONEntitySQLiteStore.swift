@@ -21,13 +21,15 @@ public final class JSONEntitySQLiteStore: @unchecked Sendable {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let url = docs.appendingPathComponent(filename)
         do {
-            dbQueue = try DatabaseQueue(path: url.path)
-            try Self.migrate(dbQueue, table: table)
+            let queue = try DatabaseQueue(path: url.path)
+            try Self.migrate(queue, table: table)
+            dbQueue = queue
         } catch {
             logger.error("open \(filename, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             // swiftlint:disable:next force_try
-            dbQueue = try! DatabaseQueue()
-            try? Self.migrate(dbQueue, table: table)
+            let fallback = try! DatabaseQueue()
+            try? Self.migrate(fallback, table: table)
+            dbQueue = fallback
         }
     }
 

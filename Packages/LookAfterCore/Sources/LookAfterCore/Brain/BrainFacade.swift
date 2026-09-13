@@ -5,6 +5,7 @@ import Foundation
 /// Concrete backends (ExecutiveBrain, FlowDirector, LLM) live in higher packages
 /// and are injected when `ArchitectureFeatureFlags.useBrainFacade` is enabled.
 public protocol BrainFacadeProtocol: Sendable {
+    @MainActor
     func recommend(_ input: BrainFacadeInput) async -> BrainFacadeOutput?
 }
 

@@ -118,13 +118,15 @@ public enum FlexibleISO8601Date {
 /// Thread-safe-enough for MainActor UI + short-lived off-main encoding.
 /// Prefer these over constructing `DateFormatter()` / `JSONEncoder()` in row bodies.
 public enum SharedFormatters {
-    public static let iso8601: ISO8601DateFormatter = {
+    /// Cached ISO8601 formatter. Marked unsafe: callers must not mutate `formatOptions` after first use.
+    nonisolated(unsafe) public static let iso8601: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
 
-    public static let iso8601NoFraction: ISO8601DateFormatter = {
+    /// Cached ISO8601 formatter without fractional seconds.
+    nonisolated(unsafe) public static let iso8601NoFraction: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f

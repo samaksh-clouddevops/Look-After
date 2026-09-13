@@ -2,6 +2,7 @@ import Foundation
 import os
 import LookAfterCore
 import LookAfterData
+import LookAfterFeatures
 
 /// Extracted bootstrap pipeline (Phase 4 WP 4.1).
 ///
