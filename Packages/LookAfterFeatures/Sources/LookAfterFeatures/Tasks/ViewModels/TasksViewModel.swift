@@ -1029,6 +1029,26 @@ public final class TasksViewModel: ObservableObject {
         notifyTaskListDidChange()
     }
 
+    /// Durable multi-day create used by manual task creation — awaits every write and rolls
+    /// back the whole plan (parent + all slices) if any single persist fails, unlike the
+    /// fire-and-forget `createMultiDayTasks` used by the AI planning apply path.
+    public func createMultiDayTasksAndAwait(plan: MultiDayTaskPlan) async throws {
+        do {
+            try await insertTaskWithoutDecomposeAndAwait(plan.parent)
+            for slice in plan.slices {
+                try await insertTaskWithoutDecomposeAndAwait(slice)
+            }
+            if let project = plan.project {
+                persistCreativeProject(project)
+            }
+            notifyTaskListDidChange()
+        } catch {
+            tasks.removeAll { $0.id == plan.parent.id || plan.slices.contains { slice in slice.id == $0.id } }
+            self.error = error.localizedDescription
+            throw error
+        }
+    }
+
     /// Banner data for an active multi-day goal on a given day.
     public static func activeMultiDayBanner(
         from tasks: [LifeTask],

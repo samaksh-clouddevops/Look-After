@@ -16,6 +16,11 @@ public enum NaturalLanguageTaskDraftValidator {
 
         var flags: [String] = []
 
+        if let rawMinutes = draft.estimatedMinutes.value,
+           MultiDaySuggestion.suggest(forRawMinutes: rawMinutes) != nil {
+            flags.append("duration-exceeds-single-task")
+        }
+
         if let scheduledAt = result.scheduledAt.value, let deadline = result.deadline.value,
            scheduledAt > deadline {
             flags.append("scheduledAt-after-deadline")

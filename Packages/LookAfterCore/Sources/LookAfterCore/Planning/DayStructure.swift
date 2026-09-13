@@ -94,6 +94,20 @@ public enum DayStructureCompiler {
             }
         }
 
+        let routineBlocks = RoutineBlockStore.load()
+        if !routineBlocks.isEmpty {
+            for block in routineBlocks where block.days.includes(day, calendar: calendar) {
+                append(DayStructure.Anchor(
+                    id: "routine-block.\(block.id)",
+                    title: block.title,
+                    startHour: block.startHour,
+                    startMinute: block.startMinute,
+                    durationMinutes: block.durationMinutes,
+                    treatAsFixed: block.isNonNegotiable
+                ))
+            }
+        }
+
         if !profile.fixedScheduleNotes.isEmpty {
             for note in profile.fixedScheduleNotes
                 .replacingOccurrences(of: "\n", with: ",")

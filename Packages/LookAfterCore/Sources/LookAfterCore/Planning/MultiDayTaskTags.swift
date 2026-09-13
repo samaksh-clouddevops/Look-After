@@ -32,3 +32,35 @@ public struct MultiDayBannerData: Sendable, Equatable {
         self.sliceTitle = sliceTitle
     }
 }
+
+/// Suggests splitting an oversized single-task time estimate into a multi-day plan.
+public struct MultiDaySuggestion: Sendable, Equatable {
+    public var totalMinutes: Int
+    public var dayCount: Int
+    public var perDayMinutes: Int
+
+    public init(totalMinutes: Int, dayCount: Int, perDayMinutes: Int) {
+        self.totalMinutes = totalMinutes
+        self.dayCount = dayCount
+        self.perDayMinutes = perDayMinutes
+    }
+
+    /// Minimum raw minute value that triggers a suggestion — anything past the single-task
+    /// ceiling (`TaskDurationPolicy.maximumMinutes`) implies the user meant a bigger goal.
+    public static let thresholdMinutes = TaskDurationPolicy.maximumMinutes
+
+    /// Purely arithmetic — no LLM call needed, mirrors `MultiDayTaskPlanner`'s offline fallback.
+    public static func suggest(
+        forRawMinutes minutes: Int,
+        workdayMinutes: Int = TaskDurationPolicy.maximumMinutes
+    ) -> MultiDaySuggestion? {
+        guard minutes > thresholdMinutes else { return nil }
+        let perDay = max(1, workdayMinutes)
+        let dayCount = Int((Double(minutes) / Double(perDay)).rounded(.up))
+        return MultiDaySuggestion(
+            totalMinutes: minutes,
+            dayCount: max(2, min(dayCount, 90)),
+            perDayMinutes: perDay
+        )
+    }
+}

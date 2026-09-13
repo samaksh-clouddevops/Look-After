@@ -818,6 +818,10 @@ struct SettingsView: View {
 
                     workTimeRow(title: "Work starts", hour: $lifeProfile.workStartHour, minute: $lifeProfile.workStartMinute)
                     workTimeRow(title: "Work ends", hour: $lifeProfile.workEndHour, minute: $lifeProfile.workEndMinute)
+
+                    NavigationLink(destination: { RoutineBuilderView() }, label: {
+                        Label("My Daily Routine", systemImage: "calendar.day.timeline.left")
+                    })
                 }, header: {
                     Text("Brain context")
                 }, footer: {

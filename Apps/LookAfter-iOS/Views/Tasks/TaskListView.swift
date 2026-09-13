@@ -469,6 +469,8 @@ struct TaskFormSheet: View {
     @State private var autoFillError: String?
     @State private var isSaving = false
     @State private var showAdvancedOptions = false
+    @State private var isMultiDay = false
+    @State private var multiDayCount = 3
     
     @Environment(\.dismiss) private var dismiss
     
@@ -562,8 +564,19 @@ struct TaskFormSheet: View {
                     }
                     
                     Section("Time Estimate") {
+                        if !mode.isEditing {
+                            Toggle("Split across multiple days", isOn: $isMultiDay)
+                        }
+
+                        if isMultiDay && !mode.isEditing {
+                            Stepper("Over \(multiDayCount) days", value: $multiDayCount, in: 2...90)
+                            Text("Creates one task per day (~\(estimatedMinutes / max(multiDayCount, 1)) min/day) linked under this goal.")
+                                .font(.system(size: 12, design: .default))
+                                .foregroundColor(DesignSystem.textMuted)
+                        }
+
                         HStack(spacing: 12) {
-                            TextField("Minutes", text: $estimatedMinutesText)
+                            TextField(isMultiDay ? "Total minutes" : "Minutes", text: $estimatedMinutesText)
                                 #if os(iOS)
                                 .keyboardType(.numberPad)
                                 #endif
@@ -577,13 +590,29 @@ struct TaskFormSheet: View {
 
                             Spacer(minLength: 0)
 
-                            Stepper("", value: $estimatedMinutes, in: 1...240)
+                            Stepper("", value: $estimatedMinutes, in: 1...(isMultiDay ? 6000 : 240))
                                 .labelsHidden()
                         }
+
+                        if !isMultiDay, !mode.isEditing,
+                           let suggestion = MultiDaySuggestion.suggest(forRawMinutes: estimatedMinutes) {
+                            Button {
+                                isMultiDay = true
+                                multiDayCount = suggestion.dayCount
+                            } label: {
+                                Label(
+                                    "This looks like \(suggestion.dayCount) days of work \u2014 tap to split into multi-day tasks",
+                                    systemImage: "calendar.badge.clock"
+                                )
+                                .font(.system(size: 12, weight: .medium, design: .default))
+                            }
+                            .foregroundColor(DesignSystem.warning)
+                        }
+
                         if let warning = DaySupervisorContinuity.createDurationWarning(
                             estimatedMinutes: estimatedMinutes,
                             remainingFlexMinutes: tasksVM.dayRemainingFlexMinutes()
-                        ), !mode.isEditing {
+                        ), !mode.isEditing, !isMultiDay {
                             Text(warning)
                                 .font(.system(size: 12, design: .default))
                                 .foregroundColor(DesignSystem.warning)
@@ -661,7 +690,7 @@ struct TaskFormSheet: View {
             estimatedMinutesText = String(estimatedMinutes)
             return
         }
-        estimatedMinutes = min(value, 240)
+        estimatedMinutes = min(value, isMultiDay ? 6000 : 240)
         estimatedMinutesText = String(estimatedMinutes)
     }
     
@@ -702,6 +731,41 @@ struct TaskFormSheet: View {
 
         switch self.mode {
         case .create:
+            if isMultiDay {
+                let perDayMinutes = max(TaskDurationPolicy.minimumMinutes, estimatedMinutes / max(multiDayCount, 1))
+                let draft = MultiDayPlanDraft(
+                    title: title,
+                    dayCount: multiDayCount,
+                    lifeArea: lifeArea,
+                    slices: (0..<multiDayCount).map { index in
+                        MultiDaySliceDraft(
+                            dayIndex: index,
+                            title: "Day \(index + 1): \(title)",
+                            estimatedMinutes: perDayMinutes,
+                            windowLabel: ""
+                        )
+                    }
+                )
+                let plan = MultiDayTaskPlanner.plan(
+                    from: draft,
+                    userId: "",
+                    existingTasks: tasksVM.tasks
+                )
+                HapticManager.impact(.medium)
+                isSaving = true
+                Task {
+                    do {
+                        try await tasksVM.createMultiDayTasksAndAwait(plan: plan)
+                        isSaving = false
+                        HapticManager.notification(.success)
+                        dismiss()
+                    } catch {
+                        isSaving = false
+                        HapticManager.notification(.error)
+                    }
+                }
+                return
+            }
             let task = LifeTask(
                 title: title,
                 description: description,

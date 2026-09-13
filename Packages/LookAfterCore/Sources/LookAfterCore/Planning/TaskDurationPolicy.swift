@@ -7,6 +7,9 @@ public enum TaskDurationPolicy {
     public static let softDefaultMinutes = 5
     /// Upper bound for a true micro-start session when the task estimate is longer.
     public static let microStartCapMinutes = 5
+    /// Hard ceiling for a single task's time estimate — also the trigger point for
+    /// suggesting a multi-day split (see `MultiDaySuggestion`).
+    public static let maximumMinutes = 240
 
     /// Session length for a micro-start — never invents a shorter number than a small estimate.
     public static func microStartSessionMinutes(for task: LifeTask) -> Int {
@@ -66,6 +69,6 @@ public enum TaskDurationPolicy {
 
     public static func clamp(_ minutes: Int, allowShortTasks: Bool = true) -> Int {
         let floor = allowShortTasks ? minimumMinutes : softDefaultMinutes
-        return min(max(minutes, floor), 240)
+        return min(max(minutes, floor), maximumMinutes)
     }
 }
