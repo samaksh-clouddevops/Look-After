@@ -18,7 +18,7 @@ struct InitiationScriptSheet: View {
                         .font(.dsBody())
                         .foregroundColor(DesignSystem.textSecondary)
 
-                    Text("Micro-start (\(script.durationMinutes) min)")
+                    Text("Micro-start (\(script.durationMinutes.durationString))")
                         .font(.dsCaption(weight: .semibold))
                         .foregroundColor(DesignSystem.textMuted)
 

@@ -37,7 +37,7 @@ public enum ContextualMomentsBuilder: Sendable {
             if let event = snapshot.calendarAvailability.nextEventTitle,
                let mins = snapshot.calendarAvailability.minutesUntilNextEvent, mins > 0 {
                 moments.append(ContextualMoment(
-                    message: "\(event) in \(mins) minutes",
+                    message: "\(event) in \(mins.durationString)",
                     icon: "calendar"
                 ))
             }

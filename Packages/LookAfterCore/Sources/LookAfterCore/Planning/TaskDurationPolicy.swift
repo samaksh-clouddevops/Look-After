@@ -22,17 +22,17 @@ public enum TaskDurationPolicy {
         let estimated = max(task.estimatedMinutes, minimumMinutes)
         let session = microStartSessionMinutes(for: task)
         if session < estimated {
-            return "up to \(estimated) minutes"
+            return "up to \(estimated.durationString)"
         }
-        return "\(estimated) minutes"
+        return estimated.durationString
     }
 
     public static func microStartOptionLabel(for task: LifeTask) -> String {
-        "Start \(microStartSessionMinutes(for: task))-min focus"
+        "Start \(microStartSessionMinutes(for: task).durationString) focus"
     }
 
     public static func microStartShortOptionLabel(minutes: Int = softDefaultMinutes) -> String {
-        "Start \(clamp(minutes, allowShortTasks: true))-min"
+        "Start \(clamp(minutes, allowShortTasks: true).durationString)"
     }
 
     /// Parses explicit durations like "1 min", "2 minutes", "5m".

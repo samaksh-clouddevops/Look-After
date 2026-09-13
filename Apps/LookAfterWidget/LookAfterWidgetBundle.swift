@@ -96,7 +96,7 @@ struct NowWidgetView: View {
                     .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
                     .lineLimit(3)
                 if let mins = entry.snapshot.topTaskMinutes {
-                    Text("~\(mins) min")
+                    Text("~\(mins.durationString)")
                         .font(.dsMetadata().monospacedDigit())
                         .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
                         .contentTransition(.numericText())
@@ -430,7 +430,7 @@ struct TasksWidgetView: View {
                                 .font(.dsMetadata(weight: .semibold))
                                 .foregroundStyle(usesFullColor ? WidgetStyle.textPrimary : .primary)
                                 .lineLimit(1)
-                            Text("\(task.estimatedMinutes)m • \(task.priorityLabel)")
+                            Text("\(task.estimatedMinutes.durationString) • \(task.priorityLabel)")
                                 .font(.dsMetadata().monospacedDigit())
                                 .foregroundStyle(usesFullColor ? WidgetStyle.textMuted : .secondary)
                                 .contentTransition(.numericText())

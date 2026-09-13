@@ -231,7 +231,7 @@ public enum ScheduleProactiveAnalyzer {
                 results.append(ScheduleProactiveSuggestion(
                     kind: .longEveningGap,
                     severity: .high,
-                    message: "You have about \(gapMinutes) minutes before \"\(last.0.title)\" — want to finish the day earlier?",
+                    message: "You have about \(gapMinutes.durationString) before \"\(last.0.title)\" — want to finish the day earlier?",
                     options: ["Move tasks earlier", "Defer late tasks to tomorrow", "Keep plan"],
                     relatedTaskIDs: [last.0.id]
                 ))

@@ -551,14 +551,7 @@ public enum PinNowSnapshotBuilder {
     }
 
     public static func compactDuration(minutes: Int) -> String {
-        let clamped = max(1, minutes)
-        if clamped >= 60 {
-            let hours = clamped / 60
-            let mins = clamped % 60
-            if mins == 0 { return "\(hours)h" }
-            return "\(hours)h \(mins)m"
-        }
-        return "\(clamped)m"
+        max(1, minutes).durationString
     }
 
     private static func sanitized(_ text: String) -> String {

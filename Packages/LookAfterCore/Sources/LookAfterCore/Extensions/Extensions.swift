@@ -190,13 +190,19 @@ extension Double {
 // MARK: - Int Extensions
 
 extension Int {
-    /// Formats minutes as a readable duration string (e.g., "1h 30m").
+    /// Formats minutes as a compact duration (e.g. `45m`, `1h`, `1h 30m`).
     public var durationString: String {
-        if self >= 60 {
-            let hours = self / 60
-            let mins = self % 60
+        let minutes = Swift.max(0, self)
+        if minutes >= 60 {
+            let hours = minutes / 60
+            let mins = minutes % 60
             return mins > 0 ? "\(hours)h \(mins)m" : "\(hours)h"
         }
-        return "\(self)m"
+        return "\(minutes)m"
+    }
+
+    /// Compact remaining-time label (e.g. `45m left`, `1h 30m left`).
+    public var durationLeftString: String {
+        "\(durationString) left"
     }
 }

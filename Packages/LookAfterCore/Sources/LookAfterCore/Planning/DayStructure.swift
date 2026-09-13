@@ -115,6 +115,12 @@ public enum DayStructureCompiler {
                 .map({ String($0).trimmingCharacters(in: .whitespacesAndNewlines) })
                 .filter({ !$0.isEmpty }) {
                 if let parsed = parseFixedNote(note, on: day, calendar: calendar) {
+                    let coveredByRoutine = routineBlocks.contains { block in
+                        block.days.includes(day, calendar: calendar)
+                            && block.startHour == parsed.startHour
+                            && block.startMinute == parsed.startMinute
+                    }
+                    if coveredByRoutine { continue }
                     append(parsed)
                 }
             }

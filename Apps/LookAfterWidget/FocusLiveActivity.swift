@@ -332,7 +332,7 @@ struct NowPinLiveActivity: Widget {
         if !schedule.isEmpty { return schedule }
         if !contextLine.isEmpty { return contextLine }
         let minutes = max(1, context.state.estimatedMinutes)
-        return "~\(minutes) min • \(energyLabel(context)) energy"
+        return "~\(PinNowSnapshotBuilder.compactDuration(minutes: minutes)) • \(energyLabel(context)) energy"
     }
 
     @ViewBuilder

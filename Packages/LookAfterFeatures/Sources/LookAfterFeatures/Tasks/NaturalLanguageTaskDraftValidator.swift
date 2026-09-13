@@ -48,11 +48,16 @@ public enum NaturalLanguageTaskDraftValidator {
     }
 
     /// Clamps an out-of-range but present minutes value; does not fabricate one from "unknown".
+    /// Values above the single-task ceiling are preserved so multi-day suggestion flags stay truthful.
     private static func repairedMinutes(_ field: ExtractedField<Int>) -> ExtractedField<Int> {
         guard let minutes = field.value, field.status == .known || field.status == .inferred else {
             return field
         }
         var repaired = field
+        if minutes > TaskDurationPolicy.maximumMinutes {
+            repaired.value = max(minutes, TaskDurationPolicy.minimumMinutes)
+            return repaired
+        }
         repaired.value = TaskDurationPolicy.clamp(minutes, allowShortTasks: true)
         return repaired
     }

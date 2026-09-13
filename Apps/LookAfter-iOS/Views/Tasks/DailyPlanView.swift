@@ -249,7 +249,7 @@ private struct AddDailyTaskSheet: View {
             PremiumForm {
                 Section("Task") {
                     TextField("What do you want to do?", text: $title)
-                    Stepper("\(minutes) minutes", value: $minutes, in: 1...240, step: 1)
+                    Stepper(minutes.durationString, value: $minutes, in: 1...240, step: 1)
                 }
                 Section("Plan") {
                     Picker("Priority", selection: $priority) {

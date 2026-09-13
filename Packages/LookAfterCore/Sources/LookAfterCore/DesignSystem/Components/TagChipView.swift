@@ -114,7 +114,7 @@ public extension LifeTask {
             parts.append(formatter.string(from: start))
         }
         if estimatedMinutes > 0 {
-            parts.append("\(estimatedMinutes)m")
+            parts.append(estimatedMinutes.durationString)
         }
         parts.append(priority.label)
         if isRecurring {
@@ -134,7 +134,7 @@ public extension LifeTask {
         if let timeLabel, !timeLabel.isEmpty {
             tags.append(TagChipView(timeLabel))
         } else if estimatedMinutes > 0 {
-            tags.append(TagChipView("\(estimatedMinutes)m"))
+            tags.append(TagChipView(estimatedMinutes.durationString))
         }
         tags.append(TagChipView(priority.label))
         if isRecurring {

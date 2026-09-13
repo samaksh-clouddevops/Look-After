@@ -8,7 +8,7 @@ public enum InitiationScriptBuilder {
         let duration = TaskDurationPolicy.microStartSessionMinutes(for: task)
         let durationPhrase = TaskDurationPolicy.microStartDurationPhrase(for: task)
         let firstStep = firstActionStep(for: task)
-        let steps = [firstStep, "Set a timer for \(duration) minutes", "Stop when the timer ends — progress counts"]
+        let steps = [firstStep, "Set a timer for \(duration.durationString)", "Stop when the timer ends — progress counts"]
         let message: String
         switch deferralCount {
         case 0...1:

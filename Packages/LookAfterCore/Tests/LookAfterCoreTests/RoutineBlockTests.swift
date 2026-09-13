@@ -23,6 +23,19 @@ final class RoutineBlockTests: XCTestCase {
         XCTAssertFalse(gym.overlaps(breakfast))
     }
 
+    func testOvernightSleepOverlapsMorningGym() {
+        let sleep = RoutineBlock(title: "Sleep", days: .everyDay, startHour: 23, startMinute: 0, durationMinutes: 480)
+        let gym = RoutineBlock(title: "Gym", days: .everyDay, startHour: 6, startMinute: 0, durationMinutes: 60)
+        XCTAssertTrue(sleep.overlaps(gym))
+        XCTAssertTrue(gym.overlaps(sleep))
+    }
+
+    func testOvernightSleepDoesNotOverlapAfternoon() {
+        let sleep = RoutineBlock(title: "Sleep", days: .everyDay, startHour: 23, startMinute: 0, durationMinutes: 480)
+        let lunch = RoutineBlock(title: "Lunch", days: .everyDay, startHour: 13, startMinute: 0, durationMinutes: 45)
+        XCTAssertFalse(sleep.overlaps(lunch))
+    }
+
     func testOverlapFalseWhenNoSharedDay() {
         let weekdayGym = RoutineBlock(title: "Gym", days: .weekdays, startHour: 6, startMinute: 0, durationMinutes: 60)
         let weekendGym = RoutineBlock(title: "Long run", days: .weekends, startHour: 6, startMinute: 0, durationMinutes: 60)
@@ -51,6 +64,15 @@ final class RoutineBlockTests: XCTestCase {
         let imported = RoutineBlockStore.importFromFixedScheduleNotes(notes)
         XCTAssertFalse(imported.isEmpty, "Expected at least one parsed routine block from notes")
         XCTAssertTrue(imported.allSatisfy { $0.isNonNegotiable })
+        if let gym = imported.first(where: { $0.title.localizedCaseInsensitiveContains("Gym") }) {
+            XCTAssertEqual(gym.title, "Gym")
+            XCTAssertFalse(gym.title.contains("am"))
+        }
+    }
+
+    func testTitleFromFixedNotePreservesNonTimeText() {
+        XCTAssertEqual(RoutineBlockStore.titleFromFixedNote("Gym 6am-7am"), "Gym")
+        XCTAssertEqual(RoutineBlockStore.titleFromFixedNote("Deep Work 9am"), "Deep Work")
     }
 
     func testImportFromFixedScheduleNotesEmptyReturnsEmpty() {

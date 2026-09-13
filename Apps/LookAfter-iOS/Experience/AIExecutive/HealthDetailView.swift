@@ -172,9 +172,7 @@ struct HealthDetailView: View {
 
     private func formatMinutes(_ minutes: Double?) -> String {
         guard let minutes, minutes > 0 else { return "—" }
-        let h = Int(minutes) / 60
-        let m = Int(minutes) % 60
-        return "\(h)h \(String(format: "%02d", m))m"
+        return Int(minutes).durationString
     }
 
     private func hasVisibleMetrics(_ summary: HealthSummary) -> Bool {

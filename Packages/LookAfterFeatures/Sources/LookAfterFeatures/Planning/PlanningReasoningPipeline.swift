@@ -204,7 +204,7 @@ public enum PlanningReasoningPipeline {
             steps.append("Reviewing meetings")
         }
         steps.append("Assessing capacity · \(context.executiveCapacityLabel)")
-        steps.append("Calculating free time · \(context.availableMinutes)m")
+        steps.append("Calculating free time · \(context.availableMinutes.durationString)")
         return steps
     }
 

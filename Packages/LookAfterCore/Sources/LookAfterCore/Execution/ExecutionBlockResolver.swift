@@ -158,7 +158,7 @@ public enum ExecutionBlockResolver {
         }
 
         let minutes = max(1, Int(next.interval.start.timeIntervalSince(now) / 60))
-        let nextLabel = "\(minutes)m until \(next.task.title)"
+        let nextLabel = "\(minutes.durationString) until \(next.task.title)"
         let dayEnd = DayBoundaryPlanner.actionableDayEnd(on: now, calendar: calendar)
         let gapEnd = min(next.interval.start, dayEnd)
 
@@ -220,7 +220,7 @@ public enum ExecutionBlockResolver {
             }
             let gapMinutes = max(0, Int(next.interval.start.timeIntervalSince(active.interval.end) / 60))
             if gapMinutes >= 5 {
-                return "Next Up: \(gapMinutes)m Fluid Gap · then \(next.task.title)"
+                return "Next Up: \(gapMinutes.durationString) Fluid Gap · then \(next.task.title)"
             }
             return "Next Up: \(next.task.title)"
         }

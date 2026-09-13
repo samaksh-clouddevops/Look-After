@@ -173,7 +173,7 @@ public struct InsightsDashboardView: View {
             if let minutes = viewModel.report.kpis.totalFocusMinutes {
                 kpiCard(
                     title: "Timer time",
-                    value: "\(minutes / 60)h \(minutes % 60)m",
+                    value: minutes.durationString,
                     icon: "clock.fill"
                 )
             }

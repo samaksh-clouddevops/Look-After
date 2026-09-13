@@ -35,15 +35,9 @@ public struct DurationEstimate: Codable, Sendable, Equatable {
     public var shortLabel: String {
         if confidence < 0.6,
            let lo = rangeMinMinutes, let hi = rangeMaxMinutes, lo != hi {
-            return "≈\(lo)–\(hi) min"
+            return "≈\(lo.durationString)–\(hi.durationString)"
         }
-        if pointMinutes >= 60 {
-            let hours = pointMinutes / 60
-            let mins = pointMinutes % 60
-            if mins == 0 { return "\(hours) h" }
-            return "\(hours) h \(mins) min"
-        }
-        return "\(pointMinutes) min"
+        return pointMinutes.durationString
     }
 }
 
@@ -103,7 +97,7 @@ public struct DurationEstimator: Sendable {
 
         if input.priorElapsedMinutes > 0 {
             adjusted = max(TaskDurationPolicy.minimumMinutes, adjusted - input.priorElapsedMinutes)
-            factors.append("Already worked \(input.priorElapsedMinutes) min")
+            factors.append("Already worked \(input.priorElapsedMinutes.durationString)")
             confidence += 0.05
         }
 

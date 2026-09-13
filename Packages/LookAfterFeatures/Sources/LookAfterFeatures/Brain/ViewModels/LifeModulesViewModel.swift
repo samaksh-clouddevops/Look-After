@@ -52,31 +52,35 @@ public final class LifeModulesViewModel: ObservableObject {
         }
         isLoading = true
 
-        // Await each repo independently so a single module's fetch failure doesn't
-        // discard the other three, which may have already succeeded concurrently.
-        async let billsResult: Result<[BillItem], Error> = Result { try await billRepo.getAll(for: userId) }
-        async let shoppingResult: Result<[ShoppingItem], Error> = Result { try await shoppingRepo.getAll(for: userId) }
-        async let relResult: Result<[RelationshipContact], Error> = Result { try await relRepo.getAll(for: userId) }
-        async let journalResult: Result<[JournalEntry], Error> = Result { try await journalRepo.getAll(for: userId) }
+        // Kick off each fetch concurrently, then await independently so one failure
+        // does not discard siblings that already succeeded.
+        async let billsLoad = billRepo.getAll(for: userId)
+        async let shoppingLoad = shoppingRepo.getAll(for: userId)
+        async let relLoad = relRepo.getAll(for: userId)
+        async let journalLoad = journalRepo.getAll(for: userId)
 
         var errors: [String] = []
 
-        switch await billsResult {
-        case .success(let loaded): self.bills = loaded
-        case .failure(let error): errors.append(error.localizedDescription)
+        do {
+            self.bills = try await billsLoad
+        } catch {
+            errors.append(error.localizedDescription)
         }
-        switch await shoppingResult {
-        case .success(let loaded):
+        do {
+            let loaded = try await shoppingLoad
             self.shoppingItems = Self.mergeShoppingItems(existing: self.shoppingItems, loaded: loaded)
-        case .failure(let error): errors.append(error.localizedDescription)
+        } catch {
+            errors.append(error.localizedDescription)
         }
-        switch await relResult {
-        case .success(let loaded): self.contacts = loaded
-        case .failure(let error): errors.append(error.localizedDescription)
+        do {
+            self.contacts = try await relLoad
+        } catch {
+            errors.append(error.localizedDescription)
         }
-        switch await journalResult {
-        case .success(let loaded): self.journalEntries = loaded
-        case .failure(let error): errors.append(error.localizedDescription)
+        do {
+            self.journalEntries = try await journalLoad
+        } catch {
+            errors.append(error.localizedDescription)
         }
 
         self.error = errors.isEmpty ? nil : errors.joined(separator: "\n")

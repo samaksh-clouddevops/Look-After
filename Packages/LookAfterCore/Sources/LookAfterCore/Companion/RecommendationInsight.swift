@@ -113,9 +113,7 @@ public enum InsightBuilder {
         let totalMin = health?.totalSleepMinutes ?? 0
         guard totalMin > 0 else { return nil }
 
-        let hours = Int(totalMin) / 60
-        let mins = Int(totalMin) % 60
-        let sleepValue = "\(hours)h \(String(format: "%02d", mins))m"
+        let sleepValue = Int(totalMin).durationString
         let deepMin = health?.deepSleepMinutes ?? 0
 
         let headline: String
@@ -137,7 +135,7 @@ public enum InsightBuilder {
             sourceKind: .sleep,
             metrics: [
                 InsightMetricRow(label: "Sleep", value: sleepValue, comparison: "Above \(String(format: "%.0f", targetSleepHours))h target"),
-                InsightMetricRow(label: "Deep Sleep", value: deepMin > 0 ? "\(Int(deepMin)) min" : "—", comparison: nil),
+                InsightMetricRow(label: "Deep Sleep", value: deepMin > 0 ? Int(deepMin).durationString : "—", comparison: nil),
                 InsightMetricRow(label: "Recovery", value: snapshot.sleepQuality == .excellent ? "High" : "Good", comparison: nil)
             ],
             sourceLabel: "Imported from Apple Health",
@@ -154,12 +152,12 @@ public enum InsightBuilder {
 
         let totalMin = health?.totalSleepMinutes ?? 0
         let deepMin = health?.deepSleepMinutes ?? 0
-        let hours = Int(totalMin) / 60
-        let mins = Int(totalMin) % 60
-        let sleepValue = totalMin > 0 ? "\(hours)h \(String(format: "%02d", mins))m" : "Unavailable"
+        let sleepValue = totalMin > 0 ? Int(totalMin).durationString : "Unavailable"
         let avgHours = Int(targetSleepHours)
         let avgMins = Int((targetSleepHours - Double(avgHours)) * 60)
-        let avgValue = "\(avgHours)h \(String(format: "%02d", avgMins))m"
+        let avgValue = avgMins > 0
+            ? "\(avgHours)h \(String(format: "%02d", avgMins))m"
+            : "\(avgHours)h"
 
         let recovery: String = {
             switch snapshot.sleepQuality {
@@ -176,7 +174,7 @@ public enum InsightBuilder {
             metrics: [
                 InsightMetricRow(label: "Sleep", value: sleepValue, comparison: nil),
                 InsightMetricRow(label: "Average", value: avgValue, comparison: "Your target"),
-                InsightMetricRow(label: "Deep Sleep", value: deepMin > 0 ? "\(Int(deepMin)) min" : "—", comparison: nil),
+                InsightMetricRow(label: "Deep Sleep", value: deepMin > 0 ? Int(deepMin).durationString : "—", comparison: nil),
                 InsightMetricRow(label: "Recovery", value: recovery, comparison: nil)
             ],
             sourceLabel: "Imported from Apple Health",
@@ -188,13 +186,13 @@ public enum InsightBuilder {
         guard let event = snapshot.calendarAvailability.nextEventTitle,
               let mins = snapshot.calendarAvailability.minutesUntilNextEvent, mins > 0 else { return nil }
         return RecommendationInsight(
-            headline: "\(event) in \(mins) minutes",
+            headline: "\(event) in \(mins.durationString)",
             detail: "Finishing before this keeps the rest of your day calmer.",
             sourceKind: .calendar,
             metrics: [
                 InsightMetricRow(label: "Next event", value: event, comparison: nil),
-                InsightMetricRow(label: "Starts in", value: "\(mins) min", comparison: nil),
-                InsightMetricRow(label: "Free now", value: "\(snapshot.availableTimeMinutes) min", comparison: nil)
+                InsightMetricRow(label: "Starts in", value: mins.durationString, comparison: nil),
+                InsightMetricRow(label: "Free now", value: snapshot.availableTimeMinutes.durationString, comparison: nil)
             ],
             sourceLabel: "From your Calendar",
             destination: .calendar

@@ -430,6 +430,6 @@ public enum BriefingProjector {
     }
 
     private static func formatDurationMinutes(_ minutes: Int) -> String {
-        minutes >= 120 ? "\(minutes / 60) h" : "\(max(1, minutes)) min"
+        max(1, minutes).durationString
     }
 }

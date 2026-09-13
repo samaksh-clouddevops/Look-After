@@ -304,13 +304,13 @@ public enum ExecutiveRecommendationEngine {
             if let mins = minutesUntilScheduled(task: task, now: now, calendar: input.calendar), mins > 0, mins <= 60 {
                 let headline = exercisePrepHeadline(minutesUntil: mins)
                 let leaveIn = max(1, mins - 13)
-                let supporting = "Leave home in about \(leaveIn) minute\(leaveIn == 1 ? "" : "s")."
+                let supporting = "Leave home in about \(leaveIn.durationString)."
                 return Output(
                     headline: headline,
                     supportingLine: supporting,
                     buttonLabel: "I'm ready",
                     durationMinutes: min(8, max(3, mins / 4)),
-                    whyNowReasons: ["\(exerciseLabel(task)) starts in \(mins) minutes."],
+                    whyNowReasons: ["\(exerciseLabel(task)) starts in \(mins.durationString)."],
                     taskID: task.id,
                     actionKind: .beginWork,
                     isPreparation: true,

@@ -309,9 +309,9 @@ public enum LifeGapDetector {
 
     private static func gapAction(minutes: Int, blockLabel: String) -> String {
         if blockLabel.lowercased() == "today" {
-            return "Try \(minutes) min sometime today"
+            return "Try \(minutes.durationString) sometime today"
         }
-        return "Try \(minutes) min in your \(blockLabel) block"
+        return "Try \(minutes.durationString) in your \(blockLabel) block"
     }
 
     private static func normalized(_ title: String) -> String {

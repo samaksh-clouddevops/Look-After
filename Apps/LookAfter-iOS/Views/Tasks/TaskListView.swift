@@ -211,7 +211,7 @@ struct TaskListView: View {
             }
         }
         .sheet(isPresented: $showCreateTask) {
-            TaskFormSheet(tasksVM: tasksVM, mode: .create)
+            TaskFormSheet(tasksVM: tasksVM, mode: .create, userId: userId)
         }
         .sheet(isPresented: $showImportTasks) {
             TaskImportSheet(tasksVM: tasksVM, userId: userId)
@@ -229,7 +229,7 @@ struct TaskListView: View {
             )
         }
         .sheet(item: $fullEditTask) { task in
-            TaskFormSheet(tasksVM: tasksVM, mode: .edit(task))
+            TaskFormSheet(tasksVM: tasksVM, mode: .edit(task), userId: userId)
                 .lookAfterZoomDestination(
                     sourceID: task.id,
                     in: taskZoomNamespace,
@@ -453,6 +453,7 @@ struct TaskFormSheet: View {
     
     @ObservedObject var tasksVM: TasksViewModel
     let mode: Mode
+    var userId: String = ""
     
     @State private var title = ""
     @State private var description = ""
@@ -570,7 +571,7 @@ struct TaskFormSheet: View {
 
                         if isMultiDay && !mode.isEditing {
                             Stepper("Over \(multiDayCount) days", value: $multiDayCount, in: 2...90)
-                            Text("Creates one task per day (~\(estimatedMinutes / max(multiDayCount, 1)) min/day) linked under this goal.")
+                            Text("Creates one task per day (~\((estimatedMinutes / max(multiDayCount, 1)).durationString)/day) linked under this goal.")
                                 .font(.system(size: 12, design: .default))
                                 .foregroundColor(DesignSystem.textMuted)
                         }
@@ -590,7 +591,7 @@ struct TaskFormSheet: View {
 
                             Spacer(minLength: 0)
 
-                            Stepper("", value: $estimatedMinutes, in: 1...(isMultiDay ? 6000 : 240))
+                            Stepper("", value: $estimatedMinutes, in: 1...(isMultiDay ? 6000 : 1440))
                                 .labelsHidden()
                         }
 
@@ -690,7 +691,7 @@ struct TaskFormSheet: View {
             estimatedMinutesText = String(estimatedMinutes)
             return
         }
-        estimatedMinutes = min(value, isMultiDay ? 6000 : 240)
+        estimatedMinutes = min(value, isMultiDay ? 6000 : 1440)
         estimatedMinutesText = String(estimatedMinutes)
     }
     
@@ -732,25 +733,41 @@ struct TaskFormSheet: View {
         switch self.mode {
         case .create:
             if isMultiDay {
-                let perDayMinutes = max(TaskDurationPolicy.minimumMinutes, estimatedMinutes / max(multiDayCount, 1))
+                let dayCount = max(multiDayCount, 1)
+                let baseMinutes = max(TaskDurationPolicy.minimumMinutes, estimatedMinutes / dayCount)
+                var remainder = max(0, estimatedMinutes - (baseMinutes * dayCount))
                 let draft = MultiDayPlanDraft(
                     title: title,
-                    dayCount: multiDayCount,
+                    dayCount: dayCount,
                     lifeArea: lifeArea,
-                    slices: (0..<multiDayCount).map { index in
-                        MultiDaySliceDraft(
+                    slices: (0..<dayCount).map { index in
+                        let extra = remainder > 0 ? 1 : 0
+                        if remainder > 0 { remainder -= 1 }
+                        return MultiDaySliceDraft(
                             dayIndex: index,
                             title: "Day \(index + 1): \(title)",
-                            estimatedMinutes: perDayMinutes,
+                            estimatedMinutes: baseMinutes + extra,
                             windowLabel: ""
                         )
                     }
                 )
-                let plan = MultiDayTaskPlanner.plan(
+                var plan = MultiDayTaskPlanner.plan(
                     from: draft,
-                    userId: "",
+                    userId: userId,
                     existingTasks: tasksVM.tasks
                 )
+                plan.parent.description = description
+                plan.parent.priority = priority
+                plan.parent.difficulty = difficulty
+                plan.parent.requiredEnergy = difficulty.minimumEnergy
+                for index in plan.slices.indices {
+                    plan.slices[index].priority = priority
+                    plan.slices[index].difficulty = difficulty
+                    plan.slices[index].requiredEnergy = difficulty.minimumEnergy
+                    if !description.isEmpty {
+                        plan.slices[index].description = description
+                    }
+                }
                 HapticManager.impact(.medium)
                 isSaving = true
                 Task {
@@ -761,6 +778,7 @@ struct TaskFormSheet: View {
                         dismiss()
                     } catch {
                         isSaving = false
+                        autoFillError = error.localizedDescription
                         HapticManager.notification(.error)
                     }
                 }
@@ -772,13 +790,14 @@ struct TaskFormSheet: View {
                 lifeArea: lifeArea,
                 priority: priority,
                 difficulty: difficulty,
-                estimatedMinutes: estimatedMinutes,
+                estimatedMinutes: TaskDurationPolicy.clamp(estimatedMinutes),
                 requiredEnergy: difficulty.minimumEnergy,
                 scheduledTime: startTime,
                 recurrence: recurrence == .none ? nil : recurrence,
                 recurrenceWeekdays: weekdays,
                 schedulingMode: scheduling,
-                scheduledEndTime: endTime
+                scheduledEndTime: endTime,
+                userId: userId
             )
             HapticManager.impact(.medium)
             tasksVM.createTask(task)

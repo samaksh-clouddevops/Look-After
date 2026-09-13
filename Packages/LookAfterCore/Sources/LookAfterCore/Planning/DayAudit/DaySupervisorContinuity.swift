@@ -36,7 +36,7 @@ public enum DaySupervisorContinuity {
         let minutes = max(estimatedMinutes, TaskDurationPolicy.minimumMinutes)
         guard minutes > remainingFlexMinutes + 15 else { return nil }
         let over = minutes - remainingFlexMinutes
-        return "This is ~\(over)m over what’s left today. Keep, shrink, or park?"
+        return "This is ~\(over.durationString) over what’s left today. Keep, shrink, or park?"
     }
 
     /// Feasible Decide-for-me pool: active, movable or due soon, duration fits open window.

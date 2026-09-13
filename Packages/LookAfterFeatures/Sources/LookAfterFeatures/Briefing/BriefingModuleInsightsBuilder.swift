@@ -96,7 +96,7 @@ enum BriefingModuleInsightsBuilder {
         }
 
         if let title = input.calendar.nextEventTitle, let minutes = input.calendar.minutesUntilStart {
-            let when = minutes <= 60 ? "in \(minutes) min" : "later today"
+            let when = minutes <= 60 ? "in \(minutes.durationString)" : "later today"
             insights.append(BriefingModuleInsight(
                 module: "Schedule",
                 icon: "calendar",

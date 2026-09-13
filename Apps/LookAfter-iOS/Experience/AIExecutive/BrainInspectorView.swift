@@ -145,7 +145,7 @@ struct BrainInspectorView: View {
                 }
                 kv("In flow", world.isInFlowSession ? "yes" : "no")
                 if let event = world.nextEventTitle, let mins = world.minutesUntilNextEvent {
-                    kv("Next event", "\(event) in \(mins)m")
+                    kv("Next event", "\(event) in \(mins.durationString)")
                 }
                 if let mission = world.currentMission {
                     kv("Current task", mission.title)
@@ -302,7 +302,7 @@ struct BrainInspectorView: View {
                         kv("Factors", "\(record.factorCount)")
                         if let result = record.result {
                             if result.completed, let mins = result.actualMinutes {
-                                kv("Result", "Finished in \(mins) min")
+                                kv("Result", "Finished in \(mins.durationString)")
                             } else if let reason = result.ignoreReason {
                                 kv("Ignored", reason)
                             }

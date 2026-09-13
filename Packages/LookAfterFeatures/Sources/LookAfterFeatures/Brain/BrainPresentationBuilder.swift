@@ -400,7 +400,7 @@ enum BrainPresentationBuilder {
     ) -> BrainCapacityPresentation {
         var freeLabel: String?
         if let minutes = lifeSnapshot?.availableTimeMinutes, minutes > 0 {
-            freeLabel = "\(minutes) min free"
+            freeLabel = "\(minutes.durationString) free"
         }
 
         var sleepLabel: String?
@@ -466,7 +466,7 @@ enum BrainPresentationBuilder {
                     id: "cal-\(item.id)",
                     kind: .calendar,
                     title: item.title,
-                    subtitle: "In \(minutes) min"
+                    subtitle: "In \(minutes.durationString)"
                 )
             )
         }

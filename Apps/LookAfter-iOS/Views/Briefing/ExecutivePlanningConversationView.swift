@@ -652,7 +652,7 @@ private struct MultiDayPlanPreviewCard: View {
                                     if let window = slice.windowLabel {
                                         Text(window)
                                     }
-                                    Text("\(slice.estimatedMinutes)m")
+                                    Text(slice.estimatedMinutes.durationString)
                                 }
                                 .font(.system(size: 10))
                                 .foregroundColor(DesignSystem.textSecondary)

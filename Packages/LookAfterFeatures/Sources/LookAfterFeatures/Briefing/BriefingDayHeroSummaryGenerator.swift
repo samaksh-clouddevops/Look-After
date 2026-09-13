@@ -121,7 +121,7 @@ enum BriefingDayHeroSummaryGenerator {
         }
 
         if let title = input.calendar.nextEventTitle, let mins = input.calendar.minutesUntilStart {
-            let when = mins <= 90 ? "in \(mins) min" : "later"
+            let when = mins <= 90 ? "in \(mins.durationString)" : "later"
             lines.append("\(formatTitleForList(title)) \(when).")
             return Array(lines.prefix(maxHeroLines))
         }
@@ -228,11 +228,7 @@ enum BriefingDayHeroSummaryGenerator {
     }
 
     private static func formatWorkMinutes(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(max(1, minutes)) min" }
-        let hours = minutes / 60
-        let remainder = minutes % 60
-        if remainder == 0 { return "\(hours)h" }
-        return "\(hours)h \(remainder)m"
+        max(1, minutes).durationString
     }
 
     private static func missingSleepPrefix(_ input: Input) -> String {

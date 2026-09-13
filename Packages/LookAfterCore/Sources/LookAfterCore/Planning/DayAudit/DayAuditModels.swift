@@ -156,9 +156,9 @@ public struct DayAuditCapacitySummary: Sendable, Equatable {
 
     public var line: String {
         if isOverloaded {
-            return "\(bandLabel) · \(bookedFlexMinutes)m booked flex — overloaded vs energy."
+            return "\(bandLabel) · \(bookedFlexMinutes.durationString) booked flex — overloaded vs energy."
         }
-        return "\(bandLabel) · \(remainingFlexMinutes)m flex still open."
+        return "\(bandLabel) · \(remainingFlexMinutes.durationString) flex still open."
     }
 }
 

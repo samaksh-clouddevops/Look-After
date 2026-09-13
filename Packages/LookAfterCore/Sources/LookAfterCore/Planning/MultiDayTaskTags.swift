@@ -45,9 +45,10 @@ public struct MultiDaySuggestion: Sendable, Equatable {
         self.perDayMinutes = perDayMinutes
     }
 
-    /// Minimum raw minute value that triggers a suggestion — anything past the single-task
-    /// ceiling (`TaskDurationPolicy.maximumMinutes`) implies the user meant a bigger goal.
-    public static let thresholdMinutes = TaskDurationPolicy.maximumMinutes
+    /// Suggests a multi-day split once the estimate exceeds a practical single-session ceiling
+    /// (below `TaskDurationPolicy.maximumMinutes` so the UI can still show the suggestion
+    /// before the single-task clamp hides the oversized value).
+    public static let thresholdMinutes = 180
 
     /// Purely arithmetic — no LLM call needed, mirrors `MultiDayTaskPlanner`'s offline fallback.
     public static func suggest(

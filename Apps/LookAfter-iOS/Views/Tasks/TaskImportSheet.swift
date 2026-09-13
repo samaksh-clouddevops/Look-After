@@ -266,7 +266,7 @@ private struct ImportTaskRowView: View {
                 MetadataTagRow(tags: [
                     TagChipView(task.priority.label, icon: task.priority.icon),
                     TagChipView(task.lifeArea.rawValue, icon: task.lifeArea.icon),
-                    TagChipView("~\(task.estimatedMinutes)m")
+                    TagChipView("~\(task.estimatedMinutes.durationString)")
                 ])
                 
                 if !task.description.isEmpty {

@@ -83,7 +83,7 @@ public enum DayAuditService {
                     kind: .shrinkTask,
                     taskID: shrink.taskID,
                     title: shrink.title,
-                    detail: "Shrink \(shrink.currentMinutes)m → \(shrink.suggestedMinutes)m",
+                    detail: "Shrink \(shrink.currentMinutes.durationString) → \(shrink.suggestedMinutes.durationString)",
                     suggestedMinutes: shrink.suggestedMinutes
                 ))
             }

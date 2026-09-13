@@ -207,7 +207,7 @@ struct LifeModelSummaryView: View {
                         Text(commitment.title)
                             .font(.system(size: 12))
                         Spacer()
-                        Text("\(commitment.defaultMinutes)m")
+                        Text(commitment.defaultMinutes.durationString)
                             .font(.system(size: 11))
                             .foregroundColor(DesignSystem.textMuted)
                     }

@@ -86,7 +86,7 @@ struct DayAuditCheckCard: View {
                                                 ? DesignSystem.accentPrimary
                                                 : DesignSystem.textMuted
                                             )
-                                        Text("\(pull.title) · \(pull.estimatedMinutes)m · \(pull.origin.rawValue)")
+                                        Text("\(pull.title) · \(pull.estimatedMinutes.durationString) · \(pull.origin.rawValue)")
                                             .textStyleCaption()
                                             .foregroundStyle(DesignSystem.textPrimary)
                                         Spacer(minLength: 0)

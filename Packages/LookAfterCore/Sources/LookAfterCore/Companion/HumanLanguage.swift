@@ -106,21 +106,15 @@ public enum HumanLanguage {
 
     public static func durationLabel(minutes: Int, rangeMin: Int? = nil, rangeMax: Int? = nil, uncertain: Bool = false) -> String {
         if uncertain, let lo = rangeMin, let hi = rangeMax, lo != hi {
-            return "About \(lo)–\(hi) minutes left"
+            return "About \(lo.durationString)–\(hi.durationString) left"
         }
-        if minutes >= 120 {
-            let hours = minutes / 60
-            let mins = minutes % 60
-            if mins == 0 { return "About \(hours) hours left" }
-            return "About \(hours) h \(mins) min left"
-        }
-        return "About \(minutes) minutes left"
+        return "About \(minutes.durationString) left"
     }
 
     // MARK: - Life impact (Why now)
 
     public static func meetingContext(minutes: Int, event: String) -> String {
-        "You still have \(minutes) minutes before \(event)."
+        "You still have \(minutes.durationString) before \(event)."
     }
 
     public static func priorityImpact(task: LifeTask, snapshot: LifeContextSnapshot) -> String {
@@ -163,7 +157,7 @@ public enum HumanLanguage {
     }
 
     public static func freeTimeImpact(minutes: Int) -> String {
-        "You have a quiet stretch — about \(minutes) minutes."
+        "You have a quiet stretch — about \(minutes.durationString)."
     }
 
     public static func progressImpact(fraction: Double) -> String {
@@ -195,7 +189,7 @@ public enum HumanLanguage {
             lines.append("This is where you left off.")
         }
         if let mins = snapshot.calendarAvailability.minutesUntilNextEvent, mins > 0, mins <= 120 {
-            lines.append("You still have \(mins) minutes before your next thing.")
+            lines.append("You still have \(mins.durationString) before your next thing.")
         }
         return lines.first ?? "This is where you left off."
     }

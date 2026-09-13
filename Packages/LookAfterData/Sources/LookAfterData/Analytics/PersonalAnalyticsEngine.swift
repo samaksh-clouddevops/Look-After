@@ -582,7 +582,7 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
         if focusMinutes > 0 {
             results.append(AnalyticsInsight(
                 category: .productivity,
-                message: "Logged \(focusMinutes / 60)h \(focusMinutes % 60)m on timed sessions."
+                message: "Logged \(focusMinutes.durationString) on timed sessions."
             ))
         }
 
@@ -857,7 +857,7 @@ public final class PersonalAnalyticsEngine: PersonalAnalyticsEngineProtocol {
         var lines = ["USER ANALYTICS (\(timeframe.rawValue)) — real data only:"]
 
         if let focus = kpis.totalFocusMinutes {
-            lines.append("- Focus time: \(focus / 60)h \(focus % 60)m")
+            lines.append("- Focus time: \(focus.durationString)")
         }
         if let tasks = kpis.completedTasksCount {
             lines.append("- Tasks completed: \(tasks)")

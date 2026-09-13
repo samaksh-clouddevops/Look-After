@@ -41,7 +41,7 @@ public final class DeferralRecoveryCoordinator {
             kind: .deferralRecovery,
             severity: script.deferralCount >= DeferralRecoveryThresholds.microChunkThreshold ? .high : .medium,
             message: script.message,
-            options: ["Start \(script.durationMinutes)-min focus", "Show steps", "Not now"],
+            options: ["Start \(script.durationMinutes.durationString) focus", "Show steps", "Not now"],
             surface: .banner,
             relatedTaskIDs: [script.taskID],
             metadata: [

@@ -254,7 +254,7 @@ struct BriefingCalendarCard: View {
                         .font(.system(size: 16, weight: .bold, design: .default))
                         .foregroundColor(DesignSystem.textPrimary)
                     if let minutes = calendar.minutesUntilStart {
-                        let countdown = minutes <= 0 ? "Starting now" : "In \(minutes) min"
+                        let countdown = minutes <= 0 ? "Starting now" : "In \(minutes.durationString)"
                         Text(countdown)
                             .font(.system(size: 13, design: .default))
                             .foregroundColor(DesignSystem.accentPrimary)
@@ -262,7 +262,7 @@ struct BriefingCalendarCard: View {
                             .animation(PremiumMotion.snappy(reduceMotion: reduceMotion), value: countdown)
                     }
                     if let duration = calendar.durationMinutes {
-                        Text("\(duration) min")
+                        Text(duration.durationString)
                             .font(.system(size: 12, design: .default))
                             .foregroundColor(DesignSystem.textMuted)
                             .contentTransition(.numericText())
@@ -328,7 +328,7 @@ struct BriefingHealthCard: View {
     }
 
     private var formattedExercise: String {
-        health.exerciseMinutes.map { "\($0)m" } ?? "—"
+        health.exerciseMinutes.map { $0.durationString } ?? "—"
     }
 
     private var formattedStand: String {

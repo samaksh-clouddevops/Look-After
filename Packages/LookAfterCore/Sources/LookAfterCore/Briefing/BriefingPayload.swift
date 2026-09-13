@@ -354,10 +354,7 @@ public extension BriefingPayload {
         }
         chips.append(.init(id: "anchored", icon: "calendar", label: "Anchored", value: "\(anchoredCount)"))
         if focusMinutes > 0 {
-            let hours = focusMinutes / 60
-            let mins = focusMinutes % 60
-            let value = hours > 0 ? "\(hours)h\(mins > 0 ? " \(mins)m" : "")" : "\(mins)m"
-            chips.append(.init(id: "focus", icon: "target", label: "Focus", value: value))
+            chips.append(.init(id: "focus", icon: "target", label: "Focus", value: focusMinutes.durationString))
         }
         chips.append(.init(id: "left", icon: "checklist", label: "Left", value: "\(remainingTaskCount)"))
         if overdueCount > 0 {
@@ -383,7 +380,7 @@ public extension BriefingPayload {
 
         if anchoredCount > 0 || flexibleCount > 0 {
             sentences.append(
-                "You have \(anchoredCount) anchored and \(flexibleCount) flexible blocks\(focusMinutes > 0 ? ", about \(focusMinutes) minutes of focus" : "")."
+                "You have \(anchoredCount) anchored and \(flexibleCount) flexible blocks\(focusMinutes > 0 ? ", about \(focusMinutes.durationString) of focus" : "")."
             )
         } else if remainingTaskCount > 0 {
             sentences.append("\(remainingTaskCount) tasks remain on the list.")
@@ -418,7 +415,7 @@ public extension BriefingPayload {
                     : "\(somedayDecayCount) parked items are past two weeks — review or bulk-discard when ready."
             )
         } else if let cat = nextEventCategory, let mins = minutesUntilNextEvent, mins <= 120 {
-            sentences.append("Next up is a \(cat) in \(mins) minutes.")
+            sentences.append("Next up is a \(cat) in \(mins.durationString).")
         }
 
         return sentences.prefix(4).joined(separator: " ")

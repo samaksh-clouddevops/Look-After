@@ -116,9 +116,7 @@ public enum LifeContextFrameBuilder {
 
     public static func sleepHoursLabel(from health: HealthSummary?) -> String? {
         guard let minutes = health?.totalSleepMinutes, minutes > 0 else { return nil }
-        let hours = Int(minutes) / 60
-        let mins = Int(minutes) % 60
-        return "\(hours)h \(String(format: "%02d", mins))m"
+        return Int(minutes).durationString
     }
 
     private static func relativeDay(_ date: Date) -> String {

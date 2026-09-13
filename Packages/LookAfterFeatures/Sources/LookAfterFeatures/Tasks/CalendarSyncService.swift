@@ -161,7 +161,7 @@ public final class CalendarSyncService {
     private func calendarNotes(for task: LifeTask) -> String {
         var lines = ["Blocked by Look After"]
         if !task.description.isEmpty { lines.append(task.description) }
-        if task.estimatedMinutes > 0 { lines.append("Estimated: \(task.estimatedMinutes) min") }
+        if task.estimatedMinutes > 0 { lines.append("Estimated: \(task.estimatedMinutes.durationString)") }
         return lines.joined(separator: "\n")
     }
 

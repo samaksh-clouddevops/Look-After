@@ -366,7 +366,7 @@ struct TodayMetricDetailSheet: View {
             if let title = briefingVM.calendar.nextEventTitle {
                 detailRow("Next", value: title)
                 if let mins = briefingVM.calendar.minutesUntilStart {
-                    detailRow("Starts in", value: "\(mins) min")
+                    detailRow("Starts in", value: mins.durationString)
                 }
             } else {
                 Text("No upcoming meetings.")

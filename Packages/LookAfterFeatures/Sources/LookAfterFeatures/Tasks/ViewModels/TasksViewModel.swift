@@ -1033,17 +1033,25 @@ public final class TasksViewModel: ObservableObject {
     /// back the whole plan (parent + all slices) if any single persist fails, unlike the
     /// fire-and-forget `createMultiDayTasks` used by the AI planning apply path.
     public func createMultiDayTasksAndAwait(plan: MultiDayTaskPlan) async throws {
+        var persistedIDs: [String] = []
         do {
             try await insertTaskWithoutDecomposeAndAwait(plan.parent)
+            persistedIDs.append(plan.parent.id)
             for slice in plan.slices {
                 try await insertTaskWithoutDecomposeAndAwait(slice)
+                persistedIDs.append(slice.id)
             }
             if let project = plan.project {
                 persistCreativeProject(project)
             }
             notifyTaskListDidChange()
         } catch {
-            tasks.removeAll { $0.id == plan.parent.id || plan.slices.contains { slice in slice.id == $0.id } }
+            let rollbackIDs = Set(persistedIDs)
+            tasks.removeAll { rollbackIDs.contains($0.id) }
+            let userId = plan.parent.userId
+            for id in persistedIDs {
+                try? await taskRepo.delete(id, userId: userId)
+            }
             self.error = error.localizedDescription
             throw error
         }

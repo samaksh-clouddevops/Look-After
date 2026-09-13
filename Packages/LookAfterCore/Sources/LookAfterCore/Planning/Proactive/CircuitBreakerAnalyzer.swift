@@ -18,7 +18,7 @@ public enum CircuitBreakerAnalyzer {
             actions.append(ProactiveAction(
                 kind: .hyperfocusBreak,
                 severity: .high,
-                message: "You've been deep in \"\(title)\" for \(focusSessionElapsedMinutes)m — \(question.prompt)",
+                message: "You've been deep in \"\(title)\" for \(focusSessionElapsedMinutes.durationString) — \(question.prompt)",
                 options: question.options,
                 surface: .banner,
                 metadata: ["elapsed": "\(focusSessionElapsedMinutes)"]

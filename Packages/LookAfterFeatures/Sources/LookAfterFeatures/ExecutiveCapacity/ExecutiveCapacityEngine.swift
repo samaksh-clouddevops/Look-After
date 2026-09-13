@@ -322,7 +322,7 @@ public final class ExecutiveCapacityEngine {
         if let sleep = input.healthSummary?.totalSleepMinutes {
             parts.append("Sleep \(String(format: "%.1f", sleep / 60))h")
         }
-        if let free = input.snapshot?.availableTimeMinutes { parts.append("\(free)m free today") }
+        if let free = input.snapshot?.availableTimeMinutes { parts.append("\(free.durationString) free today") }
         parts.append("Inference confidence \(Int(confidence(for: input) * 100))%")
         return parts.joined(separator: " · ")
     }
@@ -332,7 +332,7 @@ public final class ExecutiveCapacityEngine {
             let h = minutes / 60
             return "for \(h)+ hours"
         }
-        return "for \(minutes)m"
+        return "for \(minutes.durationString)"
     }
 
     private func formatTime(_ date: Date) -> String {

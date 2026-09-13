@@ -69,7 +69,7 @@ public final class ResumeEngine: @unchecked Sendable {
             resume.workingContext = WorkingContext(
                 kind: .focusSession,
                 title: task.title,
-                subtitle: "\(elapsedSeconds / 60)m in",
+                subtitle: "\( (elapsedSeconds / 60).durationString ) in",
                 taskID: task.id
             )
             resume.savedAt = Date()

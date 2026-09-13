@@ -111,12 +111,12 @@ struct GeneratedTasksReviewView: View {
         let day = Calendar.current.startOfDay(for: task.scheduledDate ?? Date())
         switch TaskScheduleInterval.displaySchedule(for: task, on: day) {
         case .unslottedFlexible:
-            return "Flexible · \(task.estimatedMinutes)m"
+            return "Flexible · \(task.estimatedMinutes.durationString)"
         case .window(_, _, let rangeLabel):
             return rangeLabel
         case .noSchedule:
             if task.schedulingModeValue == .flexible {
-                return "Flexible · \(task.estimatedMinutes)m"
+                return "Flexible · \(task.estimatedMinutes.durationString)"
             }
             return nil
         }

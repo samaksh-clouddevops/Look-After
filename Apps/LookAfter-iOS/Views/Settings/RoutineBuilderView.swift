@@ -135,9 +135,17 @@ struct RoutineBuilderView: View {
     }
 
     private func importSuggested() {
-        blocks.append(contentsOf: importCandidates)
+        var merged = blocks
+        var addedCount = 0
+        for candidate in importCandidates where RoutineBlockStore.conflicts(with: candidate, in: merged).isEmpty {
+            merged.append(candidate)
+            addedCount += 1
+        }
+        blocks = merged
         RoutineBlockStore.save(blocks)
-        importMessage = "Imported \(importCandidates.count) block(s) from your fixed schedule notes."
+        importMessage = addedCount == 0
+            ? "Nothing new to import — those times already overlap your routine."
+            : "Imported \(addedCount) block(s) from your fixed schedule notes."
         importCandidates = []
     }
 }

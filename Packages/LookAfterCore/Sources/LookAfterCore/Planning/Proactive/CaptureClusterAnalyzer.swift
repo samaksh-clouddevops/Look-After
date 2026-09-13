@@ -48,7 +48,7 @@ public enum CaptureClusterAnalyzer {
             ProactiveAction(
                 kind: .captureResurrection,
                 severity: .medium,
-                message: "\(cluster.inboxIDs.count) related captures about \(cluster.label) — batch \(cluster.estimatedMinutes) min?",
+                message: "\(cluster.inboxIDs.count) related captures about \(cluster.label) — batch \(cluster.estimatedMinutes.durationString)?",
                 options: ["Batch schedule", "Review captures", "Snooze"],
                 surface: .banner,
                 relatedInboxIDs: cluster.inboxIDs,

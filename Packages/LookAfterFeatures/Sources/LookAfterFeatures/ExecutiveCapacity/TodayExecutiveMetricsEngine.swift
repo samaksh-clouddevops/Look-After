@@ -220,7 +220,7 @@ public enum TodayExecutiveMetricsEngine {
             value = "Due now"
             relevance = 96
         } else if minutesUntil <= 30 {
-            value = "\(minutesUntil)m"
+            value = minutesUntil.durationString
             relevance = 93
         } else if minutesUntil <= 120 {
             value = timeLabel
@@ -268,10 +268,10 @@ public enum TodayExecutiveMetricsEngine {
             let value: String
             var relevance = 74.0
             if minutes <= 30 {
-                value = "Meet \(minutes)m"
+                value = "Meet \(minutes.durationString)"
                 relevance = 91
             } else if minutes <= 90 {
-                value = "Meet \(minutes)m"
+                value = "Meet \(minutes.durationString)"
                 relevance = 80
             } else {
                 let until = Calendar.current.date(byAdding: .minute, value: minutes, to: input.now) ?? input.now
@@ -363,7 +363,7 @@ public enum TodayExecutiveMetricsEngine {
         }
         if label.lowercased().contains("min") {
             let digits = label.filter { $0.isNumber }
-            if let mins = Int(digits), mins > 0 { return "\(mins)m" }
+            if let mins = Int(digits), mins > 0 { return mins.durationString }
         }
         return label
     }

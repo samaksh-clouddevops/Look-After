@@ -79,7 +79,7 @@ public enum TransitionShieldBuilder {
                 id: "transition-\(transition.eventID)-\(transition.tier.rawValue)",
                 kind: .transitionShield,
                 severity: transition.tier.rawValue <= 8 ? .high : .medium,
-                message: "\"\(transition.title)\" in \(transition.minutesUntil)m — \(prep)",
+                message: "\"\(transition.title)\" in \(transition.minutesUntil.durationString) — \(prep)",
                 // V3: "I'm ready" is the single filled primary; Open plan / Snooze stay secondary.
                 options: ["I'm ready", "Open plan", "Snooze 5m"],
                 surface: .notification,

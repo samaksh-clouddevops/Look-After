@@ -236,11 +236,11 @@ final class LiveActivityManager {
         case .recovery:
             remainingLabel = "Recovery"
         case .fluidGap:
-            remainingLabel = remaining > 0 ? "\(remaining)m" : "Gap"
+            remainingLabel = remaining > 0 ? remaining.durationString : "Gap"
         case .idle:
             remainingLabel = ""
         case .anchored, .flexible:
-            remainingLabel = remaining > 0 ? "\(remaining)m" : "<1m"
+            remainingLabel = remaining > 0 ? remaining.durationString : "<1m"
         }
 
         return FocusActivityAttributes.ContentState(

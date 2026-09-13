@@ -43,7 +43,7 @@ public struct ParkedFluidReviewView: View {
                                     Text(entry.title)
                                         .font(.dsBody(weight: .medium))
                                         .foregroundStyle(DesignSystem.textPrimary)
-                                    Text("\(entry.originalDurationMinutes)m · \(entry.lifeArea.rawValue)")
+                                    Text("\(entry.originalDurationMinutes.durationString) · \(entry.lifeArea.rawValue)")
                                         .font(.dsCaption())
                                         .foregroundStyle(DesignSystem.textMuted)
                                 }

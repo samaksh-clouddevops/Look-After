@@ -857,7 +857,7 @@ private struct TodayDoThisNowSection: View {
 
     private static func durationLabel(for task: LifeTask) -> String {
         let minutes = TaskDurationPolicy.microStartSessionMinutes(for: task)
-        return "\(minutes)m focus"
+        return "\(minutes.durationString) focus"
     }
 
     private static let scheduleFormatter: DateFormatter = {

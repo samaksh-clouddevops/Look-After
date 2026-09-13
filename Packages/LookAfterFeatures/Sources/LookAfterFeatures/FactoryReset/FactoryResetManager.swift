@@ -64,6 +64,7 @@ public final class FactoryResetManager {
         UserLifeProfileStore.invalidateCache()
         LifeModelStore.invalidateCache()
         MedicationStore.invalidateCache()
+        RoutineBlockStore.invalidateCache()
         clearAllResumeSnapshots()
         DecisionHistoryStore.shared.clearAll()
         AnalyticsCacheManager.shared.invalidateAll()

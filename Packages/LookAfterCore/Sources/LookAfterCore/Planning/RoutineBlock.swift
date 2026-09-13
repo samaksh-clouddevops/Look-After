@@ -41,10 +41,16 @@ public struct RoutineBlock: Codable, Sendable, Equatable, Identifiable {
     }
 
     /// True if this block overlaps `other` on at least one shared day.
+    /// Overnight blocks (e.g. sleep 23:00×8h) are split across midnight so morning
+    /// collisions are detected.
     public func overlaps(_ other: RoutineBlock) -> Bool {
         guard sharesADay(with: other) else { return false }
-        return startMinutesFromMidnight < other.endMinutesFromMidnight
-            && other.startMinutesFromMidnight < endMinutesFromMidnight
+        return Self.intervalsOverlap(
+            startA: startMinutesFromMidnight,
+            durationA: durationMinutes,
+            startB: other.startMinutesFromMidnight,
+            durationB: other.durationMinutes
+        )
     }
 
     private func sharesADay(with other: RoutineBlock) -> Bool {
@@ -55,6 +61,33 @@ public struct RoutineBlock: Codable, Sendable, Equatable, Identifiable {
         (days.friday && other.days.friday) ||
         (days.saturday && other.days.saturday) ||
         (days.sunday && other.days.sunday)
+    }
+
+    private static let minutesPerDay = 24 * 60
+
+    /// Half-open interval overlap on a 24h clock, wrapping overnight durations.
+    static func intervalsOverlap(
+        startA: Int,
+        durationA: Int,
+        startB: Int,
+        durationB: Int
+    ) -> Bool {
+        if durationA >= minutesPerDay || durationB >= minutesPerDay { return true }
+        for (a0, a1) in daySegments(start: startA, duration: durationA) {
+            for (b0, b1) in daySegments(start: startB, duration: durationB) {
+                if a0 < b1 && b0 < a1 { return true }
+            }
+        }
+        return false
+    }
+
+    private static func daySegments(start: Int, duration: Int) -> [(Int, Int)] {
+        let clampedStart = ((start % minutesPerDay) + minutesPerDay) % minutesPerDay
+        let end = clampedStart + max(duration, 0)
+        if end <= minutesPerDay {
+            return [(clampedStart, end)]
+        }
+        return [(clampedStart, minutesPerDay), (0, end % minutesPerDay)]
     }
 }
 
@@ -83,8 +116,14 @@ public enum RoutineBlockStore {
     }
 
     public static func reset() {
-        cache.withLock { $0 = [] }
+        cache.withLock { $0 = nil }
         UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+
+    /// Drops the in-memory cache so the next `load()` re-reads UserDefaults.
+    /// Call after bulk UserDefaults wipes (factory reset) that bypass `reset()`.
+    public static func invalidateCache() {
+        cache.withLock { $0 = nil }
     }
 
     /// Blocks that overlap `candidate` on a shared day, excluding `candidate` itself (by id).
@@ -119,11 +158,8 @@ extension RoutineBlockStore {
                 on: day,
                 calendar: calendar
             ) else { continue }
-            let strippedTitle = note.components(separatedBy: CharacterSet.decimalDigits).joined()
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let title = strippedTitle.isEmpty ? note : strippedTitle
             imported.append(RoutineBlock(
-                title: String(title.prefix(60)),
+                title: titleFromFixedNote(note),
                 days: .everyDay,
                 startHour: calendar.component(.hour, from: parsed.start),
                 startMinute: calendar.component(.minute, from: parsed.start),
@@ -132,6 +168,27 @@ extension RoutineBlockStore {
             ))
         }
         return imported
+    }
+
+    /// Strips time tokens from free-text notes without destroying title words that contain digits.
+    static func titleFromFixedNote(_ note: String) -> String {
+        var title = note
+        let patterns = [
+            #"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\s*[-–—to]+\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)\b"#,
+            #"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b"#,
+            #"\b\d{1,2}:\d{2}\b"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+            let range = NSRange(title.startIndex..<title.endIndex, in: title)
+            title = regex.stringByReplacingMatches(in: title, options: [], range: range, withTemplate: "")
+        }
+        title = title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-–—,"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleaned = title.isEmpty ? note : title
+        return String(cleaned.prefix(60))
     }
 
     /// Runs `importFromFixedScheduleNotes` and merges the result into the current store,

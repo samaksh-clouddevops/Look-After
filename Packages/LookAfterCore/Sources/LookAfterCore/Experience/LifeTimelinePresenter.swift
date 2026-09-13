@@ -462,7 +462,7 @@ public enum LifeTimelinePresenter {
                 subtitle = rangeLabel
             case .noSchedule:
                 if duration > 0 {
-                    subtitle = "About \(duration) min"
+                    subtitle = "About \(duration.durationString)"
                 } else {
                     subtitle = kind.sectionLabel
                 }
@@ -532,7 +532,7 @@ public enum LifeTimelinePresenter {
                 id: "shopping-trip",
                 kind: .shopping,
                 title: "Stop at the grocery store",
-                subtitle: "About \(minutes) minutes",
+                subtitle: "About \(minutes.durationString)",
                 detailLines: names,
                 date: combined,
                 estimatedMinutes: minutes
@@ -543,7 +543,7 @@ public enum LifeTimelinePresenter {
             id: "shopping-trip",
             kind: .shopping,
             title: "Stop at the grocery store",
-            subtitle: "About \(minutes) minutes",
+            subtitle: "About \(minutes.durationString)",
             detailLines: names,
             date: calendar.startOfDay(for: now),
             estimatedMinutes: minutes,
@@ -569,7 +569,7 @@ public enum LifeTimelinePresenter {
             id: "finance-session",
             kind: .finance,
             title: "Finance session",
-            subtitle: "About \(minutes) minutes",
+            subtitle: "About \(minutes.durationString)",
             detailLines: lines,
             date: when,
             estimatedMinutes: minutes,

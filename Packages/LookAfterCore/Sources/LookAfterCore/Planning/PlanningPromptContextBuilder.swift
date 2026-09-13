@@ -510,6 +510,21 @@ public enum PlanningPromptContextBuilder {
     }
 
     public static func dailyRoutineBlock() -> String {
+        let declaredBlocks = RoutineBlockStore.load()
+            .sorted { $0.startMinutesFromMidnight < $1.startMinutesFromMidnight }
+
+        if !declaredBlocks.isEmpty {
+            var lines = ["DAILY ROUTINES (user-declared fixed anchors — schedule flexible work around these):"]
+            for block in declaredBlocks {
+                let days = block.days == .everyDay ? "every day" : "selected days"
+                let lock = block.isNonNegotiable ? "non-negotiable" : "preferred"
+                lines.append("- \(block.title): \(block.timeRangeLabel()) (\(days), \(lock))")
+            }
+            lines.append("- Medication: use MEDICATIONS list — never invent times")
+            lines.append("- End-of-day reflection lives on the Timeline screen (not a schedulable task)")
+            return lines.joined(separator: "\n")
+        }
+
         if let model = LifeModelStore.load(), model.hasContent {
             var lines = ["DAILY ROUTINES (anchor the day — schedule flexible work around these):"]
             let mealCommitments = model.commitments.filter {

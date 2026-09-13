@@ -190,7 +190,7 @@ public struct ContextEngine: Sendable {
             return WorkingContext(
                 kind: .focusSession,
                 title: task.title,
-                subtitle: "\(mins)m in flow",
+                subtitle: "\(mins.durationString) in flow",
                 taskID: task.id
             )
         }

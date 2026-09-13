@@ -155,11 +155,11 @@ struct MacSettingsView: View {
                     }
 
                     Picker("Default Focus Duration", selection: $focusDurationMinutes) {
-                        Text("15 minutes").tag(15)
-                        Text("25 minutes").tag(25)
-                        Text("30 minutes").tag(30)
-                        Text("45 minutes").tag(45)
-                        Text("60 minutes").tag(60)
+                        Text(15.durationString).tag(15)
+                        Text(25.durationString).tag(25)
+                        Text(30.durationString).tag(30)
+                        Text(45.durationString).tag(45)
+                        Text(60.durationString).tag(60)
                     }
 
                     Stepper(

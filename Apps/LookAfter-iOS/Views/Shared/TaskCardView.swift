@@ -74,7 +74,7 @@ struct TaskCardView: View {
         if let timeDisplayLabel {
             parts.append(timeDisplayLabel)
         } else if task.estimatedMinutes > 0 {
-            parts.append("\(task.estimatedMinutes)m")
+            parts.append(task.estimatedMinutes.durationString)
         }
         if task.isFixedTimeEvent, let start = task.scheduledTime {
             let formatter = DateFormatter()
@@ -172,7 +172,7 @@ struct TaskCardView: View {
             HStack(spacing: DesignSystem.spacingSM) {
                 MetadataTagRow(tags: [TagChipView(task.lifeArea.rawValue.capitalized, style: .neutral)])
                 Spacer(minLength: 0)
-                TagChipView("\(task.estimatedMinutes) mins")
+                TagChipView(task.estimatedMinutes.durationString)
             }
 
             Button(action: onOpen) {
@@ -260,7 +260,7 @@ struct TaskCardView: View {
                 .padding(.vertical, DesignSystem.spacingXS)
             }
 
-            MetadataTagRow(tags: task.metadataTags(timeLabel: timeDisplayLabel ?? (task.estimatedMinutes > 0 ? "\(task.estimatedMinutes)m" : nil)))
+            MetadataTagRow(tags: task.metadataTags(timeLabel: timeDisplayLabel ?? (task.estimatedMinutes > 0 ? task.estimatedMinutes.durationString : nil)))
 
             if isLoadingTimeDisplay {
                 HStack(spacing: 6) {
@@ -294,7 +294,7 @@ struct TaskCardView: View {
 
                         Spacer(minLength: 4)
 
-                        Text("\(step.estimatedMinutes)m")
+                        Text(step.estimatedMinutes.durationString)
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundColor(DesignSystem.textMuted)
                     }
@@ -351,7 +351,7 @@ struct CompactTaskRowView: View {
             Spacer(minLength: 4)
 
             if showsEnergy {
-                Text("\(task.estimatedMinutes)m")
+                Text(task.estimatedMinutes.durationString)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundColor(DesignSystem.textMuted)
             }

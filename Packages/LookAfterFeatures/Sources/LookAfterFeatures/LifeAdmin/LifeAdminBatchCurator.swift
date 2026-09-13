@@ -96,7 +96,7 @@ public enum LifeAdminBatchCurator {
 
         guard !items.isEmpty else { return nil }
         let total = items.map(\.estimatedMinutes).reduce(0, +)
-        let narrative = "You have \(items.count) life-admin item\(items.count == 1 ? "" : "s") (~\(total) min) waiting quietly."
+        let narrative = "You have \(items.count) life-admin item\(items.count == 1 ? "" : "s") (~\(total.durationString)) waiting quietly."
         return LifeAdminBatch(items: items, totalMinutes: total, narrative: narrative)
     }
 

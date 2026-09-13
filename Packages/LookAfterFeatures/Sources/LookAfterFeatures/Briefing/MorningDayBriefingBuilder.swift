@@ -157,7 +157,7 @@ enum MorningDayBriefingBuilder {
             formatter.dateFormat = "h:mm a"
             parts.append("up since \(formatter.string(from: wake))")
         } else if let minutes = postWake.minutesSinceWake, minutes > 0 {
-            parts.append("about \(minutes) min ago")
+            parts.append("about \(minutes.durationString) ago")
         }
 
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -327,10 +327,6 @@ enum MorningDayBriefingBuilder {
     }
 
     private static func formatMinutes(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(max(1, minutes)) min" }
-        let hours = minutes / 60
-        let remainder = minutes % 60
-        if remainder == 0 { return "\(hours)h" }
-        return "\(hours)h \(remainder)m"
+        max(1, minutes).durationString
     }
 }

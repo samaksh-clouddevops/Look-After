@@ -63,7 +63,7 @@ struct EmergencyModeView: View {
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                     
-                                    Text("~\(task.estimatedMinutes) min • \(task.lifeArea.rawValue)")
+                                    Text("~\(task.estimatedMinutes.durationString) • \(task.lifeArea.rawValue)")
                                         .font(.system(size: 13, weight: .medium, design: .default))
                                         .foregroundColor(.white.opacity(0.5))
                                 }
@@ -312,13 +312,13 @@ struct FocusSessionView: View {
             NavigationStack {
                 PremiumForm {
                     Section("Focus Duration") {
-                        Stepper("\(adhdVM.focusDurationMinutes) minutes", value: $adhdVM.focusDurationMinutes, in: 5...120, step: 5)
+                        Stepper(adhdVM.focusDurationMinutes.durationString, value: $adhdVM.focusDurationMinutes, in: 5...120, step: 5)
                     }
                     Section("Short Break") {
-                        Stepper("\(adhdVM.breakDurationMinutes) minutes", value: $adhdVM.breakDurationMinutes, in: 1...30, step: 1)
+                        Stepper(adhdVM.breakDurationMinutes.durationString, value: $adhdVM.breakDurationMinutes, in: 1...30, step: 1)
                     }
                     Section("Long Break") {
-                        Stepper("\(adhdVM.longBreakMinutes) minutes", value: $adhdVM.longBreakMinutes, in: 5...60, step: 5)
+                        Stepper(adhdVM.longBreakMinutes.durationString, value: $adhdVM.longBreakMinutes, in: 5...60, step: 5)
                     }
                     Section("Sessions Before Long Break") {
                         Stepper("\(adhdVM.sessionsBeforeLongBreak) sessions", value: $adhdVM.sessionsBeforeLongBreak, in: 2...8, step: 1)

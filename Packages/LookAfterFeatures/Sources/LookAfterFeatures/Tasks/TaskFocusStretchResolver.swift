@@ -62,7 +62,7 @@ public enum TaskFocusStretchResolver {
     public static func displayInfo(for task: LifeTask, context: Context) -> TaskTimeDisplayInfo {
         let stretch = recommendedFocusStretch(for: task, context: context)
         let estimated = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
-        let label = "\(estimated)m"
+        let label = estimated.durationString
 
         if estimated <= stretch {
             return TaskTimeDisplayInfo(

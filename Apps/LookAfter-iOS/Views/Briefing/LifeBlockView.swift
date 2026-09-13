@@ -246,7 +246,9 @@ struct LifeBlockView<Content: View>: View {
                 viewModel.handle(.commitVerticalOffset(taskID: taskID, offsetMinutes: minutes))
                 let formatter = DateFormatter()
                 formatter.dateFormat = "h:mm a"
-                let label = minutes > 0 ? "Moved later by \(minutes) minutes" : "Moved earlier by \(-minutes) minutes"
+                let label = minutes > 0
+                    ? "Moved later by \(minutes.durationString)"
+                    : "Moved earlier by \((-minutes).durationString)"
                 AccessibilityNotification.Announcement(label).post()
             }
         }

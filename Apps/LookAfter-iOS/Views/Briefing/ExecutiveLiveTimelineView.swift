@@ -654,7 +654,7 @@ private struct EventTimelineCard: View {
         guard durationMinutes > 0 else { return nil }
         let end = row.sortDate.addingTimeInterval(TimeInterval(durationMinutes * 60))
         let remaining = max(0, Int(ceil(end.timeIntervalSince(now) / 60.0)))
-        return "\(remaining)m left"
+        return remaining.durationLeftString
     }
 
     private var titleWithStatusAccessibilityLabel: String {

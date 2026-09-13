@@ -61,10 +61,10 @@ public enum PreWindowFitAnalyzer {
             let name = anchor.title
             let until = anchor.minutesUntilStart
             if !isOvercommitted {
-                return "\(name) in \(until)m — your flex tasks fit."
+                return "\(name) in \(until.durationString) — your flex tasks fit."
             }
             let over = requiredMinutes - availableMinutes
-            var parts = ["\(name) in \(until)m — \(over)m short."]
+            var parts = ["\(name) in \(until.durationString) — \(over.durationString) short."]
             if !skipTaskIDs.isEmpty {
                 parts.append("Skip \(skipTaskIDs.count).")
             }

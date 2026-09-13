@@ -369,7 +369,7 @@ public extension LifeTimelineEvent {
     var scheduleRangeLabel: String {
         if isFlexibleToday {
             if let minutes = estimatedMinutes, minutes > 0 {
-                return "Flexible today · \(minutes)m"
+                return "Flexible today · \(minutes.durationString)"
             }
             return "Flexible today"
         }

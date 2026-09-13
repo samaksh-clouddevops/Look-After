@@ -50,7 +50,7 @@ struct RoutineBlockEditorSheet: View {
                 Section("Routine block") {
                     TextField("Title (e.g. Gym, Wake up)", text: $title)
                     DatePicker("Start time", selection: $startDate, displayedComponents: .hourAndMinute)
-                    Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 5...480, step: 5)
+                    Stepper("Duration: \(durationMinutes.durationString)", value: $durationMinutes, in: 5...480, step: 5)
                     Toggle("Non-negotiable (protect this time)", isOn: $isNonNegotiable)
                 }
 

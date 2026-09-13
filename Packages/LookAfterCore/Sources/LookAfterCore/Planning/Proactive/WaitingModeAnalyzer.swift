@@ -50,7 +50,7 @@ public enum WaitingModeAnalyzer {
         return ProactiveAction(
             kind: .waitingMode,
             severity: .medium,
-            message: "You have ~\(result.availableMinutes)m before \"\(result.anchorTitle)\" — knock out \"\(taskTitles)\"?",
+            message: "You have ~\(result.availableMinutes.durationString) before \"\(result.anchorTitle)\" — knock out \"\(taskTitles)\"?",
             options: result.fittingTasks.map { "Start \($0.title)" } + ["Keep plan"],
             surface: .banner,
             relatedTaskIDs: result.fittingTasks.map(\.id),
