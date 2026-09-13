@@ -20,6 +20,11 @@ struct SettingsView: View {
     @State private var profileOrganizeError: String?
     @State private var taskSyncMessage: String?
     @State private var isSyncingTasks = false
+    @State private var isImportingReminders = false
+    @State private var remindersImportMessage: String?
+    @State private var isCapturingLocation = false
+    @State private var locationCaptureMessage: String?
+    private let locationCaptureService = LocationCaptureService()
     @State private var cyclePreferences = CyclePreferencesStore.load()
     @AppStorage("targetSleepHours") private var targetSleepHours: Double = 8.0
     @AppStorage("userName") private var userName: String = ""
@@ -822,12 +827,60 @@ struct SettingsView: View {
                     NavigationLink(destination: { RoutineBuilderView() }, label: {
                         Label("My Daily Routine", systemImage: "calendar.day.timeline.left")
                     })
+
+                    Button(action: { Task { await importFromReminders() } }) {
+                        HStack {
+                            Label("Import from Reminders", systemImage: "list.bullet.clipboard")
+                            Spacer()
+                            if isImportingReminders {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isImportingReminders)
+                    .foregroundColor(DesignSystem.textPrimary)
+
+                    Button(action: { Task { await captureCurrentLocation(as: .home) } }) {
+                        HStack {
+                            Label(
+                                lifeProfile.homeLatitude == nil ? "Set current location as Home" : "Update Home location",
+                                systemImage: "house.fill"
+                            )
+                            Spacer()
+                            if isCapturingLocation {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isCapturingLocation)
+                    .foregroundColor(DesignSystem.textPrimary)
+
+                    Button(action: { Task { await captureCurrentLocation(as: .office) } }) {
+                        HStack {
+                            Label(
+                                lifeProfile.officeLatitude == nil ? "Set current location as Office" : "Update Office location",
+                                systemImage: "building.2.fill"
+                            )
+                            Spacer()
+                            if isCapturingLocation {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isCapturingLocation)
+                    .foregroundColor(DesignSystem.textPrimary)
                 }, header: {
                     Text("Brain context")
                 }, footer: {
-                    Text("Import your full life profile. The brain compiles identity, time blocks, and commitments — fixed blocks appear on Timeline automatically.")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.textMuted)
+                    Group {
+                        if let locationCaptureMessage {
+                            Text(locationCaptureMessage)
+                        } else {
+                            Text("Import your full life profile. The brain compiles identity, time blocks, and commitments — fixed blocks appear on Timeline automatically. Saved locations let the AI detect when you're home or at the office.")
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(DesignSystem.textMuted)
                 })
 
                 // Energy Profile
@@ -907,6 +960,14 @@ struct SettingsView: View {
                 Task { await notificationPermission.refreshStatus() }
                 let userId = FirebaseManager.shared.resolvedUserId
                 healthSync.refreshConnectionStatus(userId: userId, healthSummary: shell.brainVM.healthSummary)
+            }
+            .alert("Reminders Import", isPresented: Binding(
+                get: { remindersImportMessage != nil },
+                set: { if !$0 { remindersImportMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { remindersImportMessage = nil }
+            } message: {
+                Text(remindersImportMessage ?? "")
             }
             .sheet(isPresented: $showHealthVerification) {
                 NavigationStack {
@@ -1029,6 +1090,59 @@ struct SettingsView: View {
             syncStructuredProfileToStore()
             profileOrganizeError = "AI unavailable (\(error.localizedDescription)) — formatted sections locally."
             await syncTasksFromProfile(showOrganizeContext: true)
+        }
+    }
+
+    private func importFromReminders() async {
+        guard !isImportingReminders else { return }
+        isImportingReminders = true
+        defer { isImportingReminders = false }
+
+        let userId = FirebaseManager.shared.resolvedUserId
+        guard !userId.isEmpty else {
+            remindersImportMessage = "Sign in to import reminders as tasks."
+            return
+        }
+
+        do {
+            let count = try await shell.tasksVM.importFromReminders(userId: userId)
+            remindersImportMessage = count > 0
+                ? "Imported \(count) reminder\(count == 1 ? "" : "s") as task\(count == 1 ? "" : "s")."
+                : "No new reminders to import."
+        } catch RemindersImportError.accessDenied {
+            remindersImportMessage = "Reminders access denied. Enable it in iOS Settings → Look After → Reminders."
+        } catch {
+            remindersImportMessage = "Couldn't import reminders: \(error.localizedDescription)"
+        }
+    }
+
+    private enum SavedLocationKind {
+        case home
+        case office
+    }
+
+    private func captureCurrentLocation(as kind: SavedLocationKind) async {
+        guard !isCapturingLocation else { return }
+        isCapturingLocation = true
+        defer { isCapturingLocation = false }
+
+        do {
+            let coordinate = try await locationCaptureService.currentCoordinate()
+            switch kind {
+            case .home:
+                lifeProfile.homeLatitude = coordinate.latitude
+                lifeProfile.homeLongitude = coordinate.longitude
+                locationCaptureMessage = "Home location saved."
+            case .office:
+                lifeProfile.officeLatitude = coordinate.latitude
+                lifeProfile.officeLongitude = coordinate.longitude
+                locationCaptureMessage = "Office location saved."
+            }
+            UserLifeProfileStore.save(lifeProfile)
+        } catch LocationCaptureError.accessDenied {
+            locationCaptureMessage = "Location access denied. Enable it in iOS Settings → Look After → Location."
+        } catch {
+            locationCaptureMessage = "Couldn't get current location: \(error.localizedDescription)"
         }
     }
 

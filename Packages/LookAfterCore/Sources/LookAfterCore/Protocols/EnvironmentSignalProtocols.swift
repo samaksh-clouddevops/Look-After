@@ -9,19 +9,22 @@ public struct EnvironmentSignalAvailability: Codable, Sendable, Equatable {
     public var weather: Bool
     public var device: Bool
     public var time: Bool
+    public var location: Bool
 
     public init(
         health: Bool = false,
         calendar: Bool = false,
         weather: Bool = false,
         device: Bool = false,
-        time: Bool = true
+        time: Bool = true,
+        location: Bool = false
     ) {
         self.health = health
         self.calendar = calendar
         self.weather = weather
         self.device = device
         self.time = time
+        self.location = location
     }
 
     public static let none = EnvironmentSignalAvailability(time: false)
@@ -161,6 +164,32 @@ public struct TimeEnvironmentSignals: Sendable, Equatable {
 
 public protocol TimeEnvironmentSignalProviderProtocol: Sendable {
     func currentSignals(at date: Date, calendar: Calendar) async -> TimeEnvironmentSignals
+}
+
+// MARK: - Location Signals
+
+/// Location-derived slice of `EnvironmentContext`. Uses only `CoreLocation`'s free
+/// "when in use" authorization — no paid entitlement required.
+public struct LocationEnvironmentSignals: Sendable, Equatable {
+    public var locationContext: LocationContext
+    public var isAvailable: Bool
+    public var permissionDenied: Bool
+
+    public init(
+        locationContext: LocationContext = .unknown,
+        isAvailable: Bool = false,
+        permissionDenied: Bool = false
+    ) {
+        self.locationContext = locationContext
+        self.isAvailable = isAvailable
+        self.permissionDenied = permissionDenied
+    }
+
+    public static let unavailable = LocationEnvironmentSignals()
+}
+
+public protocol LocationEnvironmentSignalProviderProtocol: Sendable {
+    func currentSignals() async -> LocationEnvironmentSignals
 }
 
 // MARK: - Fused Result

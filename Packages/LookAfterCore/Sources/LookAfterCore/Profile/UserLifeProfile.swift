@@ -29,6 +29,12 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
     public var desiredSleepMinute: Int
     /// Whether the user has explicitly set wake/sleep preferences (vs. using defaults).
     public var hasSetSleepWakePreference: Bool
+    /// Saved "Home" coordinate for location-based context (`CLLocationManager`, no entitlement required).
+    public var homeLatitude: Double?
+    public var homeLongitude: Double?
+    /// Saved "Office" coordinate for location-based context.
+    public var officeLatitude: Double?
+    public var officeLongitude: Double?
 
     public init(
         hasCompletedOnboarding: Bool = false,
@@ -48,7 +54,11 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         desiredWakeMinute: Int = 0,
         desiredSleepHour: Int = 23,
         desiredSleepMinute: Int = 0,
-        hasSetSleepWakePreference: Bool = false
+        hasSetSleepWakePreference: Bool = false,
+        homeLatitude: Double? = nil,
+        homeLongitude: Double? = nil,
+        officeLatitude: Double? = nil,
+        officeLongitude: Double? = nil
     ) {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.profileText = profileText
@@ -68,6 +78,10 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         self.desiredSleepHour = desiredSleepHour
         self.desiredSleepMinute = desiredSleepMinute
         self.hasSetSleepWakePreference = hasSetSleepWakePreference
+        self.homeLatitude = homeLatitude
+        self.homeLongitude = homeLongitude
+        self.officeLatitude = officeLatitude
+        self.officeLongitude = officeLongitude
     }
 
     public init(from decoder: Decoder) throws {
@@ -90,6 +104,10 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         desiredSleepHour = try container.decodeIfPresent(Int.self, forKey: .desiredSleepHour) ?? 23
         desiredSleepMinute = try container.decodeIfPresent(Int.self, forKey: .desiredSleepMinute) ?? 0
         hasSetSleepWakePreference = try container.decodeIfPresent(Bool.self, forKey: .hasSetSleepWakePreference) ?? false
+        homeLatitude = try container.decodeIfPresent(Double.self, forKey: .homeLatitude)
+        homeLongitude = try container.decodeIfPresent(Double.self, forKey: .homeLongitude)
+        officeLatitude = try container.decodeIfPresent(Double.self, forKey: .officeLatitude)
+        officeLongitude = try container.decodeIfPresent(Double.self, forKey: .officeLongitude)
     }
 
     /// Apply focus preference → internal peak hours used by schedulers.
@@ -157,6 +175,7 @@ public struct UserLifeProfile: Codable, Sendable, Equatable {
         case workStartHour, workStartMinute, workEndHour, workEndMinute
         case peakStartHour, peakEndHour, focusTimePreference, fixedScheduleNotes, preferredName, hasSeededInitialTasks, gender
         case desiredWakeHour, desiredWakeMinute, desiredSleepHour, desiredSleepMinute, hasSetSleepWakePreference
+        case homeLatitude, homeLongitude, officeLatitude, officeLongitude
     }
 }
 

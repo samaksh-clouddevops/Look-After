@@ -1017,6 +1017,29 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    private let remindersImportService = RemindersImportService()
+
+    /// Imports incomplete Apple Reminders as tasks, skipping ones already imported (by title match).
+    /// Returns the number of new tasks created.
+    @discardableResult
+    public func importFromReminders(userId: String) async throws -> Int {
+        let candidates = try await remindersImportService.fetchIncompleteReminders(userId: userId)
+        guard !candidates.isEmpty else { return 0 }
+
+        let existingTitles = Set(
+            (tasks + completedToday).map { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        )
+
+        var importedCount = 0
+        for candidate in candidates {
+            let key = candidate.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !existingTitles.contains(key) else { continue }
+            try await createTaskAndAwait(candidate)
+            importedCount += 1
+        }
+        return importedCount
+    }
+
     /// Creates a multi-day parent + slice tasks without running TaskDecomposer.
     public func createMultiDayTasks(plan: MultiDayTaskPlan) {
         insertTaskWithoutDecompose(plan.parent)

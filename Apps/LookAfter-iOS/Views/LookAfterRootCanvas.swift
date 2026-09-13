@@ -548,6 +548,7 @@ public struct LookAfterRootCanvas: View {
                 speechSynthesizer: planningSpeech,
                 modulesVM: shell.modulesVM,
                 tasksVM: shell.tasksVM,
+                userId: firebase.resolvedUserId,
                 lifeTimelineEvents: shell.timelineService.snapshot.today,
                 tomorrowLifeTimelineEvents: shell.timelineService.snapshot.tomorrow,
                 weatherSnapshot: weatherService.snapshot,

@@ -12,6 +12,7 @@ public struct EnvironmentContextProvider: EnvironmentContextProviding, Environme
     public let calendarProvider: CalendarEnvironmentSignalProviderProtocol
     public let deviceProvider: DeviceEnvironmentSignalProviderProtocol
     public let weatherProvider: WeatherEnvironmentSignalProviderProtocol
+    public let locationProvider: LocationEnvironmentSignalProviderProtocol
     public let calendar: Calendar
 
     public init(
@@ -20,6 +21,7 @@ public struct EnvironmentContextProvider: EnvironmentContextProviding, Environme
         calendarProvider: CalendarEnvironmentSignalProviderProtocol = UnavailableCalendarEnvironmentSignalProvider(permissionDenied: false),
         deviceProvider: DeviceEnvironmentSignalProviderProtocol = DefaultDeviceEnvironmentSignalProvider(),
         weatherProvider: WeatherEnvironmentSignalProviderProtocol = StubWeatherEnvironmentSignalProvider(),
+        locationProvider: LocationEnvironmentSignalProviderProtocol = UnavailableLocationEnvironmentSignalProvider(),
         calendar: Calendar = .current
     ) {
         self.timeProvider = timeProvider
@@ -27,6 +29,7 @@ public struct EnvironmentContextProvider: EnvironmentContextProviding, Environme
         self.calendarProvider = calendarProvider
         self.deviceProvider = deviceProvider
         self.weatherProvider = weatherProvider
+        self.locationProvider = locationProvider
         self.calendar = calendar
     }
 
@@ -45,9 +48,10 @@ public struct EnvironmentContextProvider: EnvironmentContextProviding, Environme
         async let calendarSignals = calendarProvider.currentSignals(at: date)
         async let deviceSignals = deviceProvider.currentSignals()
         async let weatherSignals = weatherProvider.currentSignals(at: date)
+        async let locationSignals = locationProvider.currentSignals()
 
-        let (time, health, cal, device, weather) = await (
-            timeSignals, healthSignals, calendarSignals, deviceSignals, weatherSignals
+        let (time, health, cal, device, weather, location) = await (
+            timeSignals, healthSignals, calendarSignals, deviceSignals, weatherSignals, locationSignals
         )
 
         let availability = EnvironmentSignalAvailability(
@@ -55,7 +59,8 @@ public struct EnvironmentContextProvider: EnvironmentContextProviding, Environme
             calendar: cal.isAvailable,
             weather: weather.isAvailable,
             device: device.isAvailable,
-            time: time.isAvailable
+            time: time.isAvailable,
+            location: location.isAvailable
         )
 
         let context = EnvironmentContext(
@@ -73,7 +78,7 @@ public struct EnvironmentContextProvider: EnvironmentContextProviding, Environme
             isLowPowerMode: device.isLowPowerMode,
             reduceMotionEnabled: device.reduceMotionEnabled,
             ambientNoiseLevel: nil,
-            locationContext: nil
+            locationContext: location.isAvailable ? location.locationContext : nil
         )
 
         return EnvironmentContextResult(context: context, availability: availability)

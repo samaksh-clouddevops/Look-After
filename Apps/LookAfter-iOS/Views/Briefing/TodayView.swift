@@ -21,6 +21,7 @@ struct TodayView: View {
     let speechSynthesizer: PlanningSpeechSynthesizer
     let modulesVM: LifeModulesViewModel
     let tasksVM: TasksViewModel
+    let userId: String
 
     let lifeTimelineEvents: [LifeTimelineEvent]
     let tomorrowLifeTimelineEvents: [LifeTimelineEvent]
@@ -60,6 +61,7 @@ struct TodayView: View {
     @State private var showPlanningAssistant = false
     @State private var planningSheetDetent: PresentationDetent = .medium
     @State private var showDayControls = false
+    @State private var showQuickAddTask = false
 
     var body: some View {
         timelineSection
@@ -111,6 +113,9 @@ struct TodayView: View {
         .onChange(of: selectedCalendarDate) { _, _ in
             refreshPreWindowFitIfNeeded()
             refreshProactiveIfNeeded()
+        }
+        .sheet(isPresented: $showQuickAddTask) {
+            TaskFormSheet(tasksVM: tasksVM, mode: .create, userId: userId)
         }
     }
 
@@ -358,7 +363,8 @@ struct TodayView: View {
                 onOpenPlan: { showPlanningAssistant = true },
                 onReplanDay: onReplanDay,
                 onPlanTomorrow: onPlanTomorrow,
-                onSettings: onSettings
+                onSettings: onSettings,
+                onQuickAddTask: { showQuickAddTask = true }
             )
             if !showDayControls {
                 Text(formattedSelectedDate)
@@ -488,6 +494,7 @@ private struct TodayHeaderBar: View {
     var onReplanDay: () -> Void
     var onPlanTomorrow: () -> Void
     var onSettings: () -> Void
+    var onQuickAddTask: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: LAChromeMetrics.toolbarGap) {
@@ -498,6 +505,13 @@ private struct TodayHeaderBar: View {
                 .layoutPriority(1)
 
             Spacer(minLength: DesignSystem.spacingSM)
+
+            LAToolbarIconButton(
+                systemName: "plus.circle.fill",
+                accessibilityLabel: "Quick add task",
+                action: onQuickAddTask
+            )
+            .accessibilityIdentifier("nav-quick-add-task")
 
             if isSelectedToday {
                 Button(action: onOpenPlan) {

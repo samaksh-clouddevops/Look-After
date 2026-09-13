@@ -829,8 +829,8 @@ struct RelationshipsView: View {
             .navigationTitle("Relationships & Social Butler")
             #if os(iOS)
             .sheet(isPresented: $showContactPicker) {
-                ContactPickerViewController { name, phone in
-                    let contact = RelationshipContact(name: name, phoneNumber: phone, relationship: "Friend", userId: "user")
+                ContactPickerViewController { name, phone, birthday in
+                    let contact = RelationshipContact(name: name, phoneNumber: phone, relationship: "Friend", birthday: birthday, userId: "user")
                     Task { await modulesVM.addContact(contact) }
                 }
             }
@@ -975,6 +975,12 @@ struct RelationshipsView: View {
                             .font(.system(size: 12, weight: .medium, design: .default))
                             .foregroundColor(DesignSystem.textMuted)
                     }
+
+                    if let birthday = contact.birthday {
+                        Text("🎂 \(birthday.formatted(.dateTime.month(.wide).day()))")
+                            .font(.system(size: 12, weight: .medium, design: .default))
+                            .foregroundColor(DesignSystem.textMuted)
+                    }
                 }
                 
                 Spacer()
@@ -1033,31 +1039,36 @@ struct RelationshipsView: View {
 #if os(iOS)
 /// UIKit Contact Picker Controller Wrapper for SwiftUI
 struct ContactPickerViewController: UIViewControllerRepresentable {
-    var onSelect: (String, String) -> Void
-    
+    var onSelect: (String, String, Date?) -> Void
+
     func makeUIViewController(context: Context) -> CNContactPickerViewController {
         let picker = CNContactPickerViewController()
         picker.delegate = context.coordinator
+        picker.displayedPropertyKeys = [
+            CNContactPhoneNumbersKey,
+            CNContactBirthdayKey
+        ]
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: CNContactPickerViewController, context: Context) {}
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(onSelect: onSelect)
     }
-    
+
     class Coordinator: NSObject, CNContactPickerDelegate {
-        var onSelect: (String, String) -> Void
-        
-        init(onSelect: @escaping (String, String) -> Void) {
+        var onSelect: (String, String, Date?) -> Void
+
+        init(onSelect: @escaping (String, String, Date?) -> Void) {
             self.onSelect = onSelect
         }
-        
+
         func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
             let fullName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
             let phone = contact.phoneNumbers.first?.value.stringValue ?? ""
-            onSelect(fullName.isEmpty ? "New Contact" : fullName, phone)
+            let birthday = contact.birthday?.date
+            onSelect(fullName.isEmpty ? "New Contact" : fullName, phone, birthday)
         }
     }
 }

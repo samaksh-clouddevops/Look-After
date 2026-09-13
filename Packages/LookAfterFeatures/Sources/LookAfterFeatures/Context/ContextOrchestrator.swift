@@ -26,7 +26,8 @@ public final class ContextOrchestrator: ObservableObject {
 
     public init(
         environmentProvider: EnvironmentContextProvider = EnvironmentContextProvider(
-            calendarProvider: EventKitCalendarEnvironmentSignalProvider()
+            calendarProvider: EventKitCalendarEnvironmentSignalProvider(),
+            locationProvider: ContextOrchestrator.makeLocationProvider()
         ),
         resumeEngine: ResumeEngine = .shared,
         glmService: GLMService? = nil
@@ -34,6 +35,22 @@ public final class ContextOrchestrator: ObservableObject {
         self.environmentProvider = environmentProvider
         self.resumeEngine = resumeEngine
         self.capacityEngine = ExecutiveCapacityEngine(glmService: glmService)
+    }
+
+    /// Builds a `CoreLocationEnvironmentSignalProvider` from the user's saved home/office
+    /// coordinates (Settings), or an unavailable stub if neither has been set. No paid
+    /// entitlement required — uses only `NSLocationWhenInUseUsageDescription`.
+    private static func makeLocationProvider() -> LocationEnvironmentSignalProviderProtocol {
+        let profile = UserLifeProfileStore.load()
+        guard profile.homeLatitude != nil || profile.officeLatitude != nil else {
+            return UnavailableLocationEnvironmentSignalProvider()
+        }
+        return CoreLocationEnvironmentSignalProvider(
+            homeLatitude: profile.homeLatitude,
+            homeLongitude: profile.homeLongitude,
+            officeLatitude: profile.officeLatitude,
+            officeLongitude: profile.officeLongitude
+        )
     }
 
     public struct RefreshInput: Sendable {
