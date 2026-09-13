@@ -13,10 +13,18 @@ struct RoutineBlockEditorSheet: View {
     var onDelete: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    private enum DurationInputMode: String, CaseIterable, Identifiable {
+        case duration = "Duration"
+        case endTime = "End time"
+        var id: String { rawValue }
+    }
+
     @State private var title: String
     @State private var days: WeekdaySet
     @State private var startDate: Date
     @State private var durationMinutes: Int
+    @State private var endDate: Date
+    @State private var durationInputMode: DurationInputMode = .duration
     @State private var isNonNegotiable: Bool
     @State private var conflictWarning: String?
 
@@ -31,15 +39,19 @@ struct RoutineBlockEditorSheet: View {
             existingID = nil
             _title = State(initialValue: "")
             _days = State(initialValue: .everyDay)
-            _startDate = State(initialValue: Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: Date()) ?? Date())
+            let start = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: Date()) ?? Date()
+            _startDate = State(initialValue: start)
             _durationMinutes = State(initialValue: 30)
+            _endDate = State(initialValue: start.addingTimeInterval(30 * 60))
             _isNonNegotiable = State(initialValue: true)
         case .edit(let block):
             existingID = block.id
             _title = State(initialValue: block.title)
             _days = State(initialValue: block.days)
-            _startDate = State(initialValue: Calendar.current.date(bySettingHour: block.startHour, minute: block.startMinute, second: 0, of: Date()) ?? Date())
+            let start = Calendar.current.date(bySettingHour: block.startHour, minute: block.startMinute, second: 0, of: Date()) ?? Date()
+            _startDate = State(initialValue: start)
             _durationMinutes = State(initialValue: block.durationMinutes)
+            _endDate = State(initialValue: start.addingTimeInterval(Double(block.durationMinutes) * 60))
             _isNonNegotiable = State(initialValue: block.isNonNegotiable)
         }
     }
@@ -50,7 +62,21 @@ struct RoutineBlockEditorSheet: View {
                 Section("Routine block") {
                     TextField("Title (e.g. Gym, Wake up)", text: $title)
                     DatePicker("Start time", selection: $startDate, displayedComponents: .hourAndMinute)
-                    Stepper("Duration: \(durationMinutes.durationString)", value: $durationMinutes, in: 5...480, step: 5)
+
+                    Picker("Set by", selection: $durationInputMode) {
+                        ForEach(DurationInputMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    switch durationInputMode {
+                    case .duration:
+                        Stepper("Duration: \(durationMinutes.durationString)", value: $durationMinutes, in: 5...480, step: 5)
+                    case .endTime:
+                        DatePicker("End time", selection: $endDate, displayedComponents: .hourAndMinute)
+                    }
+
                     Toggle("Non-negotiable (protect this time)", isOn: $isNonNegotiable)
                 }
 
@@ -94,8 +120,23 @@ struct RoutineBlockEditorSheet: View {
                         .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .onChange(of: startDate) { _, _ in checkConflicts() }
-            .onChange(of: durationMinutes) { _, _ in checkConflicts() }
+            .onChange(of: startDate) { _, newValue in
+                if durationInputMode == .duration {
+                    endDate = newValue.addingTimeInterval(Double(durationMinutes) * 60)
+                } else {
+                    syncDurationFromEndDate()
+                }
+                checkConflicts()
+            }
+            .onChange(of: durationMinutes) { _, newValue in
+                endDate = startDate.addingTimeInterval(Double(newValue) * 60)
+                checkConflicts()
+            }
+            .onChange(of: endDate) { _, _ in
+                guard durationInputMode == .endTime else { return }
+                syncDurationFromEndDate()
+                checkConflicts()
+            }
             .onChange(of: days) { _, _ in checkConflicts() }
             .onAppear { checkConflicts() }
         }
@@ -119,6 +160,17 @@ struct RoutineBlockEditorSheet: View {
             durationMinutes: durationMinutes,
             isNonNegotiable: isNonNegotiable
         )
+    }
+
+    /// Recomputes `durationMinutes` from `startDate`/`endDate`, treating an end time
+    /// earlier than the start time as crossing midnight (e.g. 23:00 → 00:30 = 90 min).
+    private func syncDurationFromEndDate() {
+        let calendar = Calendar.current
+        let startMinutes = calendar.component(.hour, from: startDate) * 60 + calendar.component(.minute, from: startDate)
+        let endMinutes = calendar.component(.hour, from: endDate) * 60 + calendar.component(.minute, from: endDate)
+        var delta = endMinutes - startMinutes
+        if delta <= 0 { delta += 24 * 60 }
+        durationMinutes = min(max(delta, 5), 480)
     }
 
     private func checkConflicts() {
