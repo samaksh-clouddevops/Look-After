@@ -19,16 +19,15 @@ public final class RemindersImportService {
         let granted = try await requestRemindersAccess()
         guard granted else { throw RemindersImportError.accessDenied }
 
-        let reminders = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[EKReminder], Error>) in
+        let reminders = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[LifeTask], Error>) in
             let predicate = eventStore.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
             eventStore.fetchReminders(matching: predicate) { fetched in
-                continuation.resume(returning: fetched ?? [])
+                let tasks = (fetched ?? []).compactMap { self.mapToLifeTask($0, userId: userId) }
+                continuation.resume(returning: tasks)
             }
         }
 
-        return reminders.compactMap { reminder in
-            mapToLifeTask(reminder, userId: userId)
-        }
+        return reminders
     }
 
     // MARK: - Private
@@ -54,8 +53,8 @@ public final class RemindersImportService {
             deadline: dueDate,
             scheduledDate: dueDate,
             scheduledTime: reminder.dueDateComponents?.hour != nil ? dueDate : nil,
-            notes: "Imported from Reminders",
             tags: ["reminders-import"],
+            notes: "Imported from Reminders",
             schedulingMode: .flexible,
             userId: userId
         )

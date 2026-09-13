@@ -34,18 +34,23 @@ public final class LocationCaptureService: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let coordinate = locations.last?.coordinate else {
-            continuation?.resume(throwing: LocationCaptureError.unavailable)
+    nonisolated public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let coordinate = locations.last?.coordinate
+        Task { @MainActor in
+            guard let coordinate else {
+                continuation?.resume(throwing: LocationCaptureError.unavailable)
+                continuation = nil
+                return
+            }
+            continuation?.resume(returning: coordinate)
             continuation = nil
-            return
         }
-        continuation?.resume(returning: coordinate)
-        continuation = nil
     }
 
-    public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        continuation?.resume(throwing: error)
-        continuation = nil
+    nonisolated public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            continuation?.resume(throwing: error)
+            continuation = nil
+        }
     }
 }

@@ -1002,14 +1002,16 @@ public final class TasksViewModel: ObservableObject {
         tasks.insert(task, at: 0)
         do {
             var enriched = ScheduleNormalization.normalized(task)
-            enriched.semanticProfile = await resolveSemanticProfile(for: enriched)
+            // Keep Create instant: deterministic profile now, LLM enrichment in background.
+            enriched.semanticProfile = TaskSemanticProfileBuilder.build(from: enriched)
             _ = applyInMemoryTaskUpdate(enriched)
             try await taskRepo.create(enriched)
-
-            if enriched.steps.isEmpty, Self.shouldAutoDecompose(enriched) {
-                await decomposeTask(enriched)
-            }
             notifyTaskListDidChange()
+
+            enqueueSemanticProfileRefresh(for: enriched)
+            if enriched.steps.isEmpty, Self.shouldAutoDecompose(enriched) {
+                Task { await self.decomposeTask(enriched) }
+            }
         } catch {
             tasks.removeAll { $0.id == task.id }
             self.error = error.localizedDescription
@@ -1120,9 +1122,12 @@ public final class TasksViewModel: ObservableObject {
         tasks.insert(task, at: 0)
         do {
             var enriched = task
-            enriched.semanticProfile = await resolveSemanticProfile(for: task)
+            // Deterministic only on the create path — awaiting GLM here made multi-day
+            // Create feel stuck for tens of seconds (serial per parent/slice).
+            enriched.semanticProfile = TaskSemanticProfileBuilder.build(from: enriched)
             _ = applyInMemoryTaskUpdate(enriched)
             try await taskRepo.create(enriched)
+            enqueueSemanticProfileRefresh(for: enriched)
         } catch {
             tasks.removeAll { $0.id == task.id }
             self.error = error.localizedDescription

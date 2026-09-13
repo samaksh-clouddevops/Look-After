@@ -612,7 +612,7 @@ struct TaskFormSheet: View {
                                 multiDayCount = suggestion.dayCount
                             } label: {
                                 Label(
-                                    "This looks like \(suggestion.dayCount) days of work \u2014 tap to split into multi-day tasks",
+                                    "This looks like \(suggestion.dayCount) days of work \u{2014} tap to split into multi-day tasks",
                                     systemImage: "calendar.badge.clock"
                                 )
                                 .font(.system(size: 12, weight: .medium, design: .default))

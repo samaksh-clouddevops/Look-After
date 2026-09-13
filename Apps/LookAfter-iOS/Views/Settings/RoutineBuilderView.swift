@@ -109,7 +109,7 @@ struct RoutineBuilderView: View {
             }
             .scrollContentBackground(.hidden)
         }
-        .navigationTitle("My Daily Routine")
+        .navigationTitle("Plan my daily routine")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

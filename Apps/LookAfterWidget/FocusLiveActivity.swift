@@ -125,10 +125,12 @@ struct FocusLiveActivity: Widget {
     @ViewBuilder
     private func trailingTimer(context: ActivityViewContext<FocusActivityAttributes>) -> some View {
         if context.state.isPaused || !context.state.showsStrictCountdown {
-            Text(context.state.remainingLabel.isEmpty ? "—" : context.state.remainingLabel)
+            Text(context.state.remainingLabel.isEmpty ? "—" : Self.upgradedDurationLabel(context.state.remainingLabel))
                 .font(.dsCaption(weight: .semibold).monospacedDigit())
                 .foregroundStyle(islandAccent(context: context))
                 .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         } else {
             Text(timerInterval: Date()...endDate(for: context), countsDown: true)
                 .font(.dsCaption(weight: .semibold).monospacedDigit())
@@ -140,10 +142,12 @@ struct FocusLiveActivity: Widget {
     @ViewBuilder
     private func compactTrailing(context: ActivityViewContext<FocusActivityAttributes>) -> some View {
         if context.state.isPaused || !context.state.showsStrictCountdown {
-            Text(context.state.remainingLabel.isEmpty ? "·" : context.state.remainingLabel)
+            Text(context.state.remainingLabel.isEmpty ? "·" : Self.upgradedDurationLabel(context.state.remainingLabel))
                 .font(.dsMetadata().monospacedDigit())
                 .foregroundStyle(islandAccent(context: context))
                 .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         } else {
             Text(timerInterval: Date()...endDate(for: context), countsDown: true)
                 .font(.dsMetadata().monospacedDigit())
@@ -155,70 +159,119 @@ struct FocusLiveActivity: Widget {
     @ViewBuilder
     private func focusLockScreen(context: ActivityViewContext<FocusActivityAttributes>) -> some View {
         let accent = islandAccent(context: context)
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        let isAmbient = !context.state.showsStrictCountdown
+        let remaining = Self.upgradedDurationLabel(context.state.remainingLabel)
+        let nextUp = Self.upgradedDurationLabel(context.state.nextUpSummary)
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 Label(context.state.sessionLabel, systemImage: leadingIcon(context: context))
                     .font(.dsMetadata(weight: .bold))
                     .foregroundStyle(accent)
-                Spacer()
+                    .lineLimit(1)
+                Spacer(minLength: 4)
                 Text(context.state.constraintType)
                     .font(.dsMetadata(weight: .semibold))
                     .foregroundStyle(LiveActivityStyle.textSecondary)
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 2)
                     .background(Capsule().fill(LiveActivityStyle.chipPlate))
             }
 
             Text(context.state.taskTitle)
-                .font(.dsHeadline())
+                .font(.system(size: isAmbient ? 17 : 20, weight: .semibold))
                 .foregroundStyle(LiveActivityStyle.textPrimary)
-                .lineLimit(2)
+                .lineLimit(isAmbient ? 1 : 2)
+                .minimumScaleFactor(0.85)
 
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if context.state.isPaused {
-                    Text("Paused • \(context.state.remainingLabel)")
-                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    Text("Paused • \(remaining)")
+                        .font(.system(size: 20, weight: .bold, design: .monospaced))
                         .foregroundStyle(accent)
                         .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 } else if context.state.showsStrictCountdown {
                     Text(timerInterval: Date()...endDate(for: context), countsDown: true)
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(.system(size: 26, weight: .bold, design: .monospaced))
                         .foregroundStyle(accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 } else {
-                    Text(context.state.remainingLabel.isEmpty ? context.state.constraintType : context.state.remainingLabel)
+                    Text(remaining.isEmpty ? context.state.constraintType : remaining)
                         .font(.system(size: 22, weight: .semibold, design: .rounded).monospacedDigit())
                         .foregroundStyle(accent)
                         .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                Spacer()
-                Text("\(Int(context.state.progressFraction * 100))%")
-                    .font(.dsCaption(weight: .semibold).monospacedDigit())
-                    .foregroundStyle(LiveActivityStyle.textMuted)
-                    .contentTransition(.numericText())
+                Spacer(minLength: 4)
+                if !isAmbient || context.state.progressFraction > 0.01 {
+                    Text("\(Int(context.state.progressFraction * 100))%")
+                        .font(.dsCaption(weight: .semibold).monospacedDigit())
+                        .foregroundStyle(LiveActivityStyle.textMuted)
+                        .contentTransition(.numericText())
+                }
             }
 
-            LiveActivityLinearProgress(fraction: context.state.progressFraction, tint: accent)
+            if !isAmbient || context.state.progressFraction > 0.01 {
+                LiveActivityLinearProgress(fraction: context.state.progressFraction, tint: accent)
+            }
 
-            if !context.state.nextUpSummary.isEmpty {
-                Text(context.state.nextUpSummary)
+            if !nextUp.isEmpty {
+                Text(nextUp)
                     .font(.dsMetadata())
                     .foregroundStyle(LiveActivityStyle.textSecondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
 
-            focusControlButtons
+            // Rest/Done only for real focus blocks — ambient Fluid Gap / Recovery
+            // already fill the Lock Screen height budget without controls.
+            if context.state.showsStrictCountdown, !context.state.isOnBreak {
+                focusControlButtons
+            }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .activityBackgroundTint(LiveActivityStyle.background)
+    }
+
+    /// Rewrites legacy `381m` / `381m until Dinner` labels that predate `durationString`.
+    private static func upgradedDurationLabel(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+
+        if let pure = Int(trimmed.dropLast()), trimmed.hasSuffix("m"), !trimmed.contains("h"), !trimmed.contains(" ") {
+            return pure.durationString
+        }
+
+        // Prefix form: "381m until Dinner" / "Next Up: 90m Fluid Gap · then X"
+        var result = trimmed
+        let pattern = #"\b(\d+)m\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return trimmed }
+        let range = NSRange(result.startIndex..<result.endIndex, in: result)
+        let matches = regex.matches(in: result, range: range).reversed()
+        for match in matches {
+            guard match.numberOfRanges > 1,
+                  let full = Range(match.range(at: 0), in: result),
+                  let digits = Range(match.range(at: 1), in: result),
+                  let minutes = Int(result[digits]),
+                  minutes >= 60 else { continue }
+            result.replaceSubrange(full, with: minutes.durationString)
+        }
+        return result
     }
 
     @ViewBuilder
     private var focusControlButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button(intent: WidgetPauseFocusIntent()) {
                 Label("Rest", systemImage: "pause.circle.fill")
                     .font(.dsCaption(weight: .semibold))
+                    .lineLimit(1)
             }
             .buttonStyle(.bordered)
             .tint(LiveActivityStyle.textSecondary)
@@ -226,11 +279,11 @@ struct FocusLiveActivity: Widget {
             Button(intent: WidgetCompleteFocusIntent()) {
                 Label("Done", systemImage: "checkmark.circle.fill")
                     .font(.dsCaption(weight: .semibold))
+                    .lineLimit(1)
             }
             .buttonStyle(.borderedProminent)
             .tint(LiveActivityStyle.accent)
         }
-        .padding(.top, 4)
     }
 }
 

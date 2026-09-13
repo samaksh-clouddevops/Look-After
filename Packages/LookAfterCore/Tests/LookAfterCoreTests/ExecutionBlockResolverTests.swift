@@ -142,7 +142,8 @@ final class ExecutionBlockResolverTests: XCTestCase {
         )
 
         XCTAssertEqual(snapshot.surfaceMode, .fluidGap)
-        XCTAssertTrue(snapshot.nextUpSummary.contains("Gym") || snapshot.nextUpSummary.contains("until"))
+        XCTAssertTrue(snapshot.nextUpSummary.contains("Gym"))
+        XCTAssertTrue(snapshot.nextUpSummary.hasPrefix("Next:"))
         XCTAssertTrue(ExecutionBlockResolver.shouldProjectEnvironment(for: snapshot))
         XCTAssertFalse(snapshot.surfaceMode.showsStrictCountdown)
     }

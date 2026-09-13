@@ -25,14 +25,14 @@ public final class ContextOrchestrator: ObservableObject {
     private var userId: String = ""
 
     public init(
-        environmentProvider: EnvironmentContextProvider = EnvironmentContextProvider(
-            calendarProvider: EventKitCalendarEnvironmentSignalProvider(),
-            locationProvider: ContextOrchestrator.makeLocationProvider()
-        ),
+        environmentProvider: EnvironmentContextProvider? = nil,
         resumeEngine: ResumeEngine = .shared,
         glmService: GLMService? = nil
     ) {
-        self.environmentProvider = environmentProvider
+        self.environmentProvider = environmentProvider ?? EnvironmentContextProvider(
+            calendarProvider: EventKitCalendarEnvironmentSignalProvider(),
+            locationProvider: Self.makeLocationProvider()
+        )
         self.resumeEngine = resumeEngine
         self.capacityEngine = ExecutiveCapacityEngine(glmService: glmService)
     }

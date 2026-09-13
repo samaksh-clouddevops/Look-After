@@ -708,60 +708,7 @@ struct SettingsView: View {
                 }
 
                 if lifeProfile.gender == .female {
-                Section(content: {
-                    Toggle(isOn: Binding(
-                        get: { cyclePreferences.isEnabled },
-                        set: { enabled in
-                            cyclePreferences.isEnabled = enabled
-                            CyclePreferencesStore.save(cyclePreferences)
-                        }
-                    )) {
-                        Label("Track menstrual cycle", systemImage: "circle.circle.fill")
-                    }
-                    .tint(DesignSystem.accentPrimary)
-
-                    if cyclePreferences.isEnabled {
-                        NavigationLink(destination: {
-                            CycleDashboardView()
-                        }, label: {
-                            Label("Cycle dashboard", systemImage: "calendar.circle")
-                        })
-                        .listRowBackground(DesignSystem.contentSurface)
-
-                        Stepper("Cycle length: \(cyclePreferences.averageCycleLengthDays) days", value: Binding(
-                            get: { cyclePreferences.averageCycleLengthDays },
-                            set: {
-                                cyclePreferences.averageCycleLengthDays = $0
-                                CyclePreferencesStore.save(cyclePreferences)
-                            }
-                        ), in: 21...40)
-                        .listRowBackground(DesignSystem.contentSurface)
-
-                        Stepper("Period length: \(cyclePreferences.averagePeriodLengthDays) days", value: Binding(
-                            get: { cyclePreferences.averagePeriodLengthDays },
-                            set: {
-                                cyclePreferences.averagePeriodLengthDays = $0
-                                CyclePreferencesStore.save(cyclePreferences)
-                            }
-                        ), in: 2...10)
-                        .listRowBackground(DesignSystem.contentSurface)
-
-                        DatePicker("Last period start", selection: Binding(
-                            get: { cyclePreferences.lastPeriodStart ?? Date() },
-                            set: {
-                                cyclePreferences.lastPeriodStart = Calendar.current.startOfDay(for: $0)
-                                CyclePreferencesStore.save(cyclePreferences)
-                            }
-                        ), displayedComponents: .date)
-                        .listRowBackground(DesignSystem.contentSurface)
-                    }
-                }, header: {
-                    Text("Cycle tracking")
-                }, footer: {
-                    Text("Optional. Includes menstrual data from Apple Health when enabled. \(UserFacingCopy.medicalDisclaimer)")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.textMuted)
-                })
+                    cycleTrackingSection
                 }
                 
                 Section(content: {
@@ -820,82 +767,7 @@ struct SettingsView: View {
                 })
                 
                 // Life Profile (compiled life model)
-                Section(content: {
-                    LifeProfileImportView(markdown: $lifeProfileMarkdown)
-
-                    workTimeRow(title: "Work starts", hour: $lifeProfile.workStartHour, minute: $lifeProfile.workStartMinute)
-                    workTimeRow(title: "Work ends", hour: $lifeProfile.workEndHour, minute: $lifeProfile.workEndMinute)
-
-                    NavigationLink(destination: { RoutineBuilderView() }, label: {
-                        Label("My Daily Routine", systemImage: "calendar.day.timeline.left")
-                    })
-
-                    Button(action: { Task { await importFromReminders() } }) {
-                        HStack {
-                            Label("Import from Reminders", systemImage: "list.bullet.clipboard")
-                            Spacer()
-                            if isImportingReminders {
-                                ProgressView()
-                            }
-                        }
-                    }
-                    .disabled(isImportingReminders)
-                    .foregroundColor(DesignSystem.textPrimary)
-
-                    Button(action: { showHomeLocationPicker = true }) {
-                        HStack {
-                            Label(
-                                lifeProfile.homeLatitude == nil ? "Set Home location" : "Update Home location",
-                                systemImage: "house.fill"
-                            )
-                            Spacer()
-                            Image(systemName: "map")
-                                .foregroundColor(DesignSystem.textMuted)
-                        }
-                    }
-                    .foregroundColor(DesignSystem.textPrimary)
-
-                    Button(action: { showOfficeLocationPicker = true }) {
-                        HStack {
-                            Label(
-                                lifeProfile.officeLatitude == nil ? "Set Office location" : "Update Office location",
-                                systemImage: "building.2.fill"
-                            )
-                            Spacer()
-                            Image(systemName: "map")
-                                .foregroundColor(DesignSystem.textMuted)
-                        }
-                    }
-                    .foregroundColor(DesignSystem.textPrimary)
-
-                    ForEach(lifeProfile.customPlaces) { place in
-                        HStack {
-                            Label(place.name, systemImage: "mappin.circle.fill")
-                            Spacer()
-                        }
-                    }
-                    .onDelete { offsets in
-                        lifeProfile.customPlaces.remove(atOffsets: offsets)
-                        UserLifeProfileStore.save(lifeProfile)
-                    }
-
-                    Button(action: { showAddCustomPlace = true }) {
-                        Label("Add custom place (Gym, School…)", systemImage: "plus.circle")
-                    }
-                    .foregroundColor(DesignSystem.textPrimary)
-                }, header: {
-                    Text("Brain context")
-                }, footer: {
-                    Group {
-                        if let locationCaptureMessage {
-                            Text(locationCaptureMessage)
-                        } else {
-                            Text("Import your full life profile. The brain compiles identity, time blocks, and commitments — fixed blocks appear on Timeline automatically. Saved locations let the AI detect when you're home or at the office.")
-                        }
-                    }
-                    .font(.system(size: 11))
-                    .foregroundColor(DesignSystem.textMuted)
-                })
+                brainContextSection
 
                 // Energy Profile
                 Section(content: {
@@ -1073,6 +945,158 @@ struct SettingsView: View {
             .keyboardDismissToolbar()
             .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("screen-settings")
+    }
+
+    @ViewBuilder
+    private var cycleTrackingSection: some View {
+        Section(content: {
+            Toggle(isOn: Binding(
+                get: { cyclePreferences.isEnabled },
+                set: { enabled in
+                    cyclePreferences.isEnabled = enabled
+                    CyclePreferencesStore.save(cyclePreferences)
+                }
+            )) {
+                Label("Track menstrual cycle", systemImage: "circle.circle.fill")
+            }
+            .tint(DesignSystem.accentPrimary)
+
+            if cyclePreferences.isEnabled {
+                NavigationLink {
+                    CycleDashboardView()
+                } label: {
+                    Label("Cycle dashboard", systemImage: "calendar.circle")
+                }
+                .listRowBackground(DesignSystem.contentSurface)
+
+                Stepper(
+                    "Cycle length: \(cyclePreferences.averageCycleLengthDays) days",
+                    value: Binding(
+                        get: { cyclePreferences.averageCycleLengthDays },
+                        set: {
+                            cyclePreferences.averageCycleLengthDays = $0
+                            CyclePreferencesStore.save(cyclePreferences)
+                        }
+                    ),
+                    in: 21...40
+                )
+                .listRowBackground(DesignSystem.contentSurface)
+
+                Stepper(
+                    "Period length: \(cyclePreferences.averagePeriodLengthDays) days",
+                    value: Binding(
+                        get: { cyclePreferences.averagePeriodLengthDays },
+                        set: {
+                            cyclePreferences.averagePeriodLengthDays = $0
+                            CyclePreferencesStore.save(cyclePreferences)
+                        }
+                    ),
+                    in: 2...10
+                )
+                .listRowBackground(DesignSystem.contentSurface)
+
+                DatePicker(
+                    "Last period start",
+                    selection: Binding(
+                        get: { cyclePreferences.lastPeriodStart ?? Date() },
+                        set: {
+                            cyclePreferences.lastPeriodStart = Calendar.current.startOfDay(for: $0)
+                            CyclePreferencesStore.save(cyclePreferences)
+                        }
+                    ),
+                    displayedComponents: .date
+                )
+                .listRowBackground(DesignSystem.contentSurface)
+            }
+        }, header: {
+            Text("Cycle tracking")
+        }, footer: {
+            Text("Optional. Includes menstrual data from Apple Health when enabled. \(UserFacingCopy.medicalDisclaimer)")
+                .font(.system(size: 11))
+                .foregroundColor(DesignSystem.textMuted)
+        })
+    }
+
+    @ViewBuilder
+    private var brainContextSection: some View {
+        Section(content: {
+            LifeProfileImportView(markdown: $lifeProfileMarkdown)
+
+            workTimeRow(title: "Work starts", hour: $lifeProfile.workStartHour, minute: $lifeProfile.workStartMinute)
+            workTimeRow(title: "Work ends", hour: $lifeProfile.workEndHour, minute: $lifeProfile.workEndMinute)
+
+            NavigationLink {
+                RoutineBuilderView()
+            } label: {
+                Label("My Daily Routine", systemImage: "calendar.day.timeline.left")
+            }
+
+            Button(action: { Task { await importFromReminders() } }) {
+                HStack {
+                    Label("Import from Reminders", systemImage: "list.bullet.clipboard")
+                    Spacer()
+                    if isImportingReminders {
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(isImportingReminders)
+            .foregroundColor(DesignSystem.textPrimary)
+
+            Button(action: { showHomeLocationPicker = true }) {
+                HStack {
+                    Label(
+                        lifeProfile.homeLatitude == nil ? "Set Home location" : "Update Home location",
+                        systemImage: "house.fill"
+                    )
+                    Spacer()
+                    Image(systemName: "map")
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+            }
+            .foregroundColor(DesignSystem.textPrimary)
+
+            Button(action: { showOfficeLocationPicker = true }) {
+                HStack {
+                    Label(
+                        lifeProfile.officeLatitude == nil ? "Set Office location" : "Update Office location",
+                        systemImage: "building.2.fill"
+                    )
+                    Spacer()
+                    Image(systemName: "map")
+                        .foregroundColor(DesignSystem.textMuted)
+                }
+            }
+            .foregroundColor(DesignSystem.textPrimary)
+
+            ForEach(lifeProfile.customPlaces) { place in
+                HStack {
+                    Label(place.name, systemImage: "mappin.circle.fill")
+                    Spacer()
+                }
+            }
+            .onDelete { offsets in
+                lifeProfile.customPlaces.remove(atOffsets: offsets)
+                UserLifeProfileStore.save(lifeProfile)
+            }
+
+            Button(action: { showAddCustomPlace = true }) {
+                Label("Add custom place (Gym, School…)", systemImage: "plus.circle")
+            }
+            .foregroundColor(DesignSystem.textPrimary)
+        }, header: {
+            Text("Brain context")
+        }, footer: {
+            Group {
+                if let locationCaptureMessage {
+                    Text(locationCaptureMessage)
+                } else {
+                    Text("Import your full life profile. The brain compiles identity, time blocks, and commitments — fixed blocks appear on Timeline automatically. Saved locations let the AI detect when you're home or at the office.")
+                }
+            }
+            .font(.system(size: 11))
+            .foregroundColor(DesignSystem.textMuted)
+        })
     }
 
     private func syncStructuredProfileToStore() {

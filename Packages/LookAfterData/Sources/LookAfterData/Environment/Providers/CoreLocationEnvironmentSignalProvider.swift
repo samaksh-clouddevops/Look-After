@@ -28,15 +28,26 @@ public struct UnavailableLocationEnvironmentSignalProvider: LocationEnvironmentS
 /// (set once via Settings) within `proximityRadiusMeters`. No background tracking, no
 /// `startMonitoringVisits()` (which would require `NSLocationAlwaysAndWhenInUseUsageDescription`
 /// and raises unnecessary privacy friction for a soft planning signal).
+///
+/// `CLLocationManager` must stay on the main actor — Core Location asserts when the manager
+/// is created/used across queues (seen as `_dispatch_assert_queue_fail` after task load).
 public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalProviderProtocol {
 
-    private final class LocationFetcher: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+    @MainActor
+    private final class LocationFetcher: NSObject, CLLocationManagerDelegate {
+        static let shared = LocationFetcher()
+
         private let manager = CLLocationManager()
         private var continuation: CheckedContinuation<CLLocation?, Never>?
 
-        override init() {
+        private override init() {
             super.init()
             manager.delegate = self
+            manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        }
+
+        var authorizationStatus: CLAuthorizationStatus {
+            manager.authorizationStatus
         }
 
         func currentLocation() async -> CLLocation? {
@@ -48,23 +59,27 @@ public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalPr
                 return nil
             }
             return await withCheckedContinuation { continuation in
+                self.continuation?.resume(returning: nil)
                 self.continuation = continuation
                 manager.requestLocation()
             }
         }
 
-        func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-            continuation?.resume(returning: locations.last)
-            continuation = nil
+        nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+            Task { @MainActor in
+                continuation?.resume(returning: locations.last)
+                continuation = nil
+            }
         }
 
-        func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-            continuation?.resume(returning: nil)
-            continuation = nil
+        nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+            Task { @MainActor in
+                continuation?.resume(returning: nil)
+                continuation = nil
+            }
         }
     }
 
-    private let fetcher = LocationFetcher()
     private let homeCoordinate: CLLocationCoordinate2D?
     private let officeCoordinate: CLLocationCoordinate2D?
     private let customPlaces: [SavedPlace]
@@ -93,11 +108,11 @@ public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalPr
     }
 
     public func currentSignals() async -> LocationEnvironmentSignals {
-        let status = CLLocationManager().authorizationStatus
+        let status = await LocationFetcher.shared.authorizationStatus
         if status == .denied || status == .restricted {
             return LocationEnvironmentSignals(locationContext: .unknown, isAvailable: false, permissionDenied: true)
         }
-        guard let current = await fetcher.currentLocation() else {
+        guard let current = await LocationFetcher.shared.currentLocation() else {
             return .unavailable
         }
         let (context, placeName) = classify(current)

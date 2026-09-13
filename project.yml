@@ -44,7 +44,8 @@ targets:
         # Set after Azure deploy, e.g. https://lookafter-auth-xxxx.azurecontainerapps.io
         AuthProxyBaseURL: "https://lookafter-auth-d3mssrdbjuy6c.yellowhill-50dac6a6.eastus.azurecontainerapps.io"
         NSHealthShareUsageDescription: "Look After reads sleep, heart rate, HRV, steps, active energy, exercise and stand time, workouts, blood oxygen, mindful minutes, water intake, and menstrual-cycle data from Apple Health (including Apple Watch) to estimate energy and personalize scheduling. Cycle data is used only when that feature is enabled."
-        NSLocationWhenInUseUsageDescription: "Look After uses your location only to show local weather on Today when you open that chip."
+        NSLocationWhenInUseUsageDescription: "Look After uses your location to detect when you're at home or the office, helping the AI adapt scheduling, and to show local weather on Today."
+        NSRemindersFullAccessUsageDescription: "Look After reads your Reminders so you can import them as tasks in one tap."
         NSCalendarsFullAccessUsageDescription: "Look After reads your calendar to find free blocks and meeting-aware scheduling windows."
         NSCalendarsWriteOnlyAccessUsageDescription: "Look After needs access to your calendar to add scheduled tasks and sync events."
         NSMicrophoneUsageDescription: "Look After uses the microphone for voice capture and speech-to-text transcription."
@@ -100,7 +101,8 @@ targets:
       SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
       INFOPLIST_KEY_CFBundleDisplayName: "Look After"
       INFOPLIST_KEY_NSHealthShareUsageDescription: "Look After reads sleep, heart rate, HRV, steps, active energy, exercise and stand time, workouts, blood oxygen, mindful minutes, water intake, and menstrual-cycle data from Apple Health (including Apple Watch) to estimate energy and personalize scheduling. Cycle data is used only when that feature is enabled."
-      INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Look After uses your location only to show local weather on Today when you open that chip."
+      INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Look After uses your location to detect when you're at home or the office, helping the AI adapt scheduling, and to show local weather on Today."
+      INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: "Look After reads your Reminders so you can import them as tasks in one tap."
       INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "Look After reads your calendar to find free blocks and meeting-aware scheduling windows."
       INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription: "Look After needs access to your calendar to add scheduled tasks and sync events."
       INFOPLIST_KEY_NSMicrophoneUsageDescription: "Look After uses the microphone for voice capture and speech-to-text transcription."

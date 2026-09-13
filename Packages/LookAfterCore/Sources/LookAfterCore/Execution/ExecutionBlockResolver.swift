@@ -157,8 +157,7 @@ public enum ExecutionBlockResolver {
             return .idle
         }
 
-        let minutes = max(1, Int(next.interval.start.timeIntervalSince(now) / 60))
-        let nextLabel = "\(minutes.durationString) until \(next.task.title)"
+        let nextLabel = "Next: \(next.task.title)"
         let dayEnd = DayBoundaryPlanner.actionableDayEnd(on: now, calendar: calendar)
         let gapEnd = min(next.interval.start, dayEnd)
 
