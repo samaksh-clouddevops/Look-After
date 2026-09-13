@@ -17,6 +17,7 @@ struct ExecutiveProfileView: View {
     @State private var showModules = false
     @State private var showInbox = false
     @State private var showWeeklyReview = false
+    @State private var showRoutineBuilder = false
     @State private var weeklyAIRetrospective: WeeklyAIRetrospective?
     @State private var weeklyReviewSummaryCache: WeeklyReviewSummary?
     @State private var weeklyReviewRefreshGeneration = 0
@@ -92,6 +93,16 @@ struct ExecutiveProfileView: View {
         .sheet(isPresented: $showInbox) {
             NavigationStack {
                 InboxView(inboxVM: shell.inboxVM, userId: userId)
+            }
+        }
+        .sheet(isPresented: $showRoutineBuilder) {
+            NavigationStack {
+                RoutineBuilderView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showRoutineBuilder = false }
+                        }
+                    }
             }
         }
         .sheet(isPresented: $showWeeklyReview) {
@@ -267,6 +278,12 @@ struct ExecutiveProfileView: View {
                         .foregroundColor(DesignSystem.textSecondary)
                     Text("Routines tagged daily-routine show up here with a progress ring as you complete them.")
                         .textStyleCaption(color: DesignSystem.textSecondary)
+                    Button(action: { showRoutineBuilder = true }, label: {
+                        Text("Set up your daily routine →")
+                            .textStyleCaption(color: DesignSystem.accentPrimary)
+                    })
+                    .buttonStyle(.plain)
+                    .padding(.top, DesignSystem.spacingXXS)
                 }
                 .padding(DesignSystem.spacingMD)
                 .frame(maxWidth: .infinity, alignment: .leading)
