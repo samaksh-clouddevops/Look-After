@@ -4,7 +4,7 @@ import LookAfterAI
 import LookAfterCore
 import LookAfterData
 
-/// Natural speech via OpenAI TTS — prefers a local API key; falls back to licensed auth-proxy.
+/// Natural speech via OpenAI TTS — prefers a local API key; falls back to licensed Azure auth-proxy.
 enum OpenAICloudTTSService {
 
     enum TTSError: LocalizedError {
@@ -17,7 +17,7 @@ enum OpenAICloudTTSService {
         var errorDescription: String? {
             switch self {
             case .proxyUnavailable:
-                return "Cloud voice needs an OpenAI API key in credentials, or the Look After AI proxy."
+                return "Cloud voice needs an OpenAI API key in Settings → API Keys, or the Look After AI proxy."
             case .licenseRequired:
                 return "Activate your product key in Settings → License to use proxied cloud voice."
             case .emptyInput: return "Nothing to speak."
@@ -35,31 +35,44 @@ enum OpenAICloudTTSService {
         let voice = await MainActor.run { SpeechVoiceSettings.cloudVoice }
         let speed = await MainActor.run { cloudSpeed }
 
+        // Prefer local key (credentials / Keychain / Debug-bundled). Keep proxy as backup.
+        var directError: Error?
         if let apiKey = GLMKeyManager.resolveOpenAIAPIKey() {
             await MainActor.run { SpeechVoiceSettings.isOpenAIKeyConfigured = true }
-            return try await synthesizeDirect(
-                apiKey: apiKey,
-                input: input,
-                voice: voice,
-                speed: speed
-            )
+            do {
+                return try await synthesizeDirect(
+                    apiKey: apiKey,
+                    input: input,
+                    voice: voice,
+                    speed: speed
+                )
+            } catch {
+                directError = error
+            }
         }
 
         let proxyClient = await MainActor.run { LicenseManager.shared.proxyClient }
         let licensed = await MainActor.run { LicenseManager.shared.isLicensed }
-        guard let proxy = proxyClient else {
-            throw TTSError.proxyUnavailable
-        }
-        guard licensed else {
-            throw TTSError.licenseRequired
+        if let proxy = proxyClient, licensed {
+            do {
+                return try await proxy.speech(
+                    input: input,
+                    voice: voice,
+                    speed: speed,
+                    model: "tts-1-hd"
+                )
+            } catch {
+                throw directError ?? error
+            }
         }
 
-        return try await proxy.speech(
-            input: input,
-            voice: voice,
-            speed: speed,
-            model: "tts-1-hd"
-        )
+        if let directError {
+            throw directError
+        }
+        if proxyClient == nil {
+            throw TTSError.proxyUnavailable
+        }
+        throw TTSError.licenseRequired
     }
 
     /// Maps user rate preference (0.35…0.65) into OpenAI's 0.25…4.0 speed band.
@@ -83,6 +96,7 @@ enum OpenAICloudTTSService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 45
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": "tts-1-hd",
             "input": input,

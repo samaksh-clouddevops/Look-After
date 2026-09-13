@@ -27,6 +27,9 @@ public final class TaskStore: ObservableObject, TaskStoring {
     public func warmLocalCache(userId: String, force: Bool = false) async {
         _ = await taskRepo.warmLocalCache(force: force)
         guard !userId.isEmpty else { return }
+        // Guest → Firebase (or any stale owner id) must be claimed before we publish a snapshot,
+        // otherwise the timeline looks empty while Today's check still shows parked/prior clues.
+        taskRepo.migrateAllTasksToCanonicalUserId()
         refreshLocal(userId: userId)
     }
 
@@ -43,6 +46,7 @@ public final class TaskStore: ObservableObject, TaskStoring {
         guard !userId.isEmpty else { return snapshot }
         lastUserId = userId
         await taskRepo.warmLocalCache()
+        taskRepo.migrateAllTasksToCanonicalUserId()
         _ = try await taskRepo.getTaskLists(for: userId)
         refreshLocal(userId: userId)
         return snapshot
@@ -67,10 +71,12 @@ public final class TaskStore: ObservableObject, TaskStoring {
 
     public func reassignTasks(from oldUserId: String, to newUserId: String) {
         taskRepo.reassignTasks(from: oldUserId, to: newUserId)
-        if !lastUserId.isEmpty {
-            refreshLocal(userId: lastUserId)
-        } else if !newUserId.isEmpty {
-            refreshLocal(userId: newUserId)
+        // Always publish under the destination account — refreshing `lastUserId` (often the
+        // pre-auth guest id) made the timeline empty after sign-in while data remained on disk.
+        let publishId = newUserId.isEmpty ? lastUserId : newUserId
+        if !publishId.isEmpty {
+            lastUserId = publishId
+            refreshLocal(userId: publishId)
         }
         notifyChange()
     }

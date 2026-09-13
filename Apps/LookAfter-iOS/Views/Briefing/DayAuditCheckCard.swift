@@ -97,13 +97,7 @@ struct DayAuditCheckCard: View {
                         }
                     }
 
-                    if !ParkedTaskQueueStore.shared.candidatesForReintegration(limit: 1).isEmpty {
-                        Button("Review parked & fluid") {
-                            showParkedReview = true
-                        }
-                        .font(.dsCaption(weight: .semibold))
-                        .foregroundStyle(DesignSystem.accentPrimary)
-                    }
+                    parkedRestoreSection
 
                     if !audit.notPossible.isEmpty {
                         Text("Won’t fit today: " + audit.notPossible.prefix(2).map(\.title).joined(separator: ", "))
@@ -162,6 +156,38 @@ struct DayAuditCheckCard: View {
                     )
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var parkedRestoreSection: some View {
+        let parked = ParkedTaskQueueStore.shared.candidatesForReintegration(limit: 20)
+        if !parked.isEmpty {
+            Button("Restore \(parked.count) parked to Today") {
+                restoreParkedToToday(parked)
+            }
+            .font(.dsCaption(weight: .semibold))
+            .foregroundStyle(DesignSystem.accentPrimary)
+
+            Button("Review parked & fluid") {
+                showParkedReview = true
+            }
+            .font(.dsCaption(weight: .semibold))
+            .foregroundStyle(DesignSystem.accentPrimary)
+        }
+    }
+
+    private func restoreParkedToToday(_ entries: [ParkedTaskEntry]) {
+        Task {
+            _ = await ParkedTaskRecoveryService.shared.placeSelectedAwaitingPersistence(
+                entries,
+                gapStart: Date(),
+                day: Date(),
+                userId: userId,
+                tasksVM: tasksVM
+            )
+            tasksVM.refreshFromLocal(userId: userId)
+            await briefingVM.refreshDayAudit(tasksVM: tasksVM)
         }
     }
 }

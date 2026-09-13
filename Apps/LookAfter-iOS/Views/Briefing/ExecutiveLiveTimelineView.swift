@@ -5,12 +5,13 @@ import LookAfterFeatures
 // MARK: - Timeline visual constants
 
 private enum ExecutiveTimelineVisuals {
-    static let gutterWidth: CGFloat = 28
+    static let gutterWidth: CGFloat = 20
     static let lineWidth: CGFloat = 2
-    static let cardLeadingInset: CGFloat = 12
+    static let cardLeadingInset: CGFloat = 8
     static let rowSpacing: CGFloat = 14
-    static let timeColumnWidth: CGFloat = 60
-    static let rescheduleLeadingInset: CGFloat = timeColumnWidth + DesignSystem.spacingMD
+    /// Narrow rail so task cards own more of the Schedule row.
+    static let timeColumnWidth: CGFloat = 46
+    static let rescheduleLeadingInset: CGFloat = timeColumnWidth + DesignSystem.spacingSM
     static let dotCompleted: CGFloat = 10
     static let dotUpcoming: CGFloat = 10
     static let dotCurrent: CGFloat = 14
@@ -392,6 +393,8 @@ struct ExecutiveLiveTimelineView: View {
                 Text(row.timeLabel)
                     .font(.dsCaption())
                     .foregroundStyle(DesignSystem.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             } else if !row.timeLabel.isEmpty {
                 Text(row.timeLabel)
                     .font(.dsCaption(weight: row.isUnslottedFlexible ? .medium : .semibold))
@@ -400,10 +403,13 @@ struct ExecutiveLiveTimelineView: View {
                             ? DesignSystem.textMuted
                             : (row.isUnslottedFlexible ? DesignSystem.textMuted : DesignSystem.textSecondary)
                     )
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             } else if row.isUnslottedFlexible {
-                Text("Flexible")
+                Text("Flex")
                     .font(.dsCaption(weight: .medium))
                     .foregroundStyle(DesignSystem.textMuted)
+                    .lineLimit(1)
             } else {
                 Text("—")
                     .font(.dsCaption())
@@ -414,10 +420,13 @@ struct ExecutiveLiveTimelineView: View {
                 Text(row.endTimeLabel)
                     .font(.dsCaption())
                     .foregroundStyle(DesignSystem.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
 
             timelineConstraintMicroBadge(for: row)
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.top, 2)
     }
 
@@ -431,9 +440,10 @@ struct ExecutiveLiveTimelineView: View {
             // Time column already shows "Flexible" — skip duplicate badge.
             EmptyView()
         } else if row.timeConstraint == .flexible, !row.isFixedEvent {
-            Text("Flexible")
+            Text("Flex")
                 .font(.dsCaption(weight: .semibold))
                 .foregroundStyle(DesignSystem.textMuted)
+                .lineLimit(1)
         } else if row.timeConstraint == .fluid {
             Text("Fluid")
                 .font(.dsCaption(weight: .semibold))

@@ -22,10 +22,16 @@ public final class FirebaseManager: ObservableObject {
 
     /// True when Firestore reads/writes are allowed (real Firebase Auth + non-mock project).
     public var isCloudSyncAvailable: Bool {
+        guard !firestoreAPIDisabled else { return false }
         guard FirebaseApp.app() != nil, Auth.auth().currentUser != nil else { return false }
         guard let projectID = FirebaseApp.app()?.options.projectID else { return false }
         return !Self.mockProjectIDs.contains(projectID)
     }
+
+    /// Set when Google Cloud reports Firestore API disabled / never enabled for this project.
+    /// Session-only — cleared on next launch so enabling the API in Console resumes sync.
+    @Published public private(set) var firestoreAPIDisabled = false
+    @Published public private(set) var cloudSyncStatusMessage: String?
 
     private static let mockProjectIDs: Set<String> = ["lifeos-mock", "lifeos-dummy"]
     
@@ -48,8 +54,37 @@ public final class FirebaseManager: ObservableObject {
             self.userEmail = savedEmail
             self.isAuthenticated = true
         }
+        // Clear any stale UserDefaults latch from earlier builds so enabling Firestore
+        // in Console + relaunch resumes cloud sync without a manual reset.
+        UserDefaults.standard.removeObject(forKey: "lookafter.firestore.apiDisabled")
         ensureAuthListener()
     }
+
+    /// Call from sync catch sites when Firestore rejects writes (API disabled).
+    public func noteFirestoreFailure(_ failure: Error) {
+        let text = "\(failure) \(failure.localizedDescription)".lowercased()
+        let apiDisabled = text.contains("api has not been used")
+            || text.contains("firestore.googleapis.com/overview")
+            || text.contains("cloud firestore api")
+        guard apiDisabled else { return }
+        guard !firestoreAPIDisabled else { return }
+        firestoreAPIDisabled = true
+        cloudSyncStatusMessage = Self.firestoreDisabledUserMessage
+        error = Self.firestoreDisabledUserMessage
+    }
+
+    /// After enabling Firestore in Google Cloud, clear the local circuit breaker.
+    public func clearFirestoreAPIDisabledFlag() {
+        firestoreAPIDisabled = false
+        cloudSyncStatusMessage = nil
+        if error == Self.firestoreDisabledUserMessage {
+            error = nil
+        }
+    }
+
+    private static let firestoreDisabledUserMessage =
+        "Cloud sync paused: enable Cloud Firestore API for project adhd-d7836 in Google Cloud Console, then retry."
+
     
     // MARK: - Auth
     
@@ -74,7 +109,11 @@ public final class FirebaseManager: ObservableObject {
 
                     if let previous, !previous.isEmpty, previous != user.uid {
                         HealthSummaryRepository().reassignSummaries(from: previous, to: user.uid)
-                        TaskStore.shared.reassignTasks(from: previous, to: user.uid)
+                        Task { @MainActor in
+                            await TaskStore.shared.warmLocalCache(userId: previous, force: true)
+                            TaskStore.shared.reassignTasks(from: previous, to: user.uid)
+                            await TaskStore.shared.warmLocalCache(userId: user.uid, force: true)
+                        }
                     }
                 } else {
                     // Remote Auth session gone. Keep pure local guest sessions (Keychain guest UID)
@@ -273,7 +312,12 @@ public final class FirebaseManager: ObservableObject {
         }
         if let previous, !previous.isEmpty, previous != user.uid {
             HealthSummaryRepository().reassignSummaries(from: previous, to: user.uid)
-            TaskStore.shared.reassignTasks(from: previous, to: user.uid)
+            // Warm + reassign so guest-owned sqlite rows are claimed before UI snapshots.
+            Task { @MainActor in
+                await TaskStore.shared.warmLocalCache(userId: previous, force: true)
+                TaskStore.shared.reassignTasks(from: previous, to: user.uid)
+                await TaskStore.shared.warmLocalCache(userId: user.uid, force: true)
+            }
         }
     }
 

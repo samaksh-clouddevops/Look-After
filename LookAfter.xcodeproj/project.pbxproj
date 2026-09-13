@@ -1796,6 +1796,7 @@
 				69EBA28612E607D2065D3472 /* Frameworks */,
 				4B9B4D68DFE759D27D6E3C18 /* Embed Foundation Extensions */,
 				B6B36F48D935ADF282F88D8C /* Sync Firebase OAuth URL schemes */,
+				23D3ADE9A31248556EEAFAA4 /* Sync OpenAI debug credentials */,
 			);
 			buildRules = (
 			);
@@ -1930,6 +1931,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		23D3ADE9A31248556EEAFAA4 /* Sync OpenAI debug credentials */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Sync OpenAI debug credentials";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/bash \"${SRCROOT}/Scripts/sync-openai-debug-credentials.sh\"\n";
+		};
 		39FCA7E8754FBF4960E6B3A7 /* Ensure GoogleService-Info.plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;

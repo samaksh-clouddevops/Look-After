@@ -23,13 +23,14 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
     /// Last cloud TTS failure (cleared on successful speak). Shown in Settings preview.
     @Published private(set) var lastError: String?
 
-    private let appleSynthesizer = AVSpeechSynthesizer()
+    /// Lazily created on GCD main — never from a property initializer inside a SwiftUI/`Task` frame
+    /// (iOS 26 AX `unsafeForcedSync` / `__dispatch_assert_queue_fail`).
+    private var appleSynthesizer: AVSpeechSynthesizer?
     private let cloudPlayer = CloudSpeechPlayer()
     private var cloudTask: Task<Void, Never>?
 
     override init() {
         super.init()
-        appleSynthesizer.delegate = self
         cloudPlayer.onFinished = { [weak self] in
             self?.isSpeaking = false
             VoiceSessionKeepAlive.end("speech-synthesis")
@@ -38,6 +39,14 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         DispatchQueue.main.async { [weak self] in
             self?.refreshActiveVoiceLabel()
         }
+    }
+
+    private func ensureAppleSynthesizer() -> AVSpeechSynthesizer {
+        if let appleSynthesizer { return appleSynthesizer }
+        let synthesizer = AVSpeechSynthesizer()
+        synthesizer.delegate = self
+        appleSynthesizer = synthesizer
+        return synthesizer
     }
 
     func speak(_ text: String) {
@@ -57,14 +66,17 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
             return
         }
 
-        speakApple(prepared)
+        // Escape Swift concurrency TLS before AVSpeech (same pattern as AppleSpeechVoiceBootstrap).
+        DispatchQueue.main.async { [weak self] in
+            self?.speakApple(prepared)
+        }
     }
 
     func stop() {
         cloudTask?.cancel()
         cloudTask = nil
         cloudPlayer.stop()
-        if appleSynthesizer.isSpeaking || appleSynthesizer.isPaused {
+        if let appleSynthesizer, appleSynthesizer.isSpeaking || appleSynthesizer.isPaused {
             appleSynthesizer.stopSpeaking(at: .immediate)
         }
         isSpeaking = false
@@ -97,14 +109,17 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
                 let message = error.localizedDescription
                 lastError = message
                 print("[Speech] Cloud TTS failed: \(message) — falling back to Apple")
-                speakApple(text)
+                activeVoiceName = "System (cloud failed)"
+                DispatchQueue.main.async { [weak self] in
+                    self?.speakApple(text, preserveActiveVoiceName: true)
+                }
             }
         }
     }
 
     // MARK: - Apple
 
-    private func speakApple(_ prepared: String) {
+    private func speakApple(_ prepared: String, preserveActiveVoiceName: Bool = false) {
         #if os(iOS)
         do {
             let session = AVAudioSession.sharedInstance()
@@ -120,7 +135,9 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         let utterance = AVSpeechUtterance(string: prepared)
         let voice = Self.resolveAppleVoice()
         utterance.voice = voice
-        activeVoiceName = voice?.name ?? "System"
+        if !preserveActiveVoiceName {
+            activeVoiceName = voice?.name ?? "System"
+        }
 
         let prefRate = Float(SpeechVoiceSettings.rate)
         let minRate = AVSpeechUtteranceMinimumSpeechRate
@@ -134,7 +151,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         utterance.postUtteranceDelay = 0.08
 
         isSpeaking = true
-        appleSynthesizer.speak(utterance)
+        ensureAppleSynthesizer().speak(utterance)
     }
 
     private func refreshActiveVoiceLabel() {
@@ -142,6 +159,7 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
             let voice = SpeechVoiceSettings.cloudVoice
             activeVoiceName = SpeechVoiceSettings.cloudVoices.first(where: { $0.id == voice })?.label ?? voice
         } else {
+            // Voice lookup can touch AX — keep on GCD main async path only.
             activeVoiceName = Self.resolveAppleVoice()?.name ?? "System"
         }
     }
@@ -151,9 +169,12 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
     }
 
     /// Prefer user choice → known premium/enhanced ids → best ranked voice → language default.
+    /// Voice object creation stays on the GCD speak path; catalog reads are cache-only.
     static func resolveAppleVoice() -> AVSpeechSynthesisVoice? {
+        let english = AppleSpeechVoiceCatalog.englishVoices()
+
         if let id = SpeechVoiceSettings.voiceIdentifier,
-           let chosen = AVSpeechSynthesisVoice(identifier: id) {
+           let chosen = english.first(where: { $0.identifier == id }) {
             return chosen
         }
 
@@ -162,12 +183,11 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
 
         if preferEnhanced {
             for identifier in SpeechVoiceSettings.preferredVoiceIdentifiers {
-                if let voice = AVSpeechSynthesisVoice(identifier: identifier) {
+                if let voice = english.first(where: { $0.identifier == identifier }) {
                     return voice
                 }
             }
 
-            let english = AppleSpeechVoiceCatalog.englishVoices()
             let ranked = english.sorted { lhs, rhs in
                 voiceScore(lhs) > voiceScore(rhs)
             }
@@ -177,14 +197,11 @@ final class PlanningSpeechSynthesizer: NSObject, ObservableObject, SpeechSynthes
         }
 
         if provider == .appleStandard,
-           let english = AppleSpeechVoiceCatalog.englishVoices().first(where: {
-               !isCompactVoice($0)
-           }) {
-            return english
+           let englishVoice = english.first(where: { !isCompactVoice($0) }) {
+            return englishVoice
         }
 
-        return AVSpeechSynthesisVoice(language: "en-US")
-            ?? AVSpeechSynthesisVoice(language: Locale.current.identifier)
+        return english.first
     }
 
     private static func isCompactVoice(_ voice: AVSpeechSynthesisVoice) -> Bool {

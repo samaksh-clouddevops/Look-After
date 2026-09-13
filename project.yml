@@ -87,6 +87,10 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           /bin/bash "${SRCROOT}/Scripts/sync-firebase-url-schemes.sh"
+      - name: Sync OpenAI debug credentials
+        basedOnDependencyAnalysis: false
+        script: |
+          /bin/bash "${SRCROOT}/Scripts/sync-openai-debug-credentials.sh"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.samaksh.flowos.app
       CODE_SIGN_STYLE: Automatic

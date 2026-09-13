@@ -30,7 +30,12 @@ public struct FirestoreSyncOutboxTransport: SyncOutboxTransporting {
 
         switch record.operation {
         case .delete:
-            try await ref.document(record.entityId).delete()
+            do {
+                try await ref.document(record.entityId).delete()
+            } catch {
+                firebase.noteFirestoreFailure(error)
+                throw error
+            }
         case .upsert:
             guard !record.payloadJSON.isEmpty else {
                 throw TransportError.emptyPayload
@@ -38,7 +43,12 @@ public struct FirestoreSyncOutboxTransport: SyncOutboxTransporting {
             guard let dict = try JSONSerialization.jsonObject(with: record.payloadJSON) as? [String: Any] else {
                 throw TransportError.invalidPayload
             }
-            try await ref.document(record.entityId).setData(dict, merge: true)
+            do {
+                try await ref.document(record.entityId).setData(dict, merge: true)
+            } catch {
+                firebase.noteFirestoreFailure(error)
+                throw error
+            }
         }
     }
 

@@ -149,6 +149,26 @@ public final class ParkedTaskRecoveryService {
         placeWinners(winners, gapStart: gapStart, day: day, userId: userId, tasksVM: tasksVM, now: now)
     }
 
+    /// Same as `placeSelected`, but awaits SQLite creates/updates so Today can refresh immediately.
+    @discardableResult
+    public func placeSelectedAwaitingPersistence(
+        _ winners: [ParkedTaskEntry],
+        gapStart: Date,
+        day: Date,
+        userId: String,
+        tasksVM: TasksViewModel?,
+        now: Date = Date()
+    ) async -> [ParkedTaskEntry] {
+        await placeWinnersAwaitingPersistence(
+            winners,
+            gapStart: gapStart,
+            day: day,
+            userId: userId,
+            tasksVM: tasksVM,
+            now: now
+        )
+    }
+
     /// Pull parked winners into LifeState on the freed gap (sparkle + real schedule).
     @discardableResult
     private func placeWinners(
@@ -170,6 +190,7 @@ public final class ParkedTaskRecoveryService {
 
         for entry in winners {
             var task = tasksVM.tasks.first(where: { $0.id == entry.taskID })
+                ?? tasksVM.localAllTasks(userId: userId).first(where: { $0.id == entry.taskID })
             let duration = max(entry.originalDurationMinutes, TaskDurationPolicy.minimumMinutes)
             let end = cursor.addingTimeInterval(TimeInterval(duration * 60))
 
@@ -207,6 +228,65 @@ public final class ParkedTaskRecoveryService {
         }
         if !placed.isEmpty, !userId.isEmpty {
             tasksVM.requestDebouncedScheduleReconcile(userId: userId, immediate: true)
+        }
+        return placed
+    }
+
+    @discardableResult
+    private func placeWinnersAwaitingPersistence(
+        _ winners: [ParkedTaskEntry],
+        gapStart: Date,
+        day: Date,
+        userId: String,
+        tasksVM: TasksViewModel?,
+        now: Date
+    ) async -> [ParkedTaskEntry] {
+        guard let tasksVM else { return winners }
+        var cursor = gapStart
+        var placed: [ParkedTaskEntry] = []
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: day)
+
+        for entry in winners {
+            let existing = tasksVM.tasks.first(where: { $0.id == entry.taskID })
+                ?? tasksVM.localAllTasks(userId: userId).first(where: { $0.id == entry.taskID })
+            let duration = max(entry.originalDurationMinutes, TaskDurationPolicy.minimumMinutes)
+            let end = cursor.addingTimeInterval(TimeInterval(duration * 60))
+
+            if var task = existing {
+                task.scheduledDate = dayStart
+                task.scheduledTime = cursor
+                task.scheduledEndTime = end
+                task.estimatedMinutes = duration
+                task.applyTimeConstraint(.fluid)
+                task.status = .pending
+                task.updatedAt = now
+                await tasksVM.updateTaskAndPersist(task)
+                _ = store.dequeue(taskID: entry.taskID)
+                placed.append(entry)
+            } else {
+                var created = LifeTask(
+                    id: entry.taskID,
+                    title: entry.title,
+                    lifeArea: entry.lifeArea,
+                    priority: entry.priority,
+                    status: .pending,
+                    estimatedMinutes: duration,
+                    scheduledDate: dayStart,
+                    scheduledTime: cursor,
+                    timeConstraint: .fluid,
+                    scheduledEndTime: end,
+                    userId: userId
+                )
+                created.updatedAt = now
+                try? await tasksVM.createTaskAndAwait(created)
+                _ = store.dequeue(taskID: entry.taskID)
+                placed.append(entry)
+            }
+            cursor = end.addingTimeInterval(TimeInterval(ConflictResolutionCascade.defaultBufferMinutes * 60))
+        }
+        if !placed.isEmpty, !userId.isEmpty {
+            await tasksVM.reconcileTodaySchedule(userId: userId, date: now, calendar: cal)
         }
         return placed
     }

@@ -112,6 +112,7 @@ public final class CloudSyncOutbox {
         var completedIds = Set<String>()
 
         for entry in snapshot {
+            guard firebase.isCloudSyncAvailable else { break }
             guard let ref = firebase.userCollection(entry.collection) else {
                 continue
             }
@@ -128,7 +129,9 @@ public final class CloudSyncOutbox {
                 }
                 completedIds.insert(entry.id)
             } catch {
-                // Leave in queue for the next drain attempt.
+                firebase.noteFirestoreFailure(error)
+                // Leave remaining entries in queue; stop hammering if API is disabled.
+                break
             }
         }
 

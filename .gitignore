@@ -23,6 +23,7 @@ buildServer.json
 # Config/GoogleService-Info.plist is committed as a dummy template — replace locally for real Firebase.
 .env
 .env.*
+Config/OpenAI-Debug.plist
 
 # Archives and logs
 *.zip

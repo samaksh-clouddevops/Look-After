@@ -10,6 +10,7 @@ import LookAfterFeatures
 struct SettingsView: View {
     @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var firebase = FirebaseManager.shared
 
     @AppStorage("enableHealth") private var enableHealth: Bool = true
     @AppStorage("gmail_integration_enabled") private var gmailIntegrationEnabled: Bool = false
@@ -455,6 +456,29 @@ struct SettingsView: View {
                         }
                     })
                     .listRowBackground(DesignSystem.contentSurface)
+
+                    if firebase.firestoreAPIDisabled {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(firebase.cloudSyncStatusMessage
+                                  ?? "Cloud sync paused — Firestore API is disabled for this Firebase project.")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let url = URL(string: "https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=adhd-d7836") {
+                                Link("Enable Cloud Firestore API", destination: url)
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            Button("Retry cloud sync") {
+                                firebase.clearFirestoreAPIDisabledFlag()
+                                Task {
+                                    _ = await CloudSyncOutbox.shared.drain()
+                                    _ = await TaskSyncOutbox.shared.drain()
+                                }
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                        }
+                        .listRowBackground(DesignSystem.contentSurface)
+                    }
 
                     NavigationLink(destination: {
                         GLMUsageSettingsView()

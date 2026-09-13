@@ -69,6 +69,7 @@ public final class TaskRepository: ObservableObject {
     /// Moves tasks saved under a pre-auth fallback id to the real Firebase UID.
     public func reassignTasks(from oldUserId: String, to newUserId: String) {
         guard !oldUserId.isEmpty, !newUserId.isEmpty, oldUserId != newUserId else { return }
+        ensureLocalCacheLoadedForMigration()
 
         var tasks = allLocalTasks()
         var changed = false
@@ -88,6 +89,7 @@ public final class TaskRepository: ObservableObject {
     public func migrateAllTasksToCanonicalUserId() {
         let canonicalId = firebase.resolvedUserId
         guard !canonicalId.isEmpty else { return }
+        ensureLocalCacheLoadedForMigration()
 
         let all = allLocalTasks()
         let staleIds = Set(all.map(\.userId).filter { !$0.isEmpty && $0 != canonicalId })
@@ -98,6 +100,17 @@ public final class TaskRepository: ObservableObject {
         // stop matching the "visible to every user" wildcard in `tasksForUser` — otherwise
         // they remain permanently visible to any account signed in on this device.
         claimUnownedTasks(canonicalUserId: canonicalId)
+    }
+
+    /// Disk hydrate for ownership migration when cache is still cold (auth race / guest→Firebase).
+    private func ensureLocalCacheLoadedForMigration() {
+        guard Self.cachedAll == nil else { return }
+        if let loaded = try? taskStore.loadAll() {
+            Self.cachedAll = loaded
+            TaskPersistenceLog.localLoad(count: loaded.count, userId: "migrate-sync-load")
+        } else {
+            Self.cachedAll = []
+        }
     }
 
     /// Assigns any locally persisted task with an empty `userId` to `canonicalUserId`.

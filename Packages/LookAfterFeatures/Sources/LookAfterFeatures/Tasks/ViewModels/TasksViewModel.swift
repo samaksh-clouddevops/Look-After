@@ -162,7 +162,37 @@ public final class TasksViewModel: ObservableObject {
 
         if generation == loadGeneration {
             isLoading = false
+            // If the timeline is empty but parked recovery still has titles (guest→auth
+            // ownership races, cascade parks), materialize them so Today isn't blank while
+            // "Today's check" still shows clues.
+            await restoreParkedTasksIfTimelineEmpty(userId: userId)
         }
+    }
+
+    /// Recreates missing tasks from the parked recovery queue when Today has nothing active.
+    @discardableResult
+    public func restoreParkedTasksIfTimelineEmpty(userId: String, now: Date = Date()) async -> Int {
+        guard !userId.isEmpty else { return 0 }
+        guard !tasks.contains(where: \.status.isActive) else { return 0 }
+
+        let candidates = ParkedTaskQueueStore.shared.candidatesForReintegration(limit: 20)
+        guard !candidates.isEmpty else { return 0 }
+
+        let placed = await ParkedTaskRecoveryService.shared.placeSelectedAwaitingPersistence(
+            candidates,
+            gapStart: now,
+            day: now,
+            userId: userId,
+            tasksVM: self,
+            now: now
+        )
+        if !placed.isEmpty {
+            refreshFromLocal(userId: userId)
+            #if DEBUG
+            print("[Tasks] restored \(placed.count) parked task(s) into empty timeline")
+            #endif
+        }
+        return placed.count
     }
 
     /// Reload from on-device cache only — fast path after local mutations.

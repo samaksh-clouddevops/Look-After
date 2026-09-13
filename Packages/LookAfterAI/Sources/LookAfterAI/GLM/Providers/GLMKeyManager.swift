@@ -426,15 +426,33 @@ public final class GLMKeyManager: @unchecked Sendable {
     }
 
     /// Syncs OpenAI key from env/`~/ADHD/credentials` into Keychain for cloud TTS.
+    /// Also loads Debug-bundled credentials on device (physical iPhone cannot read Mac paths).
     @discardableResult
     public func syncOpenAIDeveloperCredentials(credentialsURL: URL? = nil) -> Bool {
         if let key = Self.resolveOpenAIAPIKey(credentialsURL: credentialsURL, preferKeychain: false) {
             return storeOpenAIAPIKey(key)
         }
+        if syncOpenAIFromBundledDebugCredentials() {
+            return true
+        }
         let existing = loadOpenAIAPIKey()
         let configured = !(existing?.isEmpty ?? true)
         SpeechVoiceSettings.isOpenAIKeyConfigured = configured
         return configured
+    }
+
+    /// Reads `OpenAI-Debug.plist` embedded by `Scripts/sync-openai-debug-credentials.sh` (Debug only).
+    @discardableResult
+    public func syncOpenAIFromBundledDebugCredentials(bundle: Bundle = .main) -> Bool {
+        guard let url = bundle.url(forResource: "OpenAI-Debug", withExtension: "plist"),
+              let dict = NSDictionary(contentsOf: url) as? [String: Any],
+              let key = (dict["openai_api_key"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !key.isEmpty
+        else {
+            return false
+        }
+        return storeOpenAIAPIKey(key)
     }
 
     @discardableResult
