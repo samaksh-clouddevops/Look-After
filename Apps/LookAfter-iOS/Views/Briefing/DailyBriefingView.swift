@@ -38,6 +38,7 @@ struct DailyBriefingView: View {
     @State private var showCycleDashboard = false
     @State private var scrollOffset: CGFloat = 0
     @State private var hasUserScrolled = false
+    @State private var showHolidayGreeting = false
 
     private let chaptersAnchorID = "briefing-chapters-start"
     private let dayAuditCheckCardAnchorID = "briefing-day-audit-check-card"
@@ -157,6 +158,22 @@ struct DailyBriefingView: View {
         }
         .onAppear {
             healthSync.refreshConnectionStatus(userId: userId, healthSummary: brainVM.healthSummary)
+            if !shell.todayHolidayNames.isEmpty, !HolidayGreetingDismissStore.dismissedForToday() {
+                showHolidayGreeting = true
+            }
+        }
+        .onChange(of: shell.todayHolidayNames) { _, names in
+            if !names.isEmpty, !HolidayGreetingDismissStore.dismissedForToday() {
+                showHolidayGreeting = true
+            }
+        }
+        .sheet(isPresented: $showHolidayGreeting) {
+            HolidayGreetingPopupCard(holidayNames: shell.todayHolidayNames) {
+                HolidayGreetingDismissStore.dismissForToday()
+                showHolidayGreeting = false
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showHealthVerification) {
             NavigationStack {

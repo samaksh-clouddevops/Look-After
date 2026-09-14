@@ -256,7 +256,9 @@ public enum LifeTimelinePresenter {
             ))
         }
 
-        for event in calendarEvents where calendar.isDate(event.startDate, inSameDayAs: dayAnchor) {
+        // All-day events (holidays, PTO, birthdays synced from Apple Calendar) are never
+        // rendered as timeline rows/tasks — they're surfaced once via a greeting card instead.
+        for event in calendarEvents where !event.isAllDay && calendar.isDate(event.startDate, inSameDayAs: dayAnchor) {
             let minutes: Int?
             if let end = event.endDate {
                 minutes = max(15, Int(end.timeIntervalSince(event.startDate) / 60))

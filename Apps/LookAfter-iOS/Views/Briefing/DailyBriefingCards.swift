@@ -610,6 +610,54 @@ struct BriefingWeeklyTrendsCard: View {
     }
 }
 
+// MARK: - Holiday greeting popup
+
+/// One-time-per-day popup card greeting the user about today's holiday(s).
+/// Holidays are never treated as tasks or timeline occupancy — greeting only.
+struct HolidayGreetingPopupCard: View {
+    let holidayNames: [String]
+    var onDismiss: () -> Void
+
+    private var titleLine: String {
+        holidayNames.count > 1
+            ? "Today is \(holidayNames.joined(separator: " & "))!"
+            : "Today is \(holidayNames.first ?? "a holiday")!"
+    }
+
+    var body: some View {
+        VStack(spacing: DesignSystem.spacingMD) {
+            Image(systemName: "party.popper.fill")
+                .font(.system(size: 34))
+                .foregroundColor(DesignSystem.accentPrimary)
+
+            Text(titleLine)
+                .font(.system(size: 18, weight: .bold, design: .default))
+                .foregroundColor(DesignSystem.textPrimary)
+                .multilineTextAlignment(.center)
+
+            Text("Enjoy the day — it won't be counted against your schedule.")
+                .font(.dsCaption())
+                .foregroundColor(DesignSystem.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button(action: onDismiss) {
+                Text("Got it")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(DesignSystem.accentPrimary)
+        }
+        .padding(DesignSystem.spacingLG)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.radiusLG, style: .continuous)
+                .fill(DesignSystem.backgroundPrimary)
+        )
+        .padding(DesignSystem.spacingLG)
+    }
+}
+
 // MARK: - Alerts
 
 struct BriefingAlertsCard: View {

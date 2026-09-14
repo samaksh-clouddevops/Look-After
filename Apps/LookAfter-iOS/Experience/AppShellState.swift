@@ -31,6 +31,8 @@ final class AppShellState: ObservableObject {
     @Published var showManualSleepSheet = false
     @Published private(set) var proactiveActions: [ProactiveAction] = []
     @Published private(set) var pendingCalendarChange: CalendarChangeResult?
+    /// Today's all-day calendar event titles (holidays, PTO, etc.) — greeting-only, never tasks.
+    @Published private(set) var todayHolidayNames: [String] = []
     @Published var pendingInitiationScript: InitiationScript?
     @Published var showInitiationScriptSheet = false
 
@@ -85,6 +87,9 @@ final class AppShellState: ObservableObject {
 
         surfaceSync.onPendingCalendarChange = { [weak self] change in
             self?.pendingCalendarChange = change
+        }
+        surfaceSync.onHolidayNamesUpdated = { [weak self] names in
+            self?.todayHolidayNames = names
         }
 
         adhdVM.onFocusSessionDidStart = { [weak self] in

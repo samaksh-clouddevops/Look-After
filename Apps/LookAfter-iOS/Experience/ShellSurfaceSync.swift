@@ -21,6 +21,9 @@ final class ShellSurfaceSync {
     private static let timelineRebuildDebounceNs: UInt64 = 75_000_000
 
     var onPendingCalendarChange: ((CalendarChangeResult?) -> Void)?
+    /// Fired with today's all-day event titles (holidays, PTO, etc.) after each rebuild —
+    /// these are never turned into timeline rows/tasks, only surfaced as a greeting.
+    var onHolidayNamesUpdated: (([String]) -> Void)?
 
     init(
         timelineService: TimelineService,
@@ -164,5 +167,10 @@ final class ShellSurfaceSync {
         if let change = CalendarChangeDetector.evaluate(timelineEvents: timelineService.snapshot.today) {
             onPendingCalendarChange?(change)
         }
+        let holidayNames = todayEvents
+            .filter(\.isAllDay)
+            .map { $0.title.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        onHolidayNamesUpdated?(holidayNames)
     }
 }
