@@ -56,7 +56,6 @@ struct TodayView: View {
     @State private var selectedDay: TimelineDaySelection = .today
     @State private var selectedMetricKind: TodayMetricKind?
     @State private var selectedCalendarDate = Calendar.current.startOfDay(for: Date())
-    @State private var expandedPriorityId: String?
     @State private var timelineBlockScrollDisabled = false
     @State private var showPlanningAssistant = false
     @State private var planningSheetDetent: PresentationDetent = .medium
@@ -257,15 +256,6 @@ struct TodayView: View {
                                 onBannerAppear: onProactiveBannerAppear
                             )
                         }
-                        TodayPrioritiesSection(
-                            tasksVM: tasksVM,
-                            planningVM: planningVM,
-                            expandedPriorityId: $expandedPriorityId,
-                            onOpenTasks: onOpenTasks,
-                            onStartTask: onStartTask,
-                            onEditTask: onEditTask,
-                            onCompleteTimelineTask: { id in Task { await onCompleteTimelineTask(id) } }
-                        )
                         TodayScheduleSection(
                             planningVM: planningVM,
                             isTomorrow: false,
@@ -955,117 +945,6 @@ private struct TodayDoThisNowSection: View {
     }
 }
 
-private struct TodayPrioritiesSection: View {
-    @ObservedObject var tasksVM: TasksViewModel
-    @ObservedObject var planningVM: ExecutivePlanningViewModel
-    @Binding var expandedPriorityId: String?
-    var onOpenTasks: () -> Void
-    var onStartTask: (LifeTask) -> Void
-    var onEditTask: (LifeTask) -> Void
-    var onCompleteTimelineTask: (String) -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var topTasks: [LifeTask] {
-        let heroId = planningVM.nowTaskId
-            ?? planningVM.timelineRows.first(where: { ($0.isNow || $0.isLate) && !$0.isCompleted })?.taskId
-        let sorted = TaskListSorter.sortByNextActionableThenPriority(tasksVM.activeTasks)
-        return Array(sorted.filter { $0.id != heroId }.prefix(2))
-    }
-
-    var body: some View {
-        LASectionCard(title: "Up next", icon: "star.fill") {
-            if topTasks.isEmpty {
-                VStack(spacing: DesignSystem.spacingSM) {
-                    Text("Nothing urgent. Add a task or capture a thought.")
-                        .textStyleCaption()
-                    Button(action: onOpenTasks) {
-                        Text("Add a task")
-                            .font(.dsCaption(weight: .semibold))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } else {
-                VStack(spacing: DesignSystem.spacingSM) {
-                    ForEach(topTasks) { task in
-                        LAPriorityRow(
-                            title: TaskTitleDisplay.humanized(task.title),
-                            category: task.lifeArea.shortLabel,
-                            detail: priorityDetail(for: task),
-                            ringColor: DesignSystem.textSecondary,
-                            isComplete: task.status == .completed,
-                            isActionsExpanded: expandedPriorityId == task.id,
-                            onToggle: {
-                                if task.status != .completed {
-                                    withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
-                                        onCompleteTimelineTask(task.id)
-                                    }
-                                }
-                            },
-                            onToggleActions: {
-                                withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
-                                    expandedPriorityId = expandedPriorityId == task.id ? nil : task.id
-                                }
-                            },
-                            onStart: {
-                                expandedPriorityId = nil
-                                onStartTask(task)
-                            },
-                            onEdit: {
-                                expandedPriorityId = nil
-                                onEditTask(task)
-                            }
-                        )
-                    }
-
-                    Button(action: onOpenTasks) {
-                        Text("View all tasks →")
-                            .font(.dsCaption(weight: .semibold))
-                            .foregroundColor(DesignSystem.accentPrimary)
-                    }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, DesignSystem.spacingXS)
-                }
-            }
-        }
-        .accessibilityIdentifier("top-priorities")
-    }
-
-    private static let scheduleFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter
-    }()
-
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter
-    }()
-
-    private func priorityDetail(for task: LifeTask) -> String {
-        var parts: [String] = []
-        let day = Calendar.current.startOfDay(for: Date())
-        switch TaskScheduleInterval.displaySchedule(for: task, on: day) {
-        case .unslottedFlexible:
-            parts.append("Flexible")
-        case .window(let start, _, _):
-            parts.append(Self.scheduleFormatter.string(from: start))
-        case .noSchedule:
-            if let scheduled = task.scheduledDate {
-                parts.append(Self.dayFormatter.string(from: scheduled))
-            }
-        }
-        if task.estimatedMinutes > 0 {
-            parts.append(task.estimatedMinutes.durationString)
-        }
-        parts.append(task.priority.label)
-        return parts.joined(separator: " · ")
-    }
-}
-
 private struct TodayScheduleSection: View {
     @ObservedObject var planningVM: ExecutivePlanningViewModel
     let isTomorrow: Bool
@@ -1084,7 +963,7 @@ private struct TodayScheduleSection: View {
 
     @AppStorage(TimelineDragHint.dismissedKey) private var dragHintDismissed = false
 
-    private static let previewRowLimit = 2
+    private static let previewRowLimit = 5
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
