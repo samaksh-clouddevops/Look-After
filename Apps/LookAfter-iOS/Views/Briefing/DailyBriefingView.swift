@@ -167,9 +167,12 @@ struct DailyBriefingView: View {
                 showHolidayGreeting = true
             }
         }
-        .sheet(isPresented: $showHolidayGreeting) {
+        .sheet(isPresented: $showHolidayGreeting, onDismiss: {
+            // Covers swipe-to-dismiss too, not just the "Got it" button — either way,
+            // the greeting must never resurface once shown.
+            HolidayGreetingDismissStore.dismissForToday()
+        }) {
             HolidayGreetingPopupCard(holidayNames: shell.todayHolidayNames) {
-                HolidayGreetingDismissStore.dismissForToday()
                 showHolidayGreeting = false
             }
             .presentationDetents([.medium])
