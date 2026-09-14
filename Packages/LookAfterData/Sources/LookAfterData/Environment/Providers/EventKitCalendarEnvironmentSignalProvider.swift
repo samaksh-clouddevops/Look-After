@@ -23,13 +23,16 @@ public struct EventKitCalendarEnvironmentSignalProvider: CalendarEnvironmentSign
     }
 
     public func currentSignals(at date: Date) async -> CalendarEnvironmentSignals {
-        return await Task.detached(priority: .utility) { [eventStoreBox, horizonHours] in
+        // EKEventStore must stay on the creation thread's run loop (main).
+        // `Task.detached` after context refresh caused `_dispatch_assert_queue_fail`
+        // ("Block was expected to execute on queue") on concurrent threads.
+        await MainActor.run {
             Self.collectSignals(
                 eventStore: eventStoreBox.store,
                 horizonHours: horizonHours,
                 date: date
             )
-        }.value
+        }
     }
 
     private static func collectSignals(
