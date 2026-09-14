@@ -149,6 +149,8 @@ public final class TasksViewModel: ObservableObject {
             _ = try await taskRepo.getTaskLists(for: userId)
             guard generation == loadGeneration else { return }
             if syncRecurrence {
+                await syncRoutineBlockTasks(userId: userId)
+                guard generation == loadGeneration else { return }
                 try await syncRecurringOccurrences(userId: userId)
                 guard generation == loadGeneration else { return }
             }
@@ -500,6 +502,115 @@ public final class TasksViewModel: ObservableObject {
 
     private static let recurrenceSyncMinimumInterval: TimeInterval = 45
     private var lastRecurrenceSyncAt: Date?
+    private static let routineBlockTagPrefix = "routine-block:"
+
+    /// Reconciles user-declared `RoutineBlock`s (from the Routine Builder) into recurring
+    /// `LifeTask` templates so the declared daily routine actually shows up as visible tasks
+    /// in the timeline and all-tasks lists — previously `RoutineBlock`s were planner-only
+    /// anchors (`DayStructure.Anchor`) and never materialized into any `LifeTask` row.
+    public func syncRoutineBlockTasks(userId: String) async {
+        guard !userId.isEmpty else { return }
+        let blocks = RoutineBlockStore.load()
+        var local = reloadLocalTasks(for: userId)
+        let calendar = Calendar.current
+
+        func tag(for block: RoutineBlock) -> String { "\(Self.routineBlockTagPrefix)\(block.id)" }
+
+        var existingTemplatesByTag: [String: LifeTask] = [:]
+        for task in local where TaskRecurrenceEngine.isRecurrenceTemplate(task) {
+            if let match = task.tags.first(where: { $0.hasPrefix(Self.routineBlockTagPrefix) }) {
+                existingTemplatesByTag[match] = task
+            }
+        }
+
+        let blockTags = Set(blocks.map(tag(for:)))
+        for (existingTag, template) in existingTemplatesByTag where !blockTags.contains(existingTag) {
+            do {
+                try await taskRepo.delete(template.id, userId: userId)
+                local.removeAll { $0.id == template.id }
+                if let index = taskIndex(id: template.id) {
+                    tasks.remove(at: index)
+                    rebuildTaskIndex()
+                }
+            } catch {
+#if DEBUG
+                print("[Tasks] failed to remove stale routine-block template: \(error.localizedDescription)")
+#endif
+            }
+        }
+
+        for block in blocks {
+            let weekdays = block.days.recurrenceWeekdayNumbers
+            guard !weekdays.isEmpty else { continue }
+            let blockTag = tag(for: block)
+            let scheduledTime = calendar.date(
+                bySettingHour: block.startHour, minute: block.startMinute, second: 0, of: Date()
+            ) ?? Date()
+
+            if var existing = existingTemplatesByTag[blockTag] {
+                let sameTime = existing.scheduledTime.map {
+                    calendar.component(.hour, from: $0) == block.startHour
+                        && calendar.component(.minute, from: $0) == block.startMinute
+                } ?? false
+                let needsUpdate = existing.title != block.title
+                    || existing.estimatedMinutes != block.durationMinutes
+                    || existing.recurrenceWeekdays != weekdays
+                    || !sameTime
+                guard needsUpdate else { continue }
+                existing.title = block.title
+                existing.estimatedMinutes = block.durationMinutes
+                existing.recurrence = .custom
+                existing.recurrenceWeekdays = weekdays
+                existing.scheduledTime = scheduledTime
+                existing.schedulingMode = block.isNonNegotiable ? .fixedTime : .flexible
+                existing.userId = userId
+                existing.updatedAt = Date()
+                do {
+                    try await taskRepo.update(existing)
+                    if let index = local.firstIndex(where: { $0.id == existing.id }) {
+                        local[index] = existing
+                    }
+                    _ = applyInMemoryTaskUpdate(existing)
+                } catch {
+#if DEBUG
+                    print("[Tasks] failed to update routine-block template: \(error.localizedDescription)")
+#endif
+                }
+            } else {
+                var template = LifeTask(
+                    title: block.title,
+                    lifeArea: .personal,
+                    priority: .medium,
+                    estimatedMinutes: block.durationMinutes,
+                    scheduledTime: scheduledTime,
+                    tags: [blockTag, "routine"],
+                    recurrence: .custom,
+                    recurrenceWeekdays: weekdays,
+                    schedulingMode: block.isNonNegotiable ? .fixedTime : .flexible,
+                    userId: userId
+                )
+                template.isRecurrenceTemplate = true
+                do {
+                    try await taskRepo.create(template)
+                    local.append(template)
+                } catch {
+#if DEBUG
+                    print("[Tasks] failed to create routine-block template: \(error.localizedDescription)")
+#endif
+                }
+            }
+        }
+
+        do {
+            try await syncRecurringOccurrences(userId: userId, localOnly: true)
+        } catch {
+#if DEBUG
+            print("[Tasks] routine-block occurrence sync failed: \(error.localizedDescription)")
+#endif
+        }
+        applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "routine-block-sync")
+        notifyTaskListDidChange()
+    }
 
     /// Normalize legacy recurring tasks and materialize today's occurrences.
     private func syncRecurringOccurrences(userId: String, localOnly: Bool = false) async throws {

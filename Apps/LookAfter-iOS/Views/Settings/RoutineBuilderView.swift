@@ -1,10 +1,13 @@
 import SwiftUI
 import LookAfterCore
+import LookAfterData
+import LookAfterFeatures
 
 /// Lets the user declare their fixed daily routine (wake, meals, work, gym, wind-down, sleep, etc.)
 /// as a list of `RoutineBlock`s. These become `DayStructure.Anchor`s that the planner treats as
 /// fixed points around which flexible tasks are scheduled.
 struct RoutineBuilderView: View {
+    @EnvironmentObject private var shell: AppShellState
     @State private var blocks: [RoutineBlock] = RoutineBlockStore.load()
     @State private var editingBlock: RoutineBlock?
     @State private var showAddSheet = false
@@ -117,6 +120,7 @@ struct RoutineBuilderView: View {
             RoutineBlockEditorSheet(mode: .add) { newBlock in
                 blocks.append(newBlock)
                 RoutineBlockStore.save(blocks)
+                syncRoutineTasks()
             }
         }
         .sheet(item: $editingBlock) { block in
@@ -127,9 +131,11 @@ struct RoutineBuilderView: View {
                     blocks.append(updated)
                 }
                 RoutineBlockStore.save(blocks)
+                syncRoutineTasks()
             } onDelete: {
                 blocks.removeAll { $0.id == block.id }
                 RoutineBlockStore.save(blocks)
+                syncRoutineTasks()
             }
         }
         .sheet(item: $editingCandidate) { candidate in
@@ -176,5 +182,17 @@ struct RoutineBuilderView: View {
             ? "Nothing new to import — those times already overlap your routine."
             : "Imported \(addedCount) block(s) from your fixed schedule notes."
         importCandidates = []
+        syncRoutineTasks()
+    }
+
+    /// Reconciles declared routine blocks into visible recurring tasks so they show up
+    /// in the timeline and all-tasks lists immediately, without waiting for the next
+    /// full task reload cycle.
+    private func syncRoutineTasks() {
+        let userId = FirebaseManager.shared.resolvedUserId
+        guard !userId.isEmpty else { return }
+        Task {
+            await shell.tasksVM.syncRoutineBlockTasks(userId: userId)
+        }
     }
 }

@@ -151,6 +151,20 @@ public struct WeekdaySet: Codable, Sendable, Equatable {
         default: return false
         }
     }
+
+    /// Calendar weekday numbers (1 = Sunday … 7 = Saturday) selected by this set —
+    /// matches `LifeTask.recurrenceWeekdays` numbering used by `TaskRecurrence.custom`.
+    public var recurrenceWeekdayNumbers: [Int] {
+        var days: [Int] = []
+        if sunday { days.append(1) }
+        if monday { days.append(2) }
+        if tuesday { days.append(3) }
+        if wednesday { days.append(4) }
+        if thursday { days.append(5) }
+        if friday { days.append(6) }
+        if saturday { days.append(7) }
+        return days
+    }
 }
 
 public struct ProtectedTimeBlock: Codable, Sendable, Equatable, Identifiable {
