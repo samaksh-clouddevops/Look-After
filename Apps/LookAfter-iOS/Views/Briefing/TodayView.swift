@@ -872,7 +872,16 @@ private struct TodayDoThisNowSection: View {
            resolved.status.isActive {
             return resolved
         }
-        return TaskListSorter.sortByNextActionableThenPriority(tasksVM.activeTasks).first
+        // Scope the fallback to tasks actually actionable *today* — `activeTasks` is
+        // unscoped (includes backlog/future/next-week tasks), so without this filter a
+        // future task could outrank today's real tasks in the sort and show as "Do This
+        // Now" while the timeline (which only shows today-actionable tasks) stays empty
+        // for it, creating a Do-This-Now vs. Timeline mismatch.
+        let context = tasksVM.schedulingContext
+        let todayCandidates = tasksVM.activeTasks.filter { task in
+            task.isOverdue || task.isActionableToday(allTasks: context)
+        }
+        return TaskListSorter.sortByNextActionableThenPriority(todayCandidates).first
     }
 
     var body: some View {

@@ -150,7 +150,7 @@ public extension LifeTask {
         guard status.isActive, !isRecurrenceTemplateTask else { return false }
         guard scheduledTime != nil, let scheduledDate else { return false }
         guard !isActionableToday(allTasks: allTasks, calendar: calendar) else { return false }
-        guard !isUpcoming(calendar: calendar) else { return false }
+        guard !isUpcoming(allTasks: allTasks, calendar: calendar) else { return false }
         let context = allTasks.isEmpty ? [self] : allTasks
         return TaskRecurrenceEngine.matchesRecurrenceSchedule(
             self,
