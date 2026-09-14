@@ -448,6 +448,10 @@ public final class TasksViewModel: ObservableObject {
            Date().timeIntervalSince(lastRecurrenceSyncAt) < Self.recurrenceSyncMinimumInterval {
             return
         }
+        // Declared routine blocks (Routine Builder) must be materialized into recurring
+        // task templates before occurrence sync, otherwise they never surface in the
+        // timeline/all-tasks lists unless the user happens to reopen Routine Builder.
+        await syncRoutineBlockTasks(userId: userId)
         do {
             try await syncRecurringOccurrences(userId: userId, localOnly: localOnly)
             lastRecurrenceSyncAt = Date()

@@ -105,6 +105,12 @@ public struct OccupiedDay: Sendable, Equatable {
             let id = "\(calendarIDPrefix)\(event.id)"
             if event.isAllDay {
                 guard includeAllDayBusy, event.isBusy else { return nil }
+                // Holidays, PTO, birthdays, vacation, etc. must never block an entire day's
+                // worth of task scheduling — they're informational, not "you're unavailable".
+                let title = event.title.lowercased()
+                guard !CalendarEventPoisonFilter.blockedTitleSubstrings.contains(where: { title.contains($0) }) else {
+                    return nil
+                }
                 guard calendar.isDate(event.startDate, inSameDayAs: dayStart)
                     || (event.startDate < dayEnd && (event.endDate ?? event.startDate) > dayStart) else {
                     return nil
