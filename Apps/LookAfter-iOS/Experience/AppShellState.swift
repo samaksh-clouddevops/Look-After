@@ -175,6 +175,7 @@ final class AppShellState: ObservableObject {
         bootstrapTask = Task { [weak self] in
             guard let self else { return }
             await self.runBootstrapWork(userId: userId, healthSync: healthSync)
+            guard !Task.isCancelled, self.bootstrappedUserId == userId else { return }
             if let launchSignpostID = self.launchSignpostID {
                 PerformanceSignposts.endLaunchToBriefing(launchSignpostID)
                 self.launchSignpostID = nil
@@ -184,7 +185,12 @@ final class AppShellState: ObservableObject {
         }
     }
 
+    private func isCurrentBootstrap(userId: String) -> Bool {
+        !Task.isCancelled && bootstrappedUserId == userId && !isPerformingFactoryReset
+    }
+
     private func runBootstrapWork(userId: String, healthSync: HealthSyncService) async {
+        guard isCurrentBootstrap(userId: userId) else { return }
         BackgroundAnalyticsScheduler.shared.start(userId: userId)
 
         if let aiContext = BackgroundAnalyticsService.shared.cachedAIContext(userId: userId) {
@@ -217,8 +223,10 @@ final class AppShellState: ObservableObject {
         async let moduleLoad: Void = modulesVM.loadAllData(userId: userId)
         async let inboxLoad: Void = inboxVM.loadItems(userId: userId)
         _ = await (brainLoad, taskLoad, moduleLoad, inboxLoad)
+        guard isCurrentBootstrap(userId: userId) else { return }
         await LookAfterIntentBridge.shared.processPendingQueue(userId: userId)
         await compileLifeModelIfNeeded()
+        guard isCurrentBootstrap(userId: userId) else { return }
         if let lifeModel = LifeModelStore.load(), lifeModel.hasContent {
             await tasksVM.dedupeLifeCommitmentTasks(userId: userId, model: lifeModel)
             await tasksVM.ensureLifeCommitmentTasks(userId: userId, model: lifeModel)

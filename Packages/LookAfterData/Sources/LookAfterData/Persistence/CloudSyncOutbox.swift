@@ -104,11 +104,11 @@ public final class CloudSyncOutbox {
         guard firebase.isCloudSyncAvailable else { return 0 }
 
         var completed = 0
-        var stillPending: [Entry] = []
+        var completedIDs: Set<String> = []
+        let snapshot = loadAll()
 
-        for entry in loadAll() {
+        for entry in snapshot {
             guard let ref = firebase.userCollection(entry.collection) else {
-                stillPending.append(entry)
                 continue
             }
             do {
@@ -118,18 +118,21 @@ public final class CloudSyncOutbox {
                 case .upsert, .upsertMerge:
                     guard let payload = entry.payloadJSON,
                           let dict = try JSONSerialization.jsonObject(with: payload) as? [String: Any] else {
-                        stillPending.append(entry)
                         continue
                     }
                     try await ref.document(entry.documentId).setData(dict, merge: entry.operation == .upsertMerge)
                 }
                 completed += 1
+                completedIDs.insert(entry.id)
             } catch {
-                stillPending.append(entry)
+                continue
             }
         }
 
-        persistence.save(stillPending, filename: filename)
+        // Reload after awaits: enqueue can append while Firestore calls yield the MainActor.
+        // Drop only IDs this drain actually synced so mid-drain writes are not overwritten.
+        let remaining = loadAll().filter { !completedIDs.contains($0.id) }
+        persistence.save(remaining, filename: filename)
         return completed
     }
 
