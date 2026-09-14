@@ -203,6 +203,12 @@ public struct LookAfterRootCanvas: View {
 
     @ViewBuilder
     private var canvasWithChrome: some View {
+        // Split presentations vs lifecycle so Swift can type-check this view in reasonable time
+        // (extra tomorrow-plan toast tipped the single chain over the limit).
+        canvasWithLifecycleChrome
+    }
+
+    private var canvasWithPresentations: some View {
         mainCanvasStack
         .onChange(of: featureTour.requestedTab) { _, tab in
             guard let tab else { return }
@@ -408,6 +414,10 @@ public struct LookAfterRootCanvas: View {
             tomorrowPlanToastMessage = newValue
             showTomorrowPlanToast = true
         }
+    }
+
+    private var canvasWithLifecycleChrome: some View {
+        canvasWithPresentations
         .undoToast(
             isShowing: $showCaptureToast,
             message: captureToastMessage,
