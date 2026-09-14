@@ -69,17 +69,9 @@ public final class TaskSQLiteStore: @unchecked Sendable {
         }
     }
 
-    public func loadAllAsync() async -> [LifeTask] {
-        do {
-            return try await dbQueue.read { db in
-                try TaskRecord.fetchAll(db).map { try $0.lifeTask() }
-            }
-        } catch is CancellationError {
-            // Superseded load — expected when bootstrap cancels an in-flight read.
-            return []
-        } catch {
-            print("[TaskSQLiteStore] loadAllAsync failed: \(error)")
-            return []
+    public func loadAllAsync() async throws -> [LifeTask] {
+        try await dbQueue.read { db in
+            try TaskRecord.fetchAll(db).map { try $0.lifeTask() }
         }
     }
 
