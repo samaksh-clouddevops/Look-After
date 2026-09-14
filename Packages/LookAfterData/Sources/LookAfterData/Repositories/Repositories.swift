@@ -31,13 +31,22 @@ public final class TaskRepository: ObservableObject {
     /// Loads `tasks.sqlite` off the main thread into `cachedAll`.
     /// Call once before first `localSnapshot` / `localAllTasks` on a cold process.
     /// Safe to call repeatedly — no-ops when already warm (unless `force` is true).
+    /// Failed or cancelled loads leave the cache unwarmed so callers cannot persist `[]` over disk.
     @discardableResult
     public func warmLocalCache(force: Bool = false) async -> [LifeTask] {
         if !force, let cached = Self.cachedAll {
             return cached
         }
         await TaskDeletionRegistry.pullFromCloud(firebase: firebase)
-        let loaded = await taskStore.loadAllAsync()
+        let loaded: [LifeTask]
+        do {
+            loaded = try await taskStore.loadAllAsync()
+        } catch is CancellationError {
+            return Self.cachedAll ?? []
+        } catch {
+            print("[TaskRepository] warmLocalCache failed: \(error)")
+            return Self.cachedAll ?? []
+        }
         if let cached = Self.cachedAll {
             let merged = TaskMerge.merge(local: cached, remote: loaded)
             Self.cachedAll = merged
@@ -107,6 +116,7 @@ public final class TaskRepository: ObservableObject {
     }
     
     public func getAll(for userId: String) async throws -> [LifeTask] {
+        await ensureLocalCacheWarmed()
         let localTasks = tasksForUser(userId)
         if FreshInstallGuard.isActive {
             TaskPersistenceLog.fetchFinished(count: localTasks.count, merged: false)
@@ -130,7 +140,11 @@ public final class TaskRepository: ObservableObject {
             for index in merged.indices {
                 ScheduleNormalization.normalizeFields(&merged[index])
             }
-            persistAllLocally(merged)
+            // Never persist a cloud merge until memory actually reflects tasks.sqlite.
+            // Otherwise an unwarmed `[]` local side + replaceAll wipes on-device history.
+            if Self.hasWarmedLocalCache {
+                persistAllLocally(merged)
+            }
             var result = tasksForUser(userId)
             for task in localTasks where !result.contains(where: { $0.id == task.id }) {
                 result.append(task)
@@ -153,6 +167,7 @@ public final class TaskRepository: ObservableObject {
     }
     
     public func create(_ task: LifeTask) async throws {
+        await ensureLocalCacheWarmed()
         var mutableTask = task
         ScheduleNormalization.normalizeFields(&mutableTask)
         let explicitUserId = task.userId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -169,6 +184,7 @@ public final class TaskRepository: ObservableObject {
     }
     
     public func update(_ task: LifeTask) async throws {
+        await ensureLocalCacheWarmed()
         var mutableTask = task
         ScheduleNormalization.normalizeFields(&mutableTask)
         mutableTask.updatedAt = Date()
@@ -178,6 +194,7 @@ public final class TaskRepository: ObservableObject {
     }
     
     public func delete(_ id: String) async throws {
+        await ensureLocalCacheWarmed()
         TaskDeletionRegistry.markDeleted(id)
         var tasks = allLocalTasks()
         tasks.removeAll { $0.id == id }
@@ -219,6 +236,11 @@ public final class TaskRepository: ObservableObject {
         )
 #endif
         return []
+    }
+
+    @discardableResult
+    private func ensureLocalCacheWarmed() async -> [LifeTask] {
+        await warmLocalCache(force: false)
     }
 
     private func persistAllLocally(_ tasks: [LifeTask]) {
@@ -273,28 +295,30 @@ public final class TaskRepository: ObservableObject {
     }
 
     /// Background-safe compaction — loads/saves off the main actor's critical path.
+    /// Applies the compacted ID set to the *latest* in-memory cache so a concurrent
+    /// create/update that landed while compaction ran is not overwritten.
     @discardableResult
     public func compactRecurrenceStorageAsync(
         for userId: String,
         retentionDays: Int
     ) async -> Int {
-        let all: [LifeTask]
-        if let cached = Self.cachedAll {
-            all = cached
-        } else {
-            all = await taskStore.loadAllAsync()
-            Self.cachedAll = all
-        }
+        await ensureLocalCacheWarmed()
+        guard let snapshot = Self.cachedAll else { return 0 }
 
-        let before = all.count
+        let before = snapshot.count
         let (pruned, removed) = await Task.detached(priority: .utility) {
-            TaskRecurrenceCompactor.compact(all, retentionDays: retentionDays)
+            TaskRecurrenceCompactor.compact(snapshot, retentionDays: retentionDays)
         }.value
         guard removed > 0 else { return 0 }
-        await taskStore.replaceAllAwait(pruned)
-        Self.cachedAll = pruned
-        print("[Tasks] compacted \(removed) recurrence rows (\(before) → \(pruned.count))")
-        return removed
+
+        let removedIDs = Set(snapshot.map(\.id)).subtracting(Set(pruned.map(\.id)))
+        let latest = Self.cachedAll ?? pruned
+        let kept = latest.filter { !removedIDs.contains($0.id) }
+        let dropped = latest.count - kept.count
+        guard dropped > 0 else { return 0 }
+        persistAllLocally(kept)
+        print("[Tasks] compacted \(dropped) recurrence rows (\(before) → \(kept.count))")
+        return dropped
     }
 
     /// Backward-compatible alias.
