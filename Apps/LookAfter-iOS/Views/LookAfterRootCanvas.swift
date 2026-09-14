@@ -60,6 +60,8 @@ public struct LookAfterRootCanvas: View {
     @State private var showPostWakeSheet = false
     @State private var showGoingOutSheet = false
     @State private var showContextualReplanPreview = false
+    @State private var showTomorrowPlanToast = false
+    @State private var tomorrowPlanToastMessage = ""
     @Namespace private var captureMorphNamespace
 
     public init() {}
@@ -400,6 +402,12 @@ public struct LookAfterRootCanvas: View {
             AuthView()
         }
         .toast(isShowing: $showWelcomeToast, message: welcomeToastMessage, type: .success)
+        .toast(isShowing: $showTomorrowPlanToast, message: tomorrowPlanToastMessage, type: .info)
+        .onChange(of: tomorrowPlannerVM.message) { _, newValue in
+            guard let newValue, !newValue.isEmpty, tomorrowPlannerVM.rescheduleProposal == nil else { return }
+            tomorrowPlanToastMessage = newValue
+            showTomorrowPlanToast = true
+        }
         .undoToast(
             isShowing: $showCaptureToast,
             message: captureToastMessage,

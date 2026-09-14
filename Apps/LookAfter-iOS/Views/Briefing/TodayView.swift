@@ -185,6 +185,23 @@ struct TodayView: View {
     }
 
 
+    /// Visible feedback while `onReplanDay` (AI replan) is in flight — otherwise tapping
+    /// "Refresh timeline" gives no indication anything is happening until it finishes.
+    private var replanningIndicator: some View {
+        HStack(spacing: DesignSystem.spacingSM) {
+            ProgressView()
+                .scaleEffect(0.85)
+            Text("AI is replanning your day…")
+                .font(.dsCaption(weight: .semibold))
+                .foregroundColor(DesignSystem.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DesignSystem.spacingSM)
+        .padding(.vertical, DesignSystem.spacingXS)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .animation(.easeInOut(duration: 0.2), value: planningVM.isReplanning)
+    }
+
     private var timelineSection: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
@@ -196,6 +213,9 @@ struct TodayView: View {
                     }
 
                     if isSelectedToday {
+                        if planningVM.isReplanning {
+                            replanningIndicator
+                        }
                         TodayMultiDayBanner(planningVM: planningVM, tasksVM: tasksVM)
                         // Critical coach only above hero (overcommit / transition). Micro-start goes below.
                         // Hide when Plan sheet is open so Open plan isn't duplicated (LAY-P2).
@@ -286,8 +306,7 @@ struct TodayView: View {
                             onEditTask: onEditTask
                         )
                     } else {
-                        Text("No plan for this day yet.")
-                            .textStyleCaption()
+                        futureDaySection
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
@@ -424,6 +443,40 @@ struct TodayView: View {
             selectedDay = .today
         } else if Calendar.current.isDateInTomorrow(date) {
             selectedDay = .tomorrow
+        }
+    }
+
+    /// Tasks for any future day the user browses to — includes recurring-series projections
+    /// (prefilled, not-yet-materialized occurrences) so repeated/routine tasks are visible on
+    /// every day, not only today/tomorrow.
+    private var futureDayTasks: [LifeTask] {
+        // `tasksVM.schedulingContext` only carries *today's* active tasks + recurrence
+        // templates (`TaskListSnapshot.make` filters `active` via `activeTasksForToday`).
+        // Future days need the full on-device task pool so already-scheduled multi-day /
+        // recurring occurrences (not just templates) are considered, or they silently
+        // vanish from every day except today/tomorrow.
+        let fullPool = tasksVM.localAllTasks(userId: userId)
+        return TaskListSorter.sortByPriorityThenSchedule(
+            TaskScheduleQuery.tasksForDay(
+                from: fullPool,
+                allTasks: fullPool,
+                day: selectedCalendarDate
+            )
+        )
+    }
+
+    @ViewBuilder
+    private var futureDaySection: some View {
+        let dayTasks = futureDayTasks
+        if dayTasks.isEmpty {
+            Text("No plan for this day yet.")
+                .textStyleCaption()
+        } else {
+            VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                ForEach(dayTasks) { task in
+                    CompactTaskRowView(task: task)
+                }
+            }
         }
     }
 
