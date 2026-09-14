@@ -203,13 +203,13 @@ public final class CalendarSyncService {
         formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
 
-        return eventStore.events(matching: predicate)
+        let mapped = eventStore.events(matching: predicate)
             .filter { event in
                 event.calendar?.title != Self.lookAfterCalendarTitle
                     && event.notes?.contains("Blocked by Look After") != true
             }
             .sorted { $0.startDate < $1.startDate }
-            .map { event in
+            .map { event -> BriefingCalendarEvent in
                 let busy: Bool
                 switch event.availability {
                 case .free, .tentative:
@@ -227,5 +227,16 @@ public final class CalendarSyncService {
                     isBusy: busy
                 )
             }
+
+        // De-dupe all-day events with the same title (e.g. a Holiday calendar duplicated across
+        // synced accounts can surface the same holiday twice via distinct EventKit identifiers).
+        var seenAllDayTitles = Set<String>()
+        return mapped.filter { event in
+            guard event.isAllDay else { return true }
+            let key = event.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !seenAllDayTitles.contains(key) else { return false }
+            seenAllDayTitles.insert(key)
+            return true
+        }
     }
 }
