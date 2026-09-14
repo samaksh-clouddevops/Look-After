@@ -267,6 +267,10 @@ private struct ExperienceRootDataModifier: ViewModifier {
                     shell.tasksVM.syncFromTaskStore()
                     shell.tasksVM.requestDebouncedScheduleReconcile(userId: userId)
                 }
+                // Timeline/widgets never subscribe to task mutations directly — without this,
+                // newly created tasks (including multi-day/routine) only appear in the timeline
+                // after the next 60s context-loop tick or a manual pull-to-refresh.
+                shell.requestDebouncedTimelineRebuild(reason: "taskListDidChange")
                 // Heavy briefing/brain work coalesced.
                 taskListFanoutTask?.cancel()
                 taskListFanoutTask = Task { @MainActor in

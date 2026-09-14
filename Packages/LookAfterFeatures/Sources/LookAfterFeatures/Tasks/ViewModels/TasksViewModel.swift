@@ -10,6 +10,8 @@ public final class TasksViewModel: ObservableObject {
     @Published public var tasks: [LifeTask] = []
     @Published public var completedToday: [LifeTask] = []
     @Published public private(set) var recurrenceTemplates: [LifeTask] = []
+    /// Non-active-status tasks (completed/skipped/expired/superseded), any day — for the "Completed" tab.
+    @Published public private(set) var inactiveTasks: [LifeTask] = []
     @Published public var isLoading: Bool = false
     @Published public var error: String?
     @Published public var selectedTask: LifeTask?
@@ -391,6 +393,7 @@ public final class TasksViewModel: ObservableObject {
             tasks = snapshot.active
             completedToday = snapshot.completedToday
             recurrenceTemplates = snapshot.templates
+            inactiveTasks = snapshot.inactive
         } else {
             tasks = Self.mergeTasksPreservingNewerEdits(existing: tasks, incoming: snapshot.active)
             completedToday = Self.mergeTasksPreservingNewerEdits(
@@ -400,6 +403,10 @@ public final class TasksViewModel: ObservableObject {
             recurrenceTemplates = Self.mergeTasksPreservingNewerEdits(
                 existing: recurrenceTemplates,
                 incoming: snapshot.templates
+            )
+            inactiveTasks = Self.mergeTasksPreservingNewerEdits(
+                existing: inactiveTasks,
+                incoming: snapshot.inactive
             )
         }
         bumpTasksRevision()

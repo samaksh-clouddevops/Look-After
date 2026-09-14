@@ -160,6 +160,45 @@ public extension LifeTask {
         )
     }
 
+    /// "Active" tab — multi-day tasks, tasks actionable today, or recurring tasks/templates.
+    /// Excludes tasks that have permanently ended (completed/skipped/expired/superseded).
+    func isActiveTask(allTasks: [LifeTask] = [], calendar: Calendar = .current) -> Bool {
+        guard status.isActive else { return false }
+        if MultiDayTaskTags.isMultiDay(self) { return true }
+        if isRecurrenceTemplateTask || isRecurring { return true }
+        let context = allTasks.isEmpty ? [self] : allTasks
+        return isActionableToday(allTasks: context, calendar: calendar)
+    }
+
+    /// "Scheduled" tab — fixed-time (not flexible) tasks with a concrete date+time falling this week.
+    func isScheduledThisWeek(calendar: Calendar = .current, referenceDate: Date = Date()) -> Bool {
+        guard status.isActive, !isRecurrenceTemplateTask else { return false }
+        guard scheduledTime != nil, let scheduledDate else { return false }
+        guard schedulingModeValue == .fixedTime else { return false }
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: referenceDate) else { return false }
+        return weekInterval.contains(scheduledDate)
+    }
+
+    /// "Completed" tab — inactive (permanently ended) tasks with no future recurrence occurrence.
+    func isInactiveWithNoFutureOccurrence(
+        allTasks: [LifeTask] = [],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
+        guard !status.isActive, !isRecurrenceTemplateTask else { return false }
+        let context = allTasks.isEmpty ? [self] : allTasks
+        let template = TaskRecurrenceEngine.template(for: self, in: context)
+        guard template.recurrenceRule != .none else { return true }
+        let next = template.recurrenceRule.nextOccurrence(
+            after: referenceDate,
+            anchoredOn: template.createdAt,
+            interval: template.recurrenceIntervalValue,
+            weekdays: template.recurrenceWeekdays,
+            calendar: calendar
+        )
+        return next == nil
+    }
+
     /// Whether `now` falls inside this task's fixed window on the same calendar day.
     func isActiveFixedTimeWindow(at now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard isFixedTimeEvent, let start = scheduledTime else { return false }

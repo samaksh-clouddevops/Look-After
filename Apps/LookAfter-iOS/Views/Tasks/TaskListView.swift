@@ -345,14 +345,25 @@ struct TaskListView: View {
             Button(action: {
                 Task { await proposeTomorrowPlan() }
             }, label: {
-                Label("Plan", systemImage: "sparkles")
-                    .font(.system(size: 13, weight: .semibold, design: .default))
-                    .padding(.horizontal, DesignSystem.spacingSM)
-                    .padding(.vertical, 8)
+                Group {
+                    if plannerVM.isScheduling {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Planning…")
+                        }
+                    } else {
+                        Label("Plan", systemImage: "sparkles")
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold, design: .default))
+                .padding(.horizontal, DesignSystem.spacingSM)
+                .padding(.vertical, 8)
             })
             .buttonStyle(.glassProminent)
             .tint(LookAfterChrome.accentTint)
             .disabled(plannerVM.isScheduling)
+            .animation(.easeInOut(duration: 0.2), value: plannerVM.isScheduling)
         }
         .padding(.horizontal, DesignSystem.spacingLG)
         .padding(.bottom, 8)
@@ -370,6 +381,7 @@ struct TaskListView: View {
                 .joined()
                 .hashValue
             &+ tasksVM.completedToday.map(\.id).joined().hashValue
+            &+ tasksVM.inactiveTasks.map(\.id).joined().hashValue
         if selectedFilter != lastFilterApplied || currentHash != lastTasksHash {
             cachedFilteredTasks = computeFilteredTasks()
             lastFilterApplied = selectedFilter
@@ -403,15 +415,17 @@ struct TaskListView: View {
                 tasksVM.tasks.filter { $0.isUpcoming(allTasks: context, calendar: calendar) }
             )
         case .active:
-            return TaskListSorter.sortByPriorityThenSchedule(
-                tasksVM.tasks.filter { $0.isActiveBacklog(calendar: calendar) }
+            return TaskListSorter.sortForToday(
+                tasksVM.tasks.filter { $0.isActiveTask(allTasks: context, calendar: calendar) }
             )
         case .scheduled:
             return TaskListSorter.sortByPriorityThenSchedule(
-                tasksVM.tasks.filter { $0.isScheduledTask(allTasks: tasksVM.schedulingContext, calendar: calendar) }
+                tasksVM.tasks.filter { $0.isScheduledThisWeek(calendar: calendar) }
             )
         case .completed:
-            return tasksVM.completedToday
+            return tasksVM.inactiveTasks.filter {
+                $0.isInactiveWithNoFutureOccurrence(allTasks: context, calendar: calendar)
+            }
         }
     }
 }

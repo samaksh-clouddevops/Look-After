@@ -7,11 +7,20 @@ public struct TaskListSnapshot: Sendable, Equatable {
     public let completedToday: [LifeTask]
     /// Recurrence master records — kept out of `active` but required for schedule checks.
     public let templates: [LifeTask]
+    /// All non-active-status tasks (completed/skipped/expired/superseded), any day —
+    /// used by the "Completed" tab to show tasks with no future occurrences.
+    public let inactive: [LifeTask]
 
-    public init(active: [LifeTask], completedToday: [LifeTask], templates: [LifeTask] = []) {
+    public init(
+        active: [LifeTask],
+        completedToday: [LifeTask],
+        templates: [LifeTask] = [],
+        inactive: [LifeTask] = []
+    ) {
         self.active = active
         self.completedToday = completedToday
         self.templates = templates
+        self.inactive = inactive
     }
 
     public static func make(
@@ -45,7 +54,10 @@ public struct TaskListSnapshot: Sendable, Equatable {
             let completionMoment = task.completedAt ?? task.updatedAt
             return completionMoment >= startOfDay
         }
-        return TaskListSnapshot(active: active, completedToday: completedToday, templates: templates)
+        let inactive = tasks.filter { task in
+            !TaskRecurrenceEngine.isRecurrenceTemplate(task) && !task.status.isActive
+        }
+        return TaskListSnapshot(active: active, completedToday: completedToday, templates: templates, inactive: inactive)
     }
 
     /// Active, completed-today, and recurrence templates for schedule validation.
