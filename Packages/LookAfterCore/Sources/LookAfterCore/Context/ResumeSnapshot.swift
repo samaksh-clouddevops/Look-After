@@ -71,6 +71,11 @@ public struct ResumeSnapshot: Codable, Sendable, Equatable {
     }
 
     public var isStale: Bool {
-        Date().timeIntervalSince(savedAt) > 86_400
+        isStale(at: Date())
+    }
+
+    /// Stale relative to an explicit clock — virtual mornings must not drop a resume the wall clock has not aged out, or keep one it has.
+    public func isStale(at now: Date) -> Bool {
+        now.timeIntervalSince(savedAt) > 86_400
     }
 }

@@ -55,6 +55,122 @@ final class ExecutiveRecommendationEngineTests: XCTestCase {
         XCTAssertEqual(output?.taskID, music.id)
     }
 
+    func testVirtualMorningDoesNotHeroWallClockOverdueTask() {
+        var morningParts = DateComponents()
+        morningParts.year = 2026
+        morningParts.month = 8
+        morningParts.day = 1
+        morningParts.hour = 9
+        let virtualMorning = Calendar.current.date(from: morningParts)!
+
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        let wallClockOverdue = LifeTask(
+            id: "wall",
+            title: "Wall clock leftover",
+            priority: .high,
+            estimatedMinutes: 20,
+            scheduledDate: Calendar.current.startOfDay(for: yesterday)
+        )
+        let virtualDay = Calendar.current.startOfDay(for: virtualMorning)
+        let virtualDayTask = LifeTask(
+            id: "virtual",
+            title: "Virtual day review",
+            priority: .low,
+            estimatedMinutes: 20,
+            scheduledDate: virtualDay
+        )
+
+        XCTAssertTrue(wallClockOverdue.isOverdue, "Precondition: leftover is overdue on the wall clock")
+        XCTAssertFalse(
+            wallClockOverdue.isOverdue(calendar: .current, referenceDate: virtualMorning),
+            "The same leftover is still in the future on the virtual morning"
+        )
+
+        let briefing = ContextBriefingGenerator().generate(
+            from: LifeContextSnapshot(currentEnergy: 0.7, availableTimeMinutes: 90),
+            resume: nil,
+            now: virtualMorning,
+            context: ContextBriefingGenerator.GenerationContext(tasks: [wallClockOverdue, virtualDayTask])
+        )
+
+        XCTAssertEqual(briefing.hero.action.taskID, virtualDayTask.id)
+    }
+
+    func testHeroDoesNotStealFutureDatedOneOffWithPastDeadline() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 1, hour: 9))!
+        let today = calendar.startOfDay(for: now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let futureDated = LifeTask(
+            id: "friday",
+            title: "Friday review",
+            priority: .high,
+            estimatedMinutes: 20,
+            deadline: yesterday,
+            scheduledDate: tomorrow
+        )
+        let todayTask = LifeTask(
+            id: "today",
+            title: "Today's work",
+            priority: .low,
+            estimatedMinutes: 20,
+            scheduledDate: today
+        )
+
+        XCTAssertTrue(futureDated.isOverdue(calendar: calendar, referenceDate: now))
+        XCTAssertFalse(futureDated.isActionableToday(allTasks: [futureDated, todayTask], calendar: calendar, referenceDate: now))
+
+        let briefing = ContextBriefingGenerator(calendar: calendar).generate(
+            from: LifeContextSnapshot(currentEnergy: 0.7, availableTimeMinutes: 90),
+            resume: nil,
+            now: now,
+            context: ContextBriefingGenerator.GenerationContext(tasks: [futureDated, todayTask])
+        )
+
+        XCTAssertEqual(briefing.hero.action.taskID, todayTask.id)
+    }
+
+    func testHeroDoesNotStealLeftoverRecurringOccurrence() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 1, hour: 9))!
+        let today = calendar.startOfDay(for: now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let leftover = LifeTask(
+            id: "leftover",
+            title: "Daily standup",
+            priority: .high,
+            estimatedMinutes: 15,
+            scheduledDate: yesterday,
+            recurrence: .daily,
+            parentTaskId: "template"
+        )
+        let todayTask = LifeTask(
+            id: "today",
+            title: "Write notes",
+            priority: .low,
+            estimatedMinutes: 20,
+            scheduledDate: today
+        )
+
+        XCTAssertTrue(leftover.isOverdue(calendar: calendar, referenceDate: now))
+        XCTAssertFalse(leftover.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: now))
+        XCTAssertFalse(leftover.isActionableToday(allTasks: [leftover, todayTask], calendar: calendar, referenceDate: now))
+
+        let briefing = ContextBriefingGenerator(calendar: calendar).generate(
+            from: LifeContextSnapshot(currentEnergy: 0.7, availableTimeMinutes: 90),
+            resume: nil,
+            now: now,
+            context: ContextBriefingGenerator.GenerationContext(tasks: [leftover, todayTask])
+        )
+
+        XCTAssertEqual(briefing.hero.action.taskID, todayTask.id)
+    }
+
     func testEveningThyroidMedicationSkipsToAlternateOrEveningPlan() {
         let thyroid = LifeTask(
             title: "Take Thyroid Medication",

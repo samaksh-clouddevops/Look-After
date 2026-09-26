@@ -80,4 +80,25 @@ final class DayPlateBuilderTests: XCTestCase {
             TaskScheduleQuery.seriesKey(for: commitment)
         )
     }
+
+    func testScheduledTaskCountForwardsQueriedDayAsReferenceDate() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let queriedDay = calendar.date(from: DateComponents(year: 2026, month: 8, day: 1, hour: 9))!
+        let dayStart = calendar.startOfDay(for: queriedDay)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: dayStart)!
+        let carryForward = LifeTask(
+            id: "carry",
+            title: "Pay rent",
+            status: .pending,
+            estimatedMinutes: 15,
+            scheduledDate: yesterday,
+            userId: "u1"
+        )
+
+        XCTAssertEqual(
+            DayPlateBuilder.scheduledTaskCount(from: [carryForward], day: queriedDay, calendar: calendar),
+            1
+        )
+    }
 }

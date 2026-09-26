@@ -342,6 +342,14 @@ public extension LifeTask {
 }
 
 public extension Calendar {
+    /// Yesterday relative to an explicit clock, not the wall clock.
+    func isDateInYesterday(_ date: Date, reference: Date) -> Bool {
+        guard let yesterday = self.date(byAdding: .day, value: -1, to: startOfDay(for: reference)) else {
+            return false
+        }
+        return isDate(date, inSameDayAs: yesterday)
+    }
+
     func combine(date day: Date, timeFrom time: Date) -> Date? {
         let parts = dateComponents([.hour, .minute, .second], from: time)
         return self.date(

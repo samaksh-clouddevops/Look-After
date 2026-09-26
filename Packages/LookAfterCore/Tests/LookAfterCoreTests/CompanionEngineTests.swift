@@ -55,6 +55,37 @@ final class CompanionEngineTests: XCTestCase {
         }
     }
 
+    func testVirtualMorningKeepsResumeTheWallClockWouldExpire() {
+        var morningParts = DateComponents()
+        morningParts.year = 2026
+        morningParts.month = 8
+        morningParts.day = 1
+        morningParts.hour = 9
+        let virtualMorning = Calendar.current.date(from: morningParts)!
+        let savedAt = virtualMorning.addingTimeInterval(-2 * 3600)
+        let resume = ResumeSnapshot(
+            lastTaskTitle: "Search API",
+            workingContext: WorkingContext(kind: .task, title: "Search API", taskID: "t1"),
+            savedAt: savedAt
+        )
+        XCTAssertFalse(resume.isStale(at: virtualMorning))
+
+        let task = LifeTask(id: "t1", title: "Search API", estimatedMinutes: 30)
+        let decision = ContinueRelevanceEngine().evaluate(
+            ContinueRelevanceEngine.Input(
+                resume: resume,
+                snapshot: LifeContextSnapshot(currentMission: task),
+                heroTask: task,
+                now: virtualMorning
+            )
+        )
+        if case .continueWork(let ctx, _) = decision {
+            XCTAssertEqual(ctx.title, "Search API")
+        } else {
+            XCTFail("Expected continue work on the virtual morning, got \(decision)")
+        }
+    }
+
     func testContinueWhenRecentlyInterrupted() {
         let resume = ResumeSnapshot(
             lastTaskTitle: "HealthKit Integration",

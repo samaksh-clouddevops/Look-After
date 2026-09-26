@@ -1,4 +1,4 @@
-import Foundation
+54444444444import Foundation
 import LookAfterCore
 import LookAfterAI
 
@@ -293,7 +293,7 @@ public final class DayReplanEngine {
 
         \(PlanningPromptContextBuilder.combinedLifeContextBlock(profile: profile))
         \(supplemental.isEmpty ? "" : "\(supplemental)\n")
-        \(PlanningPromptContextBuilder.healthBlock(pc.healthSummary))
+        \(PlanningPromptContextBuilder.healthBlock(pc.healthSummary, now: now))
         \(PlanningPromptContextBuilder.executiveCapacityBlock(
             label: pc.executiveCapacityLabel,
             reasons: pc.executiveCapacityReasons,

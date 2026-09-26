@@ -4,8 +4,12 @@ import Foundation
 public enum TaskSemanticProfileBuilder {
 
     /// Deterministic semantics for known routines — ignores stale LLM profiles on daily anchors.
-    public static func classificationProfile(for task: LifeTask) -> TaskSemanticProfile {
-        let deterministic = build(from: task)
+    public static func classificationProfile(
+        for task: LifeTask,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> TaskSemanticProfile {
+        let deterministic = build(from: task, now: now, calendar: calendar)
         if task.tags.contains("daily-routine") || isAnchoredRoutine(deterministic) {
             return deterministic
         }
@@ -16,8 +20,13 @@ public enum TaskSemanticProfileBuilder {
         profile.semanticType == .selfCare || profile.subtype == "meal"
     }
 
-    public static func build(from task: LifeTask) -> TaskSemanticProfile {
+    public static func build(
+        from task: LifeTask,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> TaskSemanticProfile {
         let corpus = normalizedCorpus(for: task)
+        let overdue = task.isOverdue(calendar: calendar, referenceDate: now)
 
         if let medication = medicationProfile(task: task, corpus: corpus) {
             return medication
@@ -28,10 +37,10 @@ public enum TaskSemanticProfileBuilder {
         if let meal = mealRoutineProfile(task: task, corpus: corpus) {
             return meal
         }
-        if let deepWork = deepWorkProfile(task: task, corpus: corpus) {
+        if let deepWork = deepWorkProfile(task: task, corpus: corpus, overdue: overdue) {
             return deepWork
         }
-        if let errand = errandProfile(task: task, corpus: corpus) {
+        if let errand = errandProfile(task: task, corpus: corpus, overdue: overdue) {
             return errand
         }
         if let exercise = exerciseProfile(task: task, corpus: corpus) {
@@ -56,7 +65,7 @@ public enum TaskSemanticProfileBuilder {
             return byArea
         }
 
-        return genericProfile(task: task)
+        return genericProfile(task: task, overdue: overdue)
     }
 
     /// Merge LLM output with deterministic safety rules. Medical constraints always win.
@@ -199,7 +208,7 @@ public enum TaskSemanticProfileBuilder {
         )
     }
 
-    private static func deepWorkProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+    private static func deepWorkProfile(task: LifeTask, corpus: String, overdue: Bool) -> TaskSemanticProfile? {
         let deepTerms = [
             "implement", "code", "coding", "oauth", "api", "architecture", "refactor",
             "debug", "design system", "search perf", "build feature"
@@ -230,13 +239,13 @@ public enum TaskSemanticProfileBuilder {
             interruptionTolerance: 0.15,
             energyRequirement: task.requiredEnergy == .peak ? .peak : .high,
             cognitiveRequirement: .deepFocus,
-            consequenceOfDelay: task.isOverdue ? .high : .moderate,
+            consequenceOfDelay: overdue ? .high : .moderate,
             confidence: 0.84,
             source: .deterministic
         )
     }
 
-    private static func errandProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+    private static func errandProfile(task: LifeTask, corpus: String, overdue: Bool) -> TaskSemanticProfile? {
         let errandTerms = ["shopping", "grocery", "groceries", "store", "pick up", "pickup", "pharmacy", "errand"]
         guard errandTerms.contains(where: { corpus.contains($0) }) else { return nil }
 
@@ -299,7 +308,7 @@ public enum TaskSemanticProfileBuilder {
             interruptionTolerance: 0.8,
             energyRequirement: .low,
             cognitiveRequirement: .light,
-            consequenceOfDelay: task.isOverdue ? .moderate : .low,
+            consequenceOfDelay: overdue ? .moderate : .low,
             confidence: 0.78,
             source: .deterministic
         )
@@ -430,7 +439,7 @@ public enum TaskSemanticProfileBuilder {
         return nil
     }
 
-    private static func genericProfile(task: LifeTask) -> TaskSemanticProfile {
+    private static func genericProfile(task: LifeTask, overdue: Bool) -> TaskSemanticProfile {
         TaskSemanticProfile(
             semanticType: .generic,
             subtype: "General task",
@@ -439,7 +448,7 @@ public enum TaskSemanticProfileBuilder {
             splittable: task.estimatedMinutes > 30,
             energyRequirement: energyFromTask(task),
             cognitiveRequirement: task.difficulty == .hard ? .moderate : .light,
-            consequenceOfDelay: task.isOverdue ? .moderate : .low,
+            consequenceOfDelay: overdue ? .moderate : .low,
             confidence: 0.55,
             source: .deterministic
         )

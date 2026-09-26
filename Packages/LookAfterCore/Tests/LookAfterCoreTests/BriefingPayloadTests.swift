@@ -219,4 +219,80 @@ final class BriefingPayloadTests: XCTestCase {
         XCTAssertTrue(router.systemActions.contains { $0.lowercased().contains("sabotage") })
         XCTAssertFalse(router.systemActions.joined().contains("@"))
     }
+
+    func testDayScopedIncludesOverdueOneOffCarryForward() {
+        let day = calendar.startOfDay(for: now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: day)!
+        let leftover = LifeTask(
+            id: "carry",
+            title: "Pay rent",
+            status: .pending,
+            estimatedMinutes: 15,
+            scheduledDate: yesterday,
+            userId: "u"
+        )
+        let payload = BriefingPayloadCompiler.compile(
+            .init(
+                now: now,
+                capacityBandLabel: "Good Capacity",
+                tasks: [leftover]
+            ),
+            calendar: calendar
+        )
+        XCTAssertEqual(payload.remainingTaskCount, 1)
+        XCTAssertEqual(payload.overdueCount, 1)
+    }
+
+    func testDayScopedExcludesFutureDatedOneOffWithPastDeadline() {
+        let day = calendar.startOfDay(for: now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: day)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: day)!
+        let futureDated = LifeTask(
+            id: "friday",
+            title: "Friday review",
+            status: .pending,
+            estimatedMinutes: 20,
+            deadline: yesterday,
+            scheduledDate: tomorrow,
+            userId: "u"
+        )
+        let payload = BriefingPayloadCompiler.compile(
+            .init(
+                now: now,
+                capacityBandLabel: "Good Capacity",
+                tasks: [futureDated]
+            ),
+            calendar: calendar
+        )
+        XCTAssertEqual(payload.remainingTaskCount, 0)
+        XCTAssertEqual(payload.overdueCount, 0)
+    }
+
+    func testDayScopedExcludesWrongWeekdayRecurringOccurrence() {
+        let day = calendar.startOfDay(for: now)
+        let weekday = calendar.component(.weekday, from: day)
+        let otherWeekday = weekday == 1 ? 2 : 1
+        let wrongDay = LifeTask(
+            id: "gym-wrong-day",
+            title: "Gym",
+            status: .pending,
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            recurrence: .custom,
+            recurrenceWeekdays: [otherWeekday],
+            createdAt: calendar.date(byAdding: .day, value: -30, to: day)!,
+            userId: "u"
+        )
+        let payload = BriefingPayloadCompiler.compile(
+            .init(
+                now: now,
+                capacityBandLabel: "Good Capacity",
+                tasks: [wrongDay]
+            ),
+            calendar: calendar
+        )
+        XCTAssertEqual(payload.remainingTaskCount, 0)
+        XCTAssertEqual(payload.focusMinutes, 0)
+    }
+
 }

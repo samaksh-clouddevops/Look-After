@@ -56,10 +56,24 @@ public enum BriefingPayloadCompiler {
         let day = calendar.startOfDay(for: input.now)
         let dayKey = TelemetryLogRotation.dayKey(for: day, calendar: calendar)
         // Include expired/superseded for tallies (not only actives).
+        // Active membership follows `belongsOnDaySchedule` so overdue one-off
+        // carry-forwards land on today even when `scheduledDate` is yesterday.
+        // A same-day stamp is not enough for an active recurring row — a Sunday
+        // gym occurrence must not inflate Monday's remaining/focus tallies.
         let dayScoped = input.tasks.filter { task in
+            if task.status.isActive {
+                return task.belongsOnDaySchedule(day: day, calendar: calendar, now: input.now)
+                    && TaskRecurrenceEngine.matchesRecurrenceSchedule(
+                        task,
+                        on: day,
+                        in: input.tasks,
+                        calendar: calendar
+                    )
+            }
             if let d = task.scheduledDate { return calendar.isDate(d, inSameDayAs: day) }
-            return task.status.isActive || task.status == .expired || task.status == .superseded
-                || task.status == .skipped
+            if let t = task.scheduledTime { return calendar.isDate(t, inSameDayAs: day) }
+            return task.status == .expired || task.status == .superseded
+                || task.status == .skipped || task.status == .completed
         }
 
         var anchored = 0, flexible = 0, fluid = 0, focus = 0
@@ -80,7 +94,7 @@ public enum BriefingPayloadCompiler {
             }
             if task.status.isActive {
                 remaining += 1
-                if task.isOverdue { overdue += 1 }
+                if task.isOverdue(calendar: calendar, referenceDate: input.now) { overdue += 1 }
                 if task.timeConstraintValue != .fluid {
                     focus += max(task.estimatedMinutes, 0)
                 }

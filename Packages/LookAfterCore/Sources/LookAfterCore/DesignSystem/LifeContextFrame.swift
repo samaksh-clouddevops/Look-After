@@ -33,13 +33,18 @@ public struct LifeContextFrame: Sendable, Equatable {
 }
 
 public enum LifeContextFrameBuilder {
-    public static func build(resume: ResumeSnapshot?, task: LifeTask?) -> LifeContextFrame {
+    public static func build(
+        resume: ResumeSnapshot?,
+        task: LifeTask?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> LifeContextFrame {
         if let resume {
             if let data = resume.previewImageData {
                 return LifeContextFrame(
                     sourceLabel: sourceLabel(for: resume),
                     primaryText: resume.workingContext?.title ?? resume.resumeDetail,
-                    secondaryText: metaLine(resume: resume, task: task),
+                    secondaryText: metaLine(resume: resume, task: task, now: now, calendar: calendar),
                     previewImageData: data
                 )
             }
@@ -47,14 +52,14 @@ public enum LifeContextFrameBuilder {
                 return LifeContextFrame(
                     sourceLabel: sourceLabel(for: context),
                     primaryText: context.title,
-                    secondaryText: context.subtitle ?? metaLine(resume: resume, task: task)
+                    secondaryText: context.subtitle ?? metaLine(resume: resume, task: task, now: now, calendar: calendar)
                 )
             }
             if let detail = resume.resumeDetail {
                 return LifeContextFrame(
                     sourceLabel: sourceLabel(for: resume),
                     primaryText: detail,
-                    secondaryText: metaLine(resume: resume, task: task)
+                    secondaryText: metaLine(resume: resume, task: task, now: now, calendar: calendar)
                 )
             }
         }
@@ -73,13 +78,18 @@ public enum LifeContextFrameBuilder {
         return briefing.whyNowReasons.first ?? ""
     }
 
-    public static func metaLine(resume: ResumeSnapshot?, task: LifeTask?) -> String? {
+    public static func metaLine(
+        resume: ResumeSnapshot?,
+        task: LifeTask?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String? {
         var parts: [String] = []
         if let resume {
-            if Calendar.current.isDateInYesterday(resume.savedAt) {
+            if calendar.isDateInYesterday(resume.savedAt, reference: now) {
                 parts.append("Yesterday")
-            } else if !Calendar.current.isDateInToday(resume.savedAt) {
-                parts.append(relativeDay(resume.savedAt))
+            } else if !calendar.isDate(resume.savedAt, inSameDayAs: now) {
+                parts.append(relativeDay(resume.savedAt, now: now, calendar: calendar))
             }
         }
         if let task, task.progress > 0 {
@@ -119,10 +129,11 @@ public enum LifeContextFrameBuilder {
         return Int(minutes).durationString
     }
 
-    private static func relativeDay(_ date: Date) -> String {
+    private static func relativeDay(_ date: Date, now: Date, calendar: Calendar) -> String {
         let formatter = RelativeDateTimeFormatter()
+        formatter.calendar = calendar
         formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return formatter.localizedString(for: date, relativeTo: now)
     }
 
     private static func sourceLabel(for context: WorkingContext) -> String {

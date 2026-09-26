@@ -103,7 +103,7 @@ public enum ExecutiveRecommendationEngine {
             }
 
             // Never hero deep work after short sleep / very low energy (Brain #12).
-            let profile = task.resolvedSemanticProfile
+            let profile = task.resolvedSemanticProfile(now: input.now, calendar: input.calendar)
             if !TaskSemanticScheduler.schedulability(profile: profile, context: schedContext).isAllowed,
                TaskSemanticScheduler.isDeepWorkCandidate(profile: profile) {
                 if let alternate = nextSchedulableTask(excluding: task.id, from: input, context: schedContext) {
@@ -199,11 +199,11 @@ public enum ExecutiveRecommendationEngine {
                 )
         }
         let scored = active.map { task -> (LifeTask, Int) in
-            let profile = task.resolvedSemanticProfile
+            let profile = task.resolvedSemanticProfile(now: input.now, calendar: input.calendar)
             let schedulable = TaskSemanticScheduler.schedulability(profile: profile, context: context).isAllowed
             var score = TaskSemanticScheduler.schedulingScoreAdjustment(profile: profile, context: context)
             if !schedulable { score -= 500 }
-            if task.isOverdue { score += 50 }
+            if task.isOverdue(calendar: input.calendar, referenceDate: input.now) { score += 50 }
             if task.id == input.snapshot.currentMission?.id { score += 30 }
             // Prefer lighter semantic types when sleep/energy is poor.
             if isLowCapacityContext(context),
@@ -251,7 +251,7 @@ public enum ExecutiveRecommendationEngine {
     // MARK: - Medication
 
     private static func isMedicationOutOfWindow(task: LifeTask, context: TaskSemanticScheduler.Context) -> Bool {
-        let profile = task.resolvedSemanticProfile
+        let profile = task.resolvedSemanticProfile(now: context.now, calendar: context.calendar)
         guard profile.semanticType == .medication else { return false }
         return !TaskSemanticScheduler.schedulability(profile: profile, context: context).isAllowed
     }
@@ -272,7 +272,7 @@ public enum ExecutiveRecommendationEngine {
     // MARK: - Preparation
 
     private static func preparationRecommendation(for task: LifeTask, input: Input) -> Output? {
-        let profile = task.resolvedSemanticProfile
+        let profile = task.resolvedSemanticProfile(now: input.now, calendar: input.calendar)
         let snapshot = input.snapshot
         let now = input.now
 
@@ -355,11 +355,17 @@ public enum ExecutiveRecommendationEngine {
                 priorElapsedMinutes: input.isContinue ? (input.resume?.lastTimerElapsedSeconds ?? 0) / 60 : 0
             )
         )
-        let profile = task.resolvedSemanticProfile
-        let decision = SemanticDecisionBuilder.from(task: task, snapshot: input.snapshot, healthSummary: input.healthSummary)
+        let profile = task.resolvedSemanticProfile(now: input.now, calendar: input.calendar)
+        let decision = SemanticDecisionBuilder.from(
+            task: task,
+            snapshot: input.snapshot,
+            healthSummary: input.healthSummary,
+            now: input.now,
+            calendar: input.calendar
+        )
         let rendered = HumanLanguage.render(decision, snapshot: input.snapshot)
 
-        let whyNow = buildWhyNow(for: task, snapshot: input.snapshot, calendar: input.calendar)
+        let whyNow = buildWhyNow(for: task, snapshot: input.snapshot, now: input.now, calendar: input.calendar)
         let supporting = distinctSupporting(
             headline: headline,
             contextLine: rendered.benefitLine,
@@ -382,7 +388,7 @@ public enum ExecutiveRecommendationEngine {
             taskID: task.id,
             actionKind: input.isContinue ? .openContinueSession : .beginWork,
             isPreparation: false,
-            impactLabel: impactLabel(for: profile, task: task),
+            impactLabel: impactLabel(for: profile, task: task, now: input.now, calendar: input.calendar),
             clarityLabel: clarityLabel(for: profile)
         )
     }
@@ -421,13 +427,18 @@ public enum ExecutiveRecommendationEngine {
         return "This is the gentlest useful next step."
     }
 
-    private static func buildWhyNow(for task: LifeTask, snapshot: LifeContextSnapshot, calendar: Calendar) -> [String] {
+    private static func buildWhyNow(
+        for task: LifeTask,
+        snapshot: LifeContextSnapshot,
+        now: Date,
+        calendar: Calendar
+    ) -> [String] {
         var reasons: [String] = []
         if let mins = snapshot.calendarAvailability.minutesUntilNextEvent, mins > 0, mins <= 120,
            let event = snapshot.calendarAvailability.nextEventTitle {
             reasons.append(HumanLanguage.meetingContext(minutes: mins, event: event))
         }
-        if task.isOverdue {
+        if task.isOverdue(calendar: calendar, referenceDate: now) {
             reasons.append("Clearing this lifts a weight you've been carrying.")
         }
         if task.progress > 0 {
@@ -439,11 +450,16 @@ public enum ExecutiveRecommendationEngine {
         return Array(reasons.prefix(4))
     }
 
-    private static func impactLabel(for profile: TaskSemanticProfile, task: LifeTask) -> String? {
+    private static func impactLabel(
+        for profile: TaskSemanticProfile,
+        task: LifeTask,
+        now: Date,
+        calendar: Calendar
+    ) -> String? {
         switch profile.consequenceOfDelay {
         case .medicalRisk: return "Health"
         case .high: return "High Impact"
-        case .moderate: return task.isOverdue ? "High Impact" : "Medium Impact"
+        case .moderate: return task.isOverdue(calendar: calendar, referenceDate: now) ? "High Impact" : "Medium Impact"
         default:
             if profile.cognitiveRequirement == .deepFocus { return "High Impact" }
             return task.priority == .high ? "High Impact" : nil

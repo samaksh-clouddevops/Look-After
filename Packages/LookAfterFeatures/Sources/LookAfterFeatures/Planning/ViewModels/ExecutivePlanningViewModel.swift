@@ -848,7 +848,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             modulesVM: modulesVM,
             userId: userId,
             medications: &meds,
-            lifeProfile: context.lifeProfile
+            lifeProfile: context.lifeProfile,
+            now: context.now
         )
         medications = meds
         pendingMutations = []
@@ -935,7 +936,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             modulesVM: modulesVM,
             userId: userId,
             medications: &meds,
-            lifeProfile: context.lifeProfile
+            lifeProfile: context.lifeProfile,
+            now: context.now
         )
         medications = meds
         await refreshContext()

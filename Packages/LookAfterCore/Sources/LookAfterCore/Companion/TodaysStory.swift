@@ -112,7 +112,9 @@ public struct TodaysStoryGenerator: Sendable {
 
         let activeTasks = input.tasks.filter { $0.status.isActive }
             .sorted { lhs, rhs in
-                if lhs.isOverdue != rhs.isOverdue { return lhs.isOverdue }
+                let lhsOverdue = lhs.isOverdue(calendar: calendar, referenceDate: input.now)
+                let rhsOverdue = rhs.isOverdue(calendar: calendar, referenceDate: input.now)
+                if lhsOverdue != rhsOverdue { return lhsOverdue }
                 if lhs.priority != rhs.priority { return lhs.priority > rhs.priority }
                 return (lhs.deadline ?? .distantFuture) < (rhs.deadline ?? .distantFuture)
             }
@@ -129,7 +131,7 @@ public struct TodaysStoryGenerator: Sendable {
             let estimate = durationEstimator.estimate(
                 DurationEstimator.Input(task: task, snapshot: input.snapshot, healthSummary: input.healthSummary)
             )
-            let why = whyForTask(task, snapshot: input.snapshot)
+            let why = whyForTask(task, snapshot: input.snapshot, now: input.now)
             segments.append(StorySegment(
                 id: "story-\(task.id)",
                 periodLabel: period,
@@ -188,10 +190,10 @@ public struct TodaysStoryGenerator: Sendable {
         return name.isEmpty ? base : "\(base), \(name)"
     }
 
-    private func whyForTask(_ task: LifeTask, snapshot: LifeContextSnapshot) -> String {
-        if task.isOverdue { return "Overdue — clearing this reduces stress" }
+    private func whyForTask(_ task: LifeTask, snapshot: LifeContextSnapshot, now: Date) -> String {
+        if task.isOverdue(calendar: calendar, referenceDate: now) { return "Overdue — clearing this reduces stress" }
         if let deadline = task.deadline {
-            if calendar.isDateInToday(deadline) { return "Due today" }
+            if calendar.isDate(deadline, inSameDayAs: now) { return "Due today" }
         }
         if let event = snapshot.calendarAvailability.nextEventTitle,
            let mins = snapshot.calendarAvailability.minutesUntilNextEvent, mins <= 120 {

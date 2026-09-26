@@ -68,8 +68,8 @@ public enum TaskListSorter {
         todayStart: Date,
         now: Date
     ) -> Bool {
-        let lhsOverdue = isOverdue(lhs, calendar: calendar, todayStart: todayStart, now: now)
-        let rhsOverdue = isOverdue(rhs, calendar: calendar, todayStart: todayStart, now: now)
+        let lhsOverdue = lhs.isOverdue(calendar: calendar, referenceDate: now)
+        let rhsOverdue = rhs.isOverdue(calendar: calendar, referenceDate: now)
         if lhsOverdue != rhsOverdue {
             return lhsOverdue && !rhsOverdue
         }
@@ -109,22 +109,5 @@ public enum TaskListSorter {
             return taskDay.addingTimeInterval(24 * 3600 - 1)
         }
         return .distantFuture
-    }
-
-    private static func isOverdue(
-        _ task: LifeTask,
-        calendar: Calendar,
-        todayStart: Date,
-        now: Date
-    ) -> Bool {
-        guard task.status.isActive else { return false }
-        if let deadline = task.deadline, deadline < now { return true }
-        if let scheduledDate = task.scheduledDate {
-            return calendar.startOfDay(for: scheduledDate) < todayStart
-        }
-        if let scheduledTime = task.scheduledTime {
-            return calendar.startOfDay(for: scheduledTime) < todayStart
-        }
-        return false
     }
 }

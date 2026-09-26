@@ -195,7 +195,7 @@ public struct ContextEngine: Sendable {
             )
         }
         if let resume = input.resumeSnapshot?.workingContext,
-           input.resumeSnapshot?.isStale != true,
+           input.resumeSnapshot?.isStale(at: input.now) != true,
            !resume.isStale(at: input.now) {
             return resume
         }

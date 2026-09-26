@@ -360,7 +360,7 @@ enum BrainPresentationBuilder {
         now: Date,
         calendar: Calendar
     ) -> BrainResumePresentation? {
-        guard let snapshot, !snapshot.isStale else { return nil }
+        guard let snapshot, !snapshot.isStale(at: now) else { return nil }
         guard let detail = snapshot.resumeDetail, !detail.isEmpty else { return nil }
 
         let title = snapshot.lastTaskTitle ?? snapshot.workingContext?.title ?? "Continue where you left off"

@@ -117,22 +117,32 @@ public enum HumanLanguage {
         "You still have \(minutes.durationString) before \(event)."
     }
 
-    public static func priorityImpact(task: LifeTask, snapshot: LifeContextSnapshot) -> String {
+    public static func priorityImpact(
+        task: LifeTask,
+        snapshot: LifeContextSnapshot,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
         if let event = snapshot.calendarAvailability.nextEventTitle,
            let mins = snapshot.calendarAvailability.minutesUntilNextEvent,
            mins > 15, mins <= 180 {
             return "Finish this and you'll have nothing important left before \(event)."
         }
-        if task.isOverdue {
+        if task.isOverdue(calendar: calendar, referenceDate: now) {
             return "Clearing this lifts a weight you've been carrying."
         }
         return "Finish this and the rest of your morning stays open."
     }
 
-    public static func deadlineImpact(deadline: Date, snapshot: LifeContextSnapshot, calendar: Calendar = .current) -> String {
+    public static func deadlineImpact(
+        deadline: Date,
+        snapshot: LifeContextSnapshot,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> String {
         let days = calendar.dateComponents(
             [.day],
-            from: calendar.startOfDay(for: Date()),
+            from: calendar.startOfDay(for: now),
             to: calendar.startOfDay(for: deadline)
         ).day ?? 0
 
@@ -146,7 +156,7 @@ public enum HumanLanguage {
             }
             return "Finish this and the rest of today feels lighter."
         case 1:
-            let hour = Calendar.current.component(.hour, from: Date())
+            let hour = calendar.component(.hour, from: now)
             if hour < 12 {
                 return "If you finish this now, the rest of your morning stays free."
             }

@@ -532,6 +532,37 @@ final class TaskRecurrenceTests: XCTestCase {
         )
     }
 
+    func testSameTitleOverrideIsNotDroppedBeforeScheduleCheck() {
+        let sunday = makeDate(year: 2026, month: 8, day: 2)
+        let monday = makeDate(year: 2026, month: 8, day: 3)
+        let template = LifeTask(
+            title: "Gym",
+            recurrence: .daily,
+            createdAt: makeDate(year: 2026, month: 7, day: 1),
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let override = LifeTask(
+            title: "Gym",
+            scheduledDate: monday,
+            recurrence: .custom,
+            recurrenceWeekdays: [2, 3, 4, 5, 6, 7],
+            createdAt: makeDate(year: 2026, month: 7, day: 1),
+            userId: "user-1"
+        )
+        let allTasks = [template, override]
+
+        XCTAssertFalse(
+            TaskRecurrenceEngine.matchesRecurrenceSchedule(override, on: sunday, in: allTasks, calendar: calendar),
+            "A same-title override must still fail days outside its own rule"
+        )
+        XCTAssertTrue(
+            TaskRecurrenceEngine.matchesRecurrenceSchedule(override, on: monday, in: allTasks, calendar: calendar),
+            "A same-title override must be judged by its own rule, not dropped as a duplicate"
+        )
+    }
+
+
     func testTimeOnlyLegacyDuplicateRemovedWhenTemplateExists() {
         let clock = makeDate(year: 2026, month: 8, day: 2, hour: 18)
         let template = LifeTask(

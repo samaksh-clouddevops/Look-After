@@ -173,7 +173,12 @@ public struct TaskSchedulabilityResult: Sendable, Equatable {
 public extension LifeTask {
     /// Profile from storage, or a deterministic fallback for legacy tasks.
     var resolvedSemanticProfile: TaskSemanticProfile {
-        TaskSemanticProfileBuilder.classificationProfile(for: self)
+        resolvedSemanticProfile(now: Date(), calendar: .current)
+    }
+
+    /// Same as `resolvedSemanticProfile`, but overdue consequence uses the caller clock.
+    func resolvedSemanticProfile(now: Date, calendar: Calendar) -> TaskSemanticProfile {
+        TaskSemanticProfileBuilder.classificationProfile(for: self, now: now, calendar: calendar)
     }
 
     var needsSemanticAnalysis: Bool {

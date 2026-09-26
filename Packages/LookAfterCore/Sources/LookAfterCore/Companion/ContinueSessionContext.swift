@@ -50,7 +50,9 @@ public struct ContinueSessionContext: Sendable, Equatable {
         snapshot: LifeContextSnapshot,
         healthSummary: HealthSummary?,
         insights: [RecommendationInsight],
-        confidenceScore: Double
+        confidenceScore: Double,
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> ContinueSessionContext? {
         let working: WorkingContext? = {
             if let ctx = resume?.workingContext { return ctx }
@@ -73,7 +75,7 @@ public struct ContinueSessionContext: Sendable, Equatable {
             )
         )
 
-        let message = restorationMessage(for: context, resume: resume)
+        let message = restorationMessage(for: context, resume: resume, now: now, calendar: calendar)
         let steps = HumanLanguage.restorationSteps(
             for: context,
             resume: resume,
@@ -103,7 +105,9 @@ public struct ContinueSessionContext: Sendable, Equatable {
         healthSummary: HealthSummary?,
         insights: [RecommendationInsight],
         confidenceScore: Double,
-        fallbackTitle: String
+        fallbackTitle: String,
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> ContinueSessionContext {
         if let built = build(
             from: resume,
@@ -111,7 +115,9 @@ public struct ContinueSessionContext: Sendable, Equatable {
             snapshot: snapshot,
             healthSummary: healthSummary,
             insights: insights,
-            confidenceScore: confidenceScore
+            confidenceScore: confidenceScore,
+            now: now,
+            calendar: calendar
         ) {
             return built
         }
@@ -147,7 +153,12 @@ public struct ContinueSessionContext: Sendable, Equatable {
         )
     }
 
-    private static func restorationMessage(for context: WorkingContext, resume: ResumeSnapshot?) -> String {
+    private static func restorationMessage(
+        for context: WorkingContext,
+        resume: ResumeSnapshot?,
+        now: Date,
+        calendar: Calendar
+    ) -> String {
         switch context.kind {
         case .document: return "Restoring \(context.title)…"
         case .note: return "Restoring your note…"
@@ -155,7 +166,7 @@ public struct ContinueSessionContext: Sendable, Equatable {
         case .aiCoach: return "Restoring your conversation…"
         case .file: return "Restoring \(context.title)…"
         case .focusSession, .task:
-            if let resume, !Calendar.current.isDateInToday(resume.savedAt) {
+            if let resume, !calendar.isDate(resume.savedAt, inSameDayAs: now) {
                 return "Restoring yesterday's work…"
             }
             return "Restoring where you left off…"

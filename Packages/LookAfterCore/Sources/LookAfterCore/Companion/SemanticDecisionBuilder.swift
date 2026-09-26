@@ -22,7 +22,9 @@ public enum SemanticDecisionBuilder {
     public static func from(
         task: LifeTask,
         snapshot: LifeContextSnapshot? = nil,
-        healthSummary: HealthSummary? = nil
+        healthSummary: HealthSummary? = nil,
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> SemanticDecision {
         let profile = task.resolvedSemanticProfile
         let object = classifyObject(profile: profile, title: task.title, taskID: task.id)
@@ -32,7 +34,9 @@ public enum SemanticDecisionBuilder {
             profile: profile,
             object: object,
             snapshot: snapshot,
-            healthSummary: healthSummary
+            healthSummary: healthSummary,
+            now: now,
+            calendar: calendar
         )
 
         return SemanticDecision(
@@ -45,9 +49,14 @@ public enum SemanticDecisionBuilder {
         )
     }
 
-    public static func from(hero: HeroBriefing, task: LifeTask?) -> SemanticDecision {
+    public static func from(
+        hero: HeroBriefing,
+        task: LifeTask?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> SemanticDecision {
         if let task {
-            var decision = from(task: task)
+            var decision = from(task: task, now: now, calendar: calendar)
             decision.confidence = hero.confidenceScore
             decision.estimateMinutes = hero.durationEstimate.pointMinutes
             return decision
@@ -147,7 +156,9 @@ public enum SemanticDecisionBuilder {
         profile: TaskSemanticProfile,
         object: DecisionObject,
         snapshot: LifeContextSnapshot?,
-        healthSummary: HealthSummary?
+        healthSummary: HealthSummary?,
+        now: Date,
+        calendar: Calendar
     ) -> DecisionBenefit {
         if profile.consequenceOfDelay == .medicalRisk {
             return .clearBiggestBlocker
@@ -165,7 +176,7 @@ public enum SemanticDecisionBuilder {
             break
         }
 
-        if task.isOverdue { return .reduceOverdueWeight }
+        if task.isOverdue(calendar: calendar, referenceDate: now) { return .reduceOverdueWeight }
         if task.progress > 0 { return .maintainMomentum }
 
         if let snapshot {

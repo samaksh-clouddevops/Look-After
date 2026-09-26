@@ -156,7 +156,7 @@ public struct ContextBriefingGenerator: Sendable {
     ) -> CoreRecommendation {
         switch continueDecision {
         case .askUser(let prompt, _):
-            return lowConfidenceCore(prompt: prompt, snapshot: snapshot, resume: resume, context: context)
+            return lowConfidenceCore(prompt: prompt, snapshot: snapshot, resume: resume, context: context, now: now)
         case .freshStart:
             if let session = snapshot.lastWorkingContext, session.kind == .focusSession,
                let taskID = session.taskID {
@@ -170,7 +170,8 @@ public struct ContextBriefingGenerator: Sendable {
                     snapshot: snapshot,
                     resume: resume,
                     health: context.healthSummary,
-                    reasons: reasons
+                    reasons: reasons,
+                    now: now
                 )
             }
             return continueContextCore(
@@ -268,7 +269,18 @@ public struct ContextBriefingGenerator: Sendable {
         let active = context.tasks.filter(\.status.isActive)
         guard !active.isEmpty else { return nil }
 
-        if let overdue = active.filter(\.isOverdue).min(by: { $0.priority > $1.priority }) {
+        // `isOverdue` is not day-membership: leftover recurring occurrences and
+        // future-dated one-offs with past deadlines are overdue but not today's work.
+        if let overdue = active
+            .filter { task in
+                task.isOverdue(calendar: calendar, referenceDate: now)
+                    && task.isActionableToday(
+                        allTasks: context.tasks,
+                        calendar: calendar,
+                        referenceDate: now
+                    )
+            }
+            .min(by: { $0.priority > $1.priority }) {
             return overdue
         }
 
@@ -317,7 +329,8 @@ public struct ContextBriefingGenerator: Sendable {
         snapshot: LifeContextSnapshot,
         resume: ResumeSnapshot?,
         health: HealthSummary?,
-        reasons: [String]
+        reasons: [String],
+        now: Date
     ) -> CoreRecommendation {
         if let rec = ExecutiveRecommendationEngine.recommend(from: ExecutiveRecommendationEngine.Input(
             task: task,
@@ -325,7 +338,7 @@ public struct ContextBriefingGenerator: Sendable {
             resume: resume,
             healthSummary: health,
             tasks: [],
-            now: Date(),
+            now: now,
             calendar: calendar,
             isContinue: true
         )) {
@@ -551,10 +564,11 @@ public struct ContextBriefingGenerator: Sendable {
         prompt: String,
         snapshot: LifeContextSnapshot,
         resume: ResumeSnapshot?,
-        context: GenerationContext
+        context: GenerationContext,
+        now: Date
     ) -> CoreRecommendation {
         if let task = snapshot.currentMission {
-            return taskCore(task: task, snapshot: snapshot, resume: resume, health: context.healthSummary, isContinue: false, tasks: context.tasks, now: Date())
+            return taskCore(task: task, snapshot: snapshot, resume: resume, health: context.healthSummary, isContinue: false, tasks: context.tasks, now: now)
         }
         return CoreRecommendation(
             actionLine: "Not sure what fits best",
@@ -582,7 +596,20 @@ public struct ContextBriefingGenerator: Sendable {
     private func morningPriorityTask(snapshot: LifeContextSnapshot, tasks: [LifeTask], now: Date) -> LifeTask? {
         guard calendar.component(.hour, from: now) < 12 else { return nil }
         let candidates = tasks.filter { $0.status.isActive }
-        if let overdue = candidates.first(where: { $0.isOverdue }) { return overdue }
+        // Match `pickBestPendingTask`: highest priority among today's overdue work,
+        // not whichever overdue row happens to be first.
+        if let overdue = candidates
+            .filter({
+                $0.isOverdue(calendar: calendar, referenceDate: now)
+                    && $0.isActionableToday(
+                        allTasks: tasks,
+                        calendar: calendar,
+                        referenceDate: now
+                    )
+            })
+            .min(by: { $0.priority > $1.priority }) {
+            return overdue
+        }
         if let event = snapshot.calendarAvailability.nextEventTitle,
            let mins = snapshot.calendarAvailability.minutesUntilNextEvent,
            mins <= 180, mins > 15 {

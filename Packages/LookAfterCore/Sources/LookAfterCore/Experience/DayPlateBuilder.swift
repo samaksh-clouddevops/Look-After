@@ -95,7 +95,8 @@ public enum DayPlateBuilder {
             from: plate.tasks,
             allTasks: plate.tasks + plate.completedToday + plate.recurrenceTemplates,
             day: day,
-            calendar: calendar
+            calendar: calendar,
+            referenceDate: day
         ).count
     }
 }

@@ -37,7 +37,7 @@ public struct ContinueRelevanceEngine: Sendable {
     }
 
     public func evaluate(_ input: Input) -> ContinueRelevanceDecision {
-        guard let resume = input.resume, !resume.isStale else {
+        guard let resume = input.resume, !resume.isStale(at: input.now) else {
             return .freshStart(reason: "No recent working context")
         }
 
@@ -59,7 +59,7 @@ public struct ContinueRelevanceEngine: Sendable {
         if let hero = input.heroTask,
            let resumeTaskID = working.taskID ?? resume.lastTaskID,
            hero.id != resumeTaskID,
-           isUrgentOverride(hero: hero, resume: resume, snapshot: input.snapshot) {
+           isUrgentOverride(hero: hero, resume: resume, snapshot: input.snapshot, now: input.now) {
             return .freshStart(reason: "Something more time-sensitive came up")
         }
 
@@ -79,7 +79,7 @@ public struct ContinueRelevanceEngine: Sendable {
             )
         }
 
-        let reasons = continueReasons(resume: resume, snapshot: input.snapshot)
+        let reasons = continueReasons(resume: resume, snapshot: input.snapshot, now: input.now)
         return .continueWork(working, reasons: reasons)
     }
 
@@ -123,10 +123,15 @@ public struct ContinueRelevanceEngine: Sendable {
         now.timeIntervalSince(date) / 3600
     }
 
-    private func isUrgentOverride(hero: LifeTask, resume: ResumeSnapshot, snapshot: LifeContextSnapshot) -> Bool {
-        if hero.isOverdue { return true }
+    private func isUrgentOverride(
+        hero: LifeTask,
+        resume: ResumeSnapshot,
+        snapshot: LifeContextSnapshot,
+        now: Date
+    ) -> Bool {
+        if hero.isOverdue(calendar: calendar, referenceDate: now) { return true }
         if let deadline = hero.deadline {
-            let hours = deadline.timeIntervalSince(Date()) / 3600
+            let hours = deadline.timeIntervalSince(now) / 3600
             if hours >= 0, hours <= 4 { return true }
         }
         if let event = snapshot.calendarAvailability.nextEventTitle,
@@ -139,8 +144,8 @@ public struct ContinueRelevanceEngine: Sendable {
         return false
     }
 
-    private func continueReasons(resume: ResumeSnapshot, snapshot: LifeContextSnapshot) -> [String] {
-        let elapsed = hoursSince(resume.savedAt, now: Date())
+    private func continueReasons(resume: ResumeSnapshot, snapshot: LifeContextSnapshot, now: Date) -> [String] {
+        let elapsed = hoursSince(resume.savedAt, now: now)
         return [HumanLanguage.continueContextImpact(elapsedHours: elapsed, snapshot: snapshot)]
     }
 }
