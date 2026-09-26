@@ -203,13 +203,30 @@ public enum LifeTimelinePresenter {
             timelineTasks.map { TaskScheduleQuery.seriesKey(for: $0) }
         )
 
-        let activeTasks = timelineTasks.filter { $0.status.isActive && !isShoppingErrandTask($0) }
+        let unpurchased = shoppingItems.filter { !$0.isPurchased }
+        let absorbShoppingIntoTrip = isToday && !unpurchased.isEmpty
+        let activeTasks = timelineTasks.filter { task in
+            guard task.status.isActive else { return false }
+            if absorbShoppingIntoTrip, isShoppingErrandTask(task) { return false }
+            return true
+        }
         let financeTasks = activeTasks.filter { isFinanceTask($0) }
-        let nonFinanceTasks = activeTasks.filter { !isFinanceTask($0) && !isShoppingErrandTask($0) }
+        let nonFinanceTasks = activeTasks.filter { task in
+            if isFinanceTask(task) { return false }
+            if absorbShoppingIntoTrip, isShoppingErrandTask(task) { return false }
+            return true
+        }
 
+        var seenRoutineTitles = Set<String>()
         for task in nonFinanceTasks {
             guard !OnboardingTaskSeeder.isJunkOnboardingTask(title: task.title, description: task.description) else { continue }
+            if let routineTitle = routineCollapseTitle(for: task), seenRoutineTitles.contains(routineTitle) {
+                continue
+            }
             guard let event = taskEvent(from: task, allTasks: allTasks, now: now, referenceDay: dayAnchor, calendar: calendar) else { continue }
+            if let routineTitle = routineCollapseTitle(for: task) {
+                seenRoutineTitles.insert(routineTitle)
+            }
             events.append(event)
             eventTaskIds.insert(task.id)
             eventSeriesKeys.insert(TaskScheduleQuery.seriesKey(for: task))
@@ -219,8 +236,7 @@ public enum LifeTimelinePresenter {
             events.append(groupedFinanceSession(tasks: financeTasks, referenceDay: dayAnchor, calendar: calendar))
         }
 
-        let unpurchased = shoppingItems.filter { !$0.isPurchased }
-        if isToday, !unpurchased.isEmpty {
+        if absorbShoppingIntoTrip {
             let shoppingTask = timelineTasks.first(where: isShoppingErrandTask)
             events.append(groupedShoppingTrip(
                 items: unpurchased,
@@ -309,6 +325,23 @@ public enum LifeTimelinePresenter {
         let filtered = events
             .filter { calendar.isDate($0.date, inSameDayAs: dayAnchor) }
         return TimelineDisplaySort.sorted(filtered, now: now, calendar: calendar)
+    }
+
+    /// Same-title routine rows (two Dinner templates, a life-model gym plus its recurrence)
+    /// paint as one timeline event. Multi-day slices keep their own titles.
+    private static func routineCollapseTitle(for task: LifeTask) -> String? {
+        guard !MultiDayTaskTags.isMultiDay(task) else { return nil }
+        let tagged = task.tags.contains { tag in
+            tag == "daily-routine"
+                || tag == LifeModel.commitmentTaskTag
+                || tag.hasPrefix("routine-block:")
+                || tag.hasPrefix(LifeModel.commitmentIDPrefix)
+        }
+        let recurring = task.recurrenceRule != .none
+            || task.parentTaskId != nil
+            || task.isLifeCommitmentTask
+        guard tagged || recurring else { return nil }
+        return OnboardingTaskSeeder.normalizedRoutineTitle(task.title)
     }
 
     // MARK: - Task → event

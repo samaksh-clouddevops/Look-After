@@ -235,6 +235,11 @@ public extension LifeTask {
         guard !isActionableToday(allTasks: allTasks, calendar: calendar, referenceDate: referenceDate) else {
             return false
         }
+        // Tomorrow has its own bucket. A time-only clock due tomorrow is "this week",
+        // not the residual scheduled-task list.
+        guard !isActionableTomorrow(allTasks: allTasks, calendar: calendar, referenceDate: referenceDate) else {
+            return false
+        }
         guard !isUpcoming(allTasks: allTasks, calendar: calendar, referenceDate: referenceDate) else {
             return false
         }

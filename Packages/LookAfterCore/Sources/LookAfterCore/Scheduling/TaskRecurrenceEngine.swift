@@ -303,7 +303,15 @@ public enum TaskRecurrenceEngine {
         calendar: Calendar = .current
     ) -> Date {
         if isRecurrenceTemplate(source) {
-            return calendar.startOfDay(for: source.createdAt)
+            let created = calendar.startOfDay(for: source.createdAt)
+            // A stored occurrence keeps the day it was written on, even when the template's
+            // createdAt is later (migration, re-seed, or a fixture clock).
+            if task.id != source.id,
+               let placed = task.scheduledDate ?? task.scheduledTime {
+                let placedDay = calendar.startOfDay(for: placed)
+                if placedDay < created { return placedDay }
+            }
+            return created
         }
         if let parentId = task.parentTaskId,
            let parent = allTasks.first(where: { $0.id == parentId }) {
@@ -508,8 +516,18 @@ public enum TaskRecurrenceEngine {
         let completedKey = TaskScheduleQuery.seriesKey(for: completed)
         var ids = Set<String>()
 
+        let completedTitle = OnboardingTaskSeeder.normalizedRoutineTitle(completed.title)
+        let completedIsRoutine = completed.parentTaskId != nil
+            || completed.recurrenceRule != .none
+            || completed.tags.contains("daily-routine")
+
         for task in allTasks where task.id != completed.id && task.status.isActive {
-            guard TaskScheduleQuery.seriesKey(for: task) == completedKey else { continue }
+            let sameSeries = TaskScheduleQuery.seriesKey(for: task) == completedKey
+            let commitmentDuplicate = completedIsRoutine
+                && !completedTitle.isEmpty
+                && (task.isLifeCommitmentTask || task.tags.contains(LifeModel.commitmentTaskTag))
+                && OnboardingTaskSeeder.normalizedRoutineTitle(task.title) == completedTitle
+            guard sameSeries || commitmentDuplicate else { continue }
             // A future clock stays on its own day even when scheduledDate was never written.
             if let scheduled = task.scheduledDate ?? task.scheduledTime,
                !calendar.isDate(scheduled, inSameDayAs: dayStart) {
@@ -537,6 +555,9 @@ public enum TaskRecurrenceEngine {
         let dayStart = calendar.startOfDay(for: day)
         var keys = Set<String>()
         for task in allTasks where task.status == .completed {
+            // A template's clock is a time-of-day, not a finished instance. Counting it
+            // fulfills the series on whatever day that clock was last written.
+            guard !isRecurrenceTemplate(task) else { continue }
             let onDay = task.completedAt.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
                 || task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
                 || (task.scheduledDate == nil

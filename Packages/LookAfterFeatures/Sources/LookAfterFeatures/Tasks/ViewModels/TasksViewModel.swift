@@ -2061,14 +2061,20 @@ public final class TasksViewModel: ObservableObject {
         titleHint: String? = nil,
         referenceDate: Date = Date()
     ) -> LifeTask? {
-        if let task = tasks.first(where: { $0.id == id }) { return task }
-        if let task = horizonTasks.first(where: { $0.id == id }) { return task }
-        if let task = completedToday.first(where: { $0.id == id }) { return task }
-        let all = schedulingContext
-        if let task = all.first(where: { $0.id == id }) { return task }
-
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: referenceDate)
+        let all = schedulingContext
+
+        func finish(_ task: LifeTask) -> LifeTask {
+            guard TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return task }
+            return occurrenceForCompletion(of: task, on: day, in: all, calendar: calendar)
+        }
+
+        if let task = tasks.first(where: { $0.id == id }) { return finish(task) }
+        if let task = horizonTasks.first(where: { $0.id == id }) { return finish(task) }
+        if let task = completedToday.first(where: { $0.id == id }) { return finish(task) }
+        if let task = all.first(where: { $0.id == id }) { return finish(task) }
+
         let projected = TaskRecurrenceEngine.timelineProjections(for: all, on: day, calendar: calendar)
         if let match = projected.first(where: { $0.id == id }) {
             return match
@@ -2079,11 +2085,31 @@ public final class TasksViewModel: ObservableObject {
             return projected.first {
                 $0.title.caseInsensitiveCompare(titleHint) == .orderedSame
             } ?? all.first {
-                $0.status.isActive && $0.title.caseInsensitiveCompare(titleHint) == .orderedSame
+                $0.status.isActive
+                    && !TaskRecurrenceEngine.isRecurrenceTemplate($0)
+                    && $0.title.caseInsensitiveCompare(titleHint) == .orderedSame
             }
         }
 
         return nil
+    }
+
+    /// Completing a series completes today's occurrence. The template stays the rule for later days.
+    private func occurrenceForCompletion(
+        of template: LifeTask,
+        on day: Date,
+        in all: [LifeTask],
+        calendar: Calendar
+    ) -> LifeTask {
+        if let stored = all.first(where: { candidate in
+            guard candidate.parentTaskId == template.id else { return false }
+            guard candidate.status != .superseded, candidate.status != .expired else { return false }
+            let scheduled = candidate.scheduledDate ?? candidate.scheduledTime
+            return scheduled.map { calendar.isDate($0, inSameDayAs: day) } ?? false
+        }) {
+            return stored
+        }
+        return TaskRecurrenceEngine.timelineProjectionOccurrence(from: template, on: day, calendar: calendar)
     }
 
     /// Persists a projected occurrence or reactivates a superseded row for the same template/day.
@@ -2198,6 +2224,23 @@ public final class TasksViewModel: ObservableObject {
     /// Mark a task as completed and schedule the next recurring occurrence when applicable.
     @discardableResult
     public func completeTask(_ task: LifeTask) async -> TaskUndoAction? {
+        if TaskRecurrenceEngine.isRecurrenceTemplate(task) {
+            let calendar = Calendar.current
+            let day = calendar.startOfDay(for: Date())
+            let occurrence = occurrenceForCompletion(of: task, on: day, in: schedulingContext, calendar: calendar)
+            guard occurrence.id != task.id else { return nil }
+            let userId = task.userId.isEmpty ? occurrence.userId : task.userId
+            guard !userId.isEmpty else { return nil }
+            do {
+                let live = try await materializeTimelineTask(occurrence, userId: userId)
+                refreshFromLocal(userId: userId)
+                return await completeTask(live)
+            } catch {
+                self.error = error.localizedDescription
+                return nil
+            }
+        }
+
         let activeIndex = taskIndex(id: task.id)
         let restoredSnapshot = task
 

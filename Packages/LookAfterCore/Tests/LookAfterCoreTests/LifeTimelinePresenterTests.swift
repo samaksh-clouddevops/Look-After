@@ -90,6 +90,41 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertTrue(events.filter { $0.title == "Plan my day" }.isEmpty)
     }
 
+    func testScheduledShoppingTaskStaysOnTimelineWithoutAGroceryList() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let errand = LifeTask(
+            id: "market",
+            title: "Farmers market",
+            lifeArea: .shopping,
+            scheduledDate: now,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 2, hour: 11),
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        let alone = LifeTimelinePresenter.build(
+            tasks: [errand],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+        XCTAssertEqual(alone.filter { $0.title == "Farmers market" }.count, 1)
+
+        let withList = LifeTimelinePresenter.build(
+            tasks: [errand],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [ShoppingItem(name: "Milk")],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+        XCTAssertTrue(withList.filter { $0.title == "Farmers market" }.isEmpty)
+        XCTAssertEqual(withList.filter { $0.title == "Stop at the grocery store" }.count, 1)
+    }
+
     func testCompletedScheduledTaskRemainsOnTimeline() {
         let now = makeDate(year: 2026, month: 8, day: 2, hour: 20)
         var gym = LifeTask(

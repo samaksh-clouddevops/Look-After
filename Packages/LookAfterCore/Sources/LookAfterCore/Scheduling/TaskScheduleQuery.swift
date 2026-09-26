@@ -5,8 +5,9 @@ public enum TaskScheduleQuery {
 
     // MARK: - Series identity
 
-    /// Series identity: prefer template / parent / stable commitment or routine-block tags;
-    /// title key only as last-resort fallback (A5).
+    /// Series identity: stable block/commitment tags first, then a shared title for routine
+    /// duplicates (two "Dinner" templates are one series). Multi-day slices stay distinct.
+    /// Parent id is only the fallback when the row is not a routine series.
     public static func seriesKey(for task: LifeTask) -> String {
         // Multi-day slices must keep distinct identities — collapsing under the root hid every
         // day after the first from All / uniqueActiveTasks.
@@ -16,12 +17,6 @@ public enum TaskScheduleQuery {
         if MultiDayTaskTags.isRoot(task) {
             return "multiday-root|\(task.id)"
         }
-        if let parent = task.parentTaskId, !parent.isEmpty {
-            return "series|\(parent)"
-        }
-        if TaskRecurrenceEngine.isRecurrenceTemplate(task) {
-            return "series|\(task.id)"
-        }
         if let routineTag = task.tags.first(where: { $0.hasPrefix("routine-block:") }) {
             return "series|\(routineTag)"
         }
@@ -29,11 +24,13 @@ public enum TaskScheduleQuery {
             return "series|\(commitmentTag)"
         }
         if usesTitleBasedRecurrenceKey(for: task) {
-            #if DEBUG
-            // Collision risk when two distinct routines share a normalized title.
-            print("[TaskScheduleQuery] title-based seriesKey for \"\(task.title)\" id=\(task.id)")
-            #endif
             return "recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(task.title))"
+        }
+        if let parent = task.parentTaskId, !parent.isEmpty {
+            return "series|\(parent)"
+        }
+        if TaskRecurrenceEngine.isRecurrenceTemplate(task) {
+            return "series|\(task.id)"
         }
         return TaskReaper.collisionKey(for: task)
     }

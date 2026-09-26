@@ -626,11 +626,56 @@ final class TaskRecurrenceTests: XCTestCase {
         )
         let (pruned, removed) = TaskRecurrenceCompactor.compact(
             [template, keeper, duplicate],
+            calendar: calendar,
             referenceDate: day
         )
 
         XCTAssertEqual(removed, 1)
         XCTAssertEqual(pruned.filter { $0.parentTaskId != nil }.count, 1)
+    }
+
+    func testCompletedTemplateClockDoesNotHideTheNextDay() {
+        let yesterday = makeDate(year: 2026, month: 8, day: 6, hour: 10)
+        let today = makeDate(year: 2026, month: 8, day: 7, hour: 10)
+        var template = LifeTask(
+            id: "late-dinner",
+            title: "Late dinner",
+            status: .completed,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 7, hour: 20, minute: 30),
+            tags: ["daily-routine"],
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template.createdAt = makeDate(year: 2026, month: 8, day: 6)
+        template.completedAt = yesterday
+
+        let fresh = TaskRecurrenceEngine.missingOccurrences(
+            for: [template],
+            on: today,
+            calendar: calendar
+        )
+        XCTAssertEqual(fresh.count, 1)
+        XCTAssertEqual(fresh.first?.title, "Late dinner")
+        XCTAssertFalse(TaskRecurrenceEngine.isSeriesFulfilled(
+            on: today,
+            for: template,
+            in: [template],
+            calendar: calendar
+        ))
+
+        var occurrence = fresh[0]
+        occurrence.status = .completed
+        occurrence.completedAt = today
+        let events = DayPlateBuilder.events(
+            from: [template, occurrence],
+            now: today,
+            referenceDay: today,
+            calendar: calendar
+        )
+        let dinner = events.filter { $0.title == "Late dinner" }
+        XCTAssertEqual(dinner.count, 1)
+        XCTAssertEqual(dinner.first?.isCompleted, true)
     }
 
     func testCompactorDropsSkippedTimeOnlyRowPastRetention() {
