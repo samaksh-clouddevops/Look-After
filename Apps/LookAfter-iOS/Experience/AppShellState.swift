@@ -1010,8 +1010,7 @@ final class AppShellState: ObservableObject {
         resetBootstrapAndTimelineCoordinators()
         brainVM.resetForFactoryReset()
         contextOrchestrator.resetInMemoryState()
-        tasksVM.tasks = []
-        tasksVM.completedToday = []
+        tasksVM.clearAllInMemoryPools()
         modulesVM.resetInMemoryState()
         inboxVM.resetInMemoryState()
         briefingVM.resetAfterDeveloperWipe()

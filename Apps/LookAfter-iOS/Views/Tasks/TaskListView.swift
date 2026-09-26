@@ -396,10 +396,15 @@ struct TaskListView: View {
         let pool = tasksVM.listPool
         switch selectedFilter {
         case .all:
+            // Full plate — today-sliced `tasksVM.tasks` hid multi-day slices and future routines.
+            let allActive = tasksVM.localAllTasks(userId: userId).filter {
+                $0.status.isActive && !TaskRecurrenceEngine.isRecurrenceTemplate($0)
+            }
+            let plateContext = tasksVM.localAllTasks(userId: userId)
             return TaskListSorter.sortForToday(
                 TaskScheduleQuery.uniqueActiveTasks(
-                    from: pool,
-                    context: context,
+                    from: allActive,
+                    context: plateContext,
                     calendar: calendar
                 )
             )
@@ -412,20 +417,38 @@ struct TaskListView: View {
                 pool.filter { $0.isActionableTomorrow(allTasks: context, calendar: calendar) }
             )
         case .upcoming:
+            let plate = tasksVM.localAllTasks(userId: userId)
             return TaskListSorter.sortByPriorityThenSchedule(
-                pool.filter { $0.isUpcoming(allTasks: context, calendar: calendar) }
+                plate.filter {
+                    $0.status.isActive
+                        && !TaskRecurrenceEngine.isRecurrenceTemplate($0)
+                        && $0.isUpcoming(allTasks: plate, calendar: calendar)
+                }
             )
         case .active:
+            let plate = tasksVM.localAllTasks(userId: userId)
             return TaskListSorter.sortForToday(
-                pool.filter { $0.isActiveTask(allTasks: context, calendar: calendar) }
+                plate.filter {
+                    $0.status.isActive
+                        && !TaskRecurrenceEngine.isRecurrenceTemplate($0)
+                        && $0.isActiveTask(allTasks: plate, calendar: calendar)
+                }
             )
         case .scheduled:
+            let plate = tasksVM.localAllTasks(userId: userId)
             return TaskListSorter.sortByPriorityThenSchedule(
-                pool.filter { $0.isScheduledThisWeek(calendar: calendar) }
+                plate.filter {
+                    $0.status.isActive
+                        && !TaskRecurrenceEngine.isRecurrenceTemplate($0)
+                        && $0.isScheduledThisWeek(calendar: calendar)
+                }
             )
         case .completed:
+            let calendar = Calendar.current
+            let cutoff = calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: Date())) ?? Date()
             return tasksVM.inactiveTasks.filter {
                 $0.isInactiveWithNoFutureOccurrence(allTasks: context, calendar: calendar)
+                    && ($0.completedAt ?? $0.updatedAt) >= cutoff
             }
         }
     }

@@ -134,8 +134,9 @@ public final class TasksViewModel: ObservableObject {
     }
     
     /// Load tasks — warms on-device cache off-main, paints local snapshot, then syncs remote.
-    /// Schedule repair runs via `syncScheduleAndReconcileToday` on context refresh, not here.
-    public func loadTasks(userId: String, syncRecurrence: Bool = false) async {
+    /// Also materializes routine-block templates/occurrences so All + timeline aren't empty
+    /// until a later context refresh.
+    public func loadTasks(userId: String, syncRecurrence: Bool = true) async {
         let generation = loadGeneration + 1
         loadGeneration = generation
 
@@ -162,6 +163,8 @@ public final class TasksViewModel: ObservableObject {
                 guard generation == loadGeneration else { return }
                 try await syncRecurringOccurrences(userId: userId)
                 guard generation == loadGeneration else { return }
+                await reactivateSupersededMultiDaySlices(userId: userId)
+                guard generation == loadGeneration else { return }
             }
             applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "remote-sync")
             await repairMidnightSchedulesOnLoad(userId: userId)
@@ -180,11 +183,16 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
-    /// Recreates missing tasks from the parked recovery queue when Today has nothing active.
+    /// Recreates missing tasks from the parked recovery queue when today's schedule rail is empty.
     @discardableResult
     public func restoreParkedTasksIfTimelineEmpty(userId: String, now: Date = Date()) async -> Int {
         guard !userId.isEmpty else { return 0 }
-        guard !tasks.contains(where: \.status.isActive) else { return 0 }
+
+        let allLocal = localAllTasks(userId: userId)
+        let railCount = DayPlateBuilder.scheduledTaskCount(from: allLocal, day: now)
+        // Prefer rail emptiness over "any active task" — a single non-rail active used to
+        // block restore and leave Today blank until Day Audit.
+        guard railCount == 0 else { return 0 }
 
         let candidates = ParkedTaskQueueStore.shared.candidatesForReintegration(limit: 20)
         guard !candidates.isEmpty else { return 0 }
@@ -204,6 +212,20 @@ public final class TasksViewModel: ObservableObject {
             #endif
         }
         return placed.count
+    }
+
+    /// Clears every in-memory task pool (factory reset / developer wipe).
+    public func clearAllInMemoryPools() {
+        tasks = []
+        completedToday = []
+        recurrenceTemplates = []
+        inactiveTasks = []
+        selectedTask = nil
+        taskTimeDisplays = [:]
+        loadingTimeDisplayTaskIds = []
+        error = nil
+        bumpTasksRevision()
+        rebuildTaskIndex()
     }
 
     /// Reload from on-device cache only — fast path after local mutations.
@@ -528,6 +550,7 @@ public final class TasksViewModel: ObservableObject {
         await syncRoutineBlockTasks(userId: userId)
         do {
             try await syncRecurringOccurrences(userId: userId, localOnly: localOnly)
+            await reactivateSupersededMultiDaySlices(userId: userId)
             lastRecurrenceSyncAt = Date()
             if !deferSnapshot {
                 applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "recurrence-sync")
@@ -877,6 +900,33 @@ public final class TasksViewModel: ObservableObject {
         }
         if !reactivated.isEmpty {
             try await taskRepo.updateMany(reactivated)
+        }
+    }
+
+    /// Undoes prior bug that treated multi-day slices as invalid recurrence (status=.superseded).
+    private func reactivateSupersededMultiDaySlices(userId: String) async {
+        let all = reloadLocalTasks(for: userId)
+        var restored: [LifeTask] = []
+        for var task in all where task.status == .superseded && MultiDayTaskTags.isSlice(task) {
+            guard let parentId = task.parentTaskId,
+                  all.contains(where: { $0.id == parentId && ($0.status.isActive || MultiDayTaskTags.isRoot($0)) })
+            else { continue }
+            task.status = .pending
+            task.updatedAt = Date()
+            restored.append(task)
+        }
+        guard !restored.isEmpty else { return }
+        do {
+            try await taskRepo.updateMany(restored)
+            applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "multiday-slice-reactivate")
+            notifyTaskListDidChange()
+            #if DEBUG
+            print("[Tasks] reactivated \(restored.count) superseded multi-day slice(s)")
+            #endif
+        } catch {
+            #if DEBUG
+            print("[Tasks] multi-day slice reactivate failed: \(error.localizedDescription)")
+            #endif
         }
     }
 
@@ -3338,7 +3388,9 @@ public final class TasksViewModel: ObservableObject {
     public func ensureDailyRoutineTasks(userId: String) async {
         guard !userId.isEmpty else { return }
 
+        // LifeModel and Routine Builder own meals/commitments — don't dual-seed title collisions.
         if LifeModelStore.hasCompiledModel { return }
+        if !RoutineBlockStore.load().isEmpty { return }
 
         await removeRetiredRoutineTasks(userId: userId)
         await migrateLegacyRoutineTitles(userId: userId)

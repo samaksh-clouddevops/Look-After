@@ -5,13 +5,28 @@ public enum TaskScheduleQuery {
 
     // MARK: - Series identity
 
-    /// Series identity: prefer template / parent id; title key only as fallback (A5).
+    /// Series identity: prefer template / parent / stable commitment or routine-block tags;
+    /// title key only as last-resort fallback (A5).
     public static func seriesKey(for task: LifeTask) -> String {
+        // Multi-day slices must keep distinct identities — collapsing under the root hid every
+        // day after the first from All / uniqueActiveTasks.
+        if MultiDayTaskTags.isSlice(task) {
+            return "multiday-slice|\(task.id)"
+        }
+        if MultiDayTaskTags.isRoot(task) {
+            return "multiday-root|\(task.id)"
+        }
         if let parent = task.parentTaskId, !parent.isEmpty {
             return "series|\(parent)"
         }
         if TaskRecurrenceEngine.isRecurrenceTemplate(task) {
             return "series|\(task.id)"
+        }
+        if let routineTag = task.tags.first(where: { $0.hasPrefix("routine-block:") }) {
+            return "series|\(routineTag)"
+        }
+        if let commitmentTag = task.tags.first(where: { $0.hasPrefix(LifeModel.commitmentIDPrefix) }) {
+            return "series|\(commitmentTag)"
         }
         if usesTitleBasedRecurrenceKey(for: task) {
             #if DEBUG
@@ -26,7 +41,11 @@ public enum TaskScheduleQuery {
     private static func usesTitleBasedRecurrenceKey(for task: LifeTask) -> Bool {
         if task.parentTaskId != nil { return true }
         if TaskRecurrenceEngine.isRecurrenceTemplate(task) { return true }
+        if task.tags.contains(where: { $0.hasPrefix("routine-block:") }) { return false }
+        if task.tags.contains(where: { $0.hasPrefix(LifeModel.commitmentIDPrefix) }) { return false }
         if task.tags.contains("daily-routine") { return true }
+        // Life commitments without a stable commitmentID tag still fall back to title —
+        // prefer tagging via DayAssembler (`life-commitment:…`) so they don't collide.
         if task.isLifeCommitmentTask { return true }
         // A clock is a day assignment when scheduledDate was never written.
         if task.recurrenceRule != .none && task.parentTaskId == nil
@@ -140,6 +159,7 @@ public enum TaskScheduleQuery {
                 || task.isActiveBacklog(calendar: calendar, referenceDate: referenceDate)
                 || task.isScheduledTask(allTasks: context, calendar: calendar, referenceDate: referenceDate)
                 || task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: referenceDate)
+                || MultiDayTaskTags.isMultiDay(task)
 
             if isRelevant {
                 candidates.append(task)

@@ -386,7 +386,8 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     }
 
     public var isRecurrenceOccurrence: Bool {
-        parentTaskId != nil
+        // Multi-day slices also set parentTaskId (goal root) — not recurrence occurrences.
+        parentTaskId != nil && !MultiDayTaskTags.isMultiDay(self)
     }
 
     public var isCompleted: Bool {

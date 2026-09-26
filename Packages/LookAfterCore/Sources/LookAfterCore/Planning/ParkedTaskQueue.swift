@@ -270,6 +270,19 @@ public final class ParkedTaskQueueStore: @unchecked Sendable {
         )
     }
 
+    /// Wipes parked recovery queue on factory reset (Application Support JSON).
+    public func resetForFactoryReset() {
+        lock.lock()
+        envelope = .empty()
+        let snap = envelope
+        let url = fileURL
+        lock.unlock()
+        persist(snap)
+        if let url {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     /// Free-market auction — energy/TOD aware; may return empty under sabotage recovery.
     public func bidForGap(
         gapMinutes: Int,

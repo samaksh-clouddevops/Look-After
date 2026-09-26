@@ -1,0 +1,65 @@
+import XCTest
+@testable import LookAfterCore
+
+final class DayPlateBuilderTests: XCTestCase {
+    func testInputsSplitActiveCompletedAndTemplates() {
+        let calendar = Calendar(identifier: .gregorian)
+        var components = DateComponents(year: 2026, month: 9, day: 14, hour: 12)
+        let now = calendar.date(from: components)!
+        let dayStart = calendar.startOfDay(for: now)
+
+        let active = LifeTask(
+            id: "a1",
+            title: "Deep work",
+            status: .pending,
+            scheduledDate: dayStart,
+            scheduledTime: now,
+            userId: "u1"
+        )
+        var completed = LifeTask(
+            id: "c1",
+            title: "Lunch",
+            status: .completed,
+            scheduledDate: dayStart,
+            userId: "u1"
+        )
+        completed.completedAt = now.addingTimeInterval(-3600)
+        let template = LifeTask(
+            id: "t1",
+            title: "Dinner",
+            status: .pending,
+            tags: ["routine-block:dinner-1"],
+            recurrence: .daily,
+            userId: "u1",
+            isRecurrenceTemplate: true
+        )
+
+        let plate = DayPlateBuilder.inputs(from: [active, completed, template], now: now, calendar: calendar)
+        XCTAssertEqual(plate.tasks.map(\.id), ["a1"])
+        XCTAssertEqual(plate.completedToday.map(\.id), ["c1"])
+        XCTAssertEqual(plate.recurrenceTemplates.map(\.id), ["t1"])
+    }
+
+    func testSeriesKeyPrefersRoutineBlockAndCommitmentTags() {
+        let routine = LifeTask(
+            id: "r1",
+            title: "Dinner",
+            status: .pending,
+            tags: ["routine-block:abc"],
+            userId: "u1"
+        )
+        let commitment = LifeTask(
+            id: "c1",
+            title: "Dinner",
+            status: .pending,
+            tags: [LifeModel.commitmentTaskTag, "life-commitment:dinner"],
+            userId: "u1"
+        )
+        XCTAssertEqual(TaskScheduleQuery.seriesKey(for: routine), "series|routine-block:abc")
+        XCTAssertEqual(TaskScheduleQuery.seriesKey(for: commitment), "series|life-commitment:dinner")
+        XCTAssertNotEqual(
+            TaskScheduleQuery.seriesKey(for: routine),
+            TaskScheduleQuery.seriesKey(for: commitment)
+        )
+    }
+}

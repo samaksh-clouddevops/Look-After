@@ -89,11 +89,12 @@ final class ShellSurfaceSync {
     }
 
     func syncWidgetDataOnly(force: Bool = false) {
+        let scheduleTasks = plateScheduleTasks()
         WidgetSyncService.shared.sync(
             brainVM: brainVM,
             taskStore: taskStore,
             healthStore: healthStore,
-            scheduleTasks: tasksVM.tasks + tasksVM.completedToday,
+            scheduleTasks: scheduleTasks,
             timelineEvents: timelineService.snapshot.today,
             force: force
         )
@@ -102,12 +103,13 @@ final class ShellSurfaceSync {
     func refreshPinNow() {
         guard WidgetSyncService.shared.isNowPinned else { return }
         rebuildTimelineFromTasks(immediate: true)
+        let scheduleTasks = plateScheduleTasks()
         Task {
             await WidgetSyncService.shared.refreshPinNow(
                 brainVM: brainVM,
                 taskStore: taskStore,
                 healthStore: healthStore,
-                scheduleTasks: tasksVM.tasks + tasksVM.completedToday,
+                scheduleTasks: scheduleTasks,
                 timelineEvents: timelineService.snapshot.today
             )
         }
@@ -119,26 +121,36 @@ final class ShellSurfaceSync {
             self?.refreshPinNow()
         }
         coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
-        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.updateTasks(plateScheduleTasks())
         coordinator.start()
     }
 
     func syncExecutionEnvironment() {
         let coordinator = ExecutionEnvironmentCoordinator.shared
         coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
-        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.updateTasks(plateScheduleTasks())
         coordinator.refresh()
     }
 
     func prepareExecutionEnvironmentForBackground() {
         let coordinator = ExecutionEnvironmentCoordinator.shared
         coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
-        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.updateTasks(plateScheduleTasks())
         coordinator.prepareForBackground()
     }
 
     func stopExecutionEnvironment() {
         ExecutionEnvironmentCoordinator.shared.stop()
+    }
+
+    /// Active + completed-today from the full plate (not list-snapshot alone).
+    private func plateScheduleTasks() -> [LifeTask] {
+        let userId = FirebaseManager.shared.resolvedUserId
+        let allTasks = userId.isEmpty
+            ? (tasksVM.tasks + tasksVM.completedToday + tasksVM.recurrenceTemplates)
+            : tasksVM.localAllTasks(userId: userId)
+        let plate = DayPlateBuilder.inputs(from: allTasks)
+        return plate.tasks + plate.completedToday
     }
 
     private func performTimelineRebuild() {
@@ -151,10 +163,14 @@ final class ShellSurfaceSync {
         } else {
             tomorrowEvents = []
         }
+        // Full on-device plate — not the today-sliced TaskListSnapshot.active pool.
+        let userId = FirebaseManager.shared.resolvedUserId
+        let allTasks = userId.isEmpty ? (tasksVM.tasks + tasksVM.completedToday + tasksVM.recurrenceTemplates) : tasksVM.localAllTasks(userId: userId)
+        let plate = DayPlateBuilder.inputs(from: allTasks, now: now, calendar: calendar)
         timelineService.rebuild(
-            tasks: tasksVM.listPool,
-            completedToday: tasksVM.completedToday,
-            recurrenceTemplates: tasksVM.recurrenceTemplates,
+            tasks: plate.tasks,
+            completedToday: plate.completedToday,
+            recurrenceTemplates: plate.recurrenceTemplates,
             bills: modulesVM.bills,
             shoppingItems: modulesVM.shoppingItems,
             contacts: modulesVM.contacts,

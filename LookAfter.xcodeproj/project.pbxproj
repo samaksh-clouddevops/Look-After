@@ -74,6 +74,7 @@
 		2860215ABB33335E75BF20B5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B56A8ACB0815B86197E6804 /* ContentView.swift */; };
 		29B1FDA11D0AD758C00B1AC2 /* TimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA045F61592FB1D1DFA0492E /* TimelineServiceTests.swift */; };
 		2A7C6ECD531B9013421FBE51 /* LookAfterAI in Frameworks */ = {isa = PBXBuildFile; productRef = AFDD18E817DDBF5E68CC2BC6 /* LookAfterAI */; };
+		2AA53F9EE132C9B3E07978EF /* MultiDayVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7253155C0EF68734A6F65F0E /* MultiDayVisibilityTests.swift */; };
 		2D11AA3576053C3D9910B306 /* CycleEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA97A9A18AB553D06A7FF75A /* CycleEngineTests.swift */; };
 		2DF65D7CCF1F2E57CCA76A6A /* GLMConfigurationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41703578EDA0DEA069DA554B /* GLMConfigurationSettingsView.swift */; };
 		2E7004829AD2BEF7D8C1FCFB /* LookAfterFirebaseConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80A1336CEAAC93F789018DB /* LookAfterFirebaseConfigurationTests.swift */; };
@@ -201,6 +202,7 @@
 		7ECA0DDA670BF3FA710C9F08 /* ProactiveOrchestratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2F47D3F379FB12EC8AE0056 /* ProactiveOrchestratorTests.swift */; };
 		7EF594CB43719B1C1ACAD729 /* TimelineDragCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF29D0A548DB4FC88D0001A4 /* TimelineDragCoordinator.swift */; };
 		7F021A543D0C6CCC606FDC6D /* NotificationRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100A4BC934F94D2C5B55E95F /* NotificationRouter.swift */; };
+		7FAD62DF65612FFBAE0B27B4 /* DailyPlannerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B013FCA467EC13A14DEE92B4 /* DailyPlannerViewModelTests.swift */; };
 		80A93A7CD140E94FB499A694 /* LookAfterWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06082DCF41547E2193621D4C /* LookAfterWidgetBundle.swift */; };
 		81912AC1FFB070CCD1315B8A /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9F1FE5EB3296CEAC7E321C /* NotificationCoordinator.swift */; };
 		81E023EFAA0A98AA577A6942 /* HealthStatusBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D380BE2FC6FE9B12F072FF9 /* HealthStatusBanner.swift */; };
@@ -230,6 +232,7 @@
 		927FB439E02F898C335EFBA5 /* MacContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2CDA73ABC468435026B754B /* MacContentView.swift */; };
 		931395041CE4A83BD5FFA497 /* Flow013Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45704AB05D9263B075BC1BF0 /* Flow013Tests.swift */; };
 		936C609BD4A3A18D093C1614 /* DayAssemblerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDCBD82C589A12AAFAE9AD82 /* DayAssemblerTests.swift */; };
+		93C325011E93448CE3F60D79 /* DayPlateBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF4B5BDFE8A30264B2042A3 /* DayPlateBuilderTests.swift */; };
 		93D915CFAC66420341167050 /* AppFeatureTourModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7665B09521ACCA91C650B0 /* AppFeatureTourModels.swift */; };
 		945DC104E9FDF63C0406365F /* AllModulesGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9763CEDAD8185E8B0BA58038 /* AllModulesGridView.swift */; };
 		94C875A918767B474706F5A4 /* PlacementSensePromptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A6E952A15FE0F2F0C745CE0 /* PlacementSensePromptTests.swift */; };
@@ -369,6 +372,7 @@
 		F216C46E4F127520573BE2A1 /* AppFeatureTourCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B030A5F5CAC7173E4D8D00C8 /* AppFeatureTourCoordinator.swift */; };
 		F2FADBEEB2A151B33F87F56D /* FirebaseAppBootstrap.m in Sources */ = {isa = PBXBuildFile; fileRef = 9117F64601AA818119E37C16 /* FirebaseAppBootstrap.m */; };
 		F3462E04EB88A4C463413208 /* ADHDViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5AABB23B87D9534BAB972C /* ADHDViews.swift */; };
+		F3C679CED3A387D2D36F2B4A /* TimelinePreviewWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1293C90740DCA3A43516E6 /* TimelinePreviewWindowTests.swift */; };
 		F5359B472706438876FFF7D7 /* DecideForMeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C062DD2F967D90E6BC85E29F /* DecideForMeView.swift */; };
 		F5F25FB0E53EF1FCA59428B3 /* LookAfterAI in Frameworks */ = {isa = PBXBuildFile; productRef = 3D8D52EF9CA90FA665E7C74A /* LookAfterAI */; };
 		F8284BB78F4C2E4C5BF415B1 /* RoutineScheduleAnchorResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC6E3D511383FB5130862B89 /* RoutineScheduleAnchorResolverTests.swift */; };
@@ -511,6 +515,7 @@
 		383E50704F1523A53E895800 /* CalendarRhythmAndPruningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarRhythmAndPruningTests.swift; sourceTree = "<group>"; };
 		392A75F87024D450B8C2D84D /* UXAgentCaptureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UXAgentCaptureUITests.swift; sourceTree = "<group>"; };
 		394F248DCE19DE50CD98445D /* LicenseManagerSwiftTestingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseManagerSwiftTestingTests.swift; sourceTree = "<group>"; };
+		3A1293C90740DCA3A43516E6 /* TimelinePreviewWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelinePreviewWindowTests.swift; sourceTree = "<group>"; };
 		3AD06C41EE1CA9BB6B6B11EB /* AccountabilityScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountabilityScheduler.swift; sourceTree = "<group>"; };
 		3C0541ADFD89A9E70258A300 /* RoutineBlockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutineBlockTests.swift; sourceTree = "<group>"; };
 		3D0AE8F9F7C1AF018B6CDE9F /* MultiDayTaskPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiDayTaskPlannerTests.swift; sourceTree = "<group>"; };
@@ -557,6 +562,7 @@
 		5B43FAC3EDD67BA5DCC75798 /* HealthSummaryFreshnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSummaryFreshnessTests.swift; sourceTree = "<group>"; };
 		5B5AABB23B87D9534BAB972C /* ADHDViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADHDViews.swift; sourceTree = "<group>"; };
 		5BD27B1555A9CEF3681E41A3 /* JSONEntitySQLiteStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONEntitySQLiteStoreTests.swift; sourceTree = "<group>"; };
+		5CF4B5BDFE8A30264B2042A3 /* DayPlateBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayPlateBuilderTests.swift; sourceTree = "<group>"; };
 		5CF9BB00ACD044C71F8130F6 /* ContextEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextEngineTests.swift; sourceTree = "<group>"; };
 		5E01B9225AC13D6CD0CD76E6 /* BriefingProjectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingProjectorTests.swift; sourceTree = "<group>"; };
 		5E59829ED133BE79C004C521 /* InsightsDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightsDashboardView.swift; sourceTree = "<group>"; };
@@ -591,6 +597,7 @@
 		7078B7A7FF6375C910804D81 /* HealthConnectionStatusUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthConnectionStatusUITests.swift; sourceTree = "<group>"; };
 		716CC47DAAEA8058CE4CBFD4 /* TaskEphemeralityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEphemeralityTests.swift; sourceTree = "<group>"; };
 		71C8DB473148FFBA086D740E /* DayAuditCheckCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayAuditCheckCard.swift; sourceTree = "<group>"; };
+		7253155C0EF68734A6F65F0E /* MultiDayVisibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiDayVisibilityTests.swift; sourceTree = "<group>"; };
 		73211A808013B51F79D2B0E2 /* PlanningSpeechSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningSpeechSynthesizer.swift; sourceTree = "<group>"; };
 		7386E012A66A4C14D9C043F6 /* ScheduleCoreStabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleCoreStabilityTests.swift; sourceTree = "<group>"; };
 		741FECD3E771F92512DB7427 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -656,6 +663,7 @@
 		ACB11A5F80E7D45CBA995338 /* ActivityStateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStateController.swift; sourceTree = "<group>"; };
 		AD0770BB452E2D2D240A543D /* Flow016Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Flow016Tests.swift; sourceTree = "<group>"; };
 		AEC64C5F6E1AD5B0A7FD3DBB /* FlowTestBase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTestBase.swift; sourceTree = "<group>"; };
+		B013FCA467EC13A14DEE92B4 /* DailyPlannerViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyPlannerViewModelTests.swift; sourceTree = "<group>"; };
 		B030A5F5CAC7173E4D8D00C8 /* AppFeatureTourCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureTourCoordinator.swift; sourceTree = "<group>"; };
 		B085C480CD03A2F56F6D9F88 /* SleepNightAggregatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepNightAggregatorTests.swift; sourceTree = "<group>"; };
 		B12EDB2E057C8A254902A3A6 /* Flow003Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Flow003Tests.swift; sourceTree = "<group>"; };
@@ -1002,6 +1010,7 @@
 				A93ED028F12F0AC1E1FB21C4 /* CycleInsightBuilderTests.swift */,
 				B49D270E63D21B2711B8C41B /* DayAuditServiceTests.swift */,
 				1C0A10BBCB5F7F4B76E8F76A /* DayBoundaryPlannerTests.swift */,
+				5CF4B5BDFE8A30264B2042A3 /* DayPlateBuilderTests.swift */,
 				F353CDDCC98CBB2888C7FF0F /* DayScheduleReconcilerTests.swift */,
 				4EA58542D2216F428271B1E8 /* DaySlotAllocatorTests.swift */,
 				90FEBA46FE1CB5F4EFAC46B8 /* DepartureNotificationCandidateTests.swift */,
@@ -1024,6 +1033,7 @@
 				42C3D6A9E6A94927A73493D7 /* ManualSleepLogStoreTests.swift */,
 				81FEFEBBF9CA32087C8B12ED /* MidnightScheduleRepairTests.swift */,
 				DD319B3975D38CD72C882921 /* MissedTaskAnalyzerTests.swift */,
+				7253155C0EF68734A6F65F0E /* MultiDayVisibilityTests.swift */,
 				E30292061806038827A8403D /* MutexHotPathStoreTests.swift */,
 				BB76903C7CD801FD0EF85BBA /* NotificationPolicyEngineTests.swift */,
 				F15BACDE15A9D54B5A097C46 /* OccupiedDayTests.swift */,
@@ -1516,6 +1526,7 @@
 				EAA1D47D3D18A19B8A7B84A6 /* ContextOrchestratorPerformanceTests.swift */,
 				2897A42A5EB90F2F8856B09D /* ContextualDayReplanTests.swift */,
 				269B52B8CE45AC13B12650EC /* DailyBriefingViewModelTests.swift */,
+				B013FCA467EC13A14DEE92B4 /* DailyPlannerViewModelTests.swift */,
 				BDCBD82C589A12AAFAE9AD82 /* DayAssemblerTests.swift */,
 				42BFE0906E993D9F8ED567B7 /* DayScheduleSuggestionValidatorTests.swift */,
 				C5D239C692636A66D0399FF3 /* ExecutivePlanningVoiceTests.swift */,
@@ -1536,6 +1547,7 @@
 				EAF9B08DAE93B5D6702F4308 /* TaskCardUIContractTests.swift */,
 				DCCEFB273220A10B57A3F2BE /* TasksViewModelInteractionTests.swift */,
 				F9DCE83AE4FFB3EB8EE2B2BC /* TimelineConstraintViewModelTests.swift */,
+				3A1293C90740DCA3A43516E6 /* TimelinePreviewWindowTests.swift */,
 				DA045F61592FB1D1DFA0492E /* TimelineServiceTests.swift */,
 			);
 			path = LookAfterFeaturesTests;
@@ -2136,10 +2148,12 @@
 				2D11AA3576053C3D9910B306 /* CycleEngineTests.swift in Sources */,
 				FC75AEB78018C38430F500F5 /* CycleInsightBuilderTests.swift in Sources */,
 				D7F91DD00B2490DD604ED663 /* DailyBriefingViewModelTests.swift in Sources */,
+				7FAD62DF65612FFBAE0B27B4 /* DailyPlannerViewModelTests.swift in Sources */,
 				9EF968198D0078E667B4592B /* DataPersistenceTests.swift in Sources */,
 				936C609BD4A3A18D093C1614 /* DayAssemblerTests.swift in Sources */,
 				744021C4D13FF512A00EF231 /* DayAuditServiceTests.swift in Sources */,
 				21D86A6557C0E897A124BC09 /* DayBoundaryPlannerTests.swift in Sources */,
+				93C325011E93448CE3F60D79 /* DayPlateBuilderTests.swift in Sources */,
 				A536ABCFD27FF60394408C4C /* DayScheduleReconcilerTests.swift in Sources */,
 				74CED28D1A72C6B692FDEB39 /* DayScheduleSuggestionValidatorTests.swift in Sources */,
 				03D51FF3514FE23E5CB3E36F /* DaySlotAllocatorTests.swift in Sources */,
@@ -2197,6 +2211,7 @@
 				070F8BEB59FF7EF173EAF185 /* MockGLM.swift in Sources */,
 				0774CA6A17F7D46F12CF1A6F /* MultiDayTaskDetectorTests.swift in Sources */,
 				368FB28B2364CB16AF770E2E /* MultiDayTaskPlannerTests.swift in Sources */,
+				2AA53F9EE132C9B3E07978EF /* MultiDayVisibilityTests.swift in Sources */,
 				67B536596AE551712CA8D278 /* MutexHotPathStoreTests.swift in Sources */,
 				9771B20292BA513A2590A17D /* NaturalLanguageTaskCaptureServiceTests.swift in Sources */,
 				D80966B7DFD0464FC817D98E /* NotificationPolicyEngineTests.swift in Sources */,
@@ -2251,6 +2266,7 @@
 				E33C60AA2D76BCD8FFE12691 /* TimelineDisplaySortTests.swift in Sources */,
 				74EB5EDAFCE4D73CAAF5B278 /* TimelineDragTimeMappingTests.swift in Sources */,
 				A3206C9E11A75859C02D19FA /* TimelineNowResolverTests.swift in Sources */,
+				F3C679CED3A387D2D36F2B4A /* TimelinePreviewWindowTests.swift in Sources */,
 				29B1FDA11D0AD758C00B1AC2 /* TimelineServiceTests.swift in Sources */,
 				6FF8608747B925F1E7311E50 /* TourPlacementEngineTests.swift in Sources */,
 				FA0C7573164CF87E0F1741FC /* UserFacingCopyTests.swift in Sources */,

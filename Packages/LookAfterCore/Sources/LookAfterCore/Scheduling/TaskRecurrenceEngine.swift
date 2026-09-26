@@ -233,6 +233,8 @@ public enum TaskRecurrenceEngine {
 
         let source = recurrenceSource(for: task, in: allTasks)
         if source.recurrenceRule == .none {
+            // Multi-day slices link to the goal root via parentTaskId — not a recurrence series.
+            if MultiDayTaskTags.isMultiDay(task) { return true }
             if task.parentTaskId != nil { return false }
             return true
         }
@@ -541,7 +543,8 @@ public enum TaskRecurrenceEngine {
                     && task.scheduledTime.map { calendar.isDate($0, inSameDayAs: dayStart) } == true)
             guard onDay else { continue }
             keys.insert(TaskScheduleQuery.seriesKey(for: task))
-            keys.insert("recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(task.title))")
+            // Do not also insert a title-wide `recurring|dinner` key — that collapsed
+            // RoutineBlock, LifeModel, and seeded meals into one fulfillment bucket.
         }
         return keys
     }
@@ -555,9 +558,7 @@ public enum TaskRecurrenceEngine {
     ) -> Bool {
         let fulfilled = fulfilledSeriesKeys(on: day, in: allTasks, calendar: calendar)
         let seriesKey = TaskScheduleQuery.seriesKey(for: template)
-        if fulfilled.contains(seriesKey) { return true }
-        let titleKey = "recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(template.title))"
-        return fulfilled.contains(titleKey)
+        return fulfilled.contains(seriesKey)
     }
 
     /// Finds an existing recurrence template with the same normalized title, if any.
@@ -623,6 +624,8 @@ public enum TaskRecurrenceEngine {
 
         for task in allTasks {
             guard !isRecurrenceTemplate(task) else { continue }
+            // Multi-day hierarchy uses parentTaskId without recurrence — never treat as invalid.
+            guard !MultiDayTaskTags.isMultiDay(task) else { continue }
             // A clock is a day assignment when scheduledDate was never written.
             guard let scheduledDate = task.scheduledDate ?? task.scheduledTime else { continue }
 

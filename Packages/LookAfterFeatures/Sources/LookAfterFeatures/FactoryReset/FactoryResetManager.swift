@@ -79,6 +79,8 @@ public final class FactoryResetManager {
         WidgetDataStore.clear()
         WidgetCenter.shared.reloadAllTimelines()
 
+        ParkedTaskQueueStore.shared.resetForFactoryReset()
+
         UserDefaults.standard.set(true, forKey: FactoryResetPreservation.freshStartFlagKey)
         UserDefaults.standard.synchronize()
     }

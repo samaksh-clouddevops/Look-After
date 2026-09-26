@@ -649,8 +649,8 @@ final class TaskRecurrenceTests: XCTestCase {
             status: .skipped,
             scheduledTime: oldClock,
             parentTaskId: template.id,
-            userId: "user-1",
-            updatedAt: today
+            updatedAt: today,
+            userId: "user-1"
         )
         let (pruned, removed) = TaskRecurrenceCompactor.compact(
             [template, skipped],
@@ -1230,10 +1230,10 @@ final class TaskRecurrenceTests: XCTestCase {
             id: "time-only-daily-backdated",
             title: "Evening stretch",
             status: .pending,
-            createdAt: createdLater,
             scheduledTime: clock,
             recurrence: .daily,
             schedulingMode: .fixedTime,
+            createdAt: createdLater,
             userId: "user-1"
         )
 
@@ -1258,10 +1258,10 @@ final class TaskRecurrenceTests: XCTestCase {
             id: "time-only-future-clock",
             title: "Dinner",
             status: .pending,
-            createdAt: created,
             scheduledTime: clock,
             recurrence: .daily,
             schedulingMode: .fixedTime,
+            createdAt: created,
             userId: "user-1"
         )
 

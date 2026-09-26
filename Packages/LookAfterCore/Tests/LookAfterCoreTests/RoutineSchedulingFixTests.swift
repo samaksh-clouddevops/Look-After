@@ -245,7 +245,8 @@ final class TaskScheduleQueryTests: XCTestCase {
         )
 
         let all = [commitment, template]
-        XCTAssertTrue(TaskRecurrenceEngine.fulfilledSeriesKeys(on: day, in: all, calendar: calendar).contains("recurring|gym"))
+        XCTAssertTrue(TaskRecurrenceEngine.fulfilledSeriesKeys(on: day, in: all, calendar: calendar).contains("series|life-commitment:gym"))
+        XCTAssertFalse(TaskRecurrenceEngine.fulfilledSeriesKeys(on: day, in: all, calendar: calendar).contains("recurring|gym"))
         XCTAssertTrue(TaskRecurrenceEngine.missingOccurrences(for: all, on: day, calendar: calendar).isEmpty)
         XCTAssertTrue(TaskRecurrenceEngine.timelineProjections(for: all, on: day, calendar: calendar).isEmpty)
         XCTAssertTrue(

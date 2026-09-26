@@ -256,6 +256,17 @@ struct TodayView: View {
                                 onBannerAppear: onProactiveBannerAppear
                             )
                         }
+                        if !overdueTimelineRows.isEmpty {
+                            TodayOverdueTasksCard(
+                                rows: overdueTimelineRows,
+                                onReschedule: { taskId in
+                                    Task { await onRescheduleTimelineTask(taskId) }
+                                },
+                                onDismiss: { taskId in
+                                    Task { await onRemoveFromTimelineTask(taskId) }
+                                }
+                            )
+                        }
                         TodayScheduleSection(
                             planningVM: planningVM,
                             isTomorrow: false,
@@ -428,6 +439,10 @@ struct TodayView: View {
         Calendar.current.isDateInTomorrow(selectedCalendarDate)
     }
 
+    private var overdueTimelineRows: [ExecutivePlanningTimelineRow] {
+        OverdueTimelineDetector.overdueTaskRows(from: planningVM.timelineRows)
+    }
+
     private func syncSelectedDay(from date: Date) {
         if Calendar.current.isDateInToday(date) {
             selectedDay = .today
@@ -436,36 +451,49 @@ struct TodayView: View {
         }
     }
 
-    /// Tasks for any future day the user browses to — includes recurring-series projections
-    /// (prefilled, not-yet-materialized occurrences) so repeated/routine tasks are visible on
-    /// every day, not only today/tomorrow.
-    private var futureDayTasks: [LifeTask] {
-        // `tasksVM.schedulingContext` only carries *today's* active tasks + recurrence
-        // templates (`TaskListSnapshot.make` filters `active` via `activeTasksForToday`).
-        // Future days need the full on-device task pool so already-scheduled multi-day /
-        // recurring occurrences (not just templates) are considered, or they silently
-        // vanish from every day except today/tomorrow.
+    /// Draft plan for strip days beyond tomorrow — full plate (routines, multi-day slices,
+    /// day-created tasks) plus Apple Calendar events for that day.
+    private var futureDayDraftEvents: [LifeTimelineEvent] {
         let fullPool = tasksVM.localAllTasks(userId: userId)
-        return TaskListSorter.sortByPriorityThenSchedule(
-            TaskScheduleQuery.tasksForDay(
-                from: fullPool,
-                allTasks: fullPool,
-                day: selectedCalendarDate
-            )
+        let calendar = Calendar.current
+        let events = tasksVM.calendarEventsProvider?(selectedCalendarDate) ?? []
+        return DayPlateBuilder.events(
+            from: fullPool,
+            calendarEvents: events,
+            now: Date(),
+            referenceDay: selectedCalendarDate,
+            calendar: calendar
         )
+    }
+
+    private var futureDayDraftRows: [ExecutivePlanningTimelineRow] {
+        TimelineRowProjector.rows(from: futureDayDraftEvents, now: Date())
     }
 
     @ViewBuilder
     private var futureDaySection: some View {
-        let dayTasks = futureDayTasks
-        if dayTasks.isEmpty {
-            Text("No plan for this day yet.")
+        let rows = futureDayDraftRows
+        if rows.isEmpty {
+            Text("No draft plan for this day yet.")
                 .textStyleCaption()
         } else {
             VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
-                ForEach(dayTasks) { task in
-                    CompactTaskRowView(task: task)
-                }
+                Text("Draft plan")
+                    .font(.dsCaption(weight: .semibold))
+                    .foregroundColor(DesignSystem.textSecondary)
+                ExecutiveLiveTimelineView(
+                    rows: rows,
+                    thinkingStep: nil,
+                    isProcessing: false,
+                    title: "",
+                    emptyMessage: "No draft plan for this day yet.",
+                    isPreview: true,
+                    showPlanButton: false,
+                    maxVisibleRows: 12,
+                    showsFullTimelineButton: false,
+                    onViewAll: {},
+                    calendarEventsProvider: tasksVM.calendarEventsProvider
+                )
             }
         }
     }
@@ -972,7 +1000,7 @@ private struct TodayScheduleSection: View {
 
     @AppStorage(TimelineDragHint.dismissedKey) private var dragHintDismissed = false
 
-    private static let previewRowLimit = 5
+    private static let previewRowLimit = TimelinePreviewWindow.maxVisibleRows
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
@@ -1006,15 +1034,15 @@ private struct TodayScheduleSection: View {
 
     private var scheduleSubtitle: String {
         if isTomorrow { return "Preview for tomorrow" }
-        return "Next on your day"
+        return "Around now · past, current, next"
     }
 
     private var previewRows: [ExecutivePlanningTimelineRow] {
-        Array(planningVM.timelineRows.filter { !$0.isCompleted }.prefix(Self.previewRowLimit))
+        TimelinePreviewWindow.centered(rows: planningVM.timelineRows)
     }
 
     private var hasMoreThanPreview: Bool {
-        planningVM.timelineRows.filter { !$0.isCompleted }.count > Self.previewRowLimit
+        TimelinePreviewWindow.hasMoreThanWindow(rows: planningVM.timelineRows)
     }
 
     private var hasMovableRows: Bool {
@@ -1602,5 +1630,50 @@ private enum TodayFormatters {
             return "\(wholeHours)h \(minutes)m"
         }
         return String(format: "%.1fh", hours)
+    }
+}
+
+// MARK: - Overdue tasks (2h past window)
+
+private struct TodayOverdueTasksCard: View {
+    let rows: [ExecutivePlanningTimelineRow]
+    var onReschedule: (String) -> Void
+    var onDismiss: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            Label("Past due", systemImage: "clock.badge.exclamationmark")
+                .font(.dsCaption(weight: .semibold))
+                .foregroundColor(DesignSystem.late)
+
+            Text("These windows ended over 2 hours ago. Reschedule them or dismiss from today.")
+                .font(.dsCaption())
+                .foregroundColor(DesignSystem.textSecondary)
+
+            ForEach(rows.prefix(4)) { row in
+                VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                    Text(row.title)
+                        .font(.dsBody(weight: .semibold))
+                        .foregroundColor(DesignSystem.textPrimary)
+                    HStack(spacing: DesignSystem.spacingSM) {
+                        Button("Reschedule") {
+                            if let id = row.taskId { onReschedule(id) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(DesignSystem.accentPrimary)
+                        .controlSize(.small)
+
+                        Button("Dismiss today") {
+                            if let id = row.taskId { onDismiss(id) }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.vertical, DesignSystem.spacingXXS)
+            }
+        }
+        .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
+        .accessibilityIdentifier("card-overdue-tasks")
     }
 }
