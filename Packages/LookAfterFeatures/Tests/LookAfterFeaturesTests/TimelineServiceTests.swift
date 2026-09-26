@@ -285,4 +285,101 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertNotNil(row)
         XCTAssertNotEqual(row?.timeLabel, "12:00 AM")
     }
+
+    @MainActor
+    func testUnscheduledBacklogDoesNotBecomeSuggestedSlot() {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 7, hour: 14, minute: 0))!
+        let backlog = LifeTask(
+            title: "Someday inbox",
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let suggested = TimelineRowProjector.suggestedSlotRows(
+            tasks: [backlog],
+            completedToday: [],
+            existingRows: [],
+            now: now
+        )
+
+        XCTAssertTrue(suggested.isEmpty)
+    }
+
+    @MainActor
+    func testTomorrowMidnightFlexiblePreviewDoesNotPaintTwelveAM() {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 7, hour: 14, minute: 0))!
+        let today = Calendar.current.startOfDay(for: now)
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        let event = LifeTimelineEvent(
+            id: "task-flex-tomorrow",
+            kind: .work,
+            title: "Catch up on mail",
+            subtitle: "Flexible today",
+            date: tomorrow,
+            estimatedMinutes: 30,
+            scheduleKind: .flexibleDay
+        )
+
+        let rows = TimelineRowProjector.previewRows(from: [event], now: tomorrow)
+        let row = rows.first(where: { $0.title == "Catch up on mail" })
+        XCTAssertNotNil(row)
+        XCTAssertTrue(row?.isUnslottedFlexible ?? false)
+        XCTAssertNotEqual(row?.timeLabel, "12:00 AM")
+        XCTAssertTrue(row?.timeLabel.isEmpty ?? false)
+    }
+
+    @MainActor
+    func testOverdueOneOffWithYesterdayDateBecomesSuggestedSlot() {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 7, hour: 14, minute: 0))!
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.startOfDay(for: now))!
+        let yesterdayNine = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: yesterday)!
+        let overdue = LifeTask(
+            title: "Pay the invoice",
+            estimatedMinutes: 30,
+            scheduledDate: yesterday,
+            scheduledTime: yesterdayNine,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let suggested = TimelineRowProjector.suggestedSlotRows(
+            tasks: [overdue],
+            completedToday: [],
+            existingRows: [],
+            now: now
+        )
+
+        XCTAssertFalse(suggested.isEmpty)
+        XCTAssertEqual(suggested.first?.suggestedSourceTaskId, overdue.id)
+    }
+
+    @MainActor
+    func testCompletePatchUsesProjectedNowForCompletedAt() {
+        let service = TimelineService()
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 10, hour: 10, minute: 15))!
+        let day = Calendar.current.startOfDay(for: now)
+        let start = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: day)!
+        let task = LifeTask(
+            id: "stamp-me",
+            title: "Stamp me",
+            scheduledDate: day,
+            scheduledTime: start,
+            userId: "user-1"
+        )
+
+        service.rebuild(
+            tasks: [task],
+            completedToday: [],
+            recurrenceTemplates: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            medications: [],
+            now: now
+        )
+        service.applyPatch(.completed(taskId: "stamp-me"))
+
+        let completedAt = service.snapshot.today.first(where: { $0.id.contains("stamp-me") })?.completedAt
+        XCTAssertEqual(completedAt, now)
+    }
 }

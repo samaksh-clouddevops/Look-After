@@ -14,17 +14,20 @@ public enum TaskRecurrenceEngine {
     public static func isRecurrenceTemplate(_ task: LifeTask) -> Bool {
         if task.isRecurrenceTemplate == true { return true }
         // Recurring master: has a rule but no day assignment and is not an occurrence.
+        // A clock is a day assignment even when scheduledDate was never written.
         return task.recurrenceRule != .none
             && task.parentTaskId == nil
             && task.scheduledDate == nil
+            && task.scheduledTime == nil
     }
 
     public static func needsLegacyNormalization(_ task: LifeTask) -> Bool {
         // Legacy format stored recurrence on the same record as a specific day instance.
+        // A clock is that day assignment when scheduledDate was never written.
         task.recurrenceRule != .none
             && task.parentTaskId == nil
             && task.isRecurrenceTemplate != true
-            && task.scheduledDate != nil
+            && (task.scheduledDate != nil || task.scheduledTime != nil)
     }
 
     /// Converts a legacy recurring root task into a template + linked occurrence.
@@ -33,6 +36,7 @@ public enum TaskRecurrenceEngine {
         template.isRecurrenceTemplate = true
         template.id = UUID().uuidString
         template.scheduledDate = nil
+        // Keep the clock — it is the series time-of-day, not a day assignment.
         template.status = .pending
         template.completedAt = nil
 
@@ -177,7 +181,8 @@ public enum TaskRecurrenceEngine {
             for task in allTasks {
                 guard !isRecurrenceTemplate(task) else { continue }
                 guard task.parentTaskId != nil else { continue }
-                guard let scheduledDate = task.scheduledDate else { continue }
+                // Time-only rows still occupy the day encoded in the clock.
+                guard let scheduledDate = task.scheduledDate ?? task.scheduledTime else { continue }
                 let key = Self.key(templateId: task.templateTaskId, day: calendar.startOfDay(for: scheduledDate))
                 map[key, default: []].append(task)
             }
@@ -261,7 +266,8 @@ public enum TaskRecurrenceEngine {
     /// Legacy or duplicate rows that share a title with an existing recurrence template.
     private static func duplicateSeriesTemplate(for task: LifeTask, in allTasks: [LifeTask]) -> LifeTask? {
         guard task.parentTaskId == nil else { return nil }
-        guard task.scheduledDate != nil else { return nil }
+        // A clock is a day assignment when scheduledDate was never written.
+        guard task.scheduledDate != nil || task.scheduledTime != nil else { return nil }
         guard needsLegacyNormalization(task) || task.recurrenceRule != .none else { return nil }
         return allTasks.first { candidate in
             guard isRecurrenceTemplate(candidate) else { return false }
@@ -301,7 +307,7 @@ public enum TaskRecurrenceEngine {
            let parent = allTasks.first(where: { $0.id == parentId }) {
             return calendar.startOfDay(for: parent.createdAt)
         }
-        if let firstDay = source.scheduledDate {
+        if let firstDay = source.scheduledDate ?? source.scheduledTime {
             return calendar.startOfDay(for: firstDay)
         }
         return calendar.startOfDay(for: source.createdAt)
@@ -323,7 +329,13 @@ public enum TaskRecurrenceEngine {
         calendar: Calendar = .current,
         referenceDate: Date = Date()
     ) -> Bool {
-        isActionable(on: calendar.startOfDay(for: referenceDate), task: task, in: allTasks, calendar: calendar)
+        isActionable(
+            on: calendar.startOfDay(for: referenceDate),
+            task: task,
+            in: allTasks,
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
     }
 
     /// Whether this task belongs on tomorrow's execution list.
@@ -336,7 +348,13 @@ public enum TaskRecurrenceEngine {
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: referenceDate)) else {
             return false
         }
-        return isActionable(on: tomorrow, task: task, in: allTasks, calendar: calendar)
+        return isActionable(
+            on: tomorrow,
+            task: task,
+            in: allTasks,
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
     }
 
     /// Whether this task belongs on a specific calendar day's execution list.
@@ -344,33 +362,41 @@ public enum TaskRecurrenceEngine {
         on day: Date,
         task: LifeTask,
         in allTasks: [LifeTask],
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
     ) -> Bool {
-        isActionableOnDayStart(calendar.startOfDay(for: day), task: task, in: allTasks, calendar: calendar)
+        isActionableOnDayStart(
+            calendar.startOfDay(for: day),
+            task: task,
+            in: allTasks,
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
     }
 
     private static func isActionableOnDayStart(
         _ dayStart: Date,
         task: LifeTask,
         in allTasks: [LifeTask],
-        calendar: Calendar
+        calendar: Calendar,
+        referenceDate: Date
     ) -> Bool {
         guard task.status.isActive, !isRecurrenceTemplate(task) else { return false }
-        if task.isOverdue {
-            guard let scheduledDate = task.scheduledDate else { return calendar.isDateInToday(dayStart) }
-            guard calendar.isDate(scheduledDate, inSameDayAs: dayStart) else { return false }
-            return matchesRecurrenceSchedule(task, on: scheduledDate, in: allTasks, calendar: calendar)
+        // Recurring occurrences stay on their scheduled day. Overdue one-offs surface on the
+        // queried today until the day-boundary reaper parks or expires them. A past deadline
+        // must not steal a future-dated one-off onto today.
+        if task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: referenceDate) {
+            return calendar.isDate(dayStart, inSameDayAs: referenceDate)
         }
-        guard let scheduledDate = task.scheduledDate,
-              calendar.isDate(scheduledDate, inSameDayAs: dayStart) else {
-            if task.scheduledDate == nil,
-               let time = task.scheduledTime,
-               calendar.isDate(time, inSameDayAs: dayStart) {
-                return true
-            }
+        if task.isDeadlineOnlyDue(on: dayStart, calendar: calendar) {
+            return true
+        }
+        let scheduleAnchor = task.scheduledDate ?? task.scheduledTime
+        guard let scheduleAnchor,
+              calendar.isDate(scheduleAnchor, inSameDayAs: dayStart) else {
             return false
         }
-        return matchesRecurrenceSchedule(task, on: scheduledDate, in: allTasks, calendar: calendar)
+        return matchesRecurrenceSchedule(task, on: scheduleAnchor, in: allTasks, calendar: calendar)
     }
 
     /// Plan merging duplicate recurrence templates that share a normalized title.
@@ -437,7 +463,8 @@ public enum TaskRecurrenceEngine {
             if let completedAt = task.completedAt, calendar.isDate(completedAt, inSameDayAs: dayStart) {
                 return true
             }
-            if let scheduled = task.scheduledDate, calendar.isDate(scheduled, inSameDayAs: dayStart) {
+            if let scheduled = task.scheduledDate ?? task.scheduledTime,
+               calendar.isDate(scheduled, inSameDayAs: dayStart) {
                 return true
             }
             return false
@@ -457,7 +484,8 @@ public enum TaskRecurrenceEngine {
                     continue
                 }
 
-                if let scheduled = task.scheduledDate, calendar.isDate(scheduled, inSameDayAs: dayStart) {
+                if let scheduled = task.scheduledDate ?? task.scheduledTime,
+                   calendar.isDate(scheduled, inSameDayAs: dayStart) {
                     ids.insert(task.id)
                 }
             }
@@ -480,7 +508,8 @@ public enum TaskRecurrenceEngine {
 
         for task in allTasks where task.id != completed.id && task.status.isActive {
             guard TaskScheduleQuery.seriesKey(for: task) == completedKey else { continue }
-            if let scheduled = task.scheduledDate,
+            // A future clock stays on its own day even when scheduledDate was never written.
+            if let scheduled = task.scheduledDate ?? task.scheduledTime,
                !calendar.isDate(scheduled, inSameDayAs: dayStart) {
                 continue
             }
@@ -508,6 +537,8 @@ public enum TaskRecurrenceEngine {
         for task in allTasks where task.status == .completed {
             let onDay = task.completedAt.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
                 || task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
+                || (task.scheduledDate == nil
+                    && task.scheduledTime.map { calendar.isDate($0, inSameDayAs: dayStart) } == true)
             guard onDay else { continue }
             keys.insert(TaskScheduleQuery.seriesKey(for: task))
             keys.insert("recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(task.title))")
@@ -592,7 +623,8 @@ public enum TaskRecurrenceEngine {
 
         for task in allTasks {
             guard !isRecurrenceTemplate(task) else { continue }
-            guard let scheduledDate = task.scheduledDate else { continue }
+            // A clock is a day assignment when scheduledDate was never written.
+            guard let scheduledDate = task.scheduledDate ?? task.scheduledTime else { continue }
 
             if task.parentTaskId != nil,
                !allTasks.contains(where: { $0.id == task.parentTaskId }) {
@@ -634,7 +666,7 @@ public enum TaskRecurrenceEngine {
             guard other.parentTaskId != nil else { return false }
             guard other.status.isActive || other.status == .completed else { return false }
             guard OnboardingTaskSeeder.normalizedRoutineTitle(other.title) == key else { return false }
-            guard let scheduledDate = other.scheduledDate else { return false }
+            guard let scheduledDate = other.scheduledDate ?? other.scheduledTime else { return false }
             return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
         }
     }

@@ -49,7 +49,7 @@ public enum FlowTaskSelector {
         if task.status == .paused { value += 80 }
         value += task.priority.rawValue * 10
         if task.isSuitableForEnergy(energy) { value += 20 }
-        if task.isOverdue { value += 15 }
+        if task.isOverdue(calendar: context.calendar, referenceDate: context.currentTime) { value += 15 }
         if task.isFixedTimeEvent && task.isActiveFixedTimeWindow(at: context.input.currentTime, calendar: context.calendar) {
             value += 200
         }

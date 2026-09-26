@@ -23,14 +23,14 @@ public struct DayScheduleSnapshot: Sendable, Equatable {
 
     public var activeScheduledTasks: [LifeTask] {
         tasks.filter { task in
-            task.status.isActive && task.scheduledTime != nil
+            task.belongsOnDaySchedule(day: day, calendar: .current, now: reconciledAt)
         }
     }
 
-    public func tasks(on day: Date, calendar: Calendar = .current) -> [LifeTask] {
-        tasks.filter { task in
-            guard let scheduledDate = task.scheduledDate else { return false }
-            return calendar.isDate(scheduledDate, inSameDayAs: day)
+    public func tasks(on day: Date, calendar: Calendar = .current, now: Date? = nil) -> [LifeTask] {
+        let reference = now ?? reconciledAt
+        return tasks.filter { task in
+            task.belongsOnDaySchedule(day: day, calendar: calendar, now: reference)
         }
     }
 }

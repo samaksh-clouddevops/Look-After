@@ -36,6 +36,13 @@ public enum SchedulePlacementGuard {
         neighborTasks: [LifeTask] = [],
         dayEnd: Date? = nil
     ) -> Placement {
+        // A clock is a day assignment when scheduledDate was never written.
+        // Falling back to proposedStart would accept tomorrow's clock on today.
+        if task.scheduledDate == nil,
+           let scheduledTime = task.scheduledTime,
+           !calendar.isDate(scheduledTime, inSameDayAs: proposedStart) {
+            return .rejected("Proposed start is on a different day than the scheduled clock")
+        }
         let day = calendar.startOfDay(for: task.scheduledDate ?? proposedStart)
         guard let start = calendar.combine(date: day, timeFrom: proposedStart) else {
             return .rejected("Could not combine date and time")

@@ -159,6 +159,61 @@ final class IdealSleepPlannerTests: XCTestCase {
         XCTAssertEqual(calendar.component(.minute, from: result!.bedtime), 45)
     }
 
+    func testTomorrowTimeOnlyClockIsWakeAnchor() {
+        let today = makeDate(year: 2026, month: 8, day: 2, hour: 18, minute: 0)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: today))!
+        let clock = calendar.date(bySettingHour: 6, minute: 30, second: 0, of: tomorrow)!
+        let task = LifeTask(
+            id: "gym-clock",
+            title: "Gym",
+            estimatedMinutes: 60,
+            scheduledTime: clock,
+            schedulingMode: .fixedTime
+        )
+
+        let result = IdealSleepPlanner.recommend(
+            IdealSleepPlanner.Input(
+                now: today,
+                targetSleepHours: 8,
+                tasks: [task],
+                calendar: calendar
+            )
+        )
+
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result!.line.contains("6:30 AM"))
+        XCTAssertLessThan(calendar.component(.hour, from: result!.bedtime), 23)
+    }
+
+    func testTodayTimeOnlyLateClockTightensBedtime() {
+        let today = makeDate(year: 2026, month: 8, day: 2, hour: 18, minute: 0)
+        let clock = calendar.date(bySettingHour: 22, minute: 0, second: 0, of: calendar.startOfDay(for: today))!
+        let task = LifeTask(
+            id: "late-clock",
+            title: "Rehearsal",
+            estimatedMinutes: 90,
+            scheduledTime: clock,
+            schedulingMode: .fixedTime
+        )
+        var profile = UserLifeProfile()
+        profile.workStartHour = 9
+        profile.workStartMinute = 0
+
+        let result = IdealSleepPlanner.recommend(
+            IdealSleepPlanner.Input(
+                now: today,
+                targetSleepHours: 8,
+                tasks: [task],
+                profile: profile,
+                calendar: calendar
+            )
+        )
+
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result!.line.contains("tight"))
+    }
+
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int, minute: Int) -> Date {
         var components = DateComponents()
         components.year = year

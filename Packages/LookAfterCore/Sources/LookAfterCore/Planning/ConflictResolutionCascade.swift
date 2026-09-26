@@ -483,10 +483,12 @@ public enum ConflictResolutionCascade {
     // MARK: - Slot search
 
     private static func isActiveOnDay(_ task: LifeTask, day: Date, calendar: Calendar) -> Bool {
-        guard task.status.isActive, task.scheduledTime != nil, let scheduledDate = task.scheduledDate else {
-            return false
+        guard task.status.isActive, task.scheduledTime != nil else { return false }
+        if let scheduledDate = task.scheduledDate {
+            return calendar.isDate(scheduledDate, inSameDayAs: day)
         }
-        return calendar.isDate(scheduledDate, inSameDayAs: day)
+        // Time-only rows occupy the day encoded in the clock.
+        return task.scheduledTime.map { calendar.isDate($0, inSameDayAs: day) } == true
     }
 
     private static func applyStart(

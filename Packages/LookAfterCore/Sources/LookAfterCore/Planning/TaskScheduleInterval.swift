@@ -65,11 +65,15 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         calendar: Calendar = .current
     ) -> TaskScheduleInterval? {
         guard !isPlaceholderMidnightSchedule(for: task, calendar: calendar) else { return nil }
-        guard let scheduledDate = task.scheduledDate,
-              calendar.isDate(scheduledDate, inSameDayAs: day),
-              let startTime = task.scheduledTime,
+        guard let startTime = task.scheduledTime,
               let start = calendar.combine(date: day, timeFrom: startTime) else {
             return nil
+        }
+        // A separate scheduledDate wins. Time-only rows still occupy the clock's own day.
+        if let scheduledDate = task.scheduledDate {
+            guard calendar.isDate(scheduledDate, inSameDayAs: day) else { return nil }
+        } else {
+            guard calendar.isDate(startTime, inSameDayAs: day) else { return nil }
         }
 
         let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
@@ -128,6 +132,9 @@ public struct TaskScheduleInterval: Sendable, Equatable {
            let combined = calendar.combine(date: day, timeFrom: startTime) {
             if let scheduledDate = task.scheduledDate {
                 guard calendar.isDate(scheduledDate, inSameDayAs: day) else { return nil }
+            } else {
+                // Time-only clocks belong to their own day — never stamp them onto another.
+                guard calendar.isDate(startTime, inSameDayAs: day) else { return nil }
             }
             return combined
         }
@@ -214,18 +221,19 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         calendar: Calendar = .current
     ) -> Bool {
         if isPlaceholderMidnightSchedule(for: task, calendar: calendar) {
-            return true
-        }
-        guard task.timeConstraintValue != .anchored else { return false }
-        if isDateOnlySchedule(for: task, on: day, calendar: calendar) {
-            return true
-        }
-        guard let scheduledDate = task.scheduledDate,
-              calendar.isDate(scheduledDate, inSameDayAs: day),
-              isMidnightClockTime(task.scheduledTime, calendar: calendar) else {
+            if let scheduledDate = task.scheduledDate {
+                return calendar.isDate(scheduledDate, inSameDayAs: day)
+            }
+            if let scheduledTime = task.scheduledTime {
+                return calendar.isDate(scheduledTime, inSameDayAs: day)
+            }
             return false
         }
-        return task.timeConstraintValue != .anchored
+        guard task.timeConstraintValue != .anchored else { return false }
+        if task.isDeadlineOnlyDue(on: day, calendar: calendar) {
+            return true
+        }
+        return isDateOnlySchedule(for: task, on: day, calendar: calendar)
     }
 
     /// Unified read model for schedule display across timeline, briefing, calendar, notifications.
@@ -261,10 +269,11 @@ public struct TaskScheduleInterval: Sendable, Equatable {
         calendar: Calendar = .current
     ) -> DisplaySchedule {
         let dayStart = calendar.startOfDay(for: day)
-        if !hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar) {
+        if isFlexibleDaySchedule(for: task, on: dayStart, calendar: calendar) {
             return .unslottedFlexible
         }
-        if isFlexibleDaySchedule(for: task, on: dayStart, calendar: calendar) {
+        if task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: dayStart),
+           !hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar) {
             return .unslottedFlexible
         }
         if let start = resolvedStart(for: task, on: dayStart, calendar: calendar),

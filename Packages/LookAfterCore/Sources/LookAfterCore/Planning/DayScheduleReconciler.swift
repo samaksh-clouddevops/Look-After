@@ -35,10 +35,14 @@ public enum DayScheduleReconciler {
         // 1) Snap life commitments to model block times first.
         var changedIDs = Set<String>()
         let synced: [LifeTask] = tasks.map { task in
-            guard task.status.isActive, let scheduledDate = task.scheduledDate,
-                  calendar.isDate(scheduledDate, inSameDayAs: dayStart) else {
-                return task
+            guard task.status.isActive else { return task }
+            let belongsOnDay: Bool
+            if let scheduledDate = task.scheduledDate {
+                belongsOnDay = calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+            } else {
+                belongsOnDay = task.scheduledTime.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
             }
+            guard belongsOnDay else { return task }
             let updated = syncCommitmentTimes(task, model: model, day: dayStart, calendar: calendar)
             if updated.scheduledTime != task.scheduledTime
                 || updated.scheduledEndTime != task.scheduledEndTime
@@ -92,8 +96,12 @@ public enum DayScheduleReconciler {
         let nextStart = calendar.startOfDay(for: nextDay)
 
         let tomorrowActives = tasks.filter { task in
-            guard task.status.isActive, let d = task.scheduledDate else { return false }
-            return calendar.isDate(d, inSameDayAs: nextStart)
+            guard task.status.isActive else { return false }
+            if let d = task.scheduledDate {
+                return calendar.isDate(d, inSameDayAs: nextStart)
+            }
+            // Time-only rows belong to the day encoded in the clock.
+            return task.scheduledTime.map { calendar.isDate($0, inSameDayAs: nextStart) } == true
         }
 
         var changed: Set<String> = []
@@ -101,8 +109,11 @@ public enum DayScheduleReconciler {
         var byID = Dictionary.uniquingFirstValue(tasks.map { ($0.id, $0) })
 
         let yesterdayIncomplete = tasks.filter { task in
-            guard task.status.isActive, let d = task.scheduledDate else { return false }
-            return calendar.isDate(d, inSameDayAs: prevStart)
+            guard task.status.isActive else { return false }
+            if let d = task.scheduledDate {
+                return calendar.isDate(d, inSameDayAs: prevStart)
+            }
+            return task.scheduledTime.map { calendar.isDate($0, inSameDayAs: prevStart) } == true
         }
 
         for var task in yesterdayIncomplete {

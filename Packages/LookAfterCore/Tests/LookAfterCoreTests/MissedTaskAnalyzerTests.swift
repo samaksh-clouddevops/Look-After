@@ -82,6 +82,29 @@ final class MissedTaskAnalyzerTests: XCTestCase {
         XCTAssertEqual(result.salvageable.first?.id, task.id)
     }
 
+    func testTomorrowTimeOnlyClockIsNotMissedToday() {
+        let now = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: today)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrowNine = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)!
+        let task = LifeTask(
+            id: "tomorrow-clock",
+            title: "Standup",
+            estimatedMinutes: 30,
+            scheduledTime: tomorrowNine,
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+
+        let result = MissedTaskAnalyzer.analyze(
+            MissedTaskAnalyzer.Input(tasks: [task], now: now, calendar: calendar)
+        )
+
+        XCTAssertTrue(result.missed.isEmpty)
+        XCTAssertTrue(result.salvageable.isEmpty)
+        XCTAssertTrue(result.protected.isEmpty)
+    }
+
+
     func testMinutesLateWhenWakeAfterExpected() {
         let wake = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: today)!
         let result = MissedTaskAnalyzer.analyze(

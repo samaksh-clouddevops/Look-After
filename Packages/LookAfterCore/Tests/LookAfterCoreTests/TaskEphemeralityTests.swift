@@ -130,6 +130,50 @@ final class TaskEphemeralityTests: XCTestCase {
         XCTAssertTrue(park.snapshot().entries.isEmpty)
     }
 
+    func testMidnightSweepSkipsTimeOnlyEndOfDayTask() {
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: day)!
+        let start = calendar.date(bySettingHour: 12, minute: 0, second: 0, of: yesterday)!
+        let lunch = LifeTask(
+            id: "time-only-lunch",
+            title: "Lunch",
+            status: .pending,
+            estimatedMinutes: 40,
+            scheduledTime: start,
+            expirationPolicy: .endOfDay,
+            userId: "u"
+        )
+        let park = ParkedTaskQueueStore.inMemory()
+        let result = DayScheduleReconciler.sweepDayBoundary(
+            tasks: [lunch], from: yesterday, to: day,
+            now: day.addingTimeInterval(7 * 3600),
+            calendar: calendar, parkedQueue: park
+        )
+        XCTAssertEqual(result.tasks.first?.status, .skipped)
+        XCTAssertTrue(result.changedTaskIDs.contains("time-only-lunch"))
+        XCTAssertTrue(park.snapshot().entries.isEmpty)
+    }
+
+    func testReaperExpiresTimeOnlyEndOfDayTaskFromClockDay() {
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: day)!
+        let start = calendar.date(bySettingHour: 12, minute: 0, second: 0, of: yesterday)!
+        let lunch = LifeTask(
+            id: "time-only-verdict",
+            title: "Lunch",
+            status: .pending,
+            estimatedMinutes: 40,
+            scheduledTime: start,
+            expirationPolicy: .endOfDay,
+            userId: "u"
+        )
+        let now = day.addingTimeInterval(7 * 3600)
+        XCTAssertEqual(
+            TaskReaper.verdict(for: lunch, now: now, calendar: calendar),
+            .expire
+        )
+    }
+
+
+
     private func decision(_ result: ConflictCascadeResult, _ id: String) -> ConflictCascadeAction? {
         result.decisions.first { $0.taskID == id }?.action
     }

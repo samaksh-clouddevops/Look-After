@@ -62,6 +62,31 @@ final class TaskListSorterTests: XCTestCase {
         XCTAssertEqual(sorted.map(\.id), ["morning", "dinner"])
     }
 
+    func testPastTimeOnlyOneOffSortsBeforeToday() {
+        let yesterdayClock = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: calendar.date(byAdding: .day, value: -1, to: today)!)!
+        let todayClock = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        let overdue = LifeTask(
+            id: "overdue-time-only",
+            title: "Pay invoice",
+            priority: .low,
+            scheduledTime: yesterdayClock,
+            userId: "user-1"
+        )
+        let current = LifeTask(
+            id: "today-timed",
+            title: "Morning review",
+            priority: .high,
+            scheduledDate: today,
+            scheduledTime: todayClock,
+            userId: "user-1"
+        )
+
+        XCTAssertTrue(overdue.isOverdue(calendar: calendar, referenceDate: today))
+        let sorted = TaskListSorter.sortForToday([current, overdue], calendar: calendar, now: today)
+        XCTAssertEqual(sorted.map(\.id), ["overdue-time-only", "today-timed"])
+    }
+
+
     func testSortByNextActionableThenPriorityUsesClockThenPriority() {
         let eight = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: today)!
         let nine = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today)!

@@ -187,7 +187,8 @@ public enum LifeTimelinePresenter {
             from: tasks,
             allTasks: allTasks,
             day: dayAnchor,
-            calendar: calendar
+            calendar: calendar,
+            referenceDate: now
         )
         let timelineCompleted = isToday
             ? completedTasksForTodayTimeline(
@@ -215,13 +216,18 @@ public enum LifeTimelinePresenter {
         }
 
         if !financeTasks.isEmpty {
-            events.append(groupedFinanceSession(tasks: financeTasks, now: now, calendar: calendar))
+            events.append(groupedFinanceSession(tasks: financeTasks, referenceDay: dayAnchor, calendar: calendar))
         }
 
         let unpurchased = shoppingItems.filter { !$0.isPurchased }
         if isToday, !unpurchased.isEmpty {
-            let shoppingTask = tasks.first(where: isShoppingErrandTask)
-            events.append(groupedShoppingTrip(items: unpurchased, scheduledTask: shoppingTask, now: now, calendar: calendar))
+            let shoppingTask = timelineTasks.first(where: isShoppingErrandTask)
+            events.append(groupedShoppingTrip(
+                items: unpurchased,
+                scheduledTask: shoppingTask,
+                referenceDay: dayAnchor,
+                calendar: calendar
+            ))
         }
 
         if isToday {
@@ -318,7 +324,8 @@ public enum LifeTimelinePresenter {
             from: tasks,
             allTasks: allTasks,
             day: calendar.startOfDay(for: now),
-            calendar: calendar
+            calendar: calendar,
+            referenceDate: now
         )
     }
 
@@ -352,21 +359,28 @@ public enum LifeTimelinePresenter {
                 ?? (calendar.isDate(task.updatedAt, inSameDayAs: now) ? task.updatedAt : nil)
             guard let completionAnchor, completionAnchor >= startOfDay else { return false }
 
-            if task.scheduledDate != nil || task.scheduledTime != nil {
-                if let scheduledDate = task.scheduledDate {
-                    return calendar.isDate(scheduledDate, inSameDayAs: now)
-                        || TaskRecurrenceEngine.matchesRecurrenceSchedule(
-                            task,
-                            on: scheduledDate,
-                            in: allTasks,
-                            calendar: calendar
-                        )
+            if let scheduledDate = task.scheduledDate {
+                if calendar.isDate(scheduledDate, inSameDayAs: now) {
+                    return true
                 }
-                if let scheduledTime = task.scheduledTime {
-                    return calendar.isDate(scheduledTime, inSameDayAs: now)
-                }
+                // Past-dated one-offs completed today were overdue carry-forwards on this timeline.
+                // Recurring occurrences stay on their scheduled day; future-dated one-offs stay off today.
+                let isOneOff = task.parentTaskId == nil && task.recurrenceRule == .none
+                return isOneOff && calendar.startOfDay(for: scheduledDate) < startOfDay
             }
-            return true
+            if let scheduledTime = task.scheduledTime {
+                return calendar.isDate(scheduledTime, inSameDayAs: now)
+            }
+            if task.isDeadlineOnlyDue(on: now, calendar: calendar) {
+                return true
+            }
+            // Past deadline-only one-offs completed today were overdue carry-forwards.
+            if task.isDeadlineOnlyOneOff,
+               let deadline = task.deadline,
+               calendar.startOfDay(for: deadline) < startOfDay {
+                return true
+            }
+            return false
         }
     }
 
@@ -520,12 +534,12 @@ public enum LifeTimelinePresenter {
     private static func groupedShoppingTrip(
         items: [ShoppingItem],
         scheduledTask: LifeTask?,
-        now: Date,
+        referenceDay: Date,
         calendar: Calendar
     ) -> LifeTimelineEvent {
         let names = items.map(\.name).sorted()
+        let day = calendar.startOfDay(for: referenceDay)
         if let task = scheduledTask,
-           let day = task.scheduledDate.map({ calendar.startOfDay(for: $0) }),
            let time = task.scheduledTime,
            let combined = calendar.combine(date: day, timeFrom: time),
            TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: day, calendar: calendar) {
@@ -547,7 +561,7 @@ public enum LifeTimelinePresenter {
             title: "Stop at the grocery store",
             subtitle: "About \(minutes.durationString)",
             detailLines: names,
-            date: calendar.startOfDay(for: now),
+            date: day,
             estimatedMinutes: minutes,
             scheduleKind: .flexibleDay
         )
@@ -555,16 +569,24 @@ public enum LifeTimelinePresenter {
 
     // MARK: - Grouped finance
 
-    private static func groupedFinanceSession(tasks: [LifeTask], now: Date, calendar: Calendar) -> LifeTimelineEvent {
+    private static func groupedFinanceSession(
+        tasks: [LifeTask],
+        referenceDay: Date,
+        calendar: Calendar
+    ) -> LifeTimelineEvent {
+        let day = calendar.startOfDay(for: referenceDay)
         let lines = tasks.compactMap { task -> String? in
             let headline = HumanLanguage.outcomeHeadline(task: task)
             return UserFacingCopy.isInternalExecutionLabel(headline) ? task.title : headline
         }
         let earliestConcrete = tasks.compactMap { task -> Date? in
-            guard let day = task.scheduledDate, let time = task.scheduledTime else { return nil }
-            return calendar.combine(date: calendar.startOfDay(for: day), timeFrom: time)
+            guard let time = task.scheduledTime else { return nil }
+            guard TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: day, calendar: calendar) else {
+                return nil
+            }
+            return calendar.combine(date: day, timeFrom: time)
         }.min()
-        let when = earliestConcrete ?? calendar.startOfDay(for: now)
+        let when = earliestConcrete ?? day
         let minutes = tasks.reduce(0) { $0 + max($1.estimatedMinutes, TaskDurationPolicy.minimumMinutes) }
         let hasClock = earliestConcrete != nil
         return LifeTimelineEvent(

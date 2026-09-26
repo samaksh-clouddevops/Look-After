@@ -119,4 +119,33 @@ final class SchedulePlacementGuardTests: XCTestCase {
             XCTFail("Dinner at 19:00 should be accepted, got \(result)")
         }
     }
+
+    func testTimeOnlyTomorrowClockIsNotRemappedOntoTodayProposal() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 9, day: 9)))
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
+        let tomorrowNine = try XCTUnwrap(calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow))
+        let todayProposal = try XCTUnwrap(calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today))
+        let task = LifeTask(
+            title: "Standup prep",
+            estimatedMinutes: 30,
+            scheduledTime: tomorrowNine,
+            schedulingMode: .flexible
+        )
+
+        let result = SchedulePlacementGuard.evaluate(
+            proposedStart: todayProposal,
+            durationMinutes: 30,
+            task: task,
+            occupied: [],
+            calendar: calendar,
+            mode: .rejectOutsideBox
+        )
+        guard case .rejected = result else {
+            XCTFail("A time-only tomorrow clock must not be accepted on today, got \(result)")
+            return
+        }
+    }
+
 }

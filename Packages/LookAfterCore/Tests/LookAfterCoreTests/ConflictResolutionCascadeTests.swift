@@ -335,6 +335,26 @@ final class ConflictResolutionCascadeTests: XCTestCase {
         XCTAssertEqual(streak, 3)
     }
 
+    func testTimeOnlyAnchoredWorkCountsAsHighLoad() {
+        let d = calendar.date(byAdding: .day, value: -1, to: day)!
+        var tasks: [LifeTask] = []
+        for h in 9..<12 {
+            let s = calendar.date(bySettingHour: h, minute: 0, second: 0, of: d)!
+            tasks.append(LifeTask(
+                id: "time-only-\(h)",
+                title: "Work",
+                status: .pending,
+                estimatedMinutes: 55,
+                scheduledTime: s,
+                timeConstraint: .anchored,
+                scheduledEndTime: s.addingTimeInterval(55 * 60),
+                userId: "u"
+            ))
+        }
+        XCTAssertTrue(HighLoadDayEvaluator.isHighLoadDay(tasks: tasks, on: d, calendar: calendar))
+    }
+
+
     func testNextGapUsesBufferAroundBlockers() {
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: day)!
         let anchorStart = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow)!

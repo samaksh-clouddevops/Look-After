@@ -160,17 +160,18 @@ public enum DayStructureCompiler {
     public static func backfillAnchorIDs(
         tasks: [LifeTask],
         structure: DayStructure,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        on day: Date = Date()
     ) -> [LifeTask] {
-        let day = calendar.startOfDay(for: Date())
+        let dayStart = calendar.startOfDay(for: day)
         return tasks.map { task in
             guard task.scheduleAnchorID == nil else { return task }
             guard let anchor = structure.anchor(matching: task) else { return task }
             var updated = task
             updated.scheduleAnchorID = anchor.id
             if anchor.treatAsFixed, task.scheduledTime == nil,
-               let start = anchor.start(on: day, calendar: calendar) {
-                updated.scheduledDate = day
+               let start = anchor.start(on: dayStart, calendar: calendar) {
+                updated.scheduledDate = dayStart
                 updated.scheduledTime = start
                 updated.scheduledEndTime = start.addingTimeInterval(TimeInterval(anchor.durationMinutes * 60))
                 updated.applyTimeConstraint(.anchored)

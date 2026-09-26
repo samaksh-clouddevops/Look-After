@@ -57,13 +57,13 @@ public final class DailyPlannerViewModel: ObservableObject {
             let allTasks = try await taskStore.getAll(for: userId)
             try await createDueRecurringOccurrences(from: allTasks, userId: userId, on: day)
             let refreshed = try await taskStore.getAll(for: userId)
-            todayTasks = refreshed
-                .filter {
-                    guard $0.status.isActive else { return false }
-                    guard let scheduledDate = $0.scheduledDate else { return isToday && calendar.isDateInToday($0.createdAt) }
-                    return calendar.isDate(scheduledDate, inSameDayAs: day)
-                }
-                .sorted(by: Self.sortBySchedule)
+            todayTasks = Self.tasksForPlanningDay(
+                from: refreshed,
+                day: day,
+                isToday: isToday,
+                calendar: calendar,
+                now: Date()
+            )
         } catch {
             self.error = error.localizedDescription
         }
@@ -557,6 +557,31 @@ public final class DailyPlannerViewModel: ObservableObject {
 
     private func combineTime(from time: Date, on day: Date) -> Date? {
         calendar.combine(date: day, timeFrom: time)
+    }
+
+    /// Today/tomorrow planner membership — same day-schedule rules as the timeline,
+    /// plus unscheduled tasks created on the queried today. Recurrence templates
+    /// and multi-day roots stay off the planner list.
+    static func tasksForPlanningDay(
+        from tasks: [LifeTask],
+        day: Date,
+        isToday: Bool,
+        calendar: Calendar,
+        now: Date
+    ) -> [LifeTask] {
+        let dayStart = calendar.startOfDay(for: day)
+        return tasks
+            .filter { task in
+                guard task.status.isActive else { return false }
+                guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
+                guard !MultiDayTaskTags.isRoot(task) else { return false }
+                if task.belongsOnDaySchedule(day: dayStart, calendar: calendar, now: now) {
+                    return true
+                }
+                guard isToday, task.scheduledDate == nil, task.scheduledTime == nil else { return false }
+                return calendar.isDate(task.createdAt, inSameDayAs: dayStart)
+            }
+            .sorted(by: sortBySchedule)
     }
 
     private static func sortBySchedule(_ lhs: LifeTask, _ rhs: LifeTask) -> Bool {

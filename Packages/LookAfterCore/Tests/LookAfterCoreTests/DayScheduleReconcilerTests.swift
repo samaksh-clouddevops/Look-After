@@ -210,6 +210,35 @@ final class DayScheduleReconcilerTests: XCTestCase {
         XCTAssertEqual(calendar.component(.minute, from: synced.scheduledTime!), 30)
     }
 
+    func testReconcileSnapsTimeOnlyGymCommitment() {
+        let markdown = """
+        ### Gym
+        **6:30 PM – 8:00 PM**
+        """
+        let model = LifeModelValidator.compileLocally(from: markdown)
+        let day = makeDate(year: 2026, month: 8, day: 4)
+        let gym = LifeTask(
+            id: "gym-time-only",
+            title: "Gym",
+            estimatedMinutes: 90,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 4, hour: 18, minute: 15),
+            tags: [LifeModel.commitmentTaskTag, model.commitmentID(for: "Gym")],
+            schedulingMode: .fixedTime
+        )
+
+        let result = DayScheduleReconciler.reconcile(
+            tasks: [gym],
+            on: day,
+            model: model,
+            calendar: calendar
+        )
+        let synced = result.tasks.first { $0.id == "gym-time-only" }
+        XCTAssertEqual(calendar.component(.hour, from: synced?.scheduledTime ?? .distantPast), 18)
+        XCTAssertEqual(calendar.component(.minute, from: synced?.scheduledTime ?? .distantPast), 30)
+        XCTAssertTrue(result.changedTaskIDs.contains("gym-time-only"))
+    }
+
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }

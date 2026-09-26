@@ -83,7 +83,9 @@ public enum PinNowSnapshotBuilder {
             preferredTask: preferredTask,
             flowSurface: flowSurface,
             activeTasks: activeTasks,
-            tasks: tasks
+            tasks: tasks,
+            now: now,
+            calendar: calendar
         )
 
         if let hero {
@@ -109,6 +111,7 @@ public enum PinNowSnapshotBuilder {
                        flowSurface: flowSurface,
                        cognitiveSnapshot: cognitiveSnapshot,
                        calendar: calendar,
+                       now: now,
                        sectionLabel: nil
                    ) {
                     return model
@@ -147,18 +150,25 @@ public enum PinNowSnapshotBuilder {
             flowSurface: flowSurface,
             cognitiveSnapshot: cognitiveSnapshot,
             calendar: calendar,
+            now: now,
             sectionLabel: "Next up"
         ) {
             return model
         }
 
-        for task in activeTasks {
+        for task in activeTasks where TaskRecurrenceEngine.isActionableToday(
+            task,
+            in: tasks,
+            calendar: calendar,
+            referenceDate: now
+        ) {
             if let model = buildFromTask(
                 task: task,
                 execution: execution,
                 flowSurface: flowSurface,
                 cognitiveSnapshot: cognitiveSnapshot,
                 calendar: calendar,
+                now: now,
                 sectionLabel: nil
             ) {
                 return model
@@ -200,6 +210,7 @@ public enum PinNowSnapshotBuilder {
                 flowSurface: flowSurface,
                 cognitiveSnapshot: cognitiveSnapshot,
                 calendar: calendar,
+                now: now,
                 sectionLabel: "NOW"
             ) {
                 return model
@@ -314,16 +325,22 @@ public enum PinNowSnapshotBuilder {
         preferredTask: LifeTask?,
         flowSurface: FlowSurface?,
         activeTasks: [LifeTask],
-        tasks: [LifeTask]
+        tasks: [LifeTask],
+        now: Date,
+        calendar: Calendar
     ) -> LifeTask? {
         let candidates = [preferredTask, flowSurface?.heroTask].compactMap { $0 }
         for candidate in candidates {
-            if activeTasks.contains(where: { $0.id == candidate.id }) {
-                return candidate
-            }
-            if let match = tasks.first(where: { $0.id == candidate.id }), match.status.isActive {
-                return match
-            }
+            let resolved = activeTasks.first(where: { $0.id == candidate.id })
+                ?? tasks.first(where: { $0.id == candidate.id && $0.status.isActive })
+            guard let resolved else { continue }
+            guard TaskHeroEligibility.isEligible(
+                for: resolved,
+                now: now,
+                calendar: calendar,
+                allTasks: tasks.isEmpty ? [resolved] : tasks
+            ) else { continue }
+            return resolved
         }
         return nil
     }
@@ -381,13 +398,14 @@ public enum PinNowSnapshotBuilder {
         flowSurface: FlowSurface?,
         cognitiveSnapshot: CognitiveSnapshot?,
         calendar: Calendar,
+        now: Date,
         sectionLabel: String?
     ) -> PinNowDisplayModel? {
         let headline = displayTitle(for: task, executionFallback: nil)
         guard !headline.isEmpty else { return nil }
 
         let category = FocusTaskCategory.resolve(for: task)
-        let day = calendar.startOfDay(for: Date())
+        let day = calendar.startOfDay(for: now)
         let taskWindow = TaskScheduleInterval.window(for: task, on: day, calendar: calendar)
         let flowWindow = flowSurface?.flowWindow
 

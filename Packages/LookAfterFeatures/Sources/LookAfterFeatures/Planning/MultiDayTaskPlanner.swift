@@ -132,8 +132,9 @@ public enum MultiDayTaskPlanner {
             slice.parentTaskId = parentId
 
             let dayTasks = pool.filter { task in
-                guard let scheduledDate = task.scheduledDate else { return false }
-                return calendar.isDate(scheduledDate, inSameDayAs: targetDay)
+                // A clock is a day assignment when scheduledDate was never written.
+                guard let scheduled = task.scheduledDate ?? task.scheduledTime else { return false }
+                return calendar.isDate(scheduled, inSameDayAs: targetDay)
             }
 
             let request = DaySlotAllocator.Request.makingSense(of: slice, on: targetDay, calendar: calendar)

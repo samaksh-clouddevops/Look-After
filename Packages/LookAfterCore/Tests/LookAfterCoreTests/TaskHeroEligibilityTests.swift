@@ -114,4 +114,92 @@ final class TaskHeroEligibilityTests: XCTestCase {
             )
         )
     }
+
+    func testUnscheduledBacklogIsNotHeroEligible() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let backlog = LifeTask(
+            title: "Plan my day",
+            status: .pending,
+            schedulingMode: .flexible
+        )
+
+        XCTAssertEqual(TaskHeroEligibility.status(for: backlog, now: now, calendar: calendar), .unscheduled)
+        XCTAssertFalse(TaskHeroEligibility.isEligible(for: backlog, now: now, calendar: calendar))
+    }
+
+    func testDeadlineOnlyDueTodayIsHeroEligible() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let task = LifeTask(
+            title: "File taxes",
+            status: .pending,
+            deadline: makeDate(year: 2026, month: 8, day: 2, hour: 18)
+        )
+
+        XCTAssertTrue(TaskHeroEligibility.isEligible(for: task, now: now, calendar: calendar))
+    }
+
+    func testFutureDeadlineOnlyIsNotHeroEligibleToday() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let task = LifeTask(
+            title: "Renew license",
+            status: .pending,
+            deadline: makeDate(year: 2026, month: 8, day: 5, hour: 18)
+        )
+
+        XCTAssertFalse(TaskHeroEligibility.isEligible(for: task, now: now, calendar: calendar))
+    }
+
+    func testOverdueOneOffWithYesterdayClockIsUnscheduledAndEligible() {
+        let yesterday = makeDate(year: 2026, month: 8, day: 1, hour: 0)
+        let yesterdayNine = makeDate(year: 2026, month: 8, day: 1, hour: 9)
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let task = LifeTask(
+            title: "Pay the invoice",
+            status: .pending,
+            estimatedMinutes: 45,
+            scheduledDate: yesterday,
+            scheduledTime: yesterdayNine,
+            userId: "user-1"
+        )
+
+        XCTAssertTrue(task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: now))
+        XCTAssertEqual(TaskHeroEligibility.status(for: task, now: now, calendar: calendar), .unscheduled)
+        XCTAssertTrue(TaskHeroEligibility.isEligible(for: task, now: now, calendar: calendar))
+        XCTAssertFalse(TaskHeroEligibility.isPastWindow(for: task, now: now, calendar: calendar))
+    }
+
+    func testFutureDatedOneOffClockIsNotRemappedOntoToday() {
+        let tomorrow = makeDate(year: 2026, month: 8, day: 3, hour: 0)
+        let tomorrowTen = makeDate(year: 2026, month: 8, day: 3, hour: 10)
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 9)
+        let task = LifeTask(
+            title: "Dentist",
+            status: .pending,
+            estimatedMinutes: 60,
+            scheduledDate: tomorrow,
+            scheduledTime: tomorrowTen,
+            userId: "user-1"
+        )
+
+        XCTAssertEqual(TaskHeroEligibility.status(for: task, now: now, calendar: calendar), .unscheduled)
+        XCTAssertFalse(TaskHeroEligibility.isEligible(for: task, now: now, calendar: calendar))
+    }
+
+    func testFutureTimeOnlyClockIsNotRemappedOntoToday() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 9)
+        let tomorrowClock = makeDate(year: 2026, month: 8, day: 3, hour: 21)
+        let task = LifeTask(
+            title: "Dinner",
+            status: .pending,
+            estimatedMinutes: 45,
+            scheduledTime: tomorrowClock,
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+
+        XCTAssertEqual(TaskHeroEligibility.status(for: task, now: now, calendar: calendar), .unscheduled)
+        XCTAssertFalse(TaskHeroEligibility.isEligible(for: task, now: now, calendar: calendar))
+        XCTAssertFalse(TaskHeroEligibility.isPastWindow(for: task, now: now, calendar: calendar))
+    }
+
 }

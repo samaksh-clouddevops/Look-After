@@ -78,6 +78,107 @@ final class TaskScheduleIntervalDisplayTests: XCTestCase {
         XCTAssertFalse(event.isImportantCommitment)
         XCTAssertFalse(event.scheduleRangeLabel.contains("12:00 AM"))
     }
+
+    func testMidnightPlaceholderOnOtherDayIsNotFlexibleToday() {
+        let today = makeDate(year: 2026, month: 8, day: 4, hour: 0)
+        let tomorrow = makeDate(year: 2026, month: 8, day: 5, hour: 0)
+        let task = LifeTask(
+            title: "Tomorrow errand",
+            scheduledDate: tomorrow,
+            scheduledTime: tomorrow,
+            schedulingMode: .flexible
+        )
+
+        XCTAssertTrue(TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task, calendar: calendar))
+        XCTAssertFalse(TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: today, calendar: calendar))
+        XCTAssertTrue(TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: tomorrow, calendar: calendar))
+        XCTAssertEqual(
+            TaskScheduleInterval.displaySchedule(for: task, on: today, calendar: calendar),
+            .noSchedule
+        )
+        XCTAssertEqual(
+            TaskScheduleInterval.displaySchedule(for: task, on: tomorrow, calendar: calendar),
+            .unslottedFlexible
+        )
+    }
+
+    func testUnscheduledBacklogDisplayIsNoSchedule() {
+        let today = makeDate(year: 2026, month: 8, day: 4, hour: 0)
+        let task = LifeTask(
+            title: "Someday inbox",
+            schedulingMode: .flexible
+        )
+
+        XCTAssertFalse(TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: today, calendar: calendar))
+        XCTAssertEqual(
+            TaskScheduleInterval.displaySchedule(for: task, on: today, calendar: calendar),
+            .noSchedule
+        )
+    }
+
+    func testDeadlineOnlyDueTodayDisplayIsFlexible() {
+        let today = makeDate(year: 2026, month: 8, day: 4, hour: 10)
+        let task = LifeTask(
+            title: "File taxes",
+            deadline: makeDate(year: 2026, month: 8, day: 4, hour: 18),
+            schedulingMode: .flexible
+        )
+
+        XCTAssertTrue(TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: today, calendar: calendar))
+        XCTAssertEqual(
+            TaskScheduleInterval.displaySchedule(for: task, on: today, calendar: calendar),
+            .unslottedFlexible
+        )
+    }
+
+    func testTimeOnlyClockOnQueriedDayBuildsWindow() {
+        let day = makeDate(year: 2026, month: 8, day: 7, hour: 0)
+        let clock = makeDate(year: 2026, month: 8, day: 7, hour: 19, minute: 30)
+        let task = LifeTask(
+            id: "dinner-time-only",
+            title: "Dinner",
+            estimatedMinutes: 45,
+            scheduledTime: clock,
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+
+        let window = TaskScheduleInterval.window(for: task, on: day, calendar: calendar)
+        XCTAssertEqual(window?.start, clock)
+        XCTAssertTrue(TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: day, calendar: calendar))
+        XCTAssertEqual(TaskScheduleInterval.timelineDisplayTime(for: task, on: day, calendar: calendar), clock)
+
+        let tomorrow = makeDate(year: 2026, month: 8, day: 8, hour: 0)
+        XCTAssertNil(TaskScheduleInterval.window(for: task, on: tomorrow, calendar: calendar))
+        XCTAssertFalse(TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: tomorrow, calendar: calendar))
+    }
+
+    func testTimeOnlyClockDoesNotResolveOntoAnotherDay() {
+        let today = makeDate(year: 2026, month: 8, day: 7, hour: 0)
+        let tomorrow = makeDate(year: 2026, month: 8, day: 8, hour: 0)
+        let clock = makeDate(year: 2026, month: 8, day: 8, hour: 19, minute: 30)
+        let task = LifeTask(
+            id: "tomorrow-dinner",
+            title: "Dinner",
+            estimatedMinutes: 45,
+            scheduledTime: clock,
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+
+        XCTAssertNil(TaskScheduleInterval.resolvedStart(for: task, on: today, calendar: calendar))
+        XCTAssertNil(TaskScheduleInterval.resolvedEnd(for: task, on: today, calendar: calendar))
+        XCTAssertEqual(
+            TaskScheduleInterval.displaySchedule(for: task, on: today, calendar: calendar),
+            .noSchedule
+        )
+        XCTAssertEqual(
+            TaskScheduleInterval.resolvedStart(for: task, on: tomorrow, calendar: calendar),
+            clock
+        )
+    }
+
+
 }
 
 final class PreWindowFitAnalyzerTests: XCTestCase {

@@ -44,11 +44,7 @@ public enum DaySchedulePlanner {
         )
 
         let active = tasks.filter { task in
-            guard task.status.isActive else { return false }
-            guard let scheduledDate = task.scheduledDate else {
-                return calendar.isDateInToday(day) && task.scheduledTime == nil
-            }
-            return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+            task.belongsOnDaySchedule(day: dayStart, calendar: calendar, now: now)
         }
 
         // Phase 1 — snap anchored / user-placed / structure-backed tasks. These tasks are not

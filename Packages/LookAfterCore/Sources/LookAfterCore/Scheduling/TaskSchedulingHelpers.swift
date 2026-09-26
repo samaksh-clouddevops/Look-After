@@ -107,7 +107,18 @@ public extension LifeTask {
     }
 
     func recurrenceOccurs(on date: Date, calendar: Calendar = .current) -> Bool {
-        let anchor = isRecurrenceTemplateTask ? createdAt : (scheduledDate ?? createdAt)
+        // Templates keep a clock as time-of-day, so their series still starts at createdAt.
+        // A non-template clock is a day assignment even when scheduledDate was never written.
+        let anchor: Date
+        if isRecurrenceTemplateTask {
+            anchor = createdAt
+        } else if let scheduledDate {
+            anchor = scheduledDate
+        } else if let scheduledTime {
+            anchor = scheduledTime
+        } else {
+            anchor = createdAt
+        }
         return recurrenceRule.occurs(
             on: date,
             anchoredOn: anchor,
@@ -118,43 +129,119 @@ public extension LifeTask {
     }
 
     /// Whether this task should appear in today's execution list.
-    func isActionableToday(allTasks: [LifeTask] = [], calendar: Calendar = .current) -> Bool {
+    func isActionableToday(
+        allTasks: [LifeTask] = [],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
         let context = allTasks.isEmpty ? [self] : allTasks
-        return TaskRecurrenceEngine.isActionableToday(self, in: context, calendar: calendar)
+        return TaskRecurrenceEngine.isActionableToday(
+            self,
+            in: context,
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
+    }
+
+    /// Whether this active task belongs on a day's schedule/snapshot.
+    /// Dated and time-only tasks stay on their scheduled day; deadline-only
+    /// due tasks belong on that due day; overdue one-off carry-forwards land
+    /// on `now`'s day. Unscheduled backlog stays off.
+    func belongsOnDaySchedule(
+        day: Date,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> Bool {
+        guard status.isActive else { return false }
+        let dayStart = calendar.startOfDay(for: day)
+        if isOverdueOneOffCarryForward(calendar: calendar, referenceDate: now) {
+            return calendar.isDate(dayStart, inSameDayAs: now)
+        }
+        if isDeadlineOnlyDue(on: dayStart, calendar: calendar) {
+            return true
+        }
+        if let scheduledDate {
+            return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+        }
+        if let scheduledTime {
+            return calendar.isDate(scheduledTime, inSameDayAs: dayStart)
+        }
+        return false
     }
 
     /// Whether this task should appear on tomorrow's execution list.
-    func isActionableTomorrow(allTasks: [LifeTask] = [], calendar: Calendar = .current) -> Bool {
+    func isActionableTomorrow(
+        allTasks: [LifeTask] = [],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
         let context = allTasks.isEmpty ? [self] : allTasks
-        return TaskRecurrenceEngine.isActionableTomorrow(self, in: context, calendar: calendar)
+        return TaskRecurrenceEngine.isActionableTomorrow(
+            self,
+            in: context,
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
     }
 
     /// Scheduled on a future calendar day (after tomorrow).
-    func isUpcoming(allTasks: [LifeTask] = [], calendar: Calendar = .current) -> Bool {
-        guard status.isActive, !isRecurrenceTemplateTask, let scheduledDate else { return false }
+    func isUpcoming(
+        allTasks: [LifeTask] = [],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
+        guard status.isActive, !isRecurrenceTemplateTask else { return false }
         let context = allTasks.isEmpty ? [self] : allTasks
-        if isActionableTomorrow(allTasks: context, calendar: calendar) { return false }
-        guard let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: Date())) else {
+        if isActionableTomorrow(allTasks: context, calendar: calendar, referenceDate: referenceDate) {
             return false
         }
-        return scheduledDate >= dayAfterTomorrow
+        guard let dayAfterTomorrow = calendar.date(
+            byAdding: .day,
+            value: 2,
+            to: calendar.startOfDay(for: referenceDate)
+        ) else {
+            return false
+        }
+        if let scheduledDate {
+            return scheduledDate >= dayAfterTomorrow
+        }
+        if let scheduledTime {
+            return calendar.startOfDay(for: scheduledTime) >= dayAfterTomorrow
+        }
+        guard isDeadlineOnlyOneOff, let deadline else { return false }
+        return calendar.startOfDay(for: deadline) >= dayAfterTomorrow
     }
 
-    /// Active backlog without a scheduled day.
-    func isActiveBacklog(calendar: Calendar = .current) -> Bool {
-        status.isActive && !isRecurrenceTemplateTask && scheduledDate == nil && !isOverdue
+    /// Active backlog without a scheduled day or deadline.
+    /// Deadline-only one-offs belong on their due day, not inbox/someday.
+    func isActiveBacklog(calendar: Calendar = .current, referenceDate: Date = Date()) -> Bool {
+        status.isActive
+            && !isRecurrenceTemplateTask
+            && scheduledDate == nil
+            && scheduledTime == nil
+            && !isDeadlineOnlyOneOff
+            && !isOverdue(calendar: calendar, referenceDate: referenceDate)
     }
 
     /// Has a time block assigned (today or future).
-    func isScheduledTask(allTasks: [LifeTask] = [], calendar: Calendar = .current) -> Bool {
+    func isScheduledTask(
+        allTasks: [LifeTask] = [],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
         guard status.isActive, !isRecurrenceTemplateTask else { return false }
-        guard scheduledTime != nil, let scheduledDate else { return false }
-        guard !isActionableToday(allTasks: allTasks, calendar: calendar) else { return false }
-        guard !isUpcoming(allTasks: allTasks, calendar: calendar) else { return false }
+        guard let scheduledTime else { return false }
+        let scheduleDay = scheduledDate ?? calendar.startOfDay(for: scheduledTime)
+        guard !isActionableToday(allTasks: allTasks, calendar: calendar, referenceDate: referenceDate) else {
+            return false
+        }
+        guard !isUpcoming(allTasks: allTasks, calendar: calendar, referenceDate: referenceDate) else {
+            return false
+        }
         let context = allTasks.isEmpty ? [self] : allTasks
         return TaskRecurrenceEngine.matchesRecurrenceSchedule(
             self,
-            on: scheduledDate,
+            on: scheduleDay,
             in: context,
             calendar: calendar
         )
@@ -162,21 +249,26 @@ public extension LifeTask {
 
     /// "Active" tab — multi-day tasks, tasks actionable today, or recurring tasks/templates.
     /// Excludes tasks that have permanently ended (completed/skipped/expired/superseded).
-    func isActiveTask(allTasks: [LifeTask] = [], calendar: Calendar = .current) -> Bool {
+    func isActiveTask(
+        allTasks: [LifeTask] = [],
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
         guard status.isActive else { return false }
         if MultiDayTaskTags.isMultiDay(self) { return true }
         if isRecurrenceTemplateTask || isRecurring { return true }
         let context = allTasks.isEmpty ? [self] : allTasks
-        return isActionableToday(allTasks: context, calendar: calendar)
+        return isActionableToday(allTasks: context, calendar: calendar, referenceDate: referenceDate)
     }
 
     /// "Scheduled" tab — fixed-time (not flexible) tasks with a concrete date+time falling this week.
     func isScheduledThisWeek(calendar: Calendar = .current, referenceDate: Date = Date()) -> Bool {
         guard status.isActive, !isRecurrenceTemplateTask else { return false }
-        guard scheduledTime != nil, let scheduledDate else { return false }
+        guard let scheduledTime else { return false }
+        let scheduleDay = scheduledDate ?? scheduledTime
         guard schedulingModeValue == .fixedTime else { return false }
         guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: referenceDate) else { return false }
-        return weekInterval.contains(scheduledDate)
+        return weekInterval.contains(scheduleDay)
     }
 
     /// "Completed" tab — inactive (permanently ended) tasks with no future recurrence occurrence.
@@ -200,8 +292,14 @@ public extension LifeTask {
     }
 
     /// Whether `now` falls inside this task's fixed window on the same calendar day.
+    /// Time-only tasks (no `scheduledDate`) still paint their clock onto `now`'s day.
+    /// A `scheduledDate` on another day must not be remapped — that would treat
+    /// tomorrow's 9am meeting, or yesterday's leftover, as "happening now".
     func isActiveFixedTimeWindow(at now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard isFixedTimeEvent, let start = scheduledTime else { return false }
+        if let scheduledDate, !calendar.isDate(scheduledDate, inSameDayAs: now) {
+            return false
+        }
         let day = calendar.startOfDay(for: now)
         guard let windowStart = calendar.combine(date: day, timeFrom: start) else { return false }
         let windowEnd: Date

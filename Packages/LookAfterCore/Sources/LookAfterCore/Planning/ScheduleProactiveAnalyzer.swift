@@ -156,7 +156,8 @@ public enum ScheduleProactiveAnalyzer {
             }
         }
 
-        let grouped = Dictionary(grouping: tasks.filter { $0.scheduledDate != nil }) {
+        // A clock is a day assignment when scheduledDate was never written.
+        let grouped = Dictionary(grouping: tasks.filter { $0.scheduledDate != nil || $0.scheduledTime != nil }) {
             OnboardingTaskSeeder.normalizedRoutineTitle($0.title)
         }
         for (_, group) in grouped where group.count > 1 {
@@ -171,11 +172,15 @@ public enum ScheduleProactiveAnalyzer {
         }
 
         for task in tasks {
-            guard let start = task.scheduledTime, start < input.now, task.status.isActive else { continue }
+            // Carry-forwards are actionable today but have no window on this day.
+            // Compare the resolved start, not the stored clock from another day.
+            guard task.status.isActive,
+                  let window = TaskScheduleInterval.window(for: task, on: dayStart, calendar: input.calendar),
+                  window.start < input.now else { continue }
             results.append(ScheduleProactiveSuggestion(
                 kind: .pastDueStillToday,
                 severity: .medium,
-                message: "\"\(task.title)\" was due at \(ScheduleTimeFormatting.timeLabel(start, calendar: input.calendar)) — still doing it?",
+                message: "\"\(task.title)\" was due at \(ScheduleTimeFormatting.timeLabel(window.start, calendar: input.calendar)) — still doing it?",
                 options: ["Reschedule", "Mark done", "Defer to tomorrow"],
                 relatedTaskIDs: [task.id]
             ))

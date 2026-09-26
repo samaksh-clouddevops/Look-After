@@ -8,17 +8,20 @@ public enum ReconcilePolicy {
         public let day: Date
         public let model: LifeModel?
         public let forceReplan: Bool
+        public let now: Date
 
         public init(
             tasks: [LifeTask],
             day: Date,
             model: LifeModel? = LifeModelStore.load(),
-            forceReplan: Bool = false
+            forceReplan: Bool = false,
+            now: Date = Date()
         ) {
             self.tasks = tasks
             self.day = day
             self.model = model
             self.forceReplan = forceReplan
+            self.now = now
         }
     }
 
@@ -37,7 +40,7 @@ public enum ReconcilePolicy {
         )
 
         if activePool.isEmpty {
-            return hasUnslottedMovableTasks(input.tasks, on: dayStart, calendar: calendar)
+            return hasUnslottedMovableTasks(input.tasks, on: dayStart, now: input.now, calendar: calendar)
         }
 
         let syncedPool = activePool.map {
@@ -52,12 +55,13 @@ public enum ReconcilePolicy {
         if commitmentDrift { return true }
         if DayScheduleReconciler.hasOverlap(syncedPool, on: dayStart, calendar: calendar) { return true }
 
-        return hasUnslottedMovableTasks(input.tasks, on: dayStart, calendar: calendar)
+        return hasUnslottedMovableTasks(input.tasks, on: dayStart, now: input.now, calendar: calendar)
     }
 
     private static func hasUnslottedMovableTasks(
         _ tasks: [LifeTask],
         on dayStart: Date,
+        now: Date,
         calendar: Calendar
     ) -> Bool {
         tasks.contains { task in
@@ -66,11 +70,18 @@ public enum ReconcilePolicy {
             if TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: dayStart, calendar: calendar) {
                 return true
             }
+            let isToday = calendar.isDate(dayStart, inSameDayAs: now)
+            if isToday, task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: now) {
+                return true
+            }
+            if task.isDeadlineOnlyDue(on: dayStart, calendar: calendar) {
+                return true
+            }
             guard task.scheduledTime == nil else { return false }
             if let scheduledDate = task.scheduledDate {
                 return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
             }
-            return calendar.isDateInToday(dayStart)
+            return false
         }
     }
 }

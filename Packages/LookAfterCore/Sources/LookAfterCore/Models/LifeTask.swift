@@ -301,13 +301,56 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     
     /// Whether the task is overdue (deadline or scheduled day has passed).
     public var isOverdue: Bool {
+        isOverdue(calendar: .current, referenceDate: Date())
+    }
+
+    /// Overdue relative to an explicit clock — used by schedule queries and virtual-clock tests.
+    public func isOverdue(calendar: Calendar, referenceDate: Date) -> Bool {
         guard status.isActive else { return false }
-        if let deadline, deadline < Date() { return true }
+        if let deadline, deadline < referenceDate { return true }
         if let scheduledDate {
-            let today = Calendar.current.startOfDay(for: Date())
-            return Calendar.current.startOfDay(for: scheduledDate) < today
+            return calendar.startOfDay(for: scheduledDate) < calendar.startOfDay(for: referenceDate)
+        }
+        // Time-only rows are overdue once the clock's own day has passed.
+        if let scheduledTime {
+            return calendar.startOfDay(for: scheduledTime) < calendar.startOfDay(for: referenceDate)
         }
         return false
+    }
+
+    /// One-off whose scheduled day has already passed — carry onto the queried today.
+    /// Future-dated one-offs stay on their scheduled day even if a deadline is already past.
+    public func isOverdueOneOffCarryForward(
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
+        guard status.isActive else { return false }
+        guard parentTaskId == nil, !isRecurring else { return false }
+        if let scheduledDate {
+            return calendar.startOfDay(for: scheduledDate) < calendar.startOfDay(for: referenceDate)
+        }
+        // Time-only one-offs stay on the day encoded in the clock. A past deadline must
+        // not carry a future time-only task onto today.
+        if let scheduledTime {
+            return calendar.startOfDay(for: scheduledTime) < calendar.startOfDay(for: referenceDate)
+        }
+        return isOverdue(calendar: calendar, referenceDate: referenceDate)
+    }
+
+    /// One-off with a deadline and no scheduled day or clock time.
+    public var isDeadlineOnlyOneOff: Bool {
+        parentTaskId == nil
+            && !isRecurring
+            && scheduledDate == nil
+            && scheduledTime == nil
+            && deadline != nil
+    }
+
+    /// Deadline-only one-off whose due day is `day` — belongs on that day's list/timeline
+    /// even before the deadline clock time has passed.
+    public func isDeadlineOnlyDue(on day: Date, calendar: Calendar = .current) -> Bool {
+        guard isDeadlineOnlyOneOff, let deadline else { return false }
+        return calendar.isDate(deadline, inSameDayAs: day)
     }
     
     /// Remaining estimated time based on incomplete steps.

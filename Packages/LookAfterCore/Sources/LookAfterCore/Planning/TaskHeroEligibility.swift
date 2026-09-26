@@ -36,6 +36,21 @@ public enum TaskHeroEligibility {
             )
         }
 
+        // Overdue one-offs carry onto today without a concrete clock window. Remapping
+        // yesterday's 9am onto today would mark them `.pastWindow` and drop them from
+        // hero / pin-now even though they are actionable today.
+        if task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: now) {
+            return .unscheduled
+        }
+
+        // A scheduledDate on another day must not be remapped — that steals tomorrow
+        // (or leftover yesterday) onto the queried day. Time-only clocks belong to
+        // the day encoded in the clock itself, not to whatever day is being queried.
+        if let scheduledDate = task.scheduledDate ?? task.scheduledTime,
+           !calendar.isDate(scheduledDate, inSameDayAs: day) {
+            return .unscheduled
+        }
+
         if let time = task.scheduledTime {
             guard let windowStart = calendar.combine(date: day, timeFrom: time) else {
                 return .unscheduled
@@ -71,21 +86,19 @@ public enum TaskHeroEligibility {
         switch status(for: task, now: now, calendar: calendar, upcomingGraceMinutes: upcomingGraceMinutes) {
         case .pastWindow, .laterToday:
             return false
-        case .eligible, .inProgress, .upcoming, .unscheduled:
+        case .inProgress:
+            return true
+        case .eligible, .upcoming, .unscheduled:
             break
         }
 
-        if task.scheduledDate != nil || task.parentTaskId != nil || task.recurrenceRule != .none {
-            let context = allTasks.isEmpty ? [task] : allTasks
-            guard TaskRecurrenceEngine.isActionableToday(
-                task,
-                in: context,
-                calendar: calendar,
-                referenceDate: now
-            ) else { return false }
-        }
-
-        return true
+        let context = allTasks.isEmpty ? [task] : allTasks
+        return TaskRecurrenceEngine.isActionableToday(
+            task,
+            in: context,
+            calendar: calendar,
+            referenceDate: now
+        )
     }
 
     public static func isPastWindow(

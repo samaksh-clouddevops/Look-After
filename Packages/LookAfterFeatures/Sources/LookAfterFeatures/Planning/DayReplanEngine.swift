@@ -566,8 +566,10 @@ public final class DayReplanEngine {
             if TaskScheduleInterval.window(for: task, on: day, calendar: calendar) != nil {
                 return false
             }
-            if let scheduledDate = task.scheduledDate {
-                return calendar.isDate(scheduledDate, inSameDayAs: day)
+            // A clock is a day assignment when scheduledDate was never written.
+            // Falling through to `true` would pull tomorrow's clock into today's gap.
+            if let scheduled = task.scheduledDate ?? task.scheduledTime {
+                return calendar.isDate(scheduled, inSameDayAs: day)
             }
             return true
         }

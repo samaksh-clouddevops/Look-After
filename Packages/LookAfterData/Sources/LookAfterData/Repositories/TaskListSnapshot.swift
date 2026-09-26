@@ -1,11 +1,14 @@
 import Foundation
 import LookAfterCore
 
-/// Cached active + completed-today task lists for fast UI hydration.
+/// Cached task lists for fast UI hydration.
 public struct TaskListSnapshot: Sendable, Equatable {
+    /// Today-actionable occurrences — widgets, hero, and the Today tab.
     public let active: [LifeTask]
+    /// All active non-template occurrences (today, tomorrow, upcoming, overdue, backlog).
+    public let horizon: [LifeTask]
     public let completedToday: [LifeTask]
-    /// Recurrence master records — kept out of `active` but required for schedule checks.
+    /// Recurrence master records — kept out of `active`/`horizon` but required for schedule checks.
     public let templates: [LifeTask]
     /// All non-active-status tasks (completed/skipped/expired/superseded), any day —
     /// used by the "Completed" tab to show tasks with no future occurrences.
@@ -15,9 +18,11 @@ public struct TaskListSnapshot: Sendable, Equatable {
         active: [LifeTask],
         completedToday: [LifeTask],
         templates: [LifeTask] = [],
-        inactive: [LifeTask] = []
+        inactive: [LifeTask] = [],
+        horizon: [LifeTask] = []
     ) {
         self.active = active
+        self.horizon = horizon
         self.completedToday = completedToday
         self.templates = templates
         self.inactive = inactive
@@ -42,6 +47,10 @@ public struct TaskListSnapshot: Sendable, Equatable {
             }
         }
         let templates = relevant.filter(TaskRecurrenceEngine.isRecurrenceTemplate)
+        let horizon = relevant.filter { task in
+            task.status.isActive && !TaskRecurrenceEngine.isRecurrenceTemplate(task)
+        }
+        .sorted { $0.priority > $1.priority }
         let active = TaskScheduleQuery.activeTasksForToday(
             from: relevant,
             calendar: calendar,
@@ -57,12 +66,28 @@ public struct TaskListSnapshot: Sendable, Equatable {
         let inactive = tasks.filter { task in
             !TaskRecurrenceEngine.isRecurrenceTemplate(task) && !task.status.isActive
         }
-        return TaskListSnapshot(active: active, completedToday: completedToday, templates: templates, inactive: inactive)
+        return TaskListSnapshot(
+            active: active,
+            completedToday: completedToday,
+            templates: templates,
+            inactive: inactive,
+            horizon: horizon
+        )
     }
 
-    /// Active, completed-today, and recurrence templates for schedule validation.
+    /// Active pool + completed-today + templates for schedule validation.
+    /// Prefers `horizon` when present; still includes `active` so older callers
+    /// that only populate `active` keep a usable context.
     public var schedulingContext: [LifeTask] {
-        active + completedToday + templates
+        var seen = Set<String>()
+        var pool: [LifeTask] = []
+        pool.reserveCapacity(horizon.count + active.count + completedToday.count + templates.count)
+        for task in horizon + active + completedToday + templates {
+            if seen.insert(task.id).inserted {
+                pool.append(task)
+            }
+        }
+        return pool
     }
 }
 

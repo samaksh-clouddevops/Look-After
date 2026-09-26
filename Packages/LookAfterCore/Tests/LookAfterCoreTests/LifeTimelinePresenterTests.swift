@@ -119,6 +119,130 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertNotNil(gymEvent?.completedAt)
     }
 
+    func testUnscheduledCompletedBacklogExcludedFromTimeline() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 20)
+        var backlog = LifeTask(
+            title: "Someday inbox",
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        backlog.status = .completed
+        backlog.completedAt = now
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [],
+            completedToday: [backlog],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(events.filter { $0.title == "Someday inbox" }.isEmpty)
+    }
+
+    func testDeadlineOnlyDueTodayAppearsOnTimelineAsFlexible() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let task = LifeTask(
+            title: "File taxes",
+            deadline: makeDate(year: 2026, month: 8, day: 2, hour: 18),
+            userId: "user-1"
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [task],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let event = events.first(where: { $0.title == "File taxes" })
+        XCTAssertNotNil(event)
+        XCTAssertEqual(event?.subtitle, "Flexible today")
+        XCTAssertTrue(event?.scheduleKind.isFlexibleToday == true)
+    }
+
+    func testCompletedDeadlineOnlyOverdueOneOffStaysOnTimeline() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 20)
+        var overdue = LifeTask(
+            title: "Pay invoice",
+            deadline: makeDate(year: 2026, month: 8, day: 1, hour: 18),
+            userId: "user-1"
+        )
+        overdue.status = .completed
+        overdue.completedAt = now
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [],
+            completedToday: [overdue],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(events.filter { $0.title == "Pay invoice" }.count, 1)
+        XCTAssertTrue(events.first(where: { $0.title == "Pay invoice" })?.isCompleted == true)
+    }
+
+    func testYesterdayScheduledOneOffCompletedTodayRemainsOnTimeline() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 20)
+        let yesterday = makeDate(year: 2026, month: 8, day: 1, hour: 9)
+        var overdue = LifeTask(
+            title: "Pay rent",
+            scheduledDate: yesterday,
+            scheduledTime: yesterday,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        overdue.status = .completed
+        overdue.completedAt = now
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [],
+            completedToday: [overdue],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(events.filter { $0.title == "Pay rent" }.count, 1)
+        XCTAssertTrue(events.first(where: { $0.title == "Pay rent" })?.isCompleted == true)
+    }
+
+    func testFutureDatedOneOffCompletedTodayExcludedFromTimeline() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 20)
+        let tomorrow = makeDate(year: 2026, month: 8, day: 3, hour: 9)
+        var future = LifeTask(
+            title: "Flight check-in",
+            scheduledDate: tomorrow,
+            scheduledTime: tomorrow,
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        future.status = .completed
+        future.completedAt = now
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [],
+            completedToday: [future],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(events.filter { $0.title == "Flight check-in" }.isEmpty)
+    }
+
     func testFixedWorkBlockUsesScheduledEndTime() {
         let now = makeDate(year: 2026, month: 8, day: 4, hour: 9)
         let day = calendar.startOfDay(for: now)

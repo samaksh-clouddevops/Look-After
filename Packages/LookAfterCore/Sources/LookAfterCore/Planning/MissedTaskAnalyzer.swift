@@ -75,7 +75,10 @@ public enum MissedTaskAnalyzer {
         var protected: [LifeTask] = []
 
         for task in active {
-            guard input.calendar.isDate(task.scheduledDate ?? day, inSameDayAs: day) else { continue }
+            // A clock is a day assignment when scheduledDate was never written.
+            // Falling back to `day` would treat tomorrow's clock as missed today.
+            guard let scheduled = task.scheduledDate ?? task.scheduledTime,
+                  input.calendar.isDate(scheduled, inSameDayAs: day) else { continue }
 
             if task.isFixedTimeEvent || task.isLifeCommitmentTask {
                 if isMissed(task, on: day, before: referenceNow, calendar: input.calendar) {

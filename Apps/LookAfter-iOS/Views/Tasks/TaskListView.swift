@@ -372,7 +372,7 @@ struct TaskListView: View {
     /// Update cached filtered tasks only when filter or tasks change (performance optimization).
     private func updateFilteredTasksIfNeeded() {
         let currentHash = tasksVM.tasksContentRevision
-            &+ tasksVM.tasks
+            &+ tasksVM.listPool
                 .map { "\($0.id):\($0.status.rawValue):\($0.title):\($0.updatedAt.timeIntervalSince1970)" }
                 .joined()
                 .hashValue
@@ -393,11 +393,12 @@ struct TaskListView: View {
     private func computeFilteredTasks() -> [LifeTask] {
         let calendar = Calendar.current
         let context = tasksVM.schedulingContext
+        let pool = tasksVM.listPool
         switch selectedFilter {
         case .all:
             return TaskListSorter.sortForToday(
                 TaskScheduleQuery.uniqueActiveTasks(
-                    from: tasksVM.tasks,
+                    from: pool,
                     context: context,
                     calendar: calendar
                 )
@@ -408,19 +409,19 @@ struct TaskListView: View {
             )
         case .tomorrow:
             return TaskListSorter.sortByPriorityThenSchedule(
-                tasksVM.tasks.filter { $0.isActionableTomorrow(allTasks: context, calendar: calendar) }
+                pool.filter { $0.isActionableTomorrow(allTasks: context, calendar: calendar) }
             )
         case .upcoming:
             return TaskListSorter.sortByPriorityThenSchedule(
-                tasksVM.tasks.filter { $0.isUpcoming(allTasks: context, calendar: calendar) }
+                pool.filter { $0.isUpcoming(allTasks: context, calendar: calendar) }
             )
         case .active:
             return TaskListSorter.sortForToday(
-                tasksVM.tasks.filter { $0.isActiveTask(allTasks: context, calendar: calendar) }
+                pool.filter { $0.isActiveTask(allTasks: context, calendar: calendar) }
             )
         case .scheduled:
             return TaskListSorter.sortByPriorityThenSchedule(
-                tasksVM.tasks.filter { $0.isScheduledThisWeek(calendar: calendar) }
+                pool.filter { $0.isScheduledThisWeek(calendar: calendar) }
             )
         case .completed:
             return tasksVM.inactiveTasks.filter {

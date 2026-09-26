@@ -27,6 +27,41 @@ final class TaskScheduleQueryTests: XCTestCase {
         XCTAssertEqual(stale, ["parked-1"])
     }
 
+    func testOverdueCarryForwardDuplicateDoesNotSupersedeTodayOccurrence() {
+        let calendar = TestCalendarFixtures.calendar
+        let today = TestCalendarFixtures.date(year: 2026, month: 8, day: 7, hour: 12)
+        let yesterday = TestCalendarFixtures.date(year: 2026, month: 8, day: 6)
+        let templateId = "template-1"
+        var overdue = LifeTask(
+            id: "overdue-1",
+            title: "Brush teeth — evening",
+            status: .pending,
+            scheduledDate: yesterday,
+            scheduledTime: TestCalendarFixtures.date(year: 2026, month: 8, day: 6, hour: 21, minute: 30),
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        overdue.parentTaskId = templateId
+        var todayOccurrence = LifeTask(
+            id: "today-1",
+            title: "Brush teeth — evening",
+            status: .pending,
+            scheduledDate: calendar.startOfDay(for: today),
+            scheduledTime: TestCalendarFixtures.date(year: 2026, month: 8, day: 7, hour: 21, minute: 30),
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        todayOccurrence.parentTaskId = templateId
+
+        let stale = TaskSeriesResolver.staleActiveSeriesIDs(
+            in: [overdue, todayOccurrence],
+            on: today,
+            calendar: calendar
+        )
+        XCTAssertTrue(stale.contains("overdue-1"))
+        XCTAssertFalse(stale.contains("today-1"))
+    }
+
     func testEphemeralityEnrichAddsMealSemantics() {
         let task = LifeTask(
             title: "Breakfast",
@@ -145,6 +180,43 @@ final class TaskScheduleQueryTests: XCTestCase {
         XCTAssertEqual(invalid, ["standalone-dinner"])
     }
 
+    func testStandaloneDinnerSupersededWhenTimeOnlyOccurrenceExists() {
+        let day = makeDate(year: 2026, month: 8, day: 5)
+        let clock = makeDate(year: 2026, month: 8, day: 5, hour: 19, minute: 30)
+        var template = LifeTask(
+            id: "tmpl-dinner-clock",
+            title: "Dinner",
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template.createdAt = makeDate(year: 2026, month: 1, day: 1)
+        let occurrence = LifeTask(
+            id: "occ-dinner-clock",
+            title: "Dinner",
+            status: .pending,
+            scheduledTime: clock,
+            parentTaskId: template.id,
+            userId: "user-1"
+        )
+        let standalone = LifeTask(
+            id: "standalone-dinner-clock",
+            title: "Dinner",
+            status: .pending,
+            scheduledDate: day,
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+
+        let invalid = TaskRecurrenceEngine.invalidScheduledTaskIDs(
+            in: [template, occurrence, standalone],
+            calendar: calendar
+        )
+        XCTAssertTrue(invalid.contains("standalone-dinner-clock"))
+        XCTAssertFalse(invalid.contains("occ-dinner-clock"))
+    }
+
+
     func testCompletedLifeCommitmentGymSuppressesRecurringOccurrenceToday() {
         let day = makeDate(year: 2026, month: 8, day: 7)
         let gymStart = makeDate(year: 2026, month: 8, day: 7, hour: 18, minute: 30)
@@ -184,6 +256,38 @@ final class TaskScheduleQueryTests: XCTestCase {
             ).contains("gym-template")
         )
     }
+
+    func testCompletedTimeOnlyCommitmentSuppressesTodayOccurrence() {
+        let day = makeDate(year: 2026, month: 8, day: 7)
+        let gymStart = makeDate(year: 2026, month: 8, day: 7, hour: 18, minute: 30)
+        var commitment = LifeTask(
+            id: "gym-commitment-clock",
+            title: "Gym",
+            status: .completed,
+            scheduledTime: gymStart,
+            tags: [LifeModel.commitmentTaskTag, "life-commitment:gym"],
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        commitment.completedAt = nil
+
+        let occurrence = LifeTask(
+            id: "gym-occ-clock",
+            title: "Gym",
+            status: .pending,
+            scheduledTime: gymStart,
+            parentTaskId: "gym-template",
+            userId: "user-1"
+        )
+
+        let ids = TaskRecurrenceEngine.recurringDuplicateIDsOfLifeCommitments(
+            in: [commitment, occurrence],
+            calendar: calendar,
+            referenceDate: day
+        )
+        XCTAssertTrue(ids.contains("gym-occ-clock"))
+    }
+
 
     func testCompletedRecurringGymSuppressesActiveLifeCommitmentDuplicate() {
         let day = makeDate(year: 2026, month: 8, day: 7)
@@ -267,6 +371,69 @@ final class TaskScheduleQueryTests: XCTestCase {
         let all = [completed, tomorrowOccurrence]
         let staleToday = TaskSeriesResolver.staleActiveSeriesIDs(in: all, on: today, calendar: calendar)
         XCTAssertFalse(staleToday.contains("dinner-tomorrow"))
+    }
+
+    func testCompletingTodayDoesNotSupersedeFutureTimeOnlyOccurrence() {
+        let today = makeDate(year: 2026, month: 8, day: 7)
+        let tomorrow = makeDate(year: 2026, month: 8, day: 8, hour: 21, minute: 30)
+        var completed = LifeTask(
+            id: "dinner-done",
+            title: "Dinner",
+            status: .completed,
+            scheduledDate: today,
+            parentTaskId: "dinner-template",
+            userId: "user-1"
+        )
+        completed.completedAt = makeDate(year: 2026, month: 8, day: 7, hour: 19, minute: 15)
+
+        let tomorrowOccurrence = LifeTask(
+            id: "dinner-tomorrow",
+            title: "Dinner",
+            status: .pending,
+            scheduledTime: tomorrow,
+            parentTaskId: "dinner-template",
+            userId: "user-1"
+        )
+        let todayOccurrence = LifeTask(
+            id: "dinner-today",
+            title: "Dinner",
+            status: .pending,
+            scheduledDate: today,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 7, hour: 19, minute: 0),
+            parentTaskId: "dinner-template",
+            userId: "user-1"
+        )
+
+        let duplicates = TaskRecurrenceEngine.duplicateActiveSeriesIDs(
+            afterCompleting: completed,
+            in: [completed, tomorrowOccurrence],
+            calendar: calendar
+        )
+        XCTAssertFalse(duplicates.contains("dinner-tomorrow"))
+
+        let stale = TaskScheduleQuery.supersededDuplicateIDs(
+            in: [todayOccurrence, tomorrowOccurrence],
+            on: today,
+            calendar: calendar
+        )
+        XCTAssertFalse(stale.contains("dinner-tomorrow"))
+        XCTAssertFalse(stale.contains("dinner-today"))
+
+        let timeOnlyToday = LifeTask(
+            id: "dinner-time-only-today",
+            title: "Dinner",
+            status: .pending,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 7, hour: 19, minute: 30),
+            parentTaskId: "dinner-template",
+            userId: "user-1"
+        )
+        let sameDayStale = TaskScheduleQuery.supersededDuplicateIDs(
+            in: [todayOccurrence, timeOnlyToday],
+            on: today,
+            calendar: calendar
+        )
+        XCTAssertTrue(sameDayStale.contains("dinner-today") || sameDayStale.contains("dinner-time-only-today"))
+        XCTAssertEqual(sameDayStale.count, 1)
     }
 
     func testCompletedTaskWithoutSlotUsesCompletedAtOnTimeline() {

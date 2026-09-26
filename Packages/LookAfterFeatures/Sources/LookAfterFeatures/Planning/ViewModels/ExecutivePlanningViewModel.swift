@@ -169,12 +169,18 @@ public final class ExecutivePlanningViewModel: ObservableObject {
     public func bootstrapTomorrowTimeline(from events: [LifeTimelineEvent]) {
         guard timelineService == nil else { return }
         guard tomorrowTimelineRows.isEmpty else { return }
-        tomorrowTimelineRows = TimelineRowProjector.previewRows(from: events)
+        tomorrowTimelineRows = TimelineRowProjector.previewRows(
+            from: events,
+            now: events.first?.date ?? Date()
+        )
     }
 
     public func refreshTomorrowTimeline(from events: [LifeTimelineEvent]) {
         guard timelineService == nil else { return }
-        let built = TimelineRowProjector.previewRows(from: events)
+        let built = TimelineRowProjector.previewRows(
+            from: events,
+            now: events.first?.date ?? Date()
+        )
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
             tomorrowTimelineRows = built
         }

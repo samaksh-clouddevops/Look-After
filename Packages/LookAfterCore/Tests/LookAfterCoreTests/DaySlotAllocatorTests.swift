@@ -33,6 +33,35 @@ final class DaySlotAllocatorTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(scheduled, fixedEnd)
     }
 
+    func testTimeOnlyOccupiedClockBlocksNewSlot() {
+        let day = makeDate(year: 2026, month: 8, day: 4)
+        let clock = makeDate(year: 2026, month: 8, day: 4, hour: 9)
+        let clockEnd = makeDate(year: 2026, month: 8, day: 4, hour: 10)
+        let occupied = LifeTask(
+            id: "standup-time-only",
+            title: "Standup",
+            estimatedMinutes: 60,
+            scheduledTime: clock,
+            schedulingMode: .fixedTime,
+            scheduledEndTime: clockEnd
+        )
+
+        let allocations = DaySlotAllocator.allocateAcrossWindows(
+            requests: [
+                DaySlotAllocator.Request(id: "new-task", estimatedMinutes: 30, priority: .high)
+            ],
+            existingTasks: [occupied],
+            windows: SchedulingWindows(officeHours: workHours),
+            on: day,
+            now: clock,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(allocations.count, 1)
+        XCTAssertGreaterThanOrEqual(allocations[0].scheduledTime, clockEnd)
+    }
+
+
     func testHigherPriorityScheduledBeforeLower() {
         let now = makeDate(year: 2026, month: 8, day: 4, hour: 10)
         let allocations = DaySlotAllocator.allocate(

@@ -12,6 +12,8 @@ public final class TasksViewModel: ObservableObject {
     @Published public private(set) var recurrenceTemplates: [LifeTask] = []
     /// Non-active-status tasks (completed/skipped/expired/superseded), any day — for the "Completed" tab.
     @Published public private(set) var inactiveTasks: [LifeTask] = []
+    /// All active non-template occurrences (today + tomorrow + upcoming + overdue + backlog).
+    @Published public private(set) var horizonTasks: [LifeTask] = []
     @Published public var isLoading: Bool = false
     @Published public var error: String?
     @Published public var selectedTask: LifeTask?
@@ -69,15 +71,20 @@ public final class TasksViewModel: ObservableObject {
     private var cachedActiveTasks: [LifeTask]?
     private var taskIndexByID: [String: Int] = [:]
 
-    /// Active, completed-today, and recurrence templates for schedule validation.
+    /// Horizon + completed-today + templates for schedule validation.
     public var schedulingContext: [LifeTask] {
         if let taskStore {
             return taskStore.snapshot.schedulingContext
         }
         if let cachedSchedulingContext { return cachedSchedulingContext }
-        let combined = tasks + completedToday + recurrenceTemplates
+        let combined = uniqueByID(horizonTasks + tasks + completedToday + recurrenceTemplates)
         cachedSchedulingContext = combined
         return combined
+    }
+
+    /// Active task occurrences for list tabs that span more than today.
+    public var listPool: [LifeTask] {
+        horizonTasks.isEmpty ? activeTasks : horizonTasks
     }
 
     /// Active task occurrences — excludes recurrence templates.
@@ -239,18 +246,24 @@ public final class TasksViewModel: ObservableObject {
     /// Apply an in-memory row update using the id index when possible (PERF-016).
     @discardableResult
     private func applyInMemoryTaskUpdate(_ updated: LifeTask) -> Bool {
+        var found = false
         if let index = taskIndex(id: updated.id) {
             tasks[index] = updated
-            cachedSchedulingContext = nil
-            cachedActiveTasks = nil
-            return true
+            found = true
+        }
+        if let index = horizonTasks.firstIndex(where: { $0.id == updated.id }) {
+            horizonTasks[index] = updated
+            found = true
         }
         if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
             completedToday[index] = updated
-            cachedSchedulingContext = nil
-            return true
+            found = true
         }
-        return false
+        if found {
+            cachedSchedulingContext = nil
+            cachedActiveTasks = nil
+        }
+        return found
     }
 
     private func notifyTaskListDidChange() {
@@ -313,20 +326,23 @@ public final class TasksViewModel: ObservableObject {
            !dayScheduleSnapshot.tasks.isEmpty {
             return dayScheduleSnapshot.activeScheduledTasks
         }
-        let allTasks = tasks + completedToday + recurrenceTemplates
         return LifeTimelinePresenter.tasksScheduledForToday(
-            from: tasks.filter { $0.status.isActive },
-            allTasks: allTasks,
+            from: listPool.filter { $0.status.isActive },
+            allTasks: schedulingContext,
             now: now,
             calendar: calendar
         )
     }
 
-    private func publishDayScheduleSnapshot(day: Date, changedIDs: Set<String>, calendar: Calendar) {
+    private func publishDayScheduleSnapshot(
+        day: Date,
+        changedIDs: Set<String>,
+        calendar: Calendar,
+        now: Date
+    ) {
         let dayStart = calendar.startOfDay(for: day)
-        let scheduled = tasks.filter { task in
-            guard task.status.isActive, let scheduledDate = task.scheduledDate else { return false }
-            return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+        let scheduled = listPool.filter { task in
+            task.belongsOnDaySchedule(day: dayStart, calendar: calendar, now: now)
         }
         dayScheduleSnapshot = DayScheduleSnapshot(
             day: dayStart,
@@ -391,11 +407,13 @@ public final class TasksViewModel: ObservableObject {
     private func applySnapshot(_ snapshot: TaskListSnapshot, logSource: String, authoritative: Bool = false) {
         if authoritative {
             tasks = snapshot.active
+            horizonTasks = snapshot.horizon
             completedToday = snapshot.completedToday
             recurrenceTemplates = snapshot.templates
             inactiveTasks = snapshot.inactive
         } else {
             tasks = Self.mergeTasksPreservingNewerEdits(existing: tasks, incoming: snapshot.active)
+            horizonTasks = Self.mergeTasksPreservingNewerEdits(existing: horizonTasks, incoming: snapshot.horizon)
             completedToday = Self.mergeTasksPreservingNewerEdits(
                 existing: completedToday,
                 incoming: snapshot.completedToday
@@ -411,7 +429,7 @@ public final class TasksViewModel: ObservableObject {
         }
         bumpTasksRevision()
 #if DEBUG
-        print("[Tasks] VM apply snapshot source=\(logSource) authoritative=\(authoritative) active=\(tasks.count) completedToday=\(completedToday.count) templates=\(recurrenceTemplates.count)")
+        print("[Tasks] VM apply snapshot source=\(logSource) authoritative=\(authoritative) active=\(tasks.count) horizon=\(horizonTasks.count) completedToday=\(completedToday.count) templates=\(recurrenceTemplates.count)")
 #endif
     }
 
@@ -440,6 +458,55 @@ public final class TasksViewModel: ObservableObject {
 
     private static func hasMidnightSentinel(_ task: LifeTask) -> Bool {
         TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task)
+    }
+
+    private func uniqueByID(_ tasks: [LifeTask]) -> [LifeTask] {
+        var seen = Set<String>()
+        var unique: [LifeTask] = []
+        unique.reserveCapacity(tasks.count)
+        for task in tasks where seen.insert(task.id).inserted {
+            unique.append(task)
+        }
+        return unique
+    }
+
+    /// Today-list membership — today-actionable only (including overdue one-off carry-forwards).
+    /// Unscheduled backlog stays on the horizon / All tab, not the Today list.
+    private func belongsOnTodayList(
+        _ task: LifeTask,
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
+    ) -> Bool {
+        guard task.status.isActive, !task.isRecurrenceTemplateTask else { return false }
+        let context = uniqueByID(horizonTasks + tasks + completedToday + recurrenceTemplates + [task])
+        return task.isActionableToday(allTasks: context, calendar: calendar, referenceDate: referenceDate)
+    }
+
+    /// Keep `tasks` (today) and `horizonTasks` (all active days) in sync.
+    private func upsertActive(_ task: LifeTask) {
+        guard task.status.isActive, !task.isRecurrenceTemplateTask else {
+            removeActive(id: task.id)
+            return
+        }
+        if let index = horizonTasks.firstIndex(where: { $0.id == task.id }) {
+            horizonTasks[index] = task
+        } else {
+            horizonTasks.insert(task, at: 0)
+        }
+        if belongsOnTodayList(task) {
+            if let index = taskIndex(id: task.id) {
+                tasks[index] = task
+            } else {
+                tasks.insert(task, at: 0)
+            }
+        } else if let index = taskIndex(id: task.id) {
+            tasks.remove(at: index)
+        }
+    }
+
+    private func removeActive(id: String) {
+        tasks.removeAll { $0.id == id }
+        horizonTasks.removeAll { $0.id == id }
     }
 
     /// Normalize legacy recurring tasks, remove invalid day instances, and materialize today's occurrences.
@@ -734,7 +801,7 @@ public final class TasksViewModel: ObservableObject {
     /// Store rows plus optimistic in-memory edits — prevents duplicate recurrence materialization.
     private func mergedLocalTasks(for userId: String) -> [LifeTask] {
         var byID = Dictionary.uniquingFirstValue(reloadLocalTasks(for: userId).map { ($0.id, $0) })
-        for task in tasks + completedToday + recurrenceTemplates {
+        for task in uniqueByID(horizonTasks + tasks + completedToday + recurrenceTemplates) {
             guard task.userId == userId || userId.isEmpty else { continue }
             byID[task.id] = task
         }
@@ -876,7 +943,7 @@ public final class TasksViewModel: ObservableObject {
             task.status = .superseded
             task.updatedAt = Date()
             batch.append(task)
-            tasks.removeAll { $0.id == id }
+            removeActive(id: id)
             completedToday.removeAll { $0.id == id }
             #if DEBUG
             print("[Tasks] superseded invalid scheduled task id=\(id.prefix(8))")
@@ -915,11 +982,11 @@ public final class TasksViewModel: ObservableObject {
             if task.recurrenceRule != .none {
                 await persistRecurringTask(task, decompose: false)
             } else {
-                tasks.insert(task, at: 0)
+                upsertActive(task)
                 do {
                     try await taskRepo.create(task)
                 } catch {
-                    tasks.removeAll { $0.id == task.id }
+                    removeActive(id: task.id)
                     self.error = error.localizedDescription
                 }
             }
@@ -965,6 +1032,7 @@ public final class TasksViewModel: ObservableObject {
             try? await taskRepo.delete(id, userId: userId)
         }
         tasks.removeAll { junkIDs.contains($0.id) }
+        horizonTasks.removeAll { junkIDs.contains($0.id) }
         completedToday.removeAll { junkIDs.contains($0.id) }
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "onboarding-cleanup")
         notifyTaskListDidChange()
@@ -986,7 +1054,7 @@ public final class TasksViewModel: ObservableObject {
 
         for templateID in plan.templateIDsToDelete {
             try await taskRepo.delete(templateID, userId: userId)
-            tasks.removeAll { $0.id == templateID }
+            removeActive(id: templateID)
             completedToday.removeAll { $0.id == templateID }
 #if DEBUG
             print("[Tasks] removed duplicate recurrence template id=\(templateID.prefix(8))")
@@ -1037,8 +1105,9 @@ public final class TasksViewModel: ObservableObject {
     }
 
     private func insertRecurringOccurrenceIfNeeded(_ occurrence: LifeTask) {
-        guard !tasks.contains(where: { $0.id == occurrence.id }) else { return }
-        tasks.insert(occurrence, at: 0)
+        guard !horizonTasks.contains(where: { $0.id == occurrence.id }),
+              !tasks.contains(where: { $0.id == occurrence.id }) else { return }
+        upsertActive(occurrence)
         bumpTasksRevision()
         notifyTaskListDidChange()
     }
@@ -1064,7 +1133,7 @@ public final class TasksViewModel: ObservableObject {
                     await decomposeTask(occurrence)
                 }
             } catch {
-                tasks.removeAll { $0.id == occurrence.id }
+                removeActive(id: occurrence.id)
                 self.error = error.localizedDescription
             }
             return
@@ -1092,7 +1161,7 @@ public final class TasksViewModel: ObservableObject {
             }
         } catch {
             if let occurrence = resolvedPlan.occurrence {
-                tasks.removeAll { $0.id == occurrence.id }
+                removeActive(id: occurrence.id)
             }
             self.error = error.localizedDescription
         }
@@ -1121,7 +1190,8 @@ public final class TasksViewModel: ObservableObject {
             return
         }
 
-        tasks.insert(task, at: 0)
+        upsertActive(task)
+        bumpTasksRevision()
         do {
             var enriched = ScheduleNormalization.normalized(task)
             // Keep Create instant: deterministic profile now, LLM enrichment in background.
@@ -1135,7 +1205,8 @@ public final class TasksViewModel: ObservableObject {
                 Task { await self.decomposeTask(enriched) }
             }
         } catch {
-            tasks.removeAll { $0.id == task.id }
+            removeActive(id: task.id)
+            bumpTasksRevision()
             self.error = error.localizedDescription
             throw error
         }
@@ -1195,6 +1266,7 @@ public final class TasksViewModel: ObservableObject {
         } catch {
             let rollbackIDs = Set(persistedIDs)
             tasks.removeAll { rollbackIDs.contains($0.id) }
+            horizonTasks.removeAll { rollbackIDs.contains($0.id) }
             let userId = plan.parent.userId
             for id in persistedIDs {
                 try? await taskRepo.delete(id, userId: userId)
@@ -1241,7 +1313,8 @@ public final class TasksViewModel: ObservableObject {
     }
 
     private func insertTaskWithoutDecomposeAndAwait(_ task: LifeTask) async throws {
-        tasks.insert(task, at: 0)
+        upsertActive(task)
+        bumpTasksRevision()
         do {
             var enriched = task
             // Deterministic only on the create path — awaiting GLM here made multi-day
@@ -1251,7 +1324,8 @@ public final class TasksViewModel: ObservableObject {
             try await taskRepo.create(enriched)
             enqueueSemanticProfileRefresh(for: enriched)
         } catch {
-            tasks.removeAll { $0.id == task.id }
+            removeActive(id: task.id)
+            bumpTasksRevision()
             self.error = error.localizedDescription
             throw error
         }
@@ -1301,7 +1375,8 @@ public final class TasksViewModel: ObservableObject {
         )
         task.semanticProfile = await resolveSemanticProfile(for: task)
         try await taskRepo.create(task)
-        tasks.insert(task, at: 0)
+        upsertActive(task)
+        bumpTasksRevision()
         notifyTaskListDidChange()
         return task
     }
@@ -1328,7 +1403,8 @@ public final class TasksViewModel: ObservableObject {
         )
         task.semanticProfile = await resolveSemanticProfile(for: task)
         try await taskRepo.create(task)
-        tasks.insert(task, at: 0)
+        upsertActive(task)
+        bumpTasksRevision()
         notifyTaskListDidChange()
         return task
     }
@@ -1403,32 +1479,55 @@ public final class TasksViewModel: ObservableObject {
 
     private func applyOptimisticUpdate(_ task: LifeTask, replacing originalID: String) {
         if originalID != task.id {
-            tasks.removeAll { $0.id == originalID }
+            removeActive(id: originalID)
             completedToday.removeAll { $0.id == originalID }
         }
-        if !applyInMemoryTaskUpdate(task) { /* not in active list */ } else if let index = completedToday.firstIndex(where: { $0.id == task.id }) {
-            completedToday[index] = task
+        if task.status.isActive {
+            completedToday.removeAll { $0.id == task.id }
+            upsertActive(task)
+        } else if task.status == .completed {
+            removeActive(id: task.id)
+            if let index = completedToday.firstIndex(where: { $0.id == task.id }) {
+                completedToday[index] = task
+            } else {
+                completedToday.insert(task, at: 0)
+            }
         } else {
-            tasks.insert(task, at: 0)
+            removeActive(id: task.id)
+            completedToday.removeAll { $0.id == task.id }
         }
         bumpTasksRevision()
     }
 
     private func revertOptimisticUpdate(saved: LifeTask, previous: LifeTask?, originalID: String) {
         guard let previous else {
-            tasks.removeAll { $0.id == saved.id || $0.id == originalID }
+            removeActive(id: saved.id)
+            if originalID != saved.id {
+                removeActive(id: originalID)
+            }
             completedToday.removeAll { $0.id == saved.id || $0.id == originalID }
+            bumpTasksRevision()
             return
         }
-        tasks.removeAll { $0.id == saved.id && saved.id != previous.id }
-        completedToday.removeAll { $0.id == saved.id && saved.id != previous.id }
-        if !applyInMemoryTaskUpdate(previous) { /* not in active list */ } else if let index = completedToday.firstIndex(where: { $0.id == previous.id }) {
-            completedToday[index] = previous
-        } else if previous.status.isActive {
-            tasks.insert(previous, at: 0)
-        } else {
-            completedToday.insert(previous, at: 0)
+        if saved.id != previous.id {
+            removeActive(id: saved.id)
+            completedToday.removeAll { $0.id == saved.id }
         }
+        if previous.status.isActive {
+            completedToday.removeAll { $0.id == previous.id }
+            upsertActive(previous)
+        } else if previous.status == .completed {
+            removeActive(id: previous.id)
+            if let index = completedToday.firstIndex(where: { $0.id == previous.id }) {
+                completedToday[index] = previous
+            } else {
+                completedToday.insert(previous, at: 0)
+            }
+        } else {
+            removeActive(id: previous.id)
+            completedToday.removeAll { $0.id == previous.id }
+        }
+        bumpTasksRevision()
     }
 
     /// Timeline projections use stable ids — convert to a real row before persisting edits.
@@ -1444,23 +1543,35 @@ public final class TasksViewModel: ObservableObject {
     public func applyCalendarEventIdentifiers(_ updates: [LifeTask]) async {
         guard !updates.isEmpty else { return }
         for update in updates {
+            var persisted: LifeTask?
+            var alreadyMatched = false
             if let index = tasks.firstIndex(where: { $0.id == update.id }) {
-                guard tasks[index].calendarEventIdentifier != update.calendarEventIdentifier else { continue }
-                tasks[index].calendarEventIdentifier = update.calendarEventIdentifier
-                do {
-                    try await taskRepo.update(tasks[index])
-                } catch {
-                    self.error = error.localizedDescription
+                if tasks[index].calendarEventIdentifier == update.calendarEventIdentifier {
+                    alreadyMatched = true
+                } else {
+                    tasks[index].calendarEventIdentifier = update.calendarEventIdentifier
+                    persisted = tasks[index]
                 }
-                continue
+            }
+            if let index = horizonTasks.firstIndex(where: { $0.id == update.id }) {
+                if horizonTasks[index].calendarEventIdentifier != update.calendarEventIdentifier {
+                    horizonTasks[index].calendarEventIdentifier = update.calendarEventIdentifier
+                    persisted = persisted ?? horizonTasks[index]
+                    alreadyMatched = false
+                }
             }
             if let index = completedToday.firstIndex(where: { $0.id == update.id }) {
-                completedToday[index].calendarEventIdentifier = update.calendarEventIdentifier
-                do {
-                    try await taskRepo.update(completedToday[index])
-                } catch {
-                    self.error = error.localizedDescription
+                if completedToday[index].calendarEventIdentifier != update.calendarEventIdentifier {
+                    completedToday[index].calendarEventIdentifier = update.calendarEventIdentifier
+                    persisted = persisted ?? completedToday[index]
+                    alreadyMatched = false
                 }
+            }
+            guard let task = persisted, !alreadyMatched else { continue }
+            do {
+                try await taskRepo.update(task)
+            } catch {
+                self.error = error.localizedDescription
             }
         }
     }
@@ -1681,6 +1792,7 @@ public final class TasksViewModel: ObservableObject {
             guard let self else { return }
             let profile = await self.resolveSemanticProfile(for: task)
             guard var current = self.tasks.first(where: { $0.id == snapshotID })
+                ?? self.horizonTasks.first(where: { $0.id == snapshotID })
                 ?? self.completedToday.first(where: { $0.id == snapshotID }) else { return }
             guard current.title == snapshotTitle else { return }
 
@@ -1900,6 +2012,7 @@ public final class TasksViewModel: ObservableObject {
         referenceDate: Date = Date()
     ) -> LifeTask? {
         if let task = tasks.first(where: { $0.id == id }) { return task }
+        if let task = horizonTasks.first(where: { $0.id == id }) { return task }
         if let task = completedToday.first(where: { $0.id == id }) { return task }
         let all = schedulingContext
         if let task = all.first(where: { $0.id == id }) { return task }
@@ -2044,8 +2157,9 @@ public final class TasksViewModel: ObservableObject {
         ScheduleNormalization.normalizeFields(&updated)
 
         // Optimistic UI — lists update immediately before persistence.
-        tasks.removeAll { $0.id == task.id }
+        removeActive(id: task.id)
         completedToday.insert(updated, at: 0)
+        bumpTasksRevision()
 
         do {
             try await taskRepo.update(updated)
@@ -2071,11 +2185,8 @@ public final class TasksViewModel: ObservableObject {
             return undo
         } catch {
             completedToday.removeAll { $0.id == task.id }
-            if let activeIndex {
-                tasks.insert(restoredSnapshot, at: min(activeIndex, tasks.count))
-            } else if !tasks.contains(where: { $0.id == restoredSnapshot.id }) {
-                tasks.insert(restoredSnapshot, at: 0)
-            }
+            upsertActive(restoredSnapshot)
+            bumpTasksRevision()
             self.error = error.localizedDescription
             return nil
         }
@@ -2091,9 +2202,8 @@ public final class TasksViewModel: ObservableObject {
         do {
             try await taskRepo.update(updated)
             completedToday.removeAll { $0.id == task.id }
-            if !tasks.contains(where: { $0.id == task.id }) {
-                tasks.insert(updated, at: 0)
-            }
+            upsertActive(updated)
+            bumpTasksRevision()
             notifyTaskListDidChange()
         } catch {
             self.error = error.localizedDescription
@@ -2150,6 +2260,7 @@ public final class TasksViewModel: ObservableObject {
         let wasAnchored = task.timeConstraintValue == .anchored || task.isFixedTimeEvent
 
         tasks.removeAll { idsToDelete.contains($0.id) }
+        horizonTasks.removeAll { idsToDelete.contains($0.id) }
         completedToday.removeAll { idsToDelete.contains($0.id) }
         recurrenceTemplates.removeAll { idsToDelete.contains($0.id) }
 
@@ -2258,11 +2369,11 @@ public final class TasksViewModel: ObservableObject {
             task.userId = userId
             task.recurrence = nil
             task.isRecurrenceTemplate = false
-            tasks.insert(task, at: 0)
+            upsertActive(task)
             do {
                 try await taskRepo.create(task)
             } catch {
-                tasks.removeAll { $0.id == task.id }
+                removeActive(id: task.id)
                 self.error = error.localizedDescription
             }
         }
@@ -2336,7 +2447,18 @@ public final class TasksViewModel: ObservableObject {
         await normalizeMidnightSentinelsInStorage(userId: userId)
 
         let structure = DayStructureCompiler.compile(model: model)
-        tasks = DayStructureCompiler.backfillAnchorIDs(tasks: tasks, structure: structure, calendar: calendar)
+        let backfilled = DayStructureCompiler.backfillAnchorIDs(
+            tasks: tasks,
+            structure: structure,
+            calendar: calendar,
+            on: date
+        )
+        tasks = backfilled
+        for updated in backfilled {
+            if let index = horizonTasks.firstIndex(where: { $0.id == updated.id }) {
+                horizonTasks[index] = updated
+            }
+        }
 
         await sweepPreviousDayIfNeeded(userId: userId, now: date, calendar: calendar)
 
@@ -2365,7 +2487,8 @@ public final class TasksViewModel: ObservableObject {
             model: model,
             calendar: calendar,
             batchNotifications: true,
-            userId: userId
+            userId: userId,
+            now: date
         )
 
         let needsFullReplan = ReconcilePolicy.needsFullReplan(
@@ -2373,7 +2496,8 @@ public final class TasksViewModel: ObservableObject {
                 tasks: tasks + completedToday,
                 day: day,
                 model: model,
-                forceReplan: pendingForceReplan
+                forceReplan: pendingForceReplan,
+                now: date
             ),
             calendar: calendar
         )
@@ -2410,12 +2534,7 @@ public final class TasksViewModel: ObservableObject {
                 restored.scheduledTime = anchor.start
                 restored.scheduledEndTime = anchor.end
                 restored.updatedAt = Date()
-                if let index = tasks.firstIndex(where: { $0.id == restored.id }) {
-                    tasks[index] = restored
-                }
-                if let index = completedToday.firstIndex(where: { $0.id == restored.id }) {
-                    completedToday[index] = restored
-                }
+                if !applyInMemoryTaskUpdate(restored) { /* not in active list */ }
                 do {
                     try await taskRepo.update(restored)
                     allChangedIDs.insert(restored.id)
@@ -2497,7 +2616,7 @@ public final class TasksViewModel: ObservableObject {
             applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "post-reconcile", authoritative: true)
         }
 
-        publishDayScheduleSnapshot(day: day, changedIDs: allChangedIDs, calendar: calendar)
+        publishDayScheduleSnapshot(day: day, changedIDs: allChangedIDs, calendar: calendar, now: date)
         bumpTasksRevision()
 
         if postScheduleNotification || !allChangedIDs.isEmpty {
@@ -2725,9 +2844,7 @@ public final class TasksViewModel: ObservableObject {
             cleared.scheduledEndTime = nil
             cleared = TaskConstraintAlignment.align(cleared)
             cleared.updatedAt = now
-            if let index = tasks.firstIndex(where: { $0.id == cleared.id }) {
-                tasks[index] = cleared
-            }
+            if !applyInMemoryTaskUpdate(cleared) { /* not in active list */ }
             do {
                 try await taskRepo.update(cleared)
             } catch {
@@ -2805,10 +2922,13 @@ public final class TasksViewModel: ObservableObject {
                             TimeInterval(max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes) * 60)
                         )
                         shifted.updatedAt = Date()
-                        if let index = tasks.firstIndex(where: { $0.id == shifted.id }) {
-                            tasks[index] = shifted
+                        if !applyInMemoryTaskUpdate(shifted) { /* not in active list */ }
+                        do {
+                            try await taskRepo.update(shifted)
+                            didChange = true
+                        } catch {
+                            self.error = error.localizedDescription
                         }
-                        didChange = true
                         continue
                     case .rejected, .needsAI:
                         continue
@@ -2849,9 +2969,10 @@ public final class TasksViewModel: ObservableObject {
         model: LifeModel?,
         calendar: Calendar,
         batchNotifications: Bool = false,
-        userId: String = ""
+        userId: String = "",
+        now: Date = Date()
     ) async {
-        let isToday = calendar.isDateInToday(day)
+        let isToday = calendar.isDate(day, inSameDayAs: now)
         let profile = UserLifeProfileStore.load()
         let unslotted = tasks.filter { task in
             guard task.status.isActive, task.isSchedulerMovable else { return false }
@@ -2864,11 +2985,14 @@ public final class TasksViewModel: ObservableObject {
             if TaskScheduleInterval.isFlexibleDaySchedule(for: task, on: day, calendar: calendar) {
                 return true
             }
+            if isToday, task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: now) {
+                return true
+            }
             guard task.scheduledTime == nil else { return false }
             if let scheduledDate = task.scheduledDate {
                 return calendar.isDate(scheduledDate, inSameDayAs: day)
             }
-            return isToday
+            return false
         }
         guard !unslotted.isEmpty else { return }
 
@@ -3062,7 +3186,7 @@ public final class TasksViewModel: ObservableObject {
         guard let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) else {
             return
         }
-        let pool = tasks + completedToday
+        let pool = uniqueByID(horizonTasks + tasks + completedToday)
         let result = DayScheduleReconciler.sweepDayBoundary(
             tasks: pool,
             from: yesterday,
@@ -3077,12 +3201,10 @@ public final class TasksViewModel: ObservableObject {
         let changed = Set(result.changedTaskIDs)
         for updated in result.tasks where changed.contains(updated.id) {
             if updated.status.isActive {
-                if !applyInMemoryTaskUpdate(updated) {
-                    tasks.insert(updated, at: 0)
-                    rebuildTaskIndex()
-                }
-            } else if let index = taskIndex(id: updated.id) {
-                tasks.remove(at: index)
+                upsertActive(updated)
+                rebuildTaskIndex()
+            } else {
+                removeActive(id: updated.id)
                 rebuildTaskIndex()
             }
             if let index = completedToday.firstIndex(where: { $0.id == updated.id }) {
@@ -3182,7 +3304,7 @@ public final class TasksViewModel: ObservableObject {
 
         for id in idsToDelete {
             guard all.contains(where: { $0.id == id }) else { continue }
-            tasks.removeAll { $0.id == id }
+            removeActive(id: id)
             completedToday.removeAll { $0.id == id }
             do {
                 try await taskRepo.delete(id, userId: userId)
@@ -3238,7 +3360,7 @@ public final class TasksViewModel: ObservableObject {
             } else {
                 do {
                     try await taskRepo.create(seedTask)
-                    tasks.insert(seedTask, at: 0)
+                    upsertActive(seedTask)
                 } catch {
                     #if DEBUG
                     print("[Tasks] daily routine seed failed: \(error.localizedDescription)")
@@ -3327,7 +3449,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         for id in Set(idsToDelete) {
-            tasks.removeAll { $0.id == id }
+            removeActive(id: id)
             completedToday.removeAll { $0.id == id }
             try? await taskRepo.delete(id, userId: userId)
             didMutate = true
@@ -3362,9 +3484,9 @@ public final class TasksViewModel: ObservableObject {
         pendingUndo = nil
 
         switch action.kind {
-        case .completed(let restoredTask, let wasInActive, let activeIndex, let spawnedId):
+        case .completed(let restoredTask, _, _, let spawnedId):
             if let spawnedId {
-                tasks.removeAll { $0.id == spawnedId }
+                removeActive(id: spawnedId)
                 try? await taskRepo.delete(spawnedId, userId: restoredTask.userId)
             }
 
@@ -3373,24 +3495,13 @@ public final class TasksViewModel: ObservableObject {
             var activeTask = restoredTask
             activeTask.status = .pending
             activeTask.completedAt = nil
-
-            if wasInActive {
-                if let activeIndex, activeIndex <= tasks.count {
-                    tasks.insert(activeTask, at: min(activeIndex, tasks.count))
-                } else {
-                    tasks.insert(activeTask, at: 0)
-                }
-            }
+            upsertActive(activeTask)
 
             try? await taskRepo.update(activeTask)
 
-        case .deleted(let task, let wasInActive, let activeIndex, let wasInCompleted, let completedIndex):
+        case .deleted(let task, let wasInActive, _, let wasInCompleted, let completedIndex):
             if wasInActive {
-                if let activeIndex, activeIndex <= tasks.count {
-                    tasks.insert(task, at: min(activeIndex, tasks.count))
-                } else {
-                    tasks.insert(task, at: 0)
-                }
+                upsertActive(task)
             }
             if wasInCompleted {
                 if let completedIndex, completedIndex <= completedToday.count {

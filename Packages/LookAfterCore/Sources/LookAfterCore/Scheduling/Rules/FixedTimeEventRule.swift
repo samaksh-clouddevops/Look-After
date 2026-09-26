@@ -30,6 +30,9 @@ public struct FixedTimeEventRule: FlowSchedulingRuleProtocol {
     }
 
     private func remainingMinutes(for task: LifeTask, at now: Date, calendar: Calendar) -> Int {
+        if let scheduledDate = task.scheduledDate, !calendar.isDate(scheduledDate, inSameDayAs: now) {
+            return FlowTaskSelector.effectiveMinutes(for: task)
+        }
         guard let start = task.scheduledTime,
               let windowStart = calendar.combine(date: calendar.startOfDay(for: now), timeFrom: start) else {
             return FlowTaskSelector.effectiveMinutes(for: task)

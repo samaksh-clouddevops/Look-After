@@ -100,7 +100,7 @@ public enum TaskListSorter {
             return time
         }
         // Prefer the task's own day when listing "All" so tomorrow stays after today.
-        if let scheduledDate = task.scheduledDate {
+        if let scheduledDate = task.scheduledDate ?? task.scheduledTime {
             let taskDay = calendar.startOfDay(for: scheduledDate)
             if let time = TaskScheduleInterval.timelineDisplayTime(for: task, on: taskDay, calendar: calendar) {
                 return time
@@ -121,6 +121,9 @@ public enum TaskListSorter {
         if let deadline = task.deadline, deadline < now { return true }
         if let scheduledDate = task.scheduledDate {
             return calendar.startOfDay(for: scheduledDate) < todayStart
+        }
+        if let scheduledTime = task.scheduledTime {
+            return calendar.startOfDay(for: scheduledTime) < todayStart
         }
         return false
     }

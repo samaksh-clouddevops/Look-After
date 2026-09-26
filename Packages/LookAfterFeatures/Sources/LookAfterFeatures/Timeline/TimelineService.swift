@@ -44,15 +44,19 @@ public enum TimelineRowProjector {
         }
     }
 
-    public static func previewRows(from events: [LifeTimelineEvent], calendar: Calendar = .current) -> [ExecutivePlanningTimelineRow] {
+    public static func previewRows(
+        from events: [LifeTimelineEvent],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [ExecutivePlanningTimelineRow] {
         let formatter = dateFormatter(calendar: calendar)
-        let sorted = TimelineNowResolver.sortedEvents(events)
+        let sorted = TimelineNowResolver.sortedEvents(events, now: now)
         return sorted.enumerated().map { index, event in
             row(
                 from: event,
                 index: index,
                 currentIndex: nil,
-                now: Date(),
+                now: now,
                 allEvents: sorted,
                 formatter: formatter,
                 isPreview: true,
@@ -83,7 +87,7 @@ public enum TimelineRowProjector {
             updated[index].isNow = false
             updated[index].isPast = false
             updated[index].subtitle = "Done"
-            updated[index].completedAt = Date()
+            updated[index].completedAt = now
         case .uncompleted(let taskId):
             guard let index = updated.firstIndex(where: { $0.taskId == taskId && $0.isCompleted }) else { return rows }
             updated[index].isCompleted = false
@@ -216,7 +220,9 @@ public enum TimelineRowProjector {
         calendar: Calendar = .current
     ) -> ExecutivePlanningTimelineRow {
         let isFlexible = event.scheduleKind.isFlexibleToday || event.isFlexibleToday
-        let dayStart = calendar.startOfDay(for: now)
+        // Preview rows (tomorrow) must detect midnight sentinels against the event's own day,
+        // not wall-clock `now` — otherwise tomorrow 00:00 flexibles never match and paint "12:00 AM".
+        let dayStart = calendar.startOfDay(for: isPreview ? event.date : now)
         var isUnslotted = TimelineDisplaySort.isUnslottedFlexible(event)
         if !isUnslotted,
            event.id.hasPrefix("task-"),
@@ -333,9 +339,15 @@ public enum TimelineRowProjector {
         let unslotted = tasks.filter { task in
             guard task.status.isActive, task.isSchedulerMovable else { return false }
             guard !existingTaskIds.contains(task.id) else { return false }
-            if let scheduledDate = task.scheduledDate {
+            if task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: now) {
+                guard calendar.isDate(dayStart, inSameDayAs: now) else { return false }
+            } else if let scheduledDate = task.scheduledDate {
                 guard calendar.isDate(scheduledDate, inSameDayAs: dayStart) else { return false }
-            } else if !calendar.isDateInToday(now) {
+            } else if let scheduledTime = task.scheduledTime {
+                guard calendar.isDate(scheduledTime, inSameDayAs: dayStart) else { return false }
+            } else if task.isDeadlineOnlyDue(on: dayStart, calendar: calendar) {
+                return !TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar)
+            } else {
                 return false
             }
             return !TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar)
@@ -475,7 +487,7 @@ public final class TimelineService: ObservableObject {
 
         snapshot = TimelineSnapshot(today: today, tomorrow: tomorrow)
         lastProjectedNow = now
-        projectRows(now: now, animated: false)
+        projectRows(now: now, animated: false, calendar: calendar)
     }
 
     public func applyPatch(_ patch: TimelinePatch) {
@@ -484,7 +496,7 @@ public final class TimelineService: ObservableObject {
             snapshot = TimelineSnapshot(
                 today: snapshot.today.map { event in
                     TimelineNowResolver.taskId(from: event.id) == taskId
-                        ? event.withCompletion(true, at: Date())
+                        ? event.withCompletion(true, at: lastProjectedNow)
                         : event
                 },
                 tomorrow: snapshot.tomorrow
@@ -513,7 +525,7 @@ public final class TimelineService: ObservableObject {
 
     public func projectRows(now: Date = Date(), animated: Bool = true, calendar: Calendar = .current) {
         lastProjectedNow = now
-        let base = TimelineRowProjector.rows(from: snapshot.today, now: now)
+        let base = TimelineRowProjector.rows(from: snapshot.today, now: now, calendar: calendar)
         let suggested = TimelineRowProjector.suggestedSlotRows(
             tasks: lastRebuildTasks,
             completedToday: lastRebuildCompleted,
@@ -522,7 +534,12 @@ public final class TimelineService: ObservableObject {
             calendar: calendar
         )
         let built = TimelineRowProjector.mergeWithSuggestedRows(base, suggested: suggested, now: now)
-        let tomorrowBuilt = TimelineRowProjector.previewRows(from: snapshot.tomorrow)
+        let tomorrowDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+        let tomorrowBuilt = TimelineRowProjector.previewRows(
+            from: snapshot.tomorrow,
+            now: tomorrowDay,
+            calendar: calendar
+        )
         if animated {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                 todayRows = built

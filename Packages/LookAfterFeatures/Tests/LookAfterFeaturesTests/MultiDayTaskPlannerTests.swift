@@ -42,6 +42,46 @@ final class MultiDayTaskPlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testSliceAvoidsTimeOnlyOccupiedClock() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 8))!
+        let clock = calendar.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 9))!
+        let clockEnd = calendar.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 10))!
+        let occupied = LifeTask(
+            id: "standup-time-only",
+            title: "Standup",
+            estimatedMinutes: 60,
+            scheduledTime: clock,
+            schedulingMode: .fixedTime,
+            scheduledEndTime: clockEnd,
+            userId: "test-user"
+        )
+        let draft = MultiDayPlanDraft(
+            title: "Finish quarterly report",
+            dayCount: 2,
+            lifeArea: .work,
+            slices: [
+                MultiDaySliceDraft(dayIndex: 0, title: "Gather data", estimatedMinutes: 30, windowLabel: "Office"),
+                MultiDaySliceDraft(dayIndex: 1, title: "Draft outline", estimatedMinutes: 30, windowLabel: "Office")
+            ],
+            reasoning: "Two office sessions."
+        )
+
+        let plan = MultiDayTaskPlanner.plan(
+            from: draft,
+            userId: "test-user",
+            existingTasks: [occupied],
+            startDate: start
+        )
+        let first = plan.slices.first { $0.title == "Gather data" }
+
+        XCTAssertNotNil(first?.scheduledTime)
+        XCTAssertGreaterThanOrEqual(first?.scheduledTime ?? start, clockEnd)
+    }
+
+
+    @MainActor
     func testCreativePlanCreatesProject() {
         let draft = MultiDayPlanDraft(
             title: "Album prep",

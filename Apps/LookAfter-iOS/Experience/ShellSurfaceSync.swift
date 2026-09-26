@@ -152,7 +152,7 @@ final class ShellSurfaceSync {
             tomorrowEvents = []
         }
         timelineService.rebuild(
-            tasks: tasksVM.tasks,
+            tasks: tasksVM.listPool,
             completedToday: tasksVM.completedToday,
             recurrenceTemplates: tasksVM.recurrenceTemplates,
             bills: modulesVM.bills,

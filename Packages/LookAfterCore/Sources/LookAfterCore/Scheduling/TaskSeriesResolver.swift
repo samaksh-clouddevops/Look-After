@@ -8,17 +8,20 @@ public enum TaskSeriesResolver {
         public let includeProjections: Bool
         public let includeCompleted: Bool
         public let activeOnly: Bool
+        public let referenceDate: Date
 
         public init(
             day: Date,
             includeProjections: Bool = false,
             includeCompleted: Bool = false,
-            activeOnly: Bool = true
+            activeOnly: Bool = true,
+            referenceDate: Date = Date()
         ) {
             self.day = day
             self.includeProjections = includeProjections
             self.includeCompleted = includeCompleted
             self.activeOnly = activeOnly
+            self.referenceDate = referenceDate
         }
     }
 
@@ -53,7 +56,13 @@ public enum TaskSeriesResolver {
                 guard options.includeCompleted else { continue }
                 guard isCompletedOnDay(task, dayStart: dayStart, calendar: calendar) else { continue }
             } else if task.status.isActive {
-                guard isActiveCandidate(task, on: dayStart, in: allTasks, calendar: calendar) else { continue }
+                guard isActiveCandidate(
+                    task,
+                    on: dayStart,
+                    in: allTasks,
+                    calendar: calendar,
+                    referenceDate: options.referenceDate
+                ) else { continue }
             } else if !options.includeCompleted {
                 continue
             }
@@ -118,9 +127,22 @@ public enum TaskSeriesResolver {
         calendar: Calendar = .current
     ) -> [String] {
         let dayStart = calendar.startOfDay(for: day)
-        let active = allTasks.filter { task in
-            guard task.status.isActive && !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
-            return isScheduled(on: dayStart, task: task, calendar: calendar)
+        let activeTasks = allTasks.filter { task in
+            task.status.isActive && !TaskRecurrenceEngine.isRecurrenceTemplate(task)
+        }
+        let sameDaySeries = Set(
+            activeTasks.compactMap { task -> String? in
+                guard isScheduled(on: dayStart, task: task, calendar: calendar) else { return nil }
+                return TaskScheduleQuery.seriesKey(for: task)
+            }
+        )
+        let active = activeTasks.filter { task in
+            belongsInDuplicateGroup(
+                on: dayStart,
+                task: task,
+                sameDaySeries: sameDaySeries,
+                calendar: calendar
+            )
         }
         var groups: [String: [LifeTask]] = [:]
         for task in active {
@@ -151,7 +173,13 @@ public enum TaskSeriesResolver {
         let key = TaskScheduleQuery.seriesKey(for: template)
         let activeKeepers = resolvedTasks(
             allTasks: allTasks,
-            options: Options(day: dayStart, includeProjections: false, includeCompleted: false, activeOnly: true),
+            options: Options(
+                day: dayStart,
+                includeProjections: false,
+                includeCompleted: false,
+                activeOnly: true,
+                referenceDate: dayStart
+            ),
             calendar: calendar
         )
         return activeKeepers.contains { TaskScheduleQuery.seriesKey(for: $0) == key }
@@ -171,6 +199,9 @@ public enum TaskSeriesResolver {
         if let scheduled = task.scheduledDate, calendar.isDate(scheduled, inSameDayAs: dayStart) {
             return true
         }
+        if task.isDeadlineOnlyDue(on: dayStart, calendar: calendar) {
+            return true
+        }
         return false
     }
 
@@ -178,19 +209,44 @@ public enum TaskSeriesResolver {
         _ task: LifeTask,
         on dayStart: Date,
         in allTasks: [LifeTask],
-        calendar: Calendar
+        calendar: Calendar,
+        referenceDate: Date
     ) -> Bool {
         guard task.status.isActive else { return false }
         guard task.scheduledDate != nil || task.scheduledTime != nil else {
-            return calendar.isDateInToday(dayStart)
+            // Deadline-only one-offs belong on their due day, and overdue ones carry onto today.
+            // Unscheduled backlog stays in the list, not the timeline.
+            if task.isDeadlineOnlyDue(on: dayStart, calendar: calendar) {
+                return true
+            }
+            return task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: referenceDate)
+                && calendar.isDate(dayStart, inSameDayAs: referenceDate)
         }
-        guard TaskRecurrenceEngine.isActionable(on: dayStart, task: task, in: allTasks, calendar: calendar) else {
+        guard TaskRecurrenceEngine.isActionable(
+            on: dayStart,
+            task: task,
+            in: allTasks,
+            calendar: calendar,
+            referenceDate: referenceDate
+        ) else {
             return false
         }
         let hasSlot = TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar)
         if hasSlot { return true }
+        // Overdue one-offs are actionable today even though `scheduledDate` is yesterday
+        // and therefore have no concrete window on `dayStart`. Recurring occurrences stay
+        // anchored to their scheduled day.
+        if task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: referenceDate) {
+            return calendar.isDate(dayStart, inSameDayAs: referenceDate)
+        }
         if TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task, calendar: calendar) {
-            return task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } ?? true
+            if let scheduledDate = task.scheduledDate {
+                return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+            }
+            if let scheduledTime = task.scheduledTime {
+                return calendar.isDate(scheduledTime, inSameDayAs: dayStart)
+            }
+            return false
         }
         guard task.timeConstraintValue.isSchedulerMovable else { return false }
         guard task.schedulingMode == .flexible
@@ -198,13 +254,48 @@ public enum TaskSeriesResolver {
             || task.timeConstraintValue == .fluid else {
             return false
         }
-        return task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } ?? true
+        if let scheduledDate = task.scheduledDate {
+            return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+        }
+        if let scheduledTime = task.scheduledTime {
+            return calendar.isDate(scheduledTime, inSameDayAs: dayStart)
+        }
+        return false
     }
 
-    private static func isScheduled(on dayStart: Date, task: LifeTask, calendar: Calendar) -> Bool {
-        guard let scheduled = task.scheduledDate else {
-            return calendar.isDateInToday(dayStart)
+    private static func isScheduled(
+        on dayStart: Date,
+        task: LifeTask,
+        calendar: Calendar
+    ) -> Bool {
+        if let scheduled = task.scheduledDate {
+            return calendar.isDate(scheduled, inSameDayAs: dayStart)
         }
-        return calendar.isDate(scheduled, inSameDayAs: dayStart)
+        // Time-only occurrences still belong to the day encoded in the clock.
+        if let scheduledTime = task.scheduledTime {
+            return calendar.isDate(scheduledTime, inSameDayAs: dayStart)
+        }
+        return false
+    }
+
+    /// Same-day rows, plus undated or past series rows only when today's occurrence is
+    /// already in the group. A lone past occurrence is not a duplicate of itself.
+    /// Future occurrences stay on their own day.
+    private static func belongsInDuplicateGroup(
+        on dayStart: Date,
+        task: LifeTask,
+        sameDaySeries: Set<String>,
+        calendar: Calendar
+    ) -> Bool {
+        if isScheduled(on: dayStart, task: task, calendar: calendar) { return true }
+        let key = TaskScheduleQuery.seriesKey(for: task)
+        guard sameDaySeries.contains(key) else { return false }
+        guard let scheduled = task.scheduledDate ?? task.scheduledTime else {
+            return task.parentTaskId != nil
+        }
+        let scheduledDay = calendar.startOfDay(for: scheduled)
+        guard scheduledDay < dayStart else { return false }
+        return task.parentTaskId != nil
+            || task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: dayStart)
     }
 }

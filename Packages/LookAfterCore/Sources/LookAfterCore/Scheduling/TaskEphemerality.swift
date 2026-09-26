@@ -230,8 +230,9 @@ public enum TaskReaper {
         case .infinite:
             break
         case .endOfDay:
-            if let scheduledDate = task.scheduledDate {
-                let day = calendar.startOfDay(for: scheduledDate)
+            let scheduledDay = task.scheduledDate ?? task.scheduledTime
+            if let scheduledDay {
+                let day = calendar.startOfDay(for: scheduledDay)
                 let today = calendar.startOfDay(for: now)
                 if day < today { return .expire }
             }

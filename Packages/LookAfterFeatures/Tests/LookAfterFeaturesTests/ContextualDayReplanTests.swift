@@ -83,6 +83,36 @@ final class ContextualDayReplanTests: XCTestCase {
     }
 
     @MainActor
+    func testFreedSlotDoesNotPullTomorrowTimeOnlyClock() async {
+        let slotStart = calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
+        let slotEnd = calendar.date(bySettingHour: 15, minute: 0, second: 0, of: today)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrowClock = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)!
+        let futureClock = LifeTask(
+            id: "tomorrow-clock",
+            title: "Standup prep",
+            priority: .high,
+            estimatedMinutes: 30,
+            scheduledTime: tomorrowClock,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let glm = offlineGLM()
+        let engine = DayReplanEngine(glmService: glm)
+        let context = makeContext(
+            tasks: [futureClock],
+            trigger: .freedSlot,
+            freedSlotWindow: DayReplanAwayWindow(start: slotStart, end: slotEnd),
+            removedTaskTitle: "Vocal Practice"
+        )
+
+        let result = try? await engine.replan(context: context)
+        XCTAssertNil(result?.scheduleChanges.first { $0.taskID == futureClock.id })
+    }
+
+
+    @MainActor
     func testGoingOutLocalFallbackAvoidsAwayWindow() async {
         let departure = calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
         let end = calendar.date(bySettingHour: 16, minute: 0, second: 0, of: today)!

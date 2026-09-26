@@ -148,8 +148,14 @@ public enum DaySlotAllocator {
 
         var remaining = requests
         var occupied = existingTasks.filter { task in
-            guard let scheduledDate = task.scheduledDate else { return false }
-            return calendar.isDate(scheduledDate, inSameDayAs: day)
+            if let scheduledDate = task.scheduledDate {
+                return calendar.isDate(scheduledDate, inSameDayAs: day)
+            }
+            // Time-only clocks still occupy the day encoded in the clock.
+            if let scheduledTime = task.scheduledTime {
+                return calendar.isDate(scheduledTime, inSameDayAs: day)
+            }
+            return false
         }
         var results: [Allocation] = []
         let extraBlocked =

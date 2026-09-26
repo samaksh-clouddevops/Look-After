@@ -879,7 +879,7 @@ private struct TodayDoThisNowSection: View {
         // for it, creating a Do-This-Now vs. Timeline mismatch.
         let context = tasksVM.schedulingContext
         let todayCandidates = tasksVM.activeTasks.filter { task in
-            task.isOverdue || task.isActionableToday(allTasks: context)
+            task.isActionableToday(allTasks: context)
         }
         return TaskListSorter.sortByNextActionableThenPriority(todayCandidates).first
     }

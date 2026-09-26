@@ -28,7 +28,9 @@ public enum TaskScheduleQuery {
         if TaskRecurrenceEngine.isRecurrenceTemplate(task) { return true }
         if task.tags.contains("daily-routine") { return true }
         if task.isLifeCommitmentTask { return true }
-        if task.recurrenceRule != .none && task.parentTaskId == nil && task.scheduledDate != nil {
+        // A clock is a day assignment when scheduledDate was never written.
+        if task.recurrenceRule != .none && task.parentTaskId == nil
+            && (task.scheduledDate != nil || task.scheduledTime != nil) {
             return true
         }
         let semanticType = task.semanticProfile?.semanticType
@@ -59,7 +61,8 @@ public enum TaskScheduleQuery {
         from tasks: [LifeTask],
         allTasks: [LifeTask],
         day: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
     ) -> [LifeTask] {
         TaskSeriesResolver.resolvedTasks(
             allTasks: allTasks,
@@ -67,7 +70,8 @@ public enum TaskScheduleQuery {
                 day: day,
                 includeProjections: true,
                 includeCompleted: false,
-                activeOnly: true
+                activeOnly: true,
+                referenceDate: referenceDate
             ),
             calendar: calendar
         )
@@ -87,6 +91,7 @@ public enum TaskScheduleQuery {
     }
 
     /// Active tasks for today's list — one instance per series, recurrence-aware.
+    /// Unscheduled backlog stays off this list unless it is an overdue one-off carry-forward.
     public static func activeTasksForToday(
         from tasks: [LifeTask],
         calendar: Calendar = .current,
@@ -96,9 +101,6 @@ public enum TaskScheduleQuery {
         let candidates = tasks.filter { task in
             guard task.status.isActive else { return false }
             guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
-            if task.scheduledDate == nil {
-                return true
-            }
             return TaskRecurrenceEngine.isActionableToday(
                 task,
                 in: tasks,
@@ -132,12 +134,12 @@ public enum TaskScheduleQuery {
             guard !completedTodayIDs.contains(task.id) else { continue }
 
             let isRelevant =
-                task.isActionableToday(allTasks: context, calendar: calendar)
-                || task.isActionableTomorrow(allTasks: context, calendar: calendar)
-                || task.isUpcoming(allTasks: context, calendar: calendar)
-                || task.isActiveBacklog(calendar: calendar)
-                || task.isScheduledTask(allTasks: context, calendar: calendar)
-                || task.isOverdue
+                task.isActionableToday(allTasks: context, calendar: calendar, referenceDate: referenceDate)
+                || task.isActionableTomorrow(allTasks: context, calendar: calendar, referenceDate: referenceDate)
+                || task.isUpcoming(allTasks: context, calendar: calendar, referenceDate: referenceDate)
+                || task.isActiveBacklog(calendar: calendar, referenceDate: referenceDate)
+                || task.isScheduledTask(allTasks: context, calendar: calendar, referenceDate: referenceDate)
+                || task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: referenceDate)
 
             if isRelevant {
                 candidates.append(task)
@@ -223,7 +225,9 @@ public enum TaskScheduleQuery {
 
     private static func keeperScore(_ task: LifeTask, on day: Date, calendar: Calendar) -> Int {
         var score = 0
-        if let scheduledDate = task.scheduledDate, calendar.isDate(scheduledDate, inSameDayAs: day) {
+        // A clock is a day assignment when scheduledDate was never written.
+        if let scheduled = task.scheduledDate ?? task.scheduledTime,
+           calendar.isDate(scheduled, inSameDayAs: day) {
             score += 100
             if TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: day, calendar: calendar) {
                 score += 50
@@ -254,7 +258,8 @@ public enum TaskRecurrenceCompactor {
             case .superseded, .expired:
                 idsToRemove.insert(task.id)
             case .skipped:
-                let anchor = task.scheduledDate ?? task.updatedAt
+                // A clock is the occurrence day when scheduledDate was never written.
+                let anchor = task.scheduledDate ?? task.scheduledTime ?? task.updatedAt
                 if anchor < cutoff { idsToRemove.insert(task.id) }
             default:
                 break
@@ -263,8 +268,9 @@ public enum TaskRecurrenceCompactor {
 
         var groups: [String: [LifeTask]] = [:]
         for task in tasks where task.parentTaskId != nil && !idsToRemove.contains(task.id) {
-            guard let scheduledDate = task.scheduledDate else { continue }
-            let key = "\(task.parentTaskId!)|\(Int(calendar.startOfDay(for: scheduledDate).timeIntervalSince1970))"
+            // A clock is a day assignment when scheduledDate was never written.
+            guard let scheduled = task.scheduledDate ?? task.scheduledTime else { continue }
+            let key = "\(task.parentTaskId!)|\(Int(calendar.startOfDay(for: scheduled).timeIntervalSince1970))"
             groups[key, default: []].append(task)
         }
         for (_, group) in groups where group.count > 1 {

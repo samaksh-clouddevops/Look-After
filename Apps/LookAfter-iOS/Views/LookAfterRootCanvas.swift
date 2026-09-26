@@ -1016,7 +1016,8 @@ public struct LookAfterRootCanvas: View {
     private func rescheduleTimelineTask(taskId: String) async {
         let userId = firebase.resolvedUserId
         guard !userId.isEmpty,
-              let task = shell.tasksVM.tasks.first(where: { $0.id == taskId && $0.status.isActive }) else {
+              let task = resolveTimelineTask(id: taskId),
+              task.status.isActive else {
             return
         }
         guard let newTime = await shell.tasksVM.rescheduleTaskFromNow(task) else { return }
@@ -1072,7 +1073,7 @@ public struct LookAfterRootCanvas: View {
         case .taskCreated(let taskId, _), .scheduledEvent(let taskId, _, _):
             return ("View", {
                 selectedTab = .today
-                if let task = shell.tasksVM.tasks.first(where: { $0.id == taskId }) {
+                if let task = shell.tasksVM.resolveTimelineTask(id: taskId) {
                     shell.tasksVM.selectedTask = task
                     openTaskList()
                 }
@@ -1107,8 +1108,8 @@ public struct LookAfterRootCanvas: View {
             return
         }
         let resolved = taskID.flatMap { id in
-            shell.tasksVM.tasks.first { $0.id == id && $0.status.isActive }
-        } ?? heroTask
+            shell.tasksVM.resolveTimelineTask(id: id)
+        }.flatMap { $0.status.isActive ? $0 : nil } ?? heroTask
         startBrainHeroTask(resolved)
     }
 
@@ -1280,7 +1281,7 @@ public struct LookAfterRootCanvas: View {
                         Task {
                             var toSave = task
                             if task.id.hasPrefix("proj-")
-                                || !shell.tasksVM.tasks.contains(where: { $0.id == task.id }) {
+                                || shell.tasksVM.resolveTimelineTask(id: task.id) == nil {
                                 do {
                                     toSave = try await shell.tasksVM.materializeTimelineTask(task, userId: userId)
                                 } catch {

@@ -220,6 +220,66 @@ final class PinNowSnapshotBuilderTests: XCTestCase {
         XCTAssertEqual(model?.constraintLabel, "Anchored")
     }
 
+    func testUnscheduledBacklogPreferredTaskDoesNotBecomeHero() {
+        let backlog = LifeTask(
+            id: "backlog",
+            title: "Someday idea",
+            status: .pending,
+            schedulingMode: .flexible,
+            userId: "test-user"
+        )
+        let actionableStart = calendar.date(from: DateComponents(year: 2026, month: 8, day: 6, hour: 9, minute: 30))!
+
+        let actionable = LifeTask(
+            id: "actionable",
+            title: "Actual today task",
+            estimatedMinutes: 30,
+            scheduledDate: day,
+            scheduledTime: actionableStart,
+            userId: "test-user"
+        )
+
+        let surface = FlowSurface(heroTask: backlog)
+
+        let model = PinNowSnapshotBuilder.build(
+            tasks: [backlog, actionable],
+            flowSurface: surface,
+            cognitiveSnapshot: nil,
+            preferredTask: backlog,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertNotEqual(model?.headline, "Someday idea")
+    }
+
+    func testFutureDatedPreferredTaskDoesNotBecomeHeroToday() {
+        let futureDay = calendar.date(from: DateComponents(year: 2026, month: 8, day: 12, hour: 0))!
+        let futureStart = calendar.date(from: DateComponents(year: 2026, month: 8, day: 12, hour: 9))!
+
+        let futureTask = LifeTask(
+            id: "future",
+            title: "Next week meeting",
+            estimatedMinutes: 30,
+            scheduledDate: futureDay,
+            scheduledTime: futureStart,
+            userId: "test-user"
+        )
+
+        let surface = FlowSurface(heroTask: futureTask)
+
+        let model = PinNowSnapshotBuilder.build(
+            tasks: [futureTask],
+            flowSurface: surface,
+            cognitiveSnapshot: nil,
+            preferredTask: futureTask,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertNil(model)
+    }
+
     func testBuildReturnsNilWhenNoActiveTasks() {
         let model = PinNowSnapshotBuilder.build(
             tasks: [],

@@ -19,9 +19,13 @@ public enum HighLoadDayEvaluator {
     ) -> Bool {
         let dayStart = calendar.startOfDay(for: day)
         let dayTasks = tasks.filter { task in
-            guard task.status.isActive || task.status == .completed else { return false }
-            guard let d = task.scheduledDate, task.scheduledTime != nil else { return false }
-            return calendar.isDate(d, inSameDayAs: dayStart)
+            guard task.status.isActive || task.status == .completed, task.scheduledTime != nil else {
+                return false
+            }
+            if let d = task.scheduledDate {
+                return calendar.isDate(d, inSameDayAs: dayStart)
+            }
+            return task.scheduledTime.map { calendar.isDate($0, inSameDayAs: dayStart) } == true
         }
         guard !dayTasks.isEmpty else { return false }
 

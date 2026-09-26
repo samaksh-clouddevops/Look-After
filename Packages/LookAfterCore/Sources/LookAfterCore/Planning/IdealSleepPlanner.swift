@@ -117,9 +117,10 @@ public enum IdealSleepPlanner {
         }
 
         for task in input.tasks where task.status.isActive {
-            guard let scheduledDate = task.scheduledDate,
-                  input.calendar.isDate(scheduledDate, inSameDayAs: tomorrow),
-                  let time = task.scheduledTime else { continue }
+            guard let time = task.scheduledTime else { continue }
+            // A clock is a day assignment when scheduledDate was never written.
+            let day = task.scheduledDate ?? time
+            guard input.calendar.isDate(day, inSameDayAs: tomorrow) else { continue }
             let label = shortTaskAnchorLabel(task, time: time, calendar: input.calendar)
             let combined = input.calendar.combine(date: tomorrow, timeFrom: time) ?? time
             candidates.append(WakeAnchor(date: combined, label: label))
@@ -195,11 +196,12 @@ public enum IdealSleepPlanner {
         }
 
         for task in input.tasks where task.status.isActive {
-            guard let scheduledDate = task.scheduledDate,
-                  input.calendar.isDate(scheduledDate, inSameDayAs: todayStart),
-                  let start = task.scheduledTime else { continue }
+            guard let time = task.scheduledTime else { continue }
+            // A clock is a day assignment when scheduledDate was never written.
+            let day = task.scheduledDate ?? time
+            guard input.calendar.isDate(day, inSameDayAs: todayStart) else { continue }
             let duration = max(task.estimatedMinutes, 30)
-            let combinedStart = input.calendar.combine(date: todayStart, timeFrom: start) ?? start
+            let combinedStart = input.calendar.combine(date: todayStart, timeFrom: time) ?? time
             let end = combinedStart.addingTimeInterval(TimeInterval(duration * 60))
             if end > windDownThreshold {
                 latestEnd = max(latestEnd ?? end, end)
