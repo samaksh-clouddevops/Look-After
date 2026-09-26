@@ -30,7 +30,9 @@ public struct FixedTimeEventRule: FlowSchedulingRuleProtocol {
     }
 
     private func remainingMinutes(for task: LifeTask, at now: Date, calendar: Calendar) -> Int {
-        if let scheduledDate = task.scheduledDate, !calendar.isDate(scheduledDate, inSameDayAs: now) {
+        // A missing scheduledDate still carries a day in the clock. Do not remap it onto now.
+        if let assigned = task.assignedDay(calendar: calendar),
+           !calendar.isDate(assigned, inSameDayAs: now) {
             return FlowTaskSelector.effectiveMinutes(for: task)
         }
         guard let start = task.scheduledTime,

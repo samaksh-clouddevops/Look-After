@@ -50,8 +50,11 @@ public enum DayAssembler {
             let tag = model.commitmentID(for: commitment.title)
             let seriesKey = "recurring|\(OnboardingTaskSeeder.normalizedRoutineTitle(commitment.title))"
             let alreadyExists = all.contains { task in
-                let onDay = task.scheduledDate.map { calendar.isDate($0, inSameDayAs: dayStart) } ?? false
-                if task.tags.contains(tag), onDay || task.scheduledDate == nil {
+                let assigned = task.assignedDay(calendar: calendar)
+                let onDay = assigned.map { calendar.isDate($0, inSameDayAs: dayStart) } ?? false
+                // A future clock is not today's row. Only an unscheduled tag blocks a twin.
+                let unscheduled = task.scheduledDate == nil && task.scheduledTime == nil
+                if task.tags.contains(tag), onDay || unscheduled {
                     return task.status.isActive || task.status == .completed || onDay
                 }
                 if TaskScheduleQuery.seriesKey(for: task) == seriesKey,
@@ -61,8 +64,9 @@ public enum DayAssembler {
                 }
                 if normalized(task.title) == normalized(commitment.title) {
                     if onDay { return true }
-                    // Unscheduled commitment row still counts — avoid Gym/Dinner twins.
+                    // Unscheduled commitment row still counts — a future clock does not.
                     if task.tags.contains(LifeModel.commitmentTaskTag),
+                       unscheduled,
                        task.status.isActive || task.status == .completed {
                         return true
                     }

@@ -192,7 +192,7 @@ enum BrainPresentationBuilder {
                 task: task,
                 title: headline(from: heroBriefing, task: task),
                 supportingLine: supportingLine(from: heroBriefing, flowSurface: flowSurface, task: task),
-                scheduledLabel: scheduledLabel(for: task, calendar: calendar),
+                scheduledLabel: scheduledLabel(for: task, now: now, calendar: calendar),
                 durationMinutes: durationMinutes(from: heroBriefing, task: task, flowSurface: flowSurface),
                 whyReasons: Array(heroBriefing.whyNowReasons.prefix(4)),
                 buttonLabel: UserFacingCopy.sanitize(heroBriefing.buttonLabel),
@@ -215,7 +215,7 @@ enum BrainPresentationBuilder {
                 task: resolvedTask,
                 title: UserFacingCopy.sanitize(recommendation.headline),
                 supportingLine: UserFacingCopy.sanitize(recommendation.supportingLine),
-                scheduledLabel: scheduledLabel(for: resolvedTask, calendar: calendar),
+                scheduledLabel: scheduledLabel(for: resolvedTask, now: now, calendar: calendar),
                 durationMinutes: recommendation.durationMinutes > 0 ? recommendation.durationMinutes : resolvedTask?.estimatedMinutes,
                 whyReasons: Array(recommendation.whyNowReasons.prefix(4)),
                 buttonLabel: UserFacingCopy.sanitize(recommendation.buttonLabel),
@@ -243,7 +243,7 @@ enum BrainPresentationBuilder {
             task: task,
             title: HumanLanguage.outcomeHeadline(task: task),
             supportingLine: HumanLanguage.recommendationSummary(from: semantics),
-            scheduledLabel: scheduledLabel(for: task, calendar: calendar),
+            scheduledLabel: scheduledLabel(for: task, now: now, calendar: calendar),
             durationMinutes: task.estimatedMinutes > 0 ? task.estimatedMinutes : nil,
             whyReasons: [],
             buttonLabel: "Start",
@@ -306,14 +306,14 @@ enum BrainPresentationBuilder {
         return nil
     }
 
-    private static func scheduledLabel(for task: LifeTask?, calendar: Calendar) -> String? {
+    private static func scheduledLabel(for task: LifeTask?, now: Date, calendar: Calendar) -> String? {
         guard let task else { return nil }
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         if let time = task.scheduledTime {
             return formatter.string(from: time)
         }
-        if let date = task.scheduledDate, calendar.isDateInToday(date) {
+        if let date = task.scheduledDate, calendar.isDate(date, inSameDayAs: now) {
             return "Today"
         }
         return nil
@@ -431,7 +431,7 @@ enum BrainPresentationBuilder {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
 
-        for med in medications where !med.isTaken && calendar.isDateInToday(med.scheduledTime) {
+        for med in medications where !med.isTaken && calendar.isDate(med.scheduledTime, inSameDayAs: now) {
             items.append(
                 BrainHeadsUpItem(
                     id: "med-\(med.id)",

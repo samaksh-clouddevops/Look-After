@@ -34,7 +34,7 @@ public enum TransitionShieldBuilder {
         var anchors: [(id: String, title: String, start: Date)] = []
 
         for event in timelineEvents where event.isFixed || event.kind == .meeting {
-            guard event.date > now, calendar.isDateInToday(event.date) else { continue }
+            guard event.date > now, calendar.isDate(event.date, inSameDayAs: now) else { continue }
             anchors.append((event.id, event.title, event.date))
         }
 

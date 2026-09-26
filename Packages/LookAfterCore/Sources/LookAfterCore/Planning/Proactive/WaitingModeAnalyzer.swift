@@ -27,6 +27,12 @@ public enum WaitingModeAnalyzer {
         let day = calendar.startOfDay(for: now)
         let candidates = tasks.filter { task in
             guard task.status.isActive, task.isSchedulerMovable else { return false }
+            // A future or past clock is not a filler for this gap. Unscheduled
+            // backlog can still fit; a time-only clock must belong to this day.
+            if let assigned = task.assignedDay(calendar: calendar),
+               !calendar.isDate(assigned, inSameDayAs: day) {
+                return false
+            }
             let minutes = TaskScheduleInterval.displayDurationMinutes(for: task, on: day, calendar: calendar)
             return minutes <= available
         }
@@ -45,7 +51,7 @@ public enum WaitingModeAnalyzer {
         )
     }
 
-    public static func proactiveAction(from result: Result) -> ProactiveAction {
+    public static func proactiveAction(from result: Result, now: Date = Date()) -> ProactiveAction {
         let taskTitles = result.fittingTasks.map(\.title).joined(separator: "\" or \"")
         return ProactiveAction(
             kind: .waitingMode,
@@ -54,7 +60,7 @@ public enum WaitingModeAnalyzer {
             options: result.fittingTasks.map { "Start \($0.title)" } + ["Keep plan"],
             surface: .banner,
             relatedTaskIDs: result.fittingTasks.map(\.id),
-            expiresAt: Date().addingTimeInterval(TimeInterval(result.availableMinutes * 60))
+            expiresAt: now.addingTimeInterval(TimeInterval(result.availableMinutes * 60))
         )
     }
 }

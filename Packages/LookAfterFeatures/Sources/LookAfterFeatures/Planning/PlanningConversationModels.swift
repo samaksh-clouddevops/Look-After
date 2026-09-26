@@ -683,6 +683,8 @@ public struct PlanningConversationContext: Sendable {
     public var lifeProfile: UserLifeProfile
     public var analyticsContext: CachedAIContextSummary?
     public var healthSummary: HealthSummary?
+    /// Virtual clock for this conversation. Defaults to wall clock only at the call site.
+    public var now: Date
 
     public init(
         userName: String,
@@ -699,7 +701,8 @@ public struct PlanningConversationContext: Sendable {
         completedTodayCount: Int = 0,
         lifeProfile: UserLifeProfile = UserLifeProfile(),
         analyticsContext: CachedAIContextSummary? = nil,
-        healthSummary: HealthSummary? = nil
+        healthSummary: HealthSummary? = nil,
+        now: Date = Date()
     ) {
         self.userName = userName
         self.tasks = tasks
@@ -716,5 +719,6 @@ public struct PlanningConversationContext: Sendable {
         self.lifeProfile = lifeProfile
         self.analyticsContext = analyticsContext
         self.healthSummary = healthSummary
+        self.now = now
     }
 }

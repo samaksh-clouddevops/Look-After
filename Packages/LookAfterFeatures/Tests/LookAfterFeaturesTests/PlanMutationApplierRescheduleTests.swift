@@ -127,6 +127,70 @@ final class PlanMutationApplierRescheduleTests: XCTestCase {
         XCTAssertEqual(PlanMutationKind.fromLLM("movetask"), .rescheduleTask)
         XCTAssertEqual(PlanMutationKind.fromLLM("scheduletask"), .rescheduleTask)
     }
+
+    @MainActor
+    func testRescheduleDoesNotOverlapTimeOnlyTaskOnToday() async throws {
+        let today = calendar.startOfDay(for: Date())
+        let store = RescheduleTestTaskStore(referenceDate: today, calendar: calendar)
+        let glm = mockGLMService()
+        let tasksVM = TasksViewModel(
+            taskRepo: store,
+            decomposer: TaskDecomposer(glmService: glm),
+            autoFiller: TaskAutoFiller(glmService: glm),
+            taskImporter: TaskImporter(glmService: glm)
+        )
+        let modulesVM = LifeModulesViewModel()
+
+        let blockerStart = calendar.date(bySettingHour: 14, minute: 30, second: 0, of: today)!
+        let blocker = LifeTask(
+            title: "Call dentist",
+            estimatedMinutes: 45,
+            scheduledDate: nil,
+            scheduledTime: blockerStart,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let movableStart = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        var movable = LifeTask(
+            title: "Email inbox",
+            estimatedMinutes: 30,
+            scheduledDate: today,
+            scheduledTime: movableStart,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        try await store.create(blocker)
+        try await store.create(movable)
+        await tasksVM.loadTasks(userId: "user-1")
+
+        let mutation = PlanMutation(
+            kind: .rescheduleTask,
+            title: "Email inbox",
+            startHour: 14,
+            startMinute: 30
+        )
+        var medications: [Medication] = []
+        ScheduleMutationIdempotencyStore.shared.reset()
+        let result = await PlanMutationApplier().apply(
+            mutations: [mutation],
+            tasksVM: tasksVM,
+            modulesVM: modulesVM,
+            userId: "user-1",
+            medications: &medications
+        )
+
+        let updated = try await store.getAll(for: "user-1").first { $0.title == "Email inbox" }
+        let placed = try XCTUnwrap(updated?.scheduledTime)
+        let placedEnd = placed.addingTimeInterval(TimeInterval(30 * 60))
+        let overlapsBlocker = placed < blockerStart.addingTimeInterval(TimeInterval(45 * 60))
+            && placedEnd > blockerStart
+        XCTAssertFalse(
+            overlapsBlocker,
+            "Reschedule landed on a time-only task. skipped=\(result.skippedReasons)"
+        )
+    }
 }
 
 @MainActor

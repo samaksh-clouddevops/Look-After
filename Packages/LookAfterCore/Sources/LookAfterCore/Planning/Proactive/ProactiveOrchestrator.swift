@@ -93,7 +93,7 @@ public enum ProactiveOrchestrator {
         actions += schedule
 
         if let waiting = WaitingModeAnalyzer.analyze(tasks: input.tasks, now: input.now, calendar: input.calendar) {
-            actions.append(WaitingModeAnalyzer.proactiveAction(from: waiting))
+            actions.append(WaitingModeAnalyzer.proactiveAction(from: waiting, now: input.now))
         }
 
         let transitions = TransitionShieldBuilder.transitions(
@@ -135,7 +135,7 @@ public enum ProactiveOrchestrator {
             focusSessionActive: input.focusSessionActive,
             now: input.now
         ) {
-            actions.append(InitiationBridgeDetector.proactiveAction(from: bridge))
+            actions.append(InitiationBridgeDetector.proactiveAction(from: bridge, now: input.now, calendar: input.calendar))
         }
 
         actions += PatternCoachAnalyzer.analyze(analytics: input.analyticsContext, now: input.now)

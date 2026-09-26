@@ -522,7 +522,45 @@ final class TaskScheduleQueryTests: XCTestCase {
         XCTAssertEqual(keeper?.id, "dinner-evening")
     }
 
-    private let calendar = Calendar(identifier: .gregorian)
+    func testCompletingTimeOnlyFutureClockDoesNotSupersedeTodayOccurrence() {
+        let today = makeDate(year: 2026, month: 8, day: 7, hour: 19)
+        let tomorrowClock = makeDate(year: 2026, month: 8, day: 8, hour: 21, minute: 30)
+        var completed = LifeTask(
+            id: "dinner-done-tomorrow",
+            title: "Dinner",
+            status: .completed,
+            scheduledTime: tomorrowClock,
+            parentTaskId: "dinner-template",
+            userId: "user-1"
+        )
+        completed.completedAt = nil
+
+        let todayOccurrence = LifeTask(
+            id: "dinner-today",
+            title: "Dinner",
+            status: .pending,
+            scheduledDate: calendar.startOfDay(for: today),
+            scheduledTime: today,
+            parentTaskId: "dinner-template",
+            userId: "user-1"
+        )
+
+        let duplicates = TaskRecurrenceEngine.duplicateActiveSeriesIDs(
+            afterCompleting: completed,
+            in: [completed, todayOccurrence],
+            calendar: calendar
+        )
+        XCTAssertFalse(
+            duplicates.contains("dinner-today"),
+            "A future time-only completion must not supersede today's occurrence"
+        )
+    }
+
+    private let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
 
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!

@@ -213,10 +213,10 @@ public enum DayAuditService {
     private static func capacitySummary(for input: Input, on day: Date) -> DayAuditCapacitySummary {
         let flex = input.tasks.filter { task in
             guard task.status.isActive, task.isSchedulerMovable else { return false }
-            if let scheduledDate = task.scheduledDate {
-                return input.calendar.isDate(scheduledDate, inSameDayAs: day)
-            }
-            return input.calendar.isDateInToday(day)
+            // A missing date is not today's load. Time-only clocks book the day
+            // encoded in the clock, and unscheduled backlog stays off this total.
+            guard let assigned = task.assignedDay(calendar: input.calendar) else { return false }
+            return input.calendar.isDate(assigned, inSameDayAs: day)
         }
         let booked = flex.reduce(0) { partial, task in
             partial + max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)

@@ -216,6 +216,51 @@ final class AIScheduleSlotServiceTests: XCTestCase {
         XCTAssertTrue(changed.isEmpty)
         XCTAssertNil(tasks[0].scheduledTime)
     }
+
+    @MainActor
+    func testLocalFallbackDoesNotOverlapTimeOnlyClock() async {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: Date())
+        let blockerStart = calendar.date(bySettingHour: 14, minute: 30, second: 0, of: day)!
+        let blocker = LifeTask(
+            id: "time-only",
+            title: "Call dentist",
+            estimatedMinutes: 45,
+            scheduledDate: nil,
+            scheduledTime: blockerStart,
+            schedulingMode: .flexible,
+            userId: "u"
+        )
+        let flexible = LifeTask(
+            id: "flex-1",
+            title: "Deep work",
+            estimatedMinutes: 30,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "u"
+        )
+        let glm = mockGLMService()
+        glm.debugCompleteHandler = { _, _ in throw CancellationError() }
+
+        let suggestions = await AIScheduleSlotService.suggestSlots(
+            for: AIScheduleSlotService.DayContext(
+                day: day,
+                allTasks: [blocker, flexible],
+                unslotted: [flexible],
+                now: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day)!
+            ),
+            glm: glm,
+            calendar: calendar
+        )
+
+        let placed = suggestions.first { $0.id == flexible.id }
+        if let placed {
+            let start = calendar.date(bySettingHour: placed.startHour, minute: placed.startMinute, second: 0, of: day)!
+            let end = start.addingTimeInterval(TimeInterval(30 * 60))
+            let overlaps = start < blockerStart.addingTimeInterval(TimeInterval(45 * 60)) && end > blockerStart
+            XCTAssertFalse(overlaps, "Local fallback landed on a time-only clock")
+        }
+    }
 }
 
 @MainActor

@@ -157,6 +157,32 @@ final class LifeModelValidatorTests: XCTestCase {
         XCTAssertFalse(gaps.contains { $0.commitmentTitle == "Gym" })
     }
 
+    func testLifeGapDetectorTreatsTimeOnlyCompletionAsToday() {
+        let model = LifeModelValidator.compileLocally(from: fixtureMarkdown)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let today = calendar.date(from: DateComponents(year: 2026, month: 3, day: 4, hour: 19))!
+        let gym = LifeTask(
+            title: "Gym",
+            lifeArea: .health,
+            status: .completed,
+            scheduledTime: today,
+            tags: [LifeModel.commitmentTaskTag, model.commitmentID(for: "Gym")],
+            userId: "user-1",
+            createdAt: calendar.date(from: DateComponents(year: 2020, month: 1, day: 1))!,
+            updatedAt: calendar.date(from: DateComponents(year: 2020, month: 1, day: 1))!
+        )
+
+        let gaps = LifeGapDetector.detect(
+            model: model,
+            allTasks: [gym],
+            now: today,
+            calendar: calendar
+        )
+
+        XCTAssertFalse(gaps.contains { $0.commitmentTitle == "Gym" })
+    }
+
     private static let inlineFixture = """
     # My Core Identity
     My name is **Alex Chen**.

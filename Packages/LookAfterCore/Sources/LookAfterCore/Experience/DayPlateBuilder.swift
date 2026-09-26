@@ -35,8 +35,15 @@ public enum DayPlateBuilder {
         let completedToday = allTasks.filter { task in
             guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
             guard task.status == .completed else { return false }
-            let completionMoment = task.completedAt ?? task.updatedAt
-            return completionMoment >= startOfDay
+            if let completedAt = task.completedAt {
+                return completedAt >= startOfDay
+            }
+            // updatedAt defaults to now, so it cannot place a clock from another day on today's rail.
+            if let scheduled = task.scheduledDate ?? task.scheduledTime,
+               !calendar.isDate(scheduled, inSameDayAs: startOfDay) {
+                return false
+            }
+            return task.updatedAt >= startOfDay
         }
         let tasks = allTasks.filter { task in
             !TaskRecurrenceEngine.isRecurrenceTemplate(task) && task.status.isActive

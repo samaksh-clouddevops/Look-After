@@ -70,9 +70,10 @@ public enum DayStructureCompiler {
     public static func compile(
         profile: UserLifeProfile = UserLifeProfileStore.load(),
         model: LifeModel? = LifeModelStore.load(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        on day: Date = Date()
     ) -> DayStructure {
-        let day = calendar.startOfDay(for: Date())
+        let day = calendar.startOfDay(for: day)
         var anchors: [DayStructure.Anchor] = []
         var seenIDs = Set<String>()
 

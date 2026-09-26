@@ -164,13 +164,13 @@ public enum NotificationCandidateBuilder {
 
             let fireDate: Date?
             let day = calendar.startOfDay(for: now)
-            if task.isOverdue {
+            if task.isOverdue(calendar: calendar, referenceDate: now) {
                 fireDate = now.addingTimeInterval(60)
             } else if let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),
                       start > now,
-                      calendar.isDateInToday(start) {
+                      calendar.isDate(start, inSameDayAs: now) {
                 fireDate = start
-            } else if let deadline = task.deadline, deadline > now, calendar.isDateInToday(deadline) {
+            } else if let deadline = task.deadline, deadline > now, calendar.isDate(deadline, inSameDayAs: now) {
                 fireDate = deadline.addingTimeInterval(-15 * 60)
             } else {
                 return nil

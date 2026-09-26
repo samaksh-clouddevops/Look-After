@@ -375,6 +375,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         refreshContext: () async -> Void
     ) async {
         let calendar = Calendar.current
+        let now = pendingContextualReplan?.planningContext.now ?? Date()
         let allowedTaskIDs = Set(tasksVM.schedulingContext.map(\.id))
         let taskByID = Dictionary.uniquingFirstValue(tasksVM.tasks.map { ($0.id, $0) })
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
@@ -390,7 +391,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             }
 
             if suggestion.deferToTomorrow {
-                task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
+                task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
                 task.scheduledTime = nil
                 task.scheduledEndTime = nil
             } else if let hour = suggestion.startHour, let minute = suggestion.startMinute,
@@ -399,13 +400,13 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                         minute: minute,
                         freedSlot: freedSlot,
                         workHours: workHours,
+                        now: now,
                         calendar: calendar
                       ) {
                 let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
                 let end = time.addingTimeInterval(TimeInterval(duration * 60))
                 if let slot = freedSlot {
                     let day = calendar.startOfDay(for: slot.start)
-                    let now = Date()
                     let effectiveStart = calendar.isDate(day, inSameDayAs: now) ? max(slot.start, now) : slot.start
                     if time < effectiveStart || end > slot.end { continue }
                 }
@@ -426,7 +427,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                     break
                 }
 
-                task.scheduledDate = calendar.startOfDay(for: freedSlot?.start ?? Date())
+                task.scheduledDate = calendar.startOfDay(for: time)
                 task.scheduledTime = time
                 task.scheduledEndTime = end
             } else {
@@ -451,7 +452,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 userId: userId,
                 medications: &meds,
                 lifeProfile: profile,
-                allowUserPlacedOverride: true
+                allowUserPlacedOverride: true,
+                now: now
             )
         }
 
@@ -465,6 +467,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         minute: Int,
         freedSlot: DayReplanAwayWindow?,
         workHours: PlanningSchedulePolicy.WorkHours,
+        now: Date = Date(),
         calendar: Calendar
     ) -> Date? {
         guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
@@ -474,7 +477,6 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             guard let time = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) else {
                 return nil
             }
-            let now = Date()
             let effectiveStart = calendar.isDate(day, inSameDayAs: now) ? max(slot.start, now) : slot.start
             guard time >= effectiveStart else { return nil }
             return time
@@ -483,6 +485,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         return PlanningSchedulePolicy.validatedSchedule(
             hour: hour,
             minute: minute,
+            now: now,
             calendar: calendar,
             workHours: workHours
         )
@@ -1028,7 +1031,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         snapshot: LifeContextSnapshot?,
         healthSummary: HealthSummary?,
         executiveCapacity: ExecutiveCapacityState? = nil,
-        analyticsContext: CachedAIContextSummary? = nil
+        analyticsContext: CachedAIContextSummary? = nil,
+        now: Date = Date()
     ) -> PlanningConversationContext {
         let medications = MedicationStore.load()
         let capacity = executiveCapacity ?? .moderate
@@ -1037,12 +1041,12 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         let available = snapshot?.availableTimeMinutes ?? min(profileRemaining, 480)
 
         let nextMeeting = timelineItems
-            .filter { $0.kind == .meeting && $0.date > Date() }
+            .filter { $0.kind == .meeting && $0.date > now }
             .min { $0.date < $1.date }
 
         let meetingMinutes: Int?
         if let nextMeeting {
-            meetingMinutes = max(0, Int(nextMeeting.date.timeIntervalSinceNow / 60))
+            meetingMinutes = max(0, Int(nextMeeting.date.timeIntervalSince(now) / 60))
         } else {
             meetingMinutes = nil
         }
@@ -1068,7 +1072,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             completedTodayCount: tasksVM.completedToday.count,
             lifeProfile: UserLifeProfileStore.load(),
             analyticsContext: analyticsContext,
-            healthSummary: healthSummary
+            healthSummary: healthSummary,
+            now: now
         )
     }
 

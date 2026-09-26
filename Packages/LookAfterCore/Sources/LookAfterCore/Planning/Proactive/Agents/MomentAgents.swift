@@ -9,7 +9,7 @@ public enum PreWindowAgent {
         calendar: Calendar = .current
     ) -> [ProactiveAction] {
         guard let waiting = WaitingModeAnalyzer.analyze(tasks: tasks, now: now, calendar: calendar) else { return [] }
-        return [WaitingModeAnalyzer.proactiveAction(from: waiting)]
+        return [WaitingModeAnalyzer.proactiveAction(from: waiting, now: now)]
     }
 }
 

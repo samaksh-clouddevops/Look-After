@@ -243,7 +243,12 @@ public enum PlanningPromptContextBuilder {
         return block
     }
 
-    public static func healthBlock(_ summary: HealthSummary?, targetSleepHours: Double = 7.5) -> String {
+    public static func healthBlock(
+        _ summary: HealthSummary?,
+        targetSleepHours: Double = 7.5,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
         guard let summary else {
             return """
             APPLE HEALTH (imported today):
@@ -254,7 +259,7 @@ public enum PlanningPromptContextBuilder {
 
         var lines: [String] = []
 
-        if let manual = ManualSleepLogStore.entry(for: Date()) {
+        if let manual = ManualSleepLogStore.entry(for: now, calendar: calendar) {
             lines.append("- Self-reported sleep last night: \(manual.rating.label) (\(manual.rating.emoji)) — use for pacing and defer decisions")
         } else if let sleepMin = summary.totalSleepMinutes, sleepMin > 0 {
             let hours = sleepMin / 60.0

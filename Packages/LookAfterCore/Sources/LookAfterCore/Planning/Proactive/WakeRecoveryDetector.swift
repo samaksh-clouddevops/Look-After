@@ -22,7 +22,7 @@ public enum WakeRecoveryDetector {
     ) -> Result? {
         guard let sleepHours, sleepHours < 6 else { return nil }
         let meetings = timelineEvents.filter { event in
-            calendar.isDateInToday(event.date) && (event.kind == .meeting || event.isFixed)
+            calendar.isDate(event.date, inSameDayAs: now) && (event.kind == .meeting || event.isFixed)
         }.count
         guard meetings >= 3 else { return nil }
         return Result(

@@ -105,10 +105,10 @@ public enum PlanVariantBuilder {
 
     private static func localRescheduleChanges(context: DayReplanContext, tasks: [LifeTask]) -> [DayReplanScheduleChange] {
         let calendar = Calendar.current
-        let now = Date()
+        let now = context.planningContext.now
         let day = calendar.startOfDay(for: now)
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: context.planningContext.lifeProfile)
-        var slot = PlanningSchedulePolicy.nextAvailableSlot(workHours: workHours) ?? (workHours.startHour, 0)
+        var slot = PlanningSchedulePolicy.nextAvailableSlot(now: now, calendar: calendar, workHours: workHours) ?? (workHours.startHour, 0)
         var slotDate = calendar.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: day) ?? now
         var changes: [DayReplanScheduleChange] = []
 

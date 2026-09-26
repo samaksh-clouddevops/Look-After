@@ -108,7 +108,7 @@ struct GeneratedTasksReviewView: View {
     }
 
     private func scheduleLabel(for task: LifeTask) -> String? {
-        let day = Calendar.current.startOfDay(for: task.scheduledDate ?? Date())
+        let day = TaskRecurrenceEngine.creationDay(for: task)
         switch TaskScheduleInterval.displaySchedule(for: task, on: day) {
         case .unslottedFlexible:
             return "Flexible · \(task.estimatedMinutes.durationString)"

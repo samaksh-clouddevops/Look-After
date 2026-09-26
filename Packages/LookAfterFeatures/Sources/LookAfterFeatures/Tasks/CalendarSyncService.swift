@@ -44,13 +44,13 @@ public final class CalendarSyncService {
         var changedTasks: [LifeTask] = []
         var activeEventIDs = Set<String>()
         let relevant = tasks.filter { task in
-            guard let scheduledTime = task.scheduledTime else { return false }
-            let anchor = task.scheduledDate ?? scheduledTime
-            return calendar.isDate(anchor, inSameDayAs: day) || calendar.isDate(scheduledTime, inSameDayAs: day)
+            guard task.scheduledTime != nil else { return false }
+            guard let assigned = task.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(assigned, inSameDayAs: day)
         }
 
         for var task in relevant {
-            let day = calendar.startOfDay(for: task.scheduledDate ?? Date())
+            let day = TaskRecurrenceEngine.creationDay(for: task, calendar: calendar)
             if TaskScheduleInterval.isPlaceholderMidnightSchedule(for: task, calendar: calendar)
                 || TaskScheduleInterval.displaySchedule(for: task, on: day) == .unslottedFlexible {
                 if let eventID = task.calendarEventIdentifier {

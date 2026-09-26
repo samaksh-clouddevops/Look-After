@@ -148,6 +148,70 @@ final class DayAuditServiceTests: XCTestCase {
         XCTAssertTrue(result.hasMaterialFindings)
     }
 
+    func testCapacityIgnoresOtherDayTimeOnlyClock() {
+        let now = makeDate(hour: 10)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+        let tomorrowClock = calendar.date(bySettingHour: 19, minute: 30, second: 0, of: tomorrow)!
+        let future = LifeTask(
+            id: "dinner",
+            title: "Dinner",
+            estimatedMinutes: 90,
+            scheduledTime: tomorrowClock,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible
+        )
+        let inbox = LifeTask(
+            id: "inbox",
+            title: "Reply to Sam",
+            estimatedMinutes: 60,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible
+        )
+
+        let result = DayAuditService.run(
+            DayAuditService.Input(
+                tasks: [future, inbox],
+                energyPercent: 55,
+                capacityBandLabel: "Steady",
+                referenceDate: now,
+                now: now,
+                calendar: calendar
+            )
+        )
+
+        XCTAssertEqual(result.capacitySummary.bookedFlexMinutes, 0)
+        XCTAssertFalse(result.capacitySummary.isOverloaded)
+    }
+
+    func testFeasiblePoolKeepsUnscheduledAndDropsOtherDayTimeOnlyClock() {
+        let now = makeDate(hour: 10)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+        let tomorrowClock = calendar.date(bySettingHour: 19, minute: 30, second: 0, of: tomorrow)!
+        let unscheduled = LifeTask(
+            id: "inbox",
+            title: "Reply to Sam",
+            estimatedMinutes: 20,
+            userId: "user-1"
+        )
+        let futureClock = LifeTask(
+            id: "dinner",
+            title: "Dinner",
+            estimatedMinutes: 45,
+            scheduledTime: tomorrowClock,
+            userId: "user-1"
+        )
+
+        let pool = DaySupervisorContinuity.feasibleTasks(
+            from: [unscheduled, futureClock],
+            openWindowMinutes: 60,
+            energyPercent: 70,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(pool.map(\.id), ["inbox"])
+    }
+
     private func makeDate(
         year: Int = 2026,
         month: Int = 8,

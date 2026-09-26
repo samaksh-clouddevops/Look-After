@@ -1124,7 +1124,7 @@ public final class TasksViewModel: ObservableObject {
         let userId = task.userId
         if let existing = TaskRecurrenceEngine.existingRecurrenceTemplate(matching: task, in: existingTasks) {
             let calendar = Calendar.current
-            let day = calendar.startOfDay(for: task.scheduledDate ?? Date())
+            let day = TaskRecurrenceEngine.creationDay(for: task, calendar: calendar)
             let shouldCreateToday = existing.recurrenceRule == .none
                 || existing.recurrenceOccurs(on: day, calendar: calendar)
             guard shouldCreateToday,
@@ -1143,7 +1143,7 @@ public final class TasksViewModel: ObservableObject {
         template.completedAt = nil
 
         let calendar = Calendar.current
-        let day = calendar.startOfDay(for: task.scheduledDate ?? Date())
+        let day = TaskRecurrenceEngine.creationDay(for: task, calendar: calendar)
         let shouldCreateToday = template.recurrenceRule == .none
             || template.recurrenceOccurs(on: day, calendar: calendar)
         guard shouldCreateToday else {
@@ -1636,10 +1636,8 @@ public final class TasksViewModel: ObservableObject {
         let occupied = schedulingContext.filter { candidate in
             guard candidate.id != task.id, candidate.status.isActive else { return false }
             guard candidate.scheduledTime != nil else { return false }
-            if let scheduledDate = candidate.scheduledDate {
-                return calendar.isDate(scheduledDate, inSameDayAs: now)
-            }
-            return true
+            guard let assigned = candidate.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(assigned, inSameDayAs: now)
         }
 
         let allocations = DaySlotAllocator.allocate(
@@ -1891,15 +1889,15 @@ public final class TasksViewModel: ObservableObject {
     }
 
     /// Rough remaining flex budget for create/capture capacity checks.
+    /// Only tasks assigned to this day are booked. A time-only clock on another
+    /// day is not today's load, and unscheduled backlog is not either.
     public func dayRemainingFlexMinutes(now: Date = Date(), calendar: Calendar = .current) -> Int {
         let day = calendar.startOfDay(for: now)
         let booked = schedulingContext
             .filter { task in
                 guard task.status.isActive, task.isSchedulerMovable else { return false }
-                if let date = task.scheduledDate {
-                    return calendar.isDate(date, inSameDayAs: day)
-                }
-                return true
+                guard let assigned = task.assignedDay(calendar: calendar) else { return false }
+                return calendar.isDate(assigned, inSameDayAs: day)
             }
             .reduce(0) { $0 + max($1.estimatedMinutes, TaskDurationPolicy.minimumMinutes) }
         return max(0, 180 - booked)
@@ -2116,15 +2114,13 @@ public final class TasksViewModel: ObservableObject {
     public func materializeTimelineTask(_ task: LifeTask, userId: String) async throws -> LifeTask {
         var all = try await taskRepo.getAll(for: userId)
         let calendar = Calendar.current
-        let day = task.scheduledDate.map { calendar.startOfDay(for: $0) } ?? calendar.startOfDay(for: Date())
+        let day = task.assignedDay(calendar: calendar)
         let seriesKey = TaskScheduleQuery.seriesKey(for: task)
-        if let existing = all.first(where: { candidate in
+        if let day, let existing = all.first(where: { candidate in
             guard candidate.id != task.id, candidate.status.isActive else { return false }
             guard TaskScheduleQuery.seriesKey(for: candidate) == seriesKey else { return false }
-            if let scheduled = candidate.scheduledDate {
-                return calendar.isDate(scheduled, inSameDayAs: day)
-            }
-            return true
+            guard let candidateDay = candidate.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(candidateDay, inSameDayAs: day)
         }) {
             return existing
         }
@@ -2145,11 +2141,11 @@ public final class TasksViewModel: ObservableObject {
         }
 
         if let parentId = task.parentTaskId,
-           let scheduledDay = task.scheduledDate,
+           let scheduledDay = task.assignedDay(calendar: calendar),
            var stale = all.first(where: { candidate in
                candidate.parentTaskId == parentId
                    && candidate.status == .superseded
-                   && candidate.scheduledDate.map { calendar.isDate($0, inSameDayAs: scheduledDay) } == true
+                   && candidate.assignedDay(calendar: calendar).map { calendar.isDate($0, inSameDayAs: scheduledDay) } == true
            }) {
             stale.status = .pending
             stale.updatedAt = Date()
@@ -2539,7 +2535,7 @@ public final class TasksViewModel: ObservableObject {
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "pre-reconcile-local", authoritative: true)
         await normalizeMidnightSentinelsInStorage(userId: userId)
 
-        let structure = DayStructureCompiler.compile(model: model)
+        let structure = DayStructureCompiler.compile(model: model, calendar: calendar, on: date)
         let backfilled = DayStructureCompiler.backfillAnchorIDs(
             tasks: tasks,
             structure: structure,
@@ -3157,10 +3153,10 @@ public final class TasksViewModel: ObservableObject {
         }
         let taskByID = Dictionary.uniquingFirstValue(toAllocate.map { ($0.id, $0) })
         var occupied = tasks.filter { task in
-            guard task.status.isActive, let scheduledDate = task.scheduledDate, task.scheduledTime != nil else {
-                return false
-            }
-            return calendar.isDate(scheduledDate, inSameDayAs: day)
+            guard task.status.isActive, task.scheduledTime != nil else { return false }
+            // A missing scheduledDate still occupies the day encoded in the clock.
+            guard let assigned = task.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(assigned, inSameDayAs: day)
         }
 
         var remainingToAllocate = toAllocate
@@ -3368,8 +3364,9 @@ public final class TasksViewModel: ObservableObject {
             return task.lifeArea == .creativity && task.scheduledTime != nil
         }
 
-        let grouped = Dictionary(grouping: activeCreative) { task -> Date in
-            calendar.startOfDay(for: task.scheduledDate ?? task.scheduledTime ?? task.createdAt)
+        let dated = activeCreative.filter { $0.assignedDay(calendar: calendar) != nil }
+        let grouped = Dictionary(grouping: dated) { task -> Date in
+            task.assignedDay(calendar: calendar) ?? .distantFuture
         }
 
         for (_, group) in grouped where group.count > 1 {
@@ -3521,8 +3518,10 @@ public final class TasksViewModel: ObservableObject {
         var groups: [String: [LifeTask]] = [:]
         for task in active where OnboardingTaskSeeder.isKnownDailyRoutineTitle(task.title) {
             // Only collapse same-day active rows that are not recurrence templates.
+            // An unscheduled row is not today's duplicate — deleting it would drop the series.
             guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { continue }
-            let day = calendar.startOfDay(for: task.scheduledDate ?? task.scheduledTime ?? today)
+            guard let assigned = task.assignedDay(calendar: calendar) else { continue }
+            let day = assigned
             let key = "\(OnboardingTaskSeeder.normalizedRoutineTitle(task.title))|\(day.timeIntervalSince1970)"
             groups[key, default: []].append(task)
         }

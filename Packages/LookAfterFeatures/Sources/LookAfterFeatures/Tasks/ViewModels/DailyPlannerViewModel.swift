@@ -482,9 +482,11 @@ public final class DailyPlannerViewModel: ObservableObject {
             guard let task = taskByID[id], task.isSchedulerMovable else { return nil }
             return DaySlotAllocator.Request.makingSense(of: task, on: planningDay, calendar: calendar)
         }
-        let occupied = todayTasks.filter {
-            guard let scheduledDate = $0.scheduledDate, $0.scheduledTime != nil else { return false }
-            return calendar.isDate(scheduledDate, inSameDayAs: planningDay)
+        let occupied = todayTasks.filter { task in
+            guard task.scheduledTime != nil else { return false }
+            // A missing scheduledDate still occupies the day encoded in the clock.
+            guard let assigned = task.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(assigned, inSameDayAs: planningDay)
         }
         let allocations = DaySlotAllocator.allocateAcrossWindows(
             requests: requests,

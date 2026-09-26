@@ -66,6 +66,23 @@ final class TaskSemanticProfileTests: XCTestCase {
         XCTAssertNotNil(shifted)
     }
 
+    func testTimeOnlyDeferralShiftsFromClockDayNotCallerDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let today = calendar.date(from: DateComponents(year: 2026, month: 8, day: 7, hour: 10))!
+        let clock = calendar.date(from: DateComponents(year: 2026, month: 8, day: 8, hour: 18, minute: 30))!
+        var task = LifeTask(title: "Gym", estimatedMinutes: 60, scheduledTime: clock)
+        task.recurrence = .weekly
+
+        let shifted = ChronicDeferralLearning.shiftedScheduleDate(
+            for: task,
+            deferralCount: 3,
+            from: today,
+            calendar: calendar
+        )
+        XCTAssertEqual(shifted, calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: clock)!))
+    }
+
     func testShoppingProfileIsFlexibleErrand() {
         let task = LifeTask(title: "Grocery shopping", estimatedMinutes: 45)
         let profile = TaskSemanticProfileBuilder.build(from: task)

@@ -40,6 +40,24 @@ final class DayPlateBuilderTests: XCTestCase {
         XCTAssertEqual(plate.recurrenceTemplates.map(\.id), ["t1"])
     }
 
+    func testTimeOnlyFutureCompletionDoesNotLandOnTodayRail() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 12))!
+        let tomorrowClock = calendar.date(from: DateComponents(year: 2026, month: 9, day: 15, hour: 21, minute: 30))!
+        var completed = LifeTask(
+            id: "future-clock",
+            title: "Dinner",
+            status: .completed,
+            scheduledTime: tomorrowClock,
+            userId: "u1"
+        )
+        completed.completedAt = nil
+
+        let plate = DayPlateBuilder.inputs(from: [completed], now: now, calendar: calendar)
+        XCTAssertFalse(plate.completedToday.contains(where: { $0.id == "future-clock" }))
+    }
+
     func testSeriesKeyPrefersRoutineBlockAndCommitmentTags() {
         let routine = LifeTask(
             id: "r1",

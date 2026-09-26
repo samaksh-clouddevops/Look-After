@@ -242,7 +242,7 @@ public final class DayReplanEngine {
     private func buildPrompt(context: DayReplanContext) -> String {
         let pc = context.planningContext
         let profile = pc.lifeProfile
-        let now = Date()
+        let now = pc.now
 
         let completed = context.completedTasks.map { "- \($0.title)" }.joined(separator: "\n")
         let supplemental = PlanningPromptContextBuilder.supplementalContextBlock(
@@ -408,7 +408,7 @@ public final class DayReplanEngine {
 
     private func localFallback(context: DayReplanContext) -> DayReplanResult {
         let calendar = Calendar.current
-        let now = Date()
+        let now = context.planningContext.now
         let day = calendar.startOfDay(for: now)
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: context.planningContext.lifeProfile)
         var changes: [DayReplanScheduleChange] = []
@@ -432,7 +432,7 @@ public final class DayReplanEngine {
             return !changes.contains(where: { $0.taskID == task.id && $0.deferToTomorrow })
         }
 
-        var slot = PlanningSchedulePolicy.nextAvailableSlot(workHours: workHours)
+        var slot = PlanningSchedulePolicy.nextAvailableSlot(now: now, calendar: calendar, workHours: workHours)
             ?? (workHours.startHour, 0)
         var slotDate = calendar.date(
             bySettingHour: slot.hour,

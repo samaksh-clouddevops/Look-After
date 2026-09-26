@@ -268,6 +268,79 @@ final class TasksViewModelInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testMaterializeTimeOnlyProjectionDoesNotReuseUndatedSibling() async throws {
+        let sibling = LifeTask(
+            id: "today-sibling",
+            title: "Gym",
+            status: .pending,
+            recurrence: .daily,
+            userId: "user-1"
+        )
+        var undated = sibling
+        undated.parentTaskId = "template-gym"
+        try await store.create(undated)
+
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let clock = calendar.date(bySettingHour: 21, minute: 0, second: 0, of: tomorrow)!
+        let projection = LifeTask(
+            id: "tomorrow-projection",
+            title: "Gym",
+            status: .pending,
+            scheduledTime: clock,
+            recurrence: .daily,
+            parentTaskId: "template-gym",
+            userId: "user-1"
+        )
+
+        let materialized = try await viewModel.materializeTimelineTask(projection, userId: "user-1")
+        XCTAssertEqual(materialized.id, projection.id)
+        XCTAssertNotEqual(materialized.id, undated.id)
+    }
+
+    @MainActor
+    func testCreativeDedupeKeepsFutureTimeOnlyCommitment() async throws {
+        let model = LifeModel(
+            commitments: [
+                LifeCommitment(title: "Music production", lifeArea: .creativity)
+            ]
+        )
+        let tag = model.commitmentID(for: "Music production")
+        let todayTask = LifeTask(
+            id: "music-today",
+            title: "Music production",
+            lifeArea: .creativity,
+            status: .pending,
+            scheduledDate: today,
+            scheduledTime: calendar.date(bySettingHour: 21, minute: 0, second: 0, of: today),
+            tags: [tag, LifeModel.commitmentTaskTag],
+            userId: "user-1"
+        )
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let future = LifeTask(
+            id: "music-tomorrow",
+            title: "Music production",
+            lifeArea: .creativity,
+            status: .pending,
+            scheduledTime: calendar.date(bySettingHour: 21, minute: 0, second: 0, of: tomorrow),
+            tags: [tag, LifeModel.commitmentTaskTag],
+            userId: "user-1"
+        )
+        try await store.create(todayTask)
+        try await store.create(future)
+
+        await viewModel.dedupeLifeCommitmentTasks(
+            userId: "user-1",
+            model: model,
+            existingTasks: [todayTask, future],
+            calendar: calendar
+        )
+
+        let remaining = try await store.getAll(for: "user-1").map(\.id)
+        XCTAssertTrue(remaining.contains(todayTask.id))
+        XCTAssertTrue(remaining.contains(future.id))
+    }
+
+    @MainActor
     func testUncompleteTimelineTaskUsesTitleHint() async throws {
         var task = LifeTask(title: "Hint Match Task", userId: "user-1")
         task.status = .completed
@@ -283,6 +356,37 @@ final class TasksViewModelInteractionTests: XCTestCase {
         XCTAssertTrue(ok)
         XCTAssertTrue(viewModel.completedToday.isEmpty)
     }
+
+    @MainActor
+    func testRemainingFlexIgnoresOtherDayTimeOnlyClock() {
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrowClock = calendar.date(bySettingHour: 19, minute: 30, second: 0, of: tomorrow)!
+        let future = LifeTask(
+            id: "dinner",
+            title: "Dinner",
+            estimatedMinutes: 90,
+            scheduledTime: tomorrowClock,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "user-1"
+        )
+        let inbox = LifeTask(
+            id: "inbox",
+            title: "Reply to Sam",
+            estimatedMinutes: 60,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "user-1"
+        )
+        viewModel.tasks = [future, inbox]
+
+        XCTAssertEqual(
+            viewModel.dayRemainingFlexMinutes(now: today, calendar: calendar),
+            180,
+            "A future time-only clock and unscheduled backlog must not shrink today's flex"
+        )
+    }
+
 }
 
 @MainActor

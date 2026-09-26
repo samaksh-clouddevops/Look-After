@@ -393,4 +393,20 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     public var isCompleted: Bool {
         status == .completed
     }
+
+    /// When this row stopped being active. A clock is the day when completion time was never written.
+    public var inactivityMoment: Date {
+        completedAt ?? scheduledDate ?? scheduledTime ?? updatedAt
+    }
+
+    /// Calendar day this row is assigned to. A missing `scheduledDate` still carries a day in the clock.
+    public func assignedDay(calendar: Calendar = .current) -> Date? {
+        if let scheduledDate {
+            return calendar.startOfDay(for: scheduledDate)
+        }
+        if let scheduledTime {
+            return calendar.startOfDay(for: scheduledTime)
+        }
+        return nil
+    }
 }

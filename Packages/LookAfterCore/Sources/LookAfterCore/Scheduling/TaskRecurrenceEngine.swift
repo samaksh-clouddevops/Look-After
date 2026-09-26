@@ -323,6 +323,17 @@ public enum TaskRecurrenceEngine {
         return calendar.startOfDay(for: source.createdAt)
     }
 
+    /// Day a new recurring row should materialize on.
+    /// A clock is the day assignment when `scheduledDate` was never written.
+    public static func creationDay(
+        for task: LifeTask,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> Date {
+        let stamp = task.scheduledDate ?? task.scheduledTime ?? now
+        return calendar.startOfDay(for: stamp)
+    }
+
     /// Task record that owns the recurrence rule — occurrence overrides beat the parent template.
     public static func recurrenceSource(for task: LifeTask, in allTasks: [LifeTask]) -> LifeTask {
         if task.recurrenceRule != .none { return task }
@@ -511,7 +522,11 @@ public enum TaskRecurrenceEngine {
         calendar: Calendar = .current
     ) -> [String] {
         guard completed.status == .completed else { return [] }
-        let reference = completed.completedAt ?? completed.scheduledDate ?? Date()
+        // A time-only completion belongs to the clock's day, not wall-clock today.
+        let reference = completed.completedAt
+            ?? completed.scheduledDate
+            ?? completed.scheduledTime
+            ?? Date()
         let dayStart = calendar.startOfDay(for: reference)
         let completedKey = TaskScheduleQuery.seriesKey(for: completed)
         var ids = Set<String>()

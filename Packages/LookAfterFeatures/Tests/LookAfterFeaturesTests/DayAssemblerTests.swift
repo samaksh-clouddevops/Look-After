@@ -80,4 +80,37 @@ final class DayAssemblerTests: XCTestCase {
         XCTAssertFalse(result.tasksToCreate.contains { $0.title == "Music production" })
         XCTAssertTrue(result.skippedTitles.contains("Music production"))
     }
+
+    @MainActor
+    func testFutureTimeOnlyCommitmentDoesNotBlockToday() {
+        let markdown = """
+        ### Gym
+        **6:30 PM – 8:00 PM**
+        """
+        let model = LifeModelValidator.compileLocally(from: markdown)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let today = calendar.date(from: DateComponents(year: 2026, month: 3, day: 4))!
+        let tomorrowClock = calendar.date(from: DateComponents(year: 2026, month: 3, day: 5, hour: 18, minute: 30))!
+        let tag = model.commitmentID(for: "Gym")
+        let future = LifeTask(
+            title: "Gym",
+            status: .pending,
+            scheduledTime: tomorrowClock,
+            tags: [tag, LifeModel.commitmentTaskTag],
+            userId: "test-user"
+        )
+
+        let result = DayAssembler.assemble(
+            model: model,
+            existingTasks: [future],
+            completedToday: [],
+            userId: "test-user",
+            date: today,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(result.tasksToCreate.contains { $0.title == "Gym" })
+        XCTAssertFalse(result.skippedTitles.contains("Gym"))
+    }
 }

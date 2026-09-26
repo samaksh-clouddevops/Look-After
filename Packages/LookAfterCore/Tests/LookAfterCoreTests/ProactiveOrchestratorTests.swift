@@ -21,6 +21,35 @@ final class ProactiveOrchestratorTests: XCTestCase {
         )
     }
 
+    func testExpiryBoostUsesReferenceNowNotWallClock() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 10))!
+        let expiring = ProactiveAction(
+            kind: .initiationBridge,
+            severity: .medium,
+            message: "Start now",
+            options: ["Start"],
+            expiresAt: now.addingTimeInterval(4 * 60)
+        )
+        let stable = ProactiveAction(
+            kind: .initiationBridge,
+            severity: .medium,
+            message: "Start later",
+            options: ["Start"],
+            expiresAt: now.addingTimeInterval(30 * 60)
+        )
+
+        XCTAssertGreaterThan(
+            ADHDProactiveRouting.score(expiring, challenge: .taskInitiation, now: now),
+            ADHDProactiveRouting.score(stable, challenge: .taskInitiation, now: now)
+        )
+        XCTAssertEqual(
+            ADHDProactiveRouting.rank([stable, expiring], challenge: .taskInitiation, now: now).map(\.message),
+            ["Start now", "Start later"]
+        )
+    }
+
     func testCalendarChangeDetectorFlagsNewMeeting() {
         let calendar = Calendar.current
         let now = Date()
@@ -66,6 +95,51 @@ final class ProactiveOrchestratorTests: XCTestCase {
             throw XCTSkip("No waiting-mode gap at current clock time")
         }
         XCTAssertFalse(result.fittingTasks.isEmpty)
+    }
+
+    func testWaitingModeDropsOtherDayTimeOnlyClock() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 10))!
+        let day = calendar.startOfDay(for: now)
+        let anchorStart = calendar.date(byAdding: .minute, value: 25, to: now)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: day)!
+        let tomorrowClock = calendar.date(bySettingHour: 19, minute: 30, second: 0, of: tomorrow)!
+
+        let anchor = LifeTask(
+            id: "standup",
+            title: "Standup",
+            scheduledDate: day,
+            scheduledTime: anchorStart,
+            schedulingMode: .fixedTime,
+            timeConstraint: .anchored,
+            userId: "user-1"
+        )
+        let future = LifeTask(
+            id: "dinner",
+            title: "Dinner",
+            estimatedMinutes: 10,
+            scheduledTime: tomorrowClock,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "user-1"
+        )
+        let inbox = LifeTask(
+            id: "inbox",
+            title: "Reply to Sam",
+            estimatedMinutes: 10,
+            schedulingMode: .flexible,
+            timeConstraint: .flexible,
+            userId: "user-1"
+        )
+
+        let result = WaitingModeAnalyzer.analyze(
+            tasks: [anchor, future, inbox],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(result?.fittingTasks.map(\.id), ["inbox"])
     }
 
     func testInitiationBridgeDetectsHovering() {

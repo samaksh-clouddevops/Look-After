@@ -174,10 +174,10 @@ public enum AIScheduleSlotService {
         )
         let dayStart = calendar.startOfDay(for: context.day)
         let slotted = context.allTasks.filter { task in
-            guard task.status.isActive, let scheduledDate = task.scheduledDate, task.scheduledTime != nil else {
-                return false
-            }
-            return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+            guard task.status.isActive, task.scheduledTime != nil else { return false }
+            // A missing scheduledDate still occupies the day encoded in the clock.
+            guard let assigned = task.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(assigned, inSameDayAs: dayStart)
                 && TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar)
         }
         let fixed = slotted.filter { !$0.isSchedulerMovable || $0.isFixedTimeEvent || $0.isLifeCommitmentTask }
@@ -235,10 +235,10 @@ public enum AIScheduleSlotService {
         }
 
         let occupied = context.allTasks.filter { task in
-            guard task.status.isActive, let scheduledDate = task.scheduledDate, task.scheduledTime != nil else {
-                return false
-            }
-            return calendar.isDate(scheduledDate, inSameDayAs: dayStart)
+            guard task.status.isActive, task.scheduledTime != nil else { return false }
+            // A missing scheduledDate still occupies the day encoded in the clock.
+            guard let assigned = task.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(assigned, inSameDayAs: dayStart)
         }
 
         let allocations = DaySlotAllocator.allocateAcrossWindows(

@@ -108,7 +108,7 @@ public final class LLMPlanningEngine {
         voiceOptimized: Bool = false
     ) -> String {
         let profile = context.lifeProfile
-        let now = Date()
+        let now = context.now
 
         let matchLines = analysis.existingTaskMatches.prefix(5).map { "- REUSE id:\($0.id) | \($0.title)" }.joined(separator: "\n")
         let deferLines = analysis.deferCandidates.map { "- \($0.title)" }.joined(separator: "\n")
@@ -147,7 +147,7 @@ public final class LLMPlanningEngine {
 
         \(PlanningPromptContextBuilder.combinedLifeContextBlock(profile: profile))
         \(supplemental.isEmpty ? "" : "\(supplemental)\n")
-        \(PlanningPromptContextBuilder.healthBlock(context.healthSummary))
+        \(PlanningPromptContextBuilder.healthBlock(context.healthSummary, now: now))
         \(cycleBlock.isEmpty ? "" : "\(cycleBlock)\n")
         \(PlanningPromptContextBuilder.executiveCapacityBlock(
             label: context.executiveCapacityLabel,

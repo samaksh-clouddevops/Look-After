@@ -114,7 +114,7 @@ public enum ProactiveActionsBuilder {
 
         let deferralsToday = snapshot.behaviorMemory.deferralRecords.filter {
             guard let date = $0.lastDeferredAt else { return false }
-            return calendar.isDateInToday(date)
+            return calendar.isDate(date, inSameDayAs: now)
         }.count
         if let badDay = BadDayDetector.evaluate(
             BadDayDetector.Input(

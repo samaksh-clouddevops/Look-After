@@ -224,7 +224,8 @@ public enum LifeGapDetector {
         guard task.status == .completed else { return nil }
         if let completedAt = task.completedAt { return completedAt }
         if task.updatedAt.timeIntervalSince1970 > 0 { return task.updatedAt }
-        if task.tags.contains(LifeModel.commitmentTaskTag), let scheduled = task.scheduledDate {
+        if task.tags.contains(LifeModel.commitmentTaskTag),
+           let scheduled = task.scheduledDate ?? task.scheduledTime {
             return scheduled
         }
         return nil

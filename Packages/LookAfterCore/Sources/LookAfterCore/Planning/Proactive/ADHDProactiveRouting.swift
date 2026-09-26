@@ -5,16 +5,24 @@ public enum ADHDProactiveRouting {
     private static let boostWeight = 2
     private static let suppressWeight = -3
 
-    public static func rank(_ actions: [ProactiveAction], challenge: ADHDFocusChallenge = ADHDFocusChallenge.load()) -> [ProactiveAction] {
+    public static func rank(
+        _ actions: [ProactiveAction],
+        challenge: ADHDFocusChallenge = ADHDFocusChallenge.load(),
+        now: Date = Date()
+    ) -> [ProactiveAction] {
         actions
-            .sorted { score($0, challenge: challenge) > score($1, challenge: challenge) }
+            .sorted { score($0, challenge: challenge, now: now) > score($1, challenge: challenge, now: now) }
     }
 
-    public static func score(_ action: ProactiveAction, challenge: ADHDFocusChallenge) -> Int {
+    public static func score(
+        _ action: ProactiveAction,
+        challenge: ADHDFocusChallenge,
+        now: Date = Date()
+    ) -> Int {
         var value = severityRank(action.severity)
         value += affinityBoost(action.kind, challenge: challenge)
-        value += ProactiveFeedbackStore.boost(for: action.kind)
-        if let expiresAt = action.expiresAt, expiresAt < Date().addingTimeInterval(5 * 60) {
+        value += ProactiveFeedbackStore.boost(for: action.kind, now: now)
+        if let expiresAt = action.expiresAt, expiresAt < now.addingTimeInterval(5 * 60) {
             value += 1
         }
         return value
@@ -22,8 +30,8 @@ public enum ADHDProactiveRouting {
 
     public static func rankFiltered(_ actions: [ProactiveAction], challenge: ADHDFocusChallenge = ADHDFocusChallenge.load(), now: Date = Date()) -> [ProactiveAction] {
         let visible = actions.filter { !ProactiveDismissStore.isSuppressed($0, now: now) }
-            .filter { !ProactiveFeedbackStore.shouldSuppress(kind: $0.kind) }
-        return rank(visible, challenge: challenge)
+            .filter { !ProactiveFeedbackStore.shouldSuppress(kind: $0.kind, now: now) }
+        return rank(visible, challenge: challenge, now: now)
     }
 
     private static func severityRank(_ severity: ProactiveAction.Severity) -> Int {

@@ -297,14 +297,12 @@ public extension LifeTask {
     }
 
     /// Whether `now` falls inside this task's fixed window on the same calendar day.
-    /// Time-only tasks (no `scheduledDate`) still paint their clock onto `now`'s day.
-    /// A `scheduledDate` on another day must not be remapped — that would treat
-    /// tomorrow's 9am meeting, or yesterday's leftover, as "happening now".
+    /// A clock from another day must not be remapped onto `now` — missing `scheduledDate`
+    /// still carries a day in `scheduledTime`.
     func isActiveFixedTimeWindow(at now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard isFixedTimeEvent, let start = scheduledTime else { return false }
-        if let scheduledDate, !calendar.isDate(scheduledDate, inSameDayAs: now) {
-            return false
-        }
+        let clockDay = scheduledDate ?? start
+        guard calendar.isDate(clockDay, inSameDayAs: now) else { return false }
         let day = calendar.startOfDay(for: now)
         guard let windowStart = calendar.combine(date: day, timeFrom: start) else { return false }
         let windowEnd: Date
@@ -320,8 +318,13 @@ public extension LifeTask {
     func fixedWindowOverlaps(_ other: LifeTask, on day: Date, calendar: Calendar = .current) -> Bool {
         guard isFixedTimeEvent, other.isFixedTimeEvent,
               let startA = scheduledTime, let startB = other.scheduledTime else { return false }
-
         let dayStart = calendar.startOfDay(for: day)
+        // A missing scheduledDate still carries a day in the clock — don't collide it onto another day.
+        guard calendar.isDate(scheduledDate ?? startA, inSameDayAs: dayStart),
+              calendar.isDate(other.scheduledDate ?? startB, inSameDayAs: dayStart) else {
+            return false
+        }
+
         guard let aStart = calendar.combine(date: dayStart, timeFrom: startA),
               let bStart = calendar.combine(date: dayStart, timeFrom: startB) else { return false }
 

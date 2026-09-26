@@ -50,11 +50,12 @@ public struct PlanMutationApplier {
         userMessage: String? = nil,
         lifeProfile: UserLifeProfile = UserLifeProfile(),
         deferReconcile: Bool = false,
-        allowUserPlacedOverride: Bool = false
+        allowUserPlacedOverride: Bool = false,
+        now: Date = Date()
     ) async -> ApplyResult {
         var result = ApplyResult()
         let windows = SchedulingWindows.from(profile: lifeProfile)
-        let dayStart = calendar.startOfDay(for: Date())
+        let dayStart = calendar.startOfDay(for: now)
         // Prefer full active list + scheduling context so title/id resolution sees all movable tasks.
         let allTasks = dedupeTasks(tasksVM.tasks + tasksVM.schedulingContext)
         let taskByID = Dictionary.uniquingFirstValue(allTasks.map { ($0.id, $0) })
@@ -63,7 +64,7 @@ public struct PlanMutationApplier {
         )
         let allowedTaskIDs = Set(taskByID.keys)
         var pendingCreates: [PendingCreate] = []
-        var schedulingPool = tasksScheduledToday(from: allTasks)
+        var schedulingPool = tasksScheduledToday(from: allTasks, dayStart: dayStart)
         let idempotency = ScheduleMutationIdempotencyStore.shared
 
         for mutation in mutations {
@@ -108,7 +109,8 @@ public struct PlanMutationApplier {
                        let scheduled = preferredStart(
                            hour: hour,
                            minute: minute,
-                           windows: windows
+                           windows: windows,
+                           now: now
                        ) {
                         let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
                         let occupied = TaskScheduleInterval.intervals(
@@ -151,12 +153,13 @@ public struct PlanMutationApplier {
                     userId: userId
                 )
                 task.id = UUID().uuidString
-                task.scheduledDate = calendar.startOfDay(for: Date())
+                task.scheduledDate = dayStart
 
                 let preferredStart = preferredStart(
                     hour: mutation.startHour,
                     minute: mutation.startMinute,
-                    windows: windows
+                    windows: windows,
+                    now: now
                 )
                 pendingCreates.append(
                     PendingCreate(
@@ -206,6 +209,8 @@ public struct PlanMutationApplier {
                     scheduled = PlanningSchedulePolicy.validatedScheduleInWindows(
                         hour: hour,
                         minute: minute,
+                        now: now,
+                        calendar: calendar,
                         windows: windows
                     )
                 } else {
@@ -274,7 +279,7 @@ public struct PlanMutationApplier {
                     result.skippedReasons.append("Could not defer task")
                     continue
                 }
-                let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
+                let tomorrow = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
                 task.scheduledDate = tomorrow
                 task.scheduledTime = nil
                 task.scheduledEndTime = nil
@@ -518,22 +523,27 @@ public struct PlanMutationApplier {
         var preferredStart: Date?
     }
 
-    private func tasksScheduledToday(from tasks: [LifeTask]) -> [LifeTask] {
-        tasks.filter { task in
-            guard let scheduledDate = task.scheduledDate, task.scheduledTime != nil else { return false }
-            return calendar.isDateInToday(scheduledDate)
+    private func tasksScheduledToday(from tasks: [LifeTask], dayStart: Date) -> [LifeTask] {
+        return tasks.filter { task in
+            guard task.status.isActive, task.scheduledTime != nil else { return false }
+            // A missing scheduledDate still occupies the day encoded in the clock.
+            guard let assigned = task.assignedDay(calendar: calendar) else { return false }
+            return calendar.isDate(assigned, inSameDayAs: dayStart)
         }
     }
 
     private func preferredStart(
         hour: Int?,
         minute: Int?,
-        windows: SchedulingWindows
+        windows: SchedulingWindows,
+        now: Date
     ) -> Date? {
         guard let hour, let minute else { return nil }
         return PlanningSchedulePolicy.validatedScheduleInWindows(
             hour: hour,
             minute: minute,
+            now: now,
+            calendar: calendar,
             windows: windows
         )
     }

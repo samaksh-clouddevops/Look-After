@@ -55,7 +55,10 @@ public enum DaySupervisorContinuity {
             let minutes = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
             if minutes > budget + 10 { return false }
             if energyPercent < 35, minutes > 40 { return false }
-            if let date = task.scheduledDate, !calendar.isDate(date, inSameDayAs: day) {
+            // Unscheduled backlog can still fill today's gap. A clock from another
+            // day — including a time-only clock with no scheduledDate — cannot.
+            if let assigned = task.assignedDay(calendar: calendar),
+               !calendar.isDate(assigned, inSameDayAs: day) {
                 return false
             }
             return true

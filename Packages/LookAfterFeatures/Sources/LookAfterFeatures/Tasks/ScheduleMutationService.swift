@@ -174,7 +174,7 @@ public final class ScheduleMutationService {
               task.timeConstraintValue != .anchored else { return }
 
         let calendar = Calendar.current
-        let day = calendar.startOfDay(for: task.scheduledDate ?? Date())
+        let day = TaskRecurrenceEngine.creationDay(for: task, calendar: calendar)
         let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
         let base = task.scheduledTime
             ?? calendar.date(bySettingHour: 12, minute: 0, second: 0, of: day)

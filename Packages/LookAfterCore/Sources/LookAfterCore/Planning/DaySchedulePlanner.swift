@@ -35,7 +35,7 @@ public enum DaySchedulePlanner {
         calendarEvents: [BriefingCalendarEvent] = []
     ) -> PlanResult {
         let dayStart = calendar.startOfDay(for: day)
-        let compiled = structure ?? DayStructureCompiler.compile(profile: profile, model: model, calendar: calendar)
+        let compiled = structure ?? DayStructureCompiler.compile(profile: profile, model: model, calendar: calendar, on: dayStart)
         var slots: [PlannedSlot] = []
         var occupied: [TaskScheduleInterval] = OccupiedDay.calendarIntervals(
             from: calendarEvents,

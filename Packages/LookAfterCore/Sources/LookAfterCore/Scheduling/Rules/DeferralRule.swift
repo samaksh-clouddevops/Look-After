@@ -93,7 +93,8 @@ public enum ChronicDeferralLearning {
         guard let offset = suggestedWeekdayOffset(deferralCount: deferralCount, threshold: threshold) else {
             return nil
         }
-        let start = calendar.startOfDay(for: task.scheduledDate ?? day)
+        // A time-only clock is the day being deferred, not the caller's `day`.
+        let start = calendar.startOfDay(for: task.scheduledDate ?? task.scheduledTime ?? day)
         return calendar.date(byAdding: .day, value: offset, to: start)
     }
 }

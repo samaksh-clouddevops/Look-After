@@ -39,7 +39,7 @@ public enum InitiationBridgeDetector {
             ],
             surface: .banner,
             relatedTaskIDs: [result.heroTask.id],
-            expiresAt: Date().addingTimeInterval(20 * 60)
+            expiresAt: now.addingTimeInterval(20 * 60)
         )
     }
 }

@@ -16,6 +16,12 @@ public enum FreedSlotWindow {
             return DayReplanAwayWindow(start: window.start, end: window.end)
         }
 
+        // A clock on another day did not free today's timeline.
+        if let assigned = task.assignedDay(calendar: calendar),
+           !calendar.isDate(assigned, inSameDayAs: day) {
+            return nil
+        }
+
         let start = max(now, day)
         let end = start.addingTimeInterval(TimeInterval(duration * 60))
         guard end > start else { return nil }

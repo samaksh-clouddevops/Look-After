@@ -448,7 +448,7 @@ struct TaskListView: View {
             let cutoff = calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: Date())) ?? Date()
             return tasksVM.inactiveTasks.filter {
                 $0.isInactiveWithNoFutureOccurrence(allTasks: context, calendar: calendar)
-                    && ($0.completedAt ?? $0.updatedAt) >= cutoff
+                    && $0.inactivityMoment >= cutoff
             }
         }
     }

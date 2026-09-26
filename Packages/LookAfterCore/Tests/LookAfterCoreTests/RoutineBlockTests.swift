@@ -124,4 +124,46 @@ final class RoutineBlockTests: XCTestCase {
         let matches = structure.anchors.filter { $0.id == "routine-block.\(block.id)" }
         XCTAssertEqual(matches.count, 1)
     }
+
+    func testDayStructureCompilerUsesPlanningDayNotWallClock() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        // 2026-08-04 is a Tuesday. Weekend-only and Monday-only blocks must not leak in.
+        let tuesday = calendar.date(from: DateComponents(year: 2026, month: 8, day: 4))!
+        let monday = calendar.date(from: DateComponents(year: 2026, month: 8, day: 3))!
+        let block = RoutineBlock(title: "Long run", days: .weekends, startHour: 9, startMinute: 0, durationMinutes: 30)
+        var mondayOnly = WeekdaySet.everyDay
+        mondayOnly.tuesday = false
+        mondayOnly.wednesday = false
+        mondayOnly.thursday = false
+        mondayOnly.friday = false
+        mondayOnly.saturday = false
+        mondayOnly.sunday = false
+        let mondayBlock = RoutineBlock(
+            title: "Monday review",
+            days: mondayOnly,
+            startHour: 10,
+            startMinute: 0,
+            durationMinutes: 30
+        )
+        RoutineBlockStore.save([block, mondayBlock])
+
+        let tuesdayStructure = DayStructureCompiler.compile(
+            profile: UserLifeProfile(),
+            model: nil,
+            calendar: calendar,
+            on: tuesday
+        )
+        XCTAssertNil(tuesdayStructure.anchors.first { $0.id == "routine-block.\(block.id)" })
+        XCTAssertNil(tuesdayStructure.anchors.first { $0.id == "routine-block.\(mondayBlock.id)" })
+
+        let mondayStructure = DayStructureCompiler.compile(
+            profile: UserLifeProfile(),
+            model: nil,
+            calendar: calendar,
+            on: monday
+        )
+        XCTAssertNotNil(mondayStructure.anchors.first { $0.id == "routine-block.\(mondayBlock.id)" })
+    }
+
 }

@@ -316,6 +316,42 @@ final class TaskRecurrenceTests: XCTestCase {
         XCTAssertFalse(task.isActiveFixedTimeWindow(at: today, calendar: calendar))
     }
 
+    func testTimeOnlyFixedWindowDoesNotPaintFutureClockOntoToday() {
+        let today = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let tomorrowNine = makeDate(year: 2026, month: 8, day: 3, hour: 9)
+        let tomorrowEnd = makeDate(year: 2026, month: 8, day: 3, hour: 10)
+        let task = LifeTask(
+            title: "Dentist",
+            scheduledTime: tomorrowNine,
+            schedulingMode: .fixedTime,
+            scheduledEndTime: tomorrowEnd
+        )
+        XCTAssertTrue(task.isFixedTimeEvent)
+        XCTAssertFalse(
+            task.isActiveFixedTimeWindow(at: today, calendar: calendar),
+            "A future time-only clock must not count as happening now"
+        )
+    }
+
+    func testTimeOnlyFutureClockDoesNotOverlapTodayWindow() {
+        let today = makeDate(year: 2026, month: 8, day: 2)
+        let todayStart = makeDate(year: 2026, month: 8, day: 2, hour: 9)
+        let todayTask = LifeTask(
+            title: "Standup",
+            scheduledDate: today,
+            scheduledTime: todayStart,
+            schedulingMode: .fixedTime,
+            scheduledEndTime: makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        )
+        let tomorrowTask = LifeTask(
+            title: "Dentist",
+            scheduledTime: makeDate(year: 2026, month: 8, day: 3, hour: 9),
+            schedulingMode: .fixedTime,
+            scheduledEndTime: makeDate(year: 2026, month: 8, day: 3, hour: 10)
+        )
+        XCTAssertFalse(todayTask.fixedWindowOverlaps(tomorrowTask, on: today, calendar: calendar))
+    }
+
     func testWeekdaysOccurrenceNotActionableOnSunday() {
         let sunday = makeDate(year: 2026, month: 8, day: 2)
         let template = LifeTask(
@@ -1190,6 +1226,19 @@ final class TaskRecurrenceTests: XCTestCase {
         XCTAssertFalse(task.isScheduledTask(allTasks: [task], calendar: calendar, referenceDate: today))
     }
 
+    func testInactivityMomentUsesClockWhenCompletionWasNeverWritten() {
+        let pastClock = makeDate(year: 2026, month: 7, day: 1, hour: 9)
+        var task = LifeTask(
+            id: "old-clock",
+            title: "Old standup",
+            status: .completed,
+            scheduledTime: pastClock,
+            userId: "user-1"
+        )
+        task.completedAt = nil
+        XCTAssertEqual(task.inactivityMoment, pastClock)
+    }
+
     func testTimeOnlyRecurringMasterIsActionableOnClockDay() {
         let today = makeDate(year: 2026, month: 7, day: 31, hour: 12)
         let clock = makeDate(year: 2026, month: 7, day: 31, hour: 21)
@@ -1315,6 +1364,27 @@ final class TaskRecurrenceTests: XCTestCase {
             "A future time-only clock must not match the earlier created day"
         )
         XCTAssertTrue(task.recurrenceOccurs(on: clock, calendar: calendar))
+    }
+
+    func testCreationDayUsesTimeOnlyClockInsteadOfNow() {
+        let now = makeDate(year: 2026, month: 8, day: 7, hour: 10)
+        let clock = makeDate(year: 2026, month: 8, day: 8, hour: 21, minute: 30)
+        let task = LifeTask(
+            id: "time-only-create",
+            title: "Dinner",
+            scheduledTime: clock,
+            recurrence: .daily,
+            userId: "user-1"
+        )
+
+        XCTAssertEqual(
+            TaskRecurrenceEngine.creationDay(for: task, calendar: calendar, now: now),
+            calendar.startOfDay(for: clock)
+        )
+        XCTAssertNotEqual(
+            TaskRecurrenceEngine.creationDay(for: task, calendar: calendar, now: now),
+            calendar.startOfDay(for: now)
+        )
     }
 
 

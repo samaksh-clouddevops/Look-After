@@ -318,12 +318,11 @@ enum MorningDayBriefingBuilder {
     }
 
     private static func isRelevantToday(_ task: LifeTask, now: Date, calendar: Calendar) -> Bool {
-        if task.isOverdue { return true }
-        if let scheduled = task.scheduledDate ?? task.scheduledTime {
-            return calendar.isDate(scheduled, inSameDayAs: now)
-        }
-        if task.scheduledTime != nil { return true }
-        return true
+        task.belongsOnDaySchedule(
+            day: calendar.startOfDay(for: now),
+            calendar: calendar,
+            now: now
+        )
     }
 
     private static func formatMinutes(_ minutes: Int) -> String {
