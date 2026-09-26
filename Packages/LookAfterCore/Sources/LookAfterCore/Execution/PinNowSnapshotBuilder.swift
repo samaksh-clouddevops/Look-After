@@ -135,10 +135,15 @@ public enum PinNowSnapshotBuilder {
         }
 
         if let upcoming = activeTasks.first(where: { task in
-            guard let day = task.scheduledDate ?? task.scheduledTime else { return false }
-            let taskDay = calendar.startOfDay(for: day)
             let today = calendar.startOfDay(for: now)
-            guard taskDay == today else { return false }
+            // A same-day stamp is not membership. A Sunday gym occurrence dated
+            // Thursday must not become the pin just because its clock is later today.
+            guard TaskRecurrenceEngine.isActionableToday(
+                task,
+                in: tasks,
+                calendar: calendar,
+                referenceDate: now
+            ) else { return false }
             if let start = TaskScheduleInterval.resolvedStart(for: task, on: today, calendar: calendar) {
                 return start > now
             }

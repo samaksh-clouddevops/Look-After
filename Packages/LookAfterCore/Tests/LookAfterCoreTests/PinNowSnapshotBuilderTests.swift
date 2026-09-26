@@ -280,6 +280,40 @@ final class PinNowSnapshotBuilderTests: XCTestCase {
         XCTAssertNil(model)
     }
 
+    func testWrongWeekdayRecurringOccurrenceDoesNotBecomeNextUpPin() {
+        // 6 Aug 2026 is a Thursday. Sunday is weekday 1.
+        let start = calendar.date(from: DateComponents(year: 2026, month: 8, day: 6, hour: 15))!
+        let template = LifeTask(
+            id: "gym-template",
+            title: "Gym",
+            recurrence: .custom,
+            recurrenceWeekdays: [1],
+            userId: "test-user",
+            isRecurrenceTemplate: true
+        )
+        let occurrence = LifeTask(
+            id: "gym-thursday",
+            title: "Gym",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: start,
+            parentTaskId: template.id,
+            recurrence: .custom,
+            recurrenceWeekdays: [1],
+            userId: "test-user"
+        )
+
+        let model = PinNowSnapshotBuilder.build(
+            tasks: [template, occurrence],
+            flowSurface: nil,
+            cognitiveSnapshot: nil,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertNotEqual(model?.headline, "Gym")
+    }
+
     func testBuildReturnsNilWhenNoActiveTasks() {
         let model = PinNowSnapshotBuilder.build(
             tasks: [],

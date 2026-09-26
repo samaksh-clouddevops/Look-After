@@ -44,7 +44,15 @@ public enum DaySchedulePlanner {
         )
 
         let active = tasks.filter { task in
+            // Date membership is not enough: a Sunday-only occurrence stamped on
+            // Monday must not occupy Monday's plan.
             task.belongsOnDaySchedule(day: dayStart, calendar: calendar, now: now)
+                && TaskRecurrenceEngine.matchesRecurrenceSchedule(
+                    task,
+                    on: dayStart,
+                    in: tasks,
+                    calendar: calendar
+                )
         }
 
         // Phase 1 — snap anchored / user-placed / structure-backed tasks. These tasks are not

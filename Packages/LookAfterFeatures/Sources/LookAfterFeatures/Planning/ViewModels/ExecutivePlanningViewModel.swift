@@ -259,7 +259,14 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
         do {
             let result = try await replanEngine.replan(context: context)
-            await applyReplanResult(result, tasksVM: tasksVM, modulesVM: modulesVM, userId: userId, refreshContext: refreshContext)
+            await applyReplanResult(
+                result,
+                now: context.planningContext.now,
+                tasksVM: tasksVM,
+                modulesVM: modulesVM,
+                userId: userId,
+                refreshContext: refreshContext
+            )
 
             replanSummary = result.summary
             turns.append(PlanningConversationTurn(role: .assistant, text: result.summary))
@@ -352,6 +359,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         guard let result = contextualReplanResult else { return }
         await applyReplanResult(
             result,
+            now: pendingContextualReplan?.planningContext.now,
             tasksVM: tasksVM,
             modulesVM: modulesVM,
             userId: userId,

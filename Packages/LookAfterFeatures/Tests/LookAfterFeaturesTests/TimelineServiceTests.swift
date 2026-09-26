@@ -354,6 +354,44 @@ final class TimelineServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testWrongWeekdayRecurringOccurrenceDoesNotBecomeSuggestedSlot() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        // Monday 10 Aug 2026 — not a Sunday.
+        let monday = calendar.date(from: DateComponents(year: 2026, month: 8, day: 10, hour: 14))!
+        let template = LifeTask(
+            id: "gym-template",
+            title: "Gym",
+            recurrence: .custom,
+            recurrenceWeekdays: [1],
+            schedulingMode: .flexible,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let occurrence = LifeTask(
+            id: "gym-monday",
+            title: "Gym",
+            estimatedMinutes: 45,
+            scheduledDate: calendar.startOfDay(for: monday),
+            parentTaskId: template.id,
+            recurrence: .custom,
+            recurrenceWeekdays: [1],
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let suggested = TimelineRowProjector.suggestedSlotRows(
+            tasks: [template, occurrence],
+            completedToday: [],
+            existingRows: [],
+            now: monday,
+            calendar: calendar
+        )
+
+        XCTAssertFalse(suggested.contains { $0.suggestedSourceTaskId == occurrence.id })
+    }
+
+    @MainActor
     func testCompletePatchUsesProjectedNowForCompletedAt() {
         let service = TimelineService()
         let now = Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 10, hour: 10, minute: 15))!
@@ -381,5 +419,42 @@ final class TimelineServiceTests: XCTestCase {
 
         let completedAt = service.snapshot.today.first(where: { $0.id.contains("stamp-me") })?.completedAt
         XCTAssertEqual(completedAt, now)
+    }
+
+    @MainActor
+    func testTodayAllDayFlagDoesNotCopyTimedEventOntoTomorrow() {
+        let service = TimelineService()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 11))!
+        let today = calendar.startOfDay(for: now)
+        let standup = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+        // isAllDay is set so the old `|| isAllDay` fallback would copy this row
+        // onto tomorrow even though its start is today.
+        let todayMeeting = BriefingCalendarEvent(
+            id: "standup",
+            title: "Standup",
+            startDate: standup,
+            timeLabel: "9:00 AM",
+            endDate: standup.addingTimeInterval(1800),
+            isAllDay: true,
+            isBusy: true
+        )
+
+        service.rebuild(
+            tasks: [],
+            completedToday: [],
+            recurrenceTemplates: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            medications: [],
+            calendarEvents: [todayMeeting],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(service.snapshot.today.contains { $0.title == "Standup" })
+        XCTAssertFalse(service.snapshot.tomorrow.contains { $0.title == "Standup" })
     }
 }

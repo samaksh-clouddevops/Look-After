@@ -350,6 +350,14 @@ public enum TimelineRowProjector {
             } else {
                 return false
             }
+            // A same-day stamp is not enough for a recurring row — a Sunday gym
+            // occurrence must not get a suggested slot on Monday.
+            guard TaskRecurrenceEngine.matchesRecurrenceSchedule(
+                task,
+                on: dayStart,
+                in: pool,
+                calendar: calendar
+            ) else { return false }
             return !TaskScheduleInterval.hasConcreteTimelineSlot(for: task, on: dayStart, calendar: calendar)
         }
         guard !unslotted.isEmpty else { return [] }
@@ -466,8 +474,11 @@ public final class TimelineService: ObservableObject {
         )
         let tomorrow: [LifeTimelineEvent]
         if let tomorrowDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
+            // All-day events are day-scoped. Copying every all-day row onto tomorrow
+            // painted today's holiday on tomorrow's preview when the caller omitted
+            // a separate tomorrow fetch. Multi-day all-day events still match via start.
             let tomorrowEvents = tomorrowCalendarEvents
-                ?? calendarEvents.filter { calendar.isDate($0.startDate, inSameDayAs: tomorrowDay) || $0.isAllDay }
+                ?? calendarEvents.filter { calendar.isDate($0.startDate, inSameDayAs: tomorrowDay) }
             tomorrow = LifeTimelinePresenter.build(
                 tasks: tasks,
                 completedToday: [],

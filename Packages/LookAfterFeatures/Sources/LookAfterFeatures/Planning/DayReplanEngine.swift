@@ -1,4 +1,4 @@
-54444444444import Foundation
+import Foundation
 import LookAfterCore
 import LookAfterAI
 
@@ -429,6 +429,13 @@ public final class DayReplanEngine {
 
         let flexible = context.planningContext.tasks.filter { task in
             guard task.status.isActive, !task.isFixedTimeEvent else { return false }
+            // The planning pool can include tomorrow and leftover wrong-weekday rows.
+            // Restamping those onto today would steal work that does not belong here.
+            guard task.isActionableToday(
+                allTasks: context.planningContext.tasks,
+                calendar: calendar,
+                referenceDate: now
+            ) else { return false }
             return !changes.contains(where: { $0.taskID == task.id && $0.deferToTomorrow })
         }
 
@@ -549,7 +556,7 @@ public final class DayReplanEngine {
         return variants.count >= 2 ? variants : nil
     }
 
-    private func slotCandidateTasks(from context: DayReplanContext) -> [LifeTask] {
+    private func slotCandidateTasks(from context: DayReplanContext, now: Date) -> [LifeTask] {
         guard let slot = context.freedSlotWindow else { return context.planningContext.tasks }
         let slotMinutes = FreedSlotWindow.slotMinutes(slot)
         let calendar = Calendar.current
@@ -569,9 +576,15 @@ public final class DayReplanEngine {
             // A clock is a day assignment when scheduledDate was never written.
             // Falling through to `true` would pull tomorrow's clock into today's gap.
             if let scheduled = task.scheduledDate ?? task.scheduledTime {
-                return calendar.isDate(scheduled, inSameDayAs: day)
+                guard calendar.isDate(scheduled, inSameDayAs: day) else { return false }
             }
-            return true
+            // Same-day stamp is not membership. A Sunday gym row dated today must
+            // not fill a freed slot.
+            return task.isActionableToday(
+                allTasks: context.planningContext.tasks,
+                calendar: calendar,
+                referenceDate: now
+            )
         }
     }
 
@@ -582,7 +595,7 @@ public final class DayReplanEngine {
         now: Date
     ) -> DayReplanResult {
         let slotMinutes = FreedSlotWindow.slotMinutes(slot)
-        let candidates = slotCandidateTasks(from: context).sorted { lhs, rhs in
+        let candidates = slotCandidateTasks(from: context, now: now).sorted { lhs, rhs in
             if lhs.priority != rhs.priority { return lhs.priority > rhs.priority }
             return lhs.estimatedMinutes < rhs.estimatedMinutes
         }

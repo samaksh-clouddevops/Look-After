@@ -164,6 +164,12 @@ public enum NotificationCandidateBuilder {
 
             let fireDate: Date?
             let day = calendar.startOfDay(for: now)
+            // A same-day stamp or a today deadline is not membership. Wrong-weekday
+            // recurring rows and future-dated one-offs must not fire just because a
+            // clock or deadline lands on today.
+            guard task.isActionableToday(allTasks: tasks, calendar: calendar, referenceDate: now) else {
+                return nil
+            }
             if task.isOverdue(calendar: calendar, referenceDate: now) {
                 fireDate = now.addingTimeInterval(60)
             } else if let start = TaskScheduleInterval.resolvedStart(for: task, on: day, calendar: calendar),

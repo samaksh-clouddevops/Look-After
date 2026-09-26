@@ -238,6 +238,40 @@ final class DayScheduleReconcilerTests: XCTestCase {
         XCTAssertTrue(result.changedTaskIDs.contains("gym-time-only"))
     }
 
+    func testWrongWeekdayRecurringOccurrenceIsNotPlanned() {
+        // Monday 10 Aug 2026 — not a Sunday.
+        let monday = makeDate(year: 2026, month: 8, day: 10, hour: 9)
+        let template = LifeTask(
+            id: "gym-template",
+            title: "Gym",
+            recurrence: .custom,
+            recurrenceWeekdays: [1],
+            schedulingMode: .flexible,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        let occurrence = LifeTask(
+            id: "gym-monday",
+            title: "Gym",
+            estimatedMinutes: 45,
+            scheduledDate: calendar.startOfDay(for: monday),
+            parentTaskId: template.id,
+            recurrence: .custom,
+            recurrenceWeekdays: [1],
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let plan = DaySchedulePlanner.plan(
+            tasks: [template, occurrence],
+            on: monday,
+            profile: UserLifeProfile(),
+            now: monday,
+            calendar: calendar
+        )
+
+        XCTAssertFalse(plan.slots.contains { $0.taskID == occurrence.id })
+    }
 
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!

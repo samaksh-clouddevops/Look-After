@@ -111,6 +111,25 @@ final class ContextualDayReplanTests: XCTestCase {
         XCTAssertNil(result?.scheduleChanges.first { $0.taskID == futureClock.id })
     }
 
+    @MainActor
+    func testGenericFallbackDoesNotRestampTomorrowTaskOntoToday() async {
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrowTask = LifeTask(
+            id: "tomorrow-write",
+            title: "Write tomorrow",
+            estimatedMinutes: 30,
+            scheduledDate: tomorrow,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        let glm = offlineGLM()
+        let engine = DayReplanEngine(glmService: glm)
+        let context = makeContext(tasks: [tomorrowTask], trigger: .generic)
+
+        let result = try? await engine.replan(context: context)
+        XCTAssertNil(result?.scheduleChanges.first { $0.taskID == tomorrowTask.id })
+    }
 
     @MainActor
     func testGoingOutLocalFallbackAvoidsAwayWindow() async {
