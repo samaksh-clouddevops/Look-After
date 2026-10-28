@@ -87,6 +87,12 @@ public enum TaskRecurrenceEngine {
         for template in templates {
             guard template.recurrenceOccurs(on: day, calendar: calendar) else { continue }
             guard !hasActionableOccurrence(for: template, on: day, index: index, calendar: calendar) else { continue }
+            // Superseded rows may need repair; skipped / expired rows are final
+            // user/day-boundary outcomes and must not reappear as projections.
+            guard !index.tasks(for: template.id, on: day, calendar: calendar).contains(where: {
+                $0.status == .skipped || $0.status == .expired
+                    || $0.recurrenceOccurrenceDate.map { calendar.isDate($0, inSameDayAs: day) } == true
+            }) else { continue }
             guard !template.isLifeCommitmentTask else { continue }
             guard !isSeriesFulfilled(on: day, for: template, in: allTasks, calendar: calendar) else { continue }
             results.append(timelineProjectionOccurrence(from: template, on: day, calendar: calendar))
@@ -185,6 +191,11 @@ public enum TaskRecurrenceEngine {
                 guard let scheduledDate = task.scheduledDate ?? task.scheduledTime else { continue }
                 let key = Self.key(templateId: task.templateTaskId, day: calendar.startOfDay(for: scheduledDate))
                 map[key, default: []].append(task)
+                if let originalDay = task.recurrenceOccurrenceDate,
+                   !calendar.isDate(originalDay, inSameDayAs: scheduledDate) {
+                    let originalKey = Self.key(templateId: task.templateTaskId, day: calendar.startOfDay(for: originalDay))
+                    map[originalKey, default: []].append(task)
+                }
             }
             return OccurrenceDayIndex(byTemplateDay: map)
         }
@@ -218,16 +229,16 @@ public enum TaskRecurrenceEngine {
         // differ from the template, prefer the occurrence (user override).
         if let seriesTemplate = duplicateSeriesTemplate(for: task, in: allTasks),
            !hasExplicitRecurrenceOverride(task, relativeTo: seriesTemplate) {
-            return matchesRecurrenceSchedule(
-                using: seriesTemplate,
-                for: task,
-                on: date,
-                in: allTasks,
-                calendar: calendar
-            )
+            return false
         }
 
         let source = recurrenceSource(for: task, in: allTasks)
+        if let originalDay = task.recurrenceOccurrenceDate,
+           let assignedDay = task.scheduledDate ?? task.scheduledTime,
+           calendar.isDate(assignedDay, inSameDayAs: date),
+           source.recurrenceRule != .none {
+            return matchesRecurrenceSchedule(using: source, for: task, on: originalDay, in: allTasks, calendar: calendar)
+        }
         if source.recurrenceRule == .none {
             // Multi-day slices link to the goal root via parentTaskId — not a recurrence series.
             if MultiDayTaskTags.isMultiDay(task) { return true }
@@ -276,6 +287,12 @@ public enum TaskRecurrenceEngine {
 
     /// True when the occurrence intentionally diverges from the template schedule.
     private static func hasExplicitRecurrenceOverride(_ task: LifeTask, relativeTo template: LifeTask) -> Bool {
+        // Old daily rows predate the more specific series template. An unqualified
+        // daily flag is not evidence that the user overrode its weekday schedule.
+        if task.recurrenceRule == .daily, template.recurrenceRule != .daily,
+           (task.recurrenceWeekdays ?? []).isEmpty, task.recurrenceInterval == nil {
+            return false
+        }
         if task.recurrenceRule != .none, task.recurrenceRule != template.recurrenceRule {
             return true
         }
@@ -411,7 +428,12 @@ public enum TaskRecurrenceEngine {
         let scheduleAnchor = task.scheduledDate ?? task.scheduledTime
         guard let scheduleAnchor,
               calendar.isDate(scheduleAnchor, inSameDayAs: dayStart) else {
-            return false
+            return task.countsOnUndatedFlexibleToday(
+                in: allTasks,
+                day: dayStart,
+                referenceDate: referenceDate,
+                calendar: calendar
+            )
         }
         return matchesRecurrenceSchedule(task, on: scheduleAnchor, in: allTasks, calendar: calendar)
     }
@@ -633,6 +655,7 @@ public enum TaskRecurrenceEngine {
         }) {
             score += 100
         }
+        if template.tags.contains(where: { $0.hasPrefix(RoutineBlock.taskTagPrefix) }) { score += 1000 }
         if template.tags.contains("daily-routine") { score += 20 }
         if template.isRecurrenceTemplate == true { score += 10 }
         score += min(occurrences.count, 50)

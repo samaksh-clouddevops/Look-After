@@ -57,7 +57,7 @@ struct RoutineBlockEditorSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Routine block") {
                     TextField("Title (e.g. Gym, Wake up)", text: $title)

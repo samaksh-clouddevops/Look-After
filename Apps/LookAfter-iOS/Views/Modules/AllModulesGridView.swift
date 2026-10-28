@@ -60,9 +60,13 @@ struct AllModulesGridView: View {
 
                         moduleLink(
                             title: "Finance & Bills",
-                            subtitle: "Track what is due",
+                            subtitle: modulesVM.moneySnapshot().map { "Safe to spend \(CurrencyFormatter.format($0.safeToSpend))" } ?? "Pay, fixed costs, and daily spend",
                             badge: modulesVM.bills.contains(where: { !$0.isPaid }) ? "\(modulesVM.bills.filter { !$0.isPaid }.count) due" : nil,
-                            destination: FinanceBillsView(modulesVM: modulesVM)
+                            destination: FinanceBillsView(
+                                modulesVM: modulesVM,
+                                userId: userId,
+                                sleepHours: shell.brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60 }
+                            )
                         )
 
                         moduleLink(

@@ -265,117 +265,9 @@ struct ExecutiveProfileView: View {
     // MARK: - Routines
 
     private var routinesSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Text("Routines")
-                .textStyleSectionLabel()
-            Text("The ring fills as you complete each daily habit.")
-                .textStyleCaption(color: DesignSystem.textSecondary)
-
-            if routineTasks.isEmpty {
-                VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
-                    Text("No daily routines yet")
-                        .font(.dsBody(weight: .semibold))
-                        .foregroundColor(DesignSystem.textSecondary)
-                    Text("Routines tagged daily-routine show up here with a progress ring as you complete them.")
-                        .textStyleCaption(color: DesignSystem.textSecondary)
-                    Button(action: { showRoutineBuilder = true }, label: {
-                        Text("Set up your daily routine →")
-                            .textStyleCaption(color: DesignSystem.accentPrimary)
-                    })
-                    .buttonStyle(.plain)
-                    .padding(.top, DesignSystem.spacingXXS)
-                }
-                .padding(DesignSystem.spacingMD)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
-                        .fill(DesignSystem.contentSurfaceElevated)
-                )
-            } else {
-                ForEach(routineTasks) { task in
-                    routineRow(task)
-                }
-            }
+        ProfileRoutinesSection(tasksVM: shell.tasksVM) {
+            showRoutineBuilder = true
         }
-    }
-
-    private var routineTasks: [LifeTask] {
-        let active = shell.tasksVM.tasks.filter {
-            $0.tags.contains("daily-routine") && $0.status.isActive
-        }
-        let doneToday = shell.tasksVM.completedToday.filter {
-            $0.tags.contains("daily-routine")
-        }
-
-        var merged: [String: LifeTask] = [:]
-        for task in active {
-            merged[normalizedRoutineKey(task.title)] = task
-        }
-        for task in doneToday {
-            merged[normalizedRoutineKey(task.title)] = task
-        }
-
-        return merged.values
-            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-            .prefix(4)
-            .map { $0 }
-    }
-
-    private func normalizedRoutineKey(_ title: String) -> String {
-        title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    private func routineProgress(for task: LifeTask) -> Double {
-        if task.status == .completed { return 1 }
-        if shell.tasksVM.completedToday.contains(where: { $0.id == task.id }) { return 1 }
-        if !task.steps.isEmpty { return task.progress }
-        return 0
-    }
-
-    private func routineStatusLabel(for task: LifeTask) -> String {
-        let progress = routineProgress(for: task)
-        if progress >= 1 {
-            return "Done today"
-        }
-        if !task.steps.isEmpty {
-            let done = task.steps.filter(\.isCompleted).count
-            return "\(done) of \(task.steps.count) steps done"
-        }
-        if let scheduled = task.scheduledTime {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "h:mm a"
-            return "Scheduled \(formatter.string(from: scheduled))"
-        }
-        return "Not yet today"
-    }
-
-    private func routineRow(_ task: LifeTask) -> some View {
-        let progress = routineProgress(for: task)
-        let status = routineStatusLabel(for: task)
-
-        return HStack(spacing: DesignSystem.spacingMD) {
-            LAProgressRing(
-                progress: progress,
-                diameter: 28,
-                lineWidth: 3
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(task.title)
-                    .textStyleCardTitle()
-                Text(status)
-                    .textStyleCaption(color: DesignSystem.textSecondary)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(DesignSystem.spacingMD)
-        .background(
-            RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
-                .fill(DesignSystem.contentSurface)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(task.title), \(status)")
     }
 
     // MARK: - Appearance
@@ -543,7 +435,125 @@ struct ExecutiveProfileView: View {
         weeklyAIRetrospective = await WeeklyAIRetrospectiveGenerator().generate(
             summary: displayedWeeklyReviewSummary,
             analytics: analytics,
-            behaviorMemory: behavior
+            behaviorMemory: behavior,
+            moneyLine: shell.modulesVM.moneyPlanningLine(
+                sleepHours: shell.brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60 }
+            )
         )
+    }
+}
+
+/// You-tab routine rings. Observes the task list directly so a saved routine appears
+/// after it loads, instead of staying on the empty state from the first render.
+private struct ProfileRoutinesSection: View {
+    @ObservedObject var tasksVM: TasksViewModel
+    var onSetUp: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+            Text("Routines")
+                .textStyleSectionLabel()
+            Text("The ring fills as you complete each daily habit.")
+                .textStyleCaption(color: DesignSystem.textSecondary)
+
+            if routineTasks.isEmpty {
+                VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
+                    Text("No daily routines yet")
+                        .font(.dsBody(weight: .semibold))
+                        .foregroundColor(DesignSystem.textSecondary)
+                    Text("Add the fixed parts of your day and they show up here with a progress ring.")
+                        .textStyleCaption(color: DesignSystem.textSecondary)
+                    Button(action: onSetUp) {
+                        Text("Set up your daily routine →")
+                            .textStyleCaption(color: DesignSystem.accentPrimary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, DesignSystem.spacingXXS)
+                }
+                .padding(DesignSystem.spacingMD)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusMD, style: .continuous)
+                        .fill(DesignSystem.contentSurfaceElevated)
+                )
+            } else {
+                ForEach(routineTasks) { task in
+                    routineRow(task)
+                }
+            }
+        }
+    }
+
+    private var routineTasks: [LifeTask] {
+        let calendar = Calendar.current
+        let now = Date()
+        let model = LifeModelStore.load()
+        return DailyRoutineBoard.rows(
+            active: tasksVM.tasks + tasksVM.horizonTasks,
+            completedToday: tasksVM.completedToday,
+            templates: tasksVM.recurrenceTemplates,
+            blocks: RoutineBlockStore.load(),
+            commitments: model?.commitments ?? [],
+            timeBlocks: model?.timeBlocks ?? [],
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    private func routineProgress(for task: LifeTask) -> Double {
+        if task.tags.contains(DailyRoutineBoard.offTodayTag) { return 0 }
+        if task.status == .completed { return 1 }
+        if tasksVM.completedToday.contains(where: { $0.id == task.id }) { return 1 }
+        if !task.steps.isEmpty { return task.progress }
+        return 0
+    }
+
+    private func routineStatusLabel(for task: LifeTask) -> String {
+        if task.tags.contains(DailyRoutineBoard.offTodayTag) {
+            return "Not on today's plan"
+        }
+        let progress = routineProgress(for: task)
+        if progress >= 1 {
+            return "Done today"
+        }
+        if !task.steps.isEmpty {
+            let done = task.steps.filter(\.isCompleted).count
+            return "\(done) of \(task.steps.count) steps done"
+        }
+        if let scheduled = task.scheduledTime {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "h:mm a"
+            return "Scheduled \(formatter.string(from: scheduled))"
+        }
+        return "Not yet today"
+    }
+
+    private func routineRow(_ task: LifeTask) -> some View {
+        let progress = routineProgress(for: task)
+        let status = routineStatusLabel(for: task)
+
+        return HStack(spacing: DesignSystem.spacingMD) {
+            LAProgressRing(
+                progress: progress,
+                diameter: 28,
+                lineWidth: 3
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .textStyleCardTitle()
+                Text(status)
+                    .textStyleCaption(color: DesignSystem.textSecondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(DesignSystem.spacingMD)
+        .background(
+            RoundedRectangle(cornerRadius: LookAfterTypography.radiusCard, style: .continuous)
+                .fill(DesignSystem.contentSurface)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(task.title), \(status)")
     }
 }

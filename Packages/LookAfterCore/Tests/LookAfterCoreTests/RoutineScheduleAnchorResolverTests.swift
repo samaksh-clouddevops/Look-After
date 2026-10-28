@@ -19,7 +19,7 @@ final class RoutineScheduleAnchorResolverTests: XCTestCase {
         dinner = TaskEphemeralityDefaults.enrich(dinner)
 
         let anchor = try XCTUnwrap(
-            RoutineScheduleAnchorResolver.resolve(for: dinner, on: day, calendar: calendar)
+            RoutineScheduleAnchorResolver.resolve(for: dinner, on: day, calendar: calendar, routineBlocks: [])
         )
         XCTAssertEqual(calendar.component(.hour, from: anchor.start), 19)
         XCTAssertFalse(anchor.treatAsFixed)
@@ -38,7 +38,7 @@ final class RoutineScheduleAnchorResolverTests: XCTestCase {
         gym = TaskEphemeralityDefaults.enrich(gym)
 
         let anchor = try XCTUnwrap(
-            RoutineScheduleAnchorResolver.resolve(for: gym, on: day, calendar: calendar)
+            RoutineScheduleAnchorResolver.resolve(for: gym, on: day, calendar: calendar, routineBlocks: [])
         )
         XCTAssertEqual(calendar.component(.hour, from: anchor.start), 18)
         XCTAssertTrue(anchor.treatAsFixed)
@@ -81,7 +81,7 @@ final class RoutineScheduleAnchorResolverTests: XCTestCase {
         gym = TaskEphemeralityDefaults.enrich(gym)
 
         let anchor = try XCTUnwrap(
-            RoutineScheduleAnchorResolver.resolve(for: gym, on: day, model: model, calendar: calendar)
+            RoutineScheduleAnchorResolver.resolve(for: gym, on: day, model: model, calendar: calendar, routineBlocks: [])
         )
         XCTAssertEqual(calendar.component(.hour, from: anchor.start), 18)
         XCTAssertEqual(calendar.component(.minute, from: anchor.start), 30)
@@ -146,11 +146,68 @@ final class RoutineScheduleAnchorResolverTests: XCTestCase {
                 for: standup,
                 on: day,
                 profile: profile,
-                calendar: calendar
+                calendar: calendar,
+                routineBlocks: []
             )
         )
         XCTAssertEqual(calendar.component(.hour, from: anchor.start), 14)
         XCTAssertEqual(calendar.component(.minute, from: anchor.start), 35)
         XCTAssertTrue(anchor.treatAsFixed)
+    }
+
+    func testDeclaredRoutineBlockReplacesSeededDinnerClock() throws {
+        let day = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 7)))
+        let block = RoutineBlock(
+            id: "dinner-block",
+            title: "Dinner",
+            days: .everyDay,
+            startHour: 20,
+            startMinute: 15,
+            durationMinutes: 30,
+            isNonNegotiable: true
+        )
+        let dinner = LifeTask(
+            title: "Dinner",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            tags: ["daily-routine"],
+            userId: "user-1"
+        )
+        let anchor = try XCTUnwrap(
+            RoutineScheduleAnchorResolver.resolve(
+                for: dinner,
+                on: day,
+                calendar: calendar,
+                routineBlocks: [block]
+            )
+        )
+        XCTAssertEqual(calendar.component(.hour, from: anchor.start), 20)
+        XCTAssertEqual(calendar.component(.minute, from: anchor.start), 15)
+        XCTAssertTrue(anchor.treatAsFixed)
+    }
+
+    func testRoutineBlockTagStaysOffSeederClockOnANonMatchingDay() throws {
+        let sunday = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 8, day: 2)))
+        let block = RoutineBlock(
+            id: "gym-block",
+            title: "Gym",
+            days: .weekdays,
+            startHour: 7,
+            durationMinutes: 60
+        )
+        let gym = LifeTask(
+            title: "Gym",
+            estimatedMinutes: 60,
+            scheduledDate: sunday,
+            tags: ["daily-routine", block.taskTag],
+            userId: "user-1"
+        )
+        let anchor = RoutineScheduleAnchorResolver.resolve(
+            for: gym,
+            on: sunday,
+            calendar: calendar,
+            routineBlocks: [block]
+        )
+        XCTAssertNil(anchor)
     }
 }

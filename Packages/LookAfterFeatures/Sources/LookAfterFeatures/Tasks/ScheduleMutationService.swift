@@ -10,6 +10,51 @@ public final class ScheduleMutationService {
         self.viewModel = viewModel
     }
 
+    /// A daily habit already has its own next occurrence. Keep today's skipped
+    /// identity so refresh cannot recreate it, rather than move it onto that row.
+    public func deferredTask(_ task: LifeTask, from day: Date, calendar: Calendar = .current) -> LifeTask {
+        var deferred = task
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: day)) ?? day
+        let source = TaskRecurrenceEngine.template(for: task, in: viewModel.schedulingContext)
+        if task.parentTaskId != nil, !MultiDayTaskTags.isSlice(task),
+           source.isRecurrenceTemplateTask, source.recurrenceOccurs(on: tomorrow, calendar: calendar) {
+            deferred.status = .skipped
+        } else {
+            deferred.scheduledDate = tomorrow
+            if task.parentTaskId != nil, source.isRecurrenceTemplateTask {
+                deferred.recurrenceOccurrenceDate = task.recurrenceOccurrenceDate ?? task.scheduledDate ?? task.scheduledTime
+            }
+        }
+        deferred.scheduledTime = nil
+        deferred.scheduledEndTime = nil
+        deferred.userPlacedScheduleAt = nil
+        return deferred
+    }
+
+    /// Resolve a displayed occurrence without discarding the schedule the user just edited.
+    public func persistTimelineEdit(_ edited: LifeTask, userId: String) async -> Bool {
+        guard !userId.isEmpty else { return false }
+        var target = edited
+        if edited.id.hasPrefix("proj-")
+            || viewModel.resolveTimelineTask(id: edited.id) == nil {
+            do {
+                target = try await viewModel.materializeTimelineTask(edited, userId: userId)
+            } catch {
+                viewModel.error = error.localizedDescription
+                return false
+            }
+        }
+        guard target.status.isActive else { return false }
+        target.scheduledDate = edited.scheduledDate
+        target.scheduledTime = edited.scheduledTime
+        target.scheduledEndTime = edited.scheduledEndTime
+        target.timeConstraint = edited.timeConstraint
+        target.schedulingMode = edited.schedulingMode
+        target.userPlacedScheduleAt = edited.userPlacedScheduleAt
+        target.updatedAt = Date()
+        return await persist(target, userId: userId, userPlaced: true)
+    }
+
     /// Persists a task update and optionally reconciles when schedule fields changed.
     /// Returns `true` if this specific save succeeded. Callers that need to know whether
     /// *their* save succeeded (e.g. to decide whether to dismiss a sheet) should use this
@@ -29,7 +74,16 @@ public final class ScheduleMutationService {
         }
         let previous = viewModel.tasks.first(where: { $0.id == task.id })
             ?? viewModel.completedToday.first(where: { $0.id == task.id })
+            ?? viewModel.schedulingContext.first(where: { $0.id == task.id })
+        if let previous, let oldDay = previous.scheduledDate ?? previous.scheduledTime,
+           let newDay = updated.scheduledDate ?? updated.scheduledTime,
+           !Calendar.current.isDate(oldDay, inSameDayAs: newDay),
+           previous.parentTaskId != nil, !MultiDayTaskTags.isSlice(previous),
+           TaskRecurrenceEngine.template(for: previous, in: viewModel.schedulingContext).isRecurrenceTemplateTask {
+            updated.recurrenceOccurrenceDate = previous.recurrenceOccurrenceDate ?? oldDay
+        }
         let succeeded = await viewModel.updateTaskAndPersist(updated)
+        guard succeeded else { return false }
         let scheduleChanged = viewModel.scheduleFieldsChanged(from: previous, to: updated) || userPlaced
         if reconcileSchedule, scheduleChanged {
             let uid = userId.isEmpty ? updated.userId : userId
@@ -88,14 +142,16 @@ public final class ScheduleMutationService {
 #if DEBUG
                 print("[Schedule] applyDayScheduleChanges rejected id=\(task.id.prefix(8))")
 #endif
-                continue
+                throw ScheduleApplyError(taskTitle: task.title)
             }
             task.scheduledDate = dayStart
             task.scheduledTime = start
             task.scheduledEndTime = start.addingTimeInterval(TimeInterval(duration * 60))
             TaskConstraintAlignment.markUserPlaced(&task)
             ScheduleNormalization.normalizeFields(&task)
-            await viewModel.updateTaskAndPersist(task)
+            guard await viewModel.updateTaskAndPersist(task) else {
+                throw ScheduleApplyError(taskTitle: task.title)
+            }
         }
 
         await viewModel.syncScheduleAndReconcileToday(userId: userId)
@@ -108,12 +164,8 @@ public final class ScheduleMutationService {
         guard var task = viewModel.tasks.first(where: { $0.id == taskID && $0.status.isActive }),
               task.isSchedulerMovable else { return nil }
 
-        let calendar = Calendar.current
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
-        task.scheduledDate = tomorrow
-        task.scheduledTime = nil
-        task.scheduledEndTime = nil
-        await persist(task, userId: userId, reconcileSchedule: true)
+        task = deferredTask(task, from: Date())
+        guard await persist(task, userId: userId, reconcileSchedule: true) else { return nil }
         return task
     }
 
@@ -159,8 +211,7 @@ public final class ScheduleMutationService {
         task.scheduledDate = day
         task.scheduledTime = resolved
         task.scheduledEndTime = resolved.addingTimeInterval(TimeInterval(duration * 60))
-        await persist(task, userId: userId, userPlaced: true)
-        return true
+        return await persist(task, userId: userId, userPlaced: true)
     }
 
     /// User drag-reschedule from timeline constraint VM.
@@ -211,5 +262,12 @@ public final class ScheduleMutationService {
         task.scheduledDate = day
         TaskConstraintAlignment.markUserPlaced(&task)
         await persist(task, userId: userId, userPlaced: true, reconcileSchedule: true)
+    }
+}
+
+private struct ScheduleApplyError: LocalizedError {
+    let taskTitle: String
+    var errorDescription: String? {
+        "Couldn’t move \(taskTitle). Some earlier changes may already be saved. Review your schedule and try again."
     }
 }

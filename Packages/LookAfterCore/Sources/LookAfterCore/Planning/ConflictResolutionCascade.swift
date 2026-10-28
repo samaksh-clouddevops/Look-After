@@ -185,7 +185,9 @@ public enum ConflictResolutionCascade {
                 continue
             }
 
-            if !blocked.contains(where: { interval.overlaps($0) }) {
+            let ownedBlockID = OccupiedDay.ownedProtectedBlockID(for: task, model: model, on: dayStart, calendar: calendar)
+            let placementBlockers = blocked.filter { $0.taskID != ownedBlockID }
+            if !placementBlockers.contains(where: { interval.overlaps($0) }) {
                 blocked.append(interval)
                 blocked.sort { $0.start < $1.start }
                 decisions.append(.init(taskID: task.id, action: .keep, reason: "no_overlap"))
@@ -208,7 +210,7 @@ public enum ConflictResolutionCascade {
             if allowShift,
                let open = findOpenStart(
                    durationMinutes: interval.durationMinutes,
-                   blocked: blocked,
+                   blocked: placementBlockers,
                    after: interval.start,
                    dayStart: dayStart,
                    bufferMinutes: bufferMinutes,
@@ -257,7 +259,7 @@ public enum ConflictResolutionCascade {
                    preferredStart: interval.start,
                    minMinutes: viableMin,
                    preferredMinutes: interval.durationMinutes,
-                   blocked: blocked,
+                   blocked: placementBlockers,
                    dayStart: dayStart,
                    bufferMinutes: bufferMinutes,
                    calendar: calendar

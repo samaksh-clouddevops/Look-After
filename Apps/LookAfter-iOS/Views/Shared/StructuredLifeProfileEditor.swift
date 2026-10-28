@@ -150,16 +150,40 @@ extension View {
 }
 
 #if canImport(UIKit)
+private struct ViewBottomPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct KeyboardDismissToolbarModifier: ViewModifier {
     let label: String
     let onDone: (() -> Void)?
 
-    @State private var keyboardHeight: CGFloat = 0
+    @State private var viewMaxY: CGFloat = 0
+    @State private var keyboardFrame: CGRect = .zero
+    @State private var keyboardVisible = false
+
+    /// How far the keyboard covers this view. A sheet is shorter than the screen, so using the full keyboard height lifts Done onto the amount field.
+    private var overlap: CGFloat {
+        guard keyboardVisible else { return 0 }
+        return max(0, viewMaxY - keyboardFrame.minY)
+    }
 
     func body(content: Content) -> some View {
         content
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: ViewBottomPreferenceKey.self,
+                        value: proxy.frame(in: .global).maxY
+                    )
+                }
+            }
+            .onPreferenceChange(ViewBottomPreferenceKey.self) { viewMaxY = $0 }
             .overlay(alignment: .bottom) {
-                if keyboardHeight > 0 {
+                if overlap > 1 {
                     HStack {
                         Spacer()
                         Button(label) {
@@ -169,25 +193,30 @@ private struct KeyboardDismissToolbarModifier: ViewModifier {
                         .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
                     .background(.bar)
-                    .padding(.bottom, keyboardHeight)
+                    .padding(.bottom, overlap)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+            .animation(.easeOut(duration: 0.25), value: overlap)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-                keyboardHeight = frame.height
+                updateKeyboardFrame(notification)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-                keyboardHeight = max(0, frame.height)
+                updateKeyboardFrame(notification)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                keyboardHeight = 0
+                keyboardVisible = false
+                keyboardFrame = .zero
             }
+    }
+
+    private func updateKeyboardFrame(_ notification: Notification) {
+        guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        keyboardFrame = frame
+        keyboardVisible = frame.height > 0 && frame.minY < UIScreen.main.bounds.height
     }
 }
 #else

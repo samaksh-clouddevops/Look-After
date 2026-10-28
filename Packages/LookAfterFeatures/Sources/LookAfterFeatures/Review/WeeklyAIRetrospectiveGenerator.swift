@@ -38,7 +38,8 @@ public final class WeeklyAIRetrospectiveGenerator {
     public func generate(
         summary: WeeklyReviewSummary,
         analytics: CachedAIContextSummary?,
-        behaviorMemory: BehaviorMemorySnapshot
+        behaviorMemory: BehaviorMemorySnapshot,
+        moneyLine: String = ""
     ) async -> WeeklyAIRetrospective {
         let cacheKey = "weekly_ai_retro_\(summary.weekStartDate.timeIntervalSince1970)"
         if let cached = loadCached(key: cacheKey) { return cached }
@@ -51,6 +52,7 @@ public final class WeeklyAIRetrospectiveGenerator {
         Cascade actions: \(cascadeCount)
         Deferrals this week: \(behaviorMemory.deferralRecords.count)
         Analytics: \(analytics?.promptBlock ?? "none")
+        \(moneyLine.isEmpty ? "" : "Money this cycle: \(moneyLine)")
         Return JSON: {"narrative":"...","wins":["..."],"frictionPatterns":["..."],"experimentForNextWeek":"..."}
         """
 

@@ -162,6 +162,9 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
     public var requiredEnergy: EnergyLevel
     public var deadline: Date?
     public var scheduledDate: Date?
+    /// Original recurrence day when this one occurrence is moved to another day.
+    /// Preserves its identity without changing the series rule or recreating the source day.
+    public var recurrenceOccurrenceDate: Date?
     public var scheduledTime: Date?
     public var tags: [String]
     public var notes: String
@@ -245,7 +248,8 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         calendarEventIdentifier: String? = nil,
         userPlacedScheduleAt: Date? = nil,
         scheduleAnchorID: String? = nil,
-        workCategory: WorkTaskCategory? = nil
+        workCategory: WorkTaskCategory? = nil,
+        recurrenceOccurrenceDate: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -261,6 +265,7 @@ public struct LifeTask: Identifiable, Codable, Sendable, Hashable {
         self.requiredEnergy = requiredEnergy
         self.deadline = deadline
         self.scheduledDate = scheduledDate
+        self.recurrenceOccurrenceDate = recurrenceOccurrenceDate
         self.scheduledTime = scheduledTime
         self.tags = tags
         self.notes = notes

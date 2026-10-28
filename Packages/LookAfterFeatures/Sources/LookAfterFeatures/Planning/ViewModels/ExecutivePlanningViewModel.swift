@@ -34,6 +34,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
     @Published public private(set) var replanSummary: String?
     @Published public private(set) var isReplanning = false
+    @Published public private(set) var isApplyingPlan = false
     @Published public private(set) var isRedesigningWithAI = false
     @Published public private(set) var contextualReplanResult: DayReplanResult?
     @Published public private(set) var contextualReplanTrigger: DayReplanTrigger?
@@ -100,6 +101,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         errorMessage = nil
         replanSummary = nil
         isReplanning = false
+        isApplyingPlan = false
         isRedesigningWithAI = false
         contextualReplanResult = nil
         contextualReplanTrigger = nil
@@ -259,7 +261,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
 
         do {
             let result = try await replanEngine.replan(context: context)
-            await applyReplanResult(
+            let applied = await applyReplanResult(
                 result,
                 now: context.planningContext.now,
                 tasksVM: tasksVM,
@@ -268,6 +270,12 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 refreshContext: refreshContext
             )
 
+            guard applied else {
+                isReplanning = false
+                isProcessing = false
+                visibleThinkingStep = nil
+                return
+            }
             replanSummary = result.summary
             turns.append(PlanningConversationTurn(role: .assistant, text: result.summary))
             recentDeltas = result.timelineDeltas
@@ -350,14 +358,15 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         replanSummary = nil
     }
 
+    @discardableResult
     public func applyContextualReplanResult(
         tasksVM: TasksViewModel,
         modulesVM: LifeModulesViewModel,
         userId: String,
         refreshContext: @escaping () async -> Void
-    ) async {
-        guard let result = contextualReplanResult else { return }
-        await applyReplanResult(
+    ) async -> Bool {
+        guard let result = contextualReplanResult, !isApplyingPlan else { return false }
+        guard await applyReplanResult(
             result,
             now: pendingContextualReplan?.planningContext.now,
             tasksVM: tasksVM,
@@ -365,6 +374,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             userId: userId,
             refreshContext: refreshContext
         )
+        else { return false }
         contextualReplanResult = nil
         contextualReplanTrigger = nil
         pendingContextualReplan = nil
@@ -373,19 +383,27 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         recentDeltas = result.effectiveTimelineDeltas(selectedVariantID: selectedVariantID)
         planVariants = nil
         selectedVariantID = nil
+        return true
     }
 
-    private func applyReplanResult(
+    @discardableResult
+    func applyReplanResult(
         _ result: DayReplanResult,
+        now explicitNow: Date? = nil,
         tasksVM: TasksViewModel,
         modulesVM: LifeModulesViewModel,
         userId: String,
-        refreshContext: () async -> Void
-    ) async {
+        refreshContext: () async -> Void,
+        reconcileSchedule: Bool = true
+    ) async -> Bool {
+        guard !isApplyingPlan else { return false }
+        isApplyingPlan = true
+        errorMessage = nil
+        defer { isApplyingPlan = false }
+        var failures: [String] = []
         let calendar = Calendar.current
-        let now = pendingContextualReplan?.planningContext.now ?? Date()
+        let now = explicitNow ?? pendingContextualReplan?.planningContext.now ?? Date()
         let allowedTaskIDs = Set(tasksVM.schedulingContext.map(\.id))
-        let taskByID = Dictionary.uniquingFirstValue(tasksVM.tasks.map { ($0.id, $0) })
         let workHours = PlanningSchedulePolicy.WorkHours.from(profile: UserLifeProfileStore.load())
         let freedSlot = pendingContextualReplan?.freedSlotWindow
         let profile = UserLifeProfileStore.load()
@@ -393,15 +411,16 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         for suggestion in result.effectiveChanges(selectedVariantID: selectedVariantID) {
             // A3: ignore hallucinated task IDs.
             guard allowedTaskIDs.contains(suggestion.taskID) else { continue }
-            guard var task = taskByID[suggestion.taskID], !task.isFixedTimeEvent else { continue }
+            guard var task = tasksVM.schedulingContext.first(where: { $0.id == suggestion.taskID }),
+                  task.status.isActive, task.isSchedulerMovable, !task.isRecurrenceTemplateTask,
+                  !MultiDayTaskTags.isRoot(task),
+                  task.isActionableToday(allTasks: tasksVM.schedulingContext, referenceDate: now) else { continue }
             if task.isLifeCommitmentTask || OnboardingTaskSeeder.isActivityRoutineTitle(task.title) {
                 continue
             }
 
             if suggestion.deferToTomorrow {
-                task.scheduledDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
-                task.scheduledTime = nil
-                task.scheduledEndTime = nil
+                task = tasksVM.scheduleMutation.deferredTask(task, from: now, calendar: calendar)
             } else if let hour = suggestion.startHour, let minute = suggestion.startMinute,
                       let time = resolveReplanScheduleTime(
                         hour: hour,
@@ -418,33 +437,41 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                     let effectiveStart = calendar.isDate(day, inSameDayAs: now) ? max(slot.start, now) : slot.start
                     if time < effectiveStart || end > slot.end { continue }
                 }
-                // B6: placement guard before writing.
                 let dayStart = calendar.startOfDay(for: time)
+                task.scheduledDate = dayStart
                 let neighbors = tasksVM.schedulingContext.filter { $0.id != task.id && $0.status.isActive }
-                let occupied = TaskScheduleInterval.intervals(from: neighbors, on: dayStart, calendar: calendar)
+                let occupied = OccupiedDay.build(
+                    tasks: neighbors, calendarEvents: tasksVM.calendarEventsProvider?(dayStart) ?? [],
+                    model: LifeModelStore.load(), on: dayStart, calendar: calendar,
+                    excludingTaskID: task.id
+                ).occupiedForPlacement(excludingTaskID: task.id)
+                let resolved: Date
                 switch SchedulePlacementGuard.evaluate(
-                    proposedStart: time,
-                    durationMinutes: duration,
-                    task: task,
-                    occupied: occupied,
-                    neighborTasks: neighbors
+                    proposedStart: time, durationMinutes: duration, task: task,
+                    occupied: occupied, calendar: calendar, neighborTasks: neighbors
                 ) {
-                case .rejected:
+                case .accepted(let start), .snapped(let start): resolved = start
+                case .rejected, .needsAI:
+                    failures.append("Couldn't fit \"\(task.title)\" into that time")
                     continue
-                case .accepted, .snapped, .needsAI:
-                    break
                 }
-
-                task.scheduledDate = calendar.startOfDay(for: time)
-                task.scheduledTime = time
-                task.scheduledEndTime = end
+                let resolvedEnd = resolved.addingTimeInterval(TimeInterval(duration * 60))
+                if let slot = freedSlot, resolved < max(slot.start, now) || resolvedEnd > slot.end {
+                    failures.append("The available window changed for \"\(task.title)\"")
+                    continue
+                }
+                task.scheduledDate = calendar.startOfDay(for: resolved)
+                task.scheduledTime = resolved
+                task.scheduledEndTime = resolvedEnd
             } else {
                 continue
             }
 
             // Approved replan path may override user-placed clocks (P2).
             task.userPlacedScheduleAt = nil
-            await tasksVM.scheduleMutation.persist(task, userId: userId, reconcileSchedule: true)
+            if await tasksVM.scheduleMutation.persist(task, userId: userId, reconcileSchedule: false) == false {
+                failures.append("Couldn't save \"\(task.title)\" — please try again")
+            }
         }
 
         if !result.mutations.isEmpty {
@@ -453,19 +480,30 @@ public final class ExecutivePlanningViewModel: ObservableObject {
                 return allowedTaskIDs.contains(id)
             }
             var meds = MedicationStore.load()
-            _ = await applier.apply(
+            let applied = await applier.apply(
                 mutations: allowedMutations,
                 tasksVM: tasksVM,
                 modulesVM: modulesVM,
                 userId: userId,
                 medications: &meds,
                 lifeProfile: profile,
+                deferReconcile: true,
                 allowUserPlacedOverride: true,
                 now: now
             )
+            failures += applied.skippedReasons
         }
 
+        if reconcileSchedule {
+            tasksVM.requestDebouncedScheduleReconcile(userId: userId, immediate: true)
+            tasksVM.onScheduleWriteCommitted?()
+        }
         await refreshContext()
+        if !failures.isEmpty {
+            errorMessage = failures.joined(separator: "\n") + "\nSome earlier changes may have saved. Review your schedule before retrying."
+            return false
+        }
+        return true
     }
 
     /// Resolves a replan time — slot-scoped replans keep the AI hour/minute on the slot day;
@@ -889,7 +927,7 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         selectedVariantID = variant.id
         negotiationPhase = .awaitingSelection
         let result = PlanVariantBuilder.result(from: variant)
-        await applyReplanResult(result, tasksVM: tasksVM, modulesVM: modulesVM, userId: userId, refreshContext: refreshContext)
+        guard await applyReplanResult(result, now: context.now, tasksVM: tasksVM, modulesVM: modulesVM, userId: userId, refreshContext: refreshContext) else { return }
         if contextualReplanTrigger == .badDay || contextualReplanTrigger == .calendarChange || contextualReplanTrigger == .travelDisruption {
             let kind: ProactiveAction.Kind = contextualReplanTrigger == .badDay ? .badDay : .calendarChange
             ProactiveFeedbackStore.record(kind: kind, outcome: .accepted)
@@ -951,6 +989,10 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         await refreshContext()
         NotificationCenter.default.post(name: .taskListDidChange, object: nil)
 
+        guard applyResult.appliedCount > 0, !applyResult.createdTaskIDs.isEmpty else {
+            errorMessage = applyResult.skippedReasons.first ?? "Couldn't save the project. Please try again."
+            return
+        }
         multiDaySession = MultiDayPlanningSession(phase: .committed, draft: draft)
         multiDayDraft = nil
         multiDayPlanning = nil
@@ -1042,7 +1084,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         healthSummary: HealthSummary?,
         executiveCapacity: ExecutiveCapacityState? = nil,
         analyticsContext: CachedAIContextSummary? = nil,
-        now: Date = Date()
+        now: Date = Date(),
+        moneyLine: String = ""
     ) -> PlanningConversationContext {
         let medications = MedicationStore.load()
         let capacity = executiveCapacity ?? .moderate
@@ -1083,7 +1126,8 @@ public final class ExecutivePlanningViewModel: ObservableObject {
             lifeProfile: UserLifeProfileStore.load(),
             analyticsContext: analyticsContext,
             healthSummary: healthSummary,
-            now: now
+            now: now,
+            moneyLine: moneyLine
         )
     }
 

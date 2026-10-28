@@ -192,6 +192,19 @@ struct LookAfterBottomNav: View {
             .foregroundStyle(isSelected ? DesignSystem.accentPrimary : DesignSystem.textSecondary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: DesignSystem.minTouchTarget)
+            .padding(.vertical, DesignSystem.spacingXXS)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: DesignSystem.radiusSM, style: .continuous)
+                        .fill(DesignSystem.contentSurface)
+                        .overlay(alignment: .bottom) {
+                            Capsule()
+                                .fill(DesignSystem.accentPrimary)
+                                .frame(width: 16, height: 3)
+                                .padding(.bottom, 2)
+                        }
+                }
+            }
             .contentShape(Rectangle())
         })
         .buttonStyle(.plain)

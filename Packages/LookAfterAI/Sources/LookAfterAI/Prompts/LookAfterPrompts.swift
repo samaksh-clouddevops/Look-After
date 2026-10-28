@@ -935,7 +935,7 @@ public enum LookAfterPrompts {
         calibrationBlock: String = UserCalibrationStore.promptBlock(maxEntries: 5)
     ) -> String {
         let taskList = tasks.map {
-            "- \($0.title) (\($0.estimatedMinutes)m, Priority: \($0.priority.label), Energy: \($0.requiredEnergy.rawValue), Difficulty: \($0.difficulty.rawValue))"
+            "- ID: \($0.id) | \($0.title) (\($0.estimatedMinutes)m, Priority: \($0.priority.label), Energy: \($0.requiredEnergy.rawValue), Difficulty: \($0.difficulty.rawValue))"
         }.joined(separator: "\n")
 
         return """
@@ -958,7 +958,7 @@ public enum LookAfterPrompts {
 
         Return ONLY a JSON response:
         {
-            "selectedTaskTitle": "<task title exactly as listed>",
+            "selectedTaskID": "<task ID exactly as listed>",
             "reason": "<warm 1-sentence explanation why this item is right now>"
         }
         """

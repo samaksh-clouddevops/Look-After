@@ -92,8 +92,10 @@ public enum DayScheduleReconciler {
         calendar: Calendar = .current,
         parkedQueue: ParkedTaskQueueStore? = nil
     ) -> Result {
-        let prevStart = calendar.startOfDay(for: previousDay)
         let nextStart = calendar.startOfDay(for: nextDay)
+        guard calendar.startOfDay(for: previousDay) < nextStart else {
+            return Result(tasks: tasks, changedTaskIDs: [], conflictTaskIDs: [])
+        }
 
         let tomorrowActives = tasks.filter { task in
             guard task.status.isActive else { return false }
@@ -108,15 +110,14 @@ public enum DayScheduleReconciler {
         var decisions: [ConflictCascadeDecision] = []
         var byID = Dictionary.uniquingFirstValue(tasks.map { ($0.id, $0) })
 
-        let yesterdayIncomplete = tasks.filter { task in
-            guard task.status.isActive else { return false }
-            if let d = task.scheduledDate {
-                return calendar.isDate(d, inSameDayAs: prevStart)
-            }
-            return task.scheduledTime.map { calendar.isDate($0, inSameDayAs: prevStart) } == true
+        let overdueIncomplete = tasks.filter { task in
+            guard task.status.isActive, !task.isRecurrenceTemplateTask,
+                  let assigned = task.scheduledDate ?? task.scheduledTime else { return false }
+            // Reopening after several unused days must clean the entire gap.
+            return calendar.startOfDay(for: assigned) < nextStart
         }
 
-        for var task in yesterdayIncomplete {
+        for var task in overdueIncomplete {
             let policy = TaskEphemeralityDefaults.expiration(for: task)
 
             if policy == .endOfDay {
@@ -173,7 +174,7 @@ public enum DayScheduleReconciler {
             }
 
             // Recurrence occurrences are re-materialized on sync — never park stale series rows.
-            if task.parentTaskId != nil {
+            if task.parentTaskId != nil && !MultiDayTaskTags.isSlice(task) {
                 task.status = .superseded
                 task.scheduledTime = nil
                 task.scheduledEndTime = nil

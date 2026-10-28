@@ -599,6 +599,11 @@ public struct ExecutivePlanningTimelineRow: Identifiable, Sendable, Equatable {
         return timeConstraint.isSchedulerMovable
     }
 
+    /// Any incomplete task can take a one-day clock, including a fixed time.
+    public var canRescheduleJustForToday: Bool {
+        taskId != nil && !isCompleted && !isSuggestedSlot
+    }
+
     public var canRemoveFromTimeline: Bool {
         guard taskId != nil, !isCompleted, !isSuggestedSlot else { return false }
         if isFixedEvent || timeConstraint == .anchored { return false }
@@ -685,6 +690,8 @@ public struct PlanningConversationContext: Sendable {
     public var healthSummary: HealthSummary?
     /// Virtual clock for this conversation. Defaults to wall clock only at the call site.
     public var now: Date
+    /// Safe-to-spend and the next due bill. Empty when salary is unset.
+    public var moneyLine: String
 
     public init(
         userName: String,
@@ -702,7 +709,8 @@ public struct PlanningConversationContext: Sendable {
         lifeProfile: UserLifeProfile = UserLifeProfile(),
         analyticsContext: CachedAIContextSummary? = nil,
         healthSummary: HealthSummary? = nil,
-        now: Date = Date()
+        now: Date = Date(),
+        moneyLine: String = ""
     ) {
         self.userName = userName
         self.tasks = tasks
@@ -720,5 +728,6 @@ public struct PlanningConversationContext: Sendable {
         self.analyticsContext = analyticsContext
         self.healthSummary = healthSummary
         self.now = now
+        self.moneyLine = moneyLine
     }
 }

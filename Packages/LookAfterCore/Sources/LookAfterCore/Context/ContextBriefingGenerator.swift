@@ -271,16 +271,14 @@ public struct ContextBriefingGenerator: Sendable {
 
         // `isOverdue` is not day-membership: leftover recurring occurrences and
         // future-dated one-offs with past deadlines are overdue but not today's work.
-        if let overdue = active
-            .filter { task in
-                task.isOverdue(calendar: calendar, referenceDate: now)
-                    && task.isActionableToday(
-                        allTasks: context.tasks,
-                        calendar: calendar,
-                        referenceDate: now
-                    )
-            }
-            .min(by: { $0.priority > $1.priority }) {
+        if let overdue = active.filter({ task in
+            task.isOverdue(calendar: calendar, referenceDate: now)
+                && task.isActionableToday(
+                    allTasks: context.tasks,
+                    calendar: calendar,
+                    referenceDate: now
+                )
+        }).min(by: { $0.priority > $1.priority }) {
             return overdue
         }
 

@@ -134,6 +134,7 @@ public final class LLMPlanningEngine {
         \(voiceOptimized ? "" : "\(PlanningPromptContextBuilder.dailyRoutineBlock())\n")
         \(PlanningPromptContextBuilder.sleepBoundaryBlock(now: now, profile: profile))
         \(PlanningPromptContextBuilder.duplicateReuseRulesBlock())
+        \(context.moneyLine.isEmpty ? "" : "MONEY (totals only): \(context.moneyLine)")
 
         PRE-ANALYSIS (deterministic — follow this):
         - Classified intent: \(analysis.intent.label)

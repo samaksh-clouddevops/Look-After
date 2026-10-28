@@ -15,6 +15,7 @@ public struct LookAfterRootCanvas: View {
     @State private var showDailyPlan = false
     @State private var showTasks = false
     @State private var taskListInitialFilter: TaskFilter = .all
+    @State private var taskListInitialTask: LifeTask?
     @State private var showInsights = false
     @State private var showDecideForMe = false
     @State private var decideForMeResult: DecideForMeResult?
@@ -25,6 +26,7 @@ public struct LookAfterRootCanvas: View {
     @State private var showHealthDetail = false
     @State private var showMedication = false
     @State private var showFullTimeline = false
+    @State private var taskToEditAfterTimeline: LifeTask?
     @State private var fullTimelineScrollDisabled = false
     @State private var showBrainCapture = false
     @State private var showInbox = false
@@ -229,7 +231,12 @@ public struct LookAfterRootCanvas: View {
         .sheet(isPresented: $showDailyPlan) {
             DailyPlanView(userId: firebase.resolvedUserId)
         }
-        .sheet(isPresented: $showFullTimeline) {
+        .sheet(isPresented: $showFullTimeline, onDismiss: {
+            if let task = taskToEditAfterTimeline {
+                taskToEditAfterTimeline = nil
+                openTaskList(editing: task)
+            }
+        }) {
             fullTimelineSheet
         }
         .sheet(isPresented: $showTasks) {
@@ -238,7 +245,8 @@ public struct LookAfterRootCanvas: View {
                 adhdVM: shell.adhdVM,
                 brainVM: shell.brainVM,
                 userId: firebase.resolvedUserId,
-                initialFilter: taskListInitialFilter
+                initialFilter: taskListInitialFilter,
+                initialTask: taskListInitialTask
             )
         }
         .sheet(isPresented: $showInsights) {
@@ -250,26 +258,28 @@ public struct LookAfterRootCanvas: View {
             } else if isLoadingDecideForMe {
                 ProgressView("Finding your one task…")
                     .padding()
-            } else if let topTask = heroTask {
-                DecideForMeView(task: topTask, adhdVM: shell.adhdVM)
+            } else {
+                ContentUnavailableView(
+                    "Nothing to choose right now",
+                    systemImage: "checkmark.circle",
+                    description: Text("There are no available tasks for today. Add a task or take a moment to pause.")
+                )
             }
         }
-        .onChange(of: showDecideForMe) { _, show in
-            guard show else {
+        .task(id: showDecideForMe) {
+            guard showDecideForMe else {
                 decideForMeResult = nil
+                isLoadingDecideForMe = false
                 return
             }
             isLoadingDecideForMe = true
-            Task {
-                let snapshot = shell.brainVM.cognitiveSnapshot ?? CognitiveSnapshot()
-                let tasks = shell.tasksVM.tasks.filter(\.status.isActive)
-                let picker = DecideForMePicker()
-                let result = await picker.pick(snapshot: snapshot, tasks: tasks)
-                await MainActor.run {
-                    decideForMeResult = result
-                    isLoadingDecideForMe = false
-                }
-            }
+            let snapshot = shell.brainVM.cognitiveSnapshot ?? CognitiveSnapshot()
+            let tasks = shell.tasksVM.schedulingContext
+            let picker = DecideForMePicker()
+            let result = await picker.pick(snapshot: snapshot, tasks: tasks)
+            guard !Task.isCancelled else { return }
+            decideForMeResult = result
+            isLoadingDecideForMe = false
         }
         .sheet(isPresented: $showResetMode) {
             PhysiologicalResetView()
@@ -507,8 +517,7 @@ public struct LookAfterRootCanvas: View {
                 selectedTab = .today
                 if let taskId = notificationRouter.pendingRoutePayload,
                    let task = shell.tasksVM.tasks.first(where: { $0.id == taskId }) {
-                    shell.tasksVM.selectedTask = task
-                    openTaskList()
+                    openTaskList(editing: task)
                 } else {
                     openTaskList()
                 }
@@ -608,13 +617,15 @@ public struct LookAfterRootCanvas: View {
                 onRescheduleTimelineTask: { taskId in
                     await rescheduleTimelineTask(taskId: taskId)
                 },
+                onRescheduleJustForToday: { taskId, time in
+                    await rescheduleTimelineTaskJustForToday(taskId: taskId, time: time)
+                },
                 onRemoveFromTimelineTask: { taskId in
                     await removeFromTimelineAndReplanSlot(taskId: taskId)
                 },
                 onStartTask: { task in startBrainHeroTask(task, instant: true) },
                 onEditTask: { task in
-                    shell.tasksVM.selectedTask = task
-                    openTaskList()
+                    openTaskList(editing: task)
                 },
                 onCapture: {
                     openCapture(
@@ -702,7 +713,10 @@ public struct LookAfterRootCanvas: View {
         weeklyAIRetrospective = await WeeklyAIRetrospectiveGenerator().generate(
             summary: displayedWeeklyReviewSummary,
             analytics: analytics,
-            behaviorMemory: behavior
+            behaviorMemory: behavior,
+            moneyLine: shell.modulesVM.moneyPlanningLine(
+                sleepHours: shell.brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60 }
+            )
         )
     }
 
@@ -873,7 +887,10 @@ public struct LookAfterRootCanvas: View {
             snapshot: shell.contextOrchestrator.snapshot,
             healthSummary: shell.brainVM.healthSummary,
             executiveCapacity: shell.contextOrchestrator.executiveCapacity,
-            analyticsContext: analytics
+            analyticsContext: analytics,
+            moneyLine: shell.modulesVM.moneyPlanningLine(
+                sleepHours: shell.brainVM.healthSummary?.totalSleepMinutes.map { $0 / 60 }
+            )
         )
     }
 
@@ -1013,20 +1030,36 @@ public struct LookAfterRootCanvas: View {
         shell.refreshWidgetData(rebuildTimeline: true, immediateTimelineRebuild: true)
     }
 
-    private func rescheduleTimelineTask(taskId: String) async {
+    private func rescheduleTimelineTaskJustForToday(taskId: String, time: Date) async -> Bool {
         let userId = firebase.resolvedUserId
         guard !userId.isEmpty,
               let task = resolveTimelineTask(id: taskId),
               task.status.isActive else {
-            return
+            return false
         }
-        guard let newTime = await shell.tasksVM.rescheduleTaskFromNow(task) else { return }
+        guard let newTime = await shell.tasksVM.rescheduleJustForToday(task, to: time) else { return false }
         HapticManager.impact(.medium)
         planningVM.markTimelineTaskRescheduled(taskId: taskId, to: newTime)
         await refreshTimelinePage(userId: userId)
+        return true
     }
 
-    private func openTaskList(filter: TaskFilter = .all) {
+    private func rescheduleTimelineTask(taskId: String) async -> Bool {
+        let userId = firebase.resolvedUserId
+        guard !userId.isEmpty,
+              let task = resolveTimelineTask(id: taskId),
+              task.status.isActive else {
+            return false
+        }
+        guard let newTime = await shell.tasksVM.rescheduleTaskFromNow(task) else { return false }
+        HapticManager.impact(.medium)
+        planningVM.markTimelineTaskRescheduled(taskId: taskId, to: newTime)
+        await refreshTimelinePage(userId: userId)
+        return true
+    }
+
+    private func openTaskList(filter: TaskFilter = .all, editing task: LifeTask? = nil) {
+        taskListInitialTask = task
         taskListInitialFilter = filter
         showTasks = true
     }
@@ -1074,8 +1107,7 @@ public struct LookAfterRootCanvas: View {
             return ("View", {
                 selectedTab = .today
                 if let task = shell.tasksVM.resolveTimelineTask(id: taskId) {
-                    shell.tasksVM.selectedTask = task
-                    openTaskList()
+                    openTaskList(editing: task)
                 }
             })
         case .needsReview, .queuedOffline:
@@ -1261,13 +1293,15 @@ public struct LookAfterRootCanvas: View {
                     },
                     onEditTask: { taskId in
                         if let task = resolveTimelineTask(id: taskId) {
-                            shell.tasksVM.selectedTask = task
+                            taskToEditAfterTimeline = task
                             showFullTimeline = false
-                            openTaskList()
                         }
                     },
                     onRescheduleTask: { taskId in
                         await rescheduleTimelineTask(taskId: taskId)
+                    },
+                    onRescheduleJustForToday: { taskId, time in
+                        await rescheduleTimelineTaskJustForToday(taskId: taskId, time: time)
                     },
                     onRemoveFromTimelineTask: { taskId in
                         await removeFromTimelineAndReplanSlot(taskId: taskId)
@@ -1276,28 +1310,14 @@ public struct LookAfterRootCanvas: View {
                         Task { await addSuggestedTimelineSlot(sourceId: sourceId, start: start) }
                     },
                     onPersistScheduleChange: { task in
-                        let userId = firebase.resolvedUserId
-                        guard !userId.isEmpty else { return }
-                        Task {
-                            var toSave = task
-                            if task.id.hasPrefix("proj-")
-                                || shell.tasksVM.resolveTimelineTask(id: task.id) == nil {
-                                do {
-                                    toSave = try await shell.tasksVM.materializeTimelineTask(task, userId: userId)
-                                } catch {
-                                    return
-                                }
-                            }
-                            await shell.tasksVM.scheduleMutation.persist(
-                                toSave,
-                                userId: userId,
-                                userPlaced: true
-                            )
-                        }
+                        await shell.tasksVM.scheduleMutation.persistTimelineEdit(
+                            task, userId: firebase.resolvedUserId
+                        )
                     },
                     taskForID: resolveTimelineTask,
                     parentScrollDisabled: $fullTimelineScrollDisabled,
-                    calendarEventsProvider: shell.tasksVM.calendarEventsProvider
+                    calendarEventsProvider: shell.tasksVM.calendarEventsProvider,
+                schedulingTasks: shell.tasksVM.schedulingContext
                 )
                 .padding(.horizontal, DesignSystem.BriefingViewport.sectionHorizontal)
                 .padding(.vertical, DesignSystem.spacingMD)

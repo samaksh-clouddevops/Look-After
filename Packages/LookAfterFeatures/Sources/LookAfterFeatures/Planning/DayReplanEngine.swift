@@ -114,15 +114,19 @@ public struct DayReplanResult: Sendable {
 
     /// Effective changes for apply — selected variant or top-level scheduleChanges.
     public func effectiveChanges(selectedVariantID: String? = nil) -> [DayReplanScheduleChange] {
+        let changes: [DayReplanScheduleChange]
         if let id = selectedVariantID ?? recommendedVariantID,
            let variant = planVariants?.first(where: { $0.id == id }) {
-            return variant.scheduleChanges
+            changes = variant.scheduleChanges
+        } else if let variants = planVariants, !variants.isEmpty, scheduleChanges.isEmpty {
+            changes = (variants.first(where: \.recommended) ?? variants[0]).scheduleChanges
+        } else {
+            changes = scheduleChanges
         }
-        if let variants = planVariants, !variants.isEmpty, scheduleChanges.isEmpty {
-            let recommended = variants.first(where: \.recommended) ?? variants[0]
-            return recommended.scheduleChanges
-        }
-        return scheduleChanges
+        // One preview row and one write per task, even when the model revises a
+        // task twice in the same reply. The final instruction wins.
+        var seen = Set<String>()
+        return changes.reversed().filter { seen.insert($0.taskID).inserted }.reversed()
     }
 
     public func effectiveTimelineDeltas(selectedVariantID: String? = nil) -> [PlanningTimelineDelta] {
@@ -155,16 +159,19 @@ public final class DayReplanEngine {
         var raw: String?
         var lastError: Error?
         for attempt in 0..<2 {
+            try Task.checkCancellation()
             do {
                 raw = try await glm.sendMessage(prompt, systemPrompt: system, history: [], tier: .premium)
                 break
             } catch {
+                if error is CancellationError { throw error }
                 lastError = error
                 if attempt == 0 {
                     print("[DayReplan] AI attempt failed, retrying: \(error.localizedDescription)")
                 }
             }
         }
+        try Task.checkCancellation()
         guard let raw else {
             print("[DayReplan] AI unavailable after retry: \(lastError?.localizedDescription ?? "unknown error")")
             return localFallback(context: context)
@@ -279,7 +286,7 @@ public final class DayReplanEngine {
         }
 
         let tasksForPrompt = context.trigger == .freedSlot
-            ? slotCandidateTasks(from: context)
+            ? slotCandidateTasks(from: context, now: now)
             : context.planningContext.tasks
 
         return """
@@ -409,8 +416,6 @@ public final class DayReplanEngine {
     private func localFallback(context: DayReplanContext) -> DayReplanResult {
         let calendar = Calendar.current
         let now = context.planningContext.now
-        let day = calendar.startOfDay(for: now)
-        let workHours = PlanningSchedulePolicy.WorkHours.from(profile: context.planningContext.lifeProfile)
         var changes: [DayReplanScheduleChange] = []
 
         if context.trigger == .postWake {
@@ -439,49 +444,7 @@ public final class DayReplanEngine {
             return !changes.contains(where: { $0.taskID == task.id && $0.deferToTomorrow })
         }
 
-        var slot = PlanningSchedulePolicy.nextAvailableSlot(now: now, calendar: calendar, workHours: workHours)
-            ?? (workHours.startHour, 0)
-        var slotDate = calendar.date(
-            bySettingHour: slot.hour,
-            minute: slot.minute,
-            second: 0,
-            of: day
-        ) ?? now
-
-        func advanceSlot() {
-            slot = (min(slot.hour + 1, workHours.endHour), slot.minute)
-            slotDate = calendar.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: day) ?? slotDate.addingTimeInterval(3600)
-        }
-
-        func isInsideAwayWindow(_ date: Date) -> Bool {
-            guard let away = context.awayWindow else { return false }
-            return date >= away.start && date < away.end
-        }
-
-        for task in flexible.prefix(6) {
-            while slotDate < now || isInsideAwayWindow(slotDate) {
-                advanceSlot()
-            }
-            if context.trigger == .goingOut,
-               let away = context.awayWindow,
-               slotDate >= away.start {
-                changes.append(DayReplanScheduleChange(
-                    taskID: task.id,
-                    deferToTomorrow: true,
-                    reason: "No room before going out — deferred"
-                ))
-                continue
-            }
-            changes.append(DayReplanScheduleChange(
-                taskID: task.id,
-                startHour: slot.hour,
-                startMinute: slot.minute,
-                reason: context.trigger == .goingOut
-                    ? "Fits before you head out"
-                    : "Better fit for remaining energy"
-            ))
-            advanceSlot()
-        }
+        changes += LocalDayReplanScheduler.changes(context: context, tasks: flexible)
 
         let hour = calendar.component(.hour, from: now)
         let summary: String
@@ -546,14 +509,23 @@ public final class DayReplanEngine {
         let deferCandidates = context.planningContext.tasks.filter { task in
             task.status.isActive && !task.isFixedTimeEvent && baseChanges.contains(where: { $0.taskID == task.id && $0.deferToTomorrow })
         }
-        let variants = PlanVariantBuilder.buildOfflineVariants(
+        var variants = PlanVariantBuilder.buildOfflineVariants(
             tasks: context.planningContext.tasks,
-            deferCandidates: deferCandidates.isEmpty
-                ? Array(context.planningContext.tasks.filter { $0.status.isActive && !$0.isFixedTimeEvent }.prefix(3))
-                : deferCandidates,
+            deferCandidates: deferCandidates,
             context: context
-        )
-        return variants.count >= 2 ? variants : nil
+        ).map { variant in
+            var alternative = variant
+            alternative.recommended = false
+            return alternative
+        }
+        // The default must apply the plan just shown, rather than replace it with
+        // a separate prefix-based deferral that can drop the newly added priority.
+        variants.insert(PlanVariant(
+            id: "balanced-local", label: "Keep priorities", summary: summary,
+            tradeoffs: ["Protect commitments", "Defer work that cannot fit"],
+            scheduleChanges: baseChanges, timelineDeltas: [], recommended: true
+        ), at: 0)
+        return Array(variants.prefix(3))
     }
 
     private func slotCandidateTasks(from context: DayReplanContext, now: Date) -> [LifeTask] {

@@ -31,13 +31,72 @@ public struct RoutineBlock: Codable, Sendable, Equatable, Identifiable {
         self.isNonNegotiable = isNonNegotiable
     }
 
+    public static let taskTagPrefix = "routine-block:"
+
+    public var taskTag: String { "\(Self.taskTagPrefix)\(id)" }
+    public var anchorID: String { "routine-block.\(id)" }
+
     public var startMinutesFromMidnight: Int { startHour * 60 + startMinute }
     public var endMinutesFromMidnight: Int { startMinutesFromMidnight + durationMinutes }
 
+    public var endHour: Int { (startHour + (startMinute + durationMinutes) / 60) % 24 }
+    public var endMinute: Int { (startMinute + durationMinutes) % 60 }
+
+    /// Writes this block's clock onto a recurrence template or a single day's occurrence.
+    /// Leaves identity, status, and parent linkage alone except when `asTemplate` clears the parent.
+    public func applySchedule(
+        to task: inout LifeTask,
+        on day: Date,
+        calendar: Calendar,
+        asTemplate: Bool
+    ) {
+        task.title = title
+        task.estimatedMinutes = max(durationMinutes, TaskDurationPolicy.minimumMinutes)
+        let dayStart = calendar.startOfDay(for: day)
+        let start = calendar.date(bySettingHour: startHour, minute: startMinute, second: 0, of: dayStart)
+        task.scheduledTime = start
+        if let start {
+            task.scheduledEndTime = start.addingTimeInterval(TimeInterval(task.estimatedMinutes * 60))
+        }
+        task.scheduleAnchorID = anchorID
+        if asTemplate {
+            task.scheduledDate = nil
+            task.isRecurrenceTemplate = true
+            task.parentTaskId = nil
+            task.recurrence = .custom
+            task.recurrenceInterval = 1
+            task.recurrenceWeekdays = days.recurrenceWeekdayNumbers
+        } else {
+            task.scheduledDate = dayStart
+            task.isRecurrenceTemplate = false
+            task.recurrence = nil
+            task.recurrenceWeekdays = nil
+        }
+        var tags = task.tags.filter { !$0.hasPrefix(Self.taskTagPrefix) }
+        tags.append(taskTag)
+        if !tags.contains("routine") { tags.append("routine") }
+        if !tags.contains("daily-routine") { tags.append("daily-routine") }
+        task.tags = tags
+        if isNonNegotiable {
+            task.applyTimeConstraint(.anchored)
+        } else {
+            let preservedStart = task.scheduledTime
+            let preservedEnd = task.scheduledEndTime
+            task.applyTimeConstraint(.flexible)
+            task.scheduledTime = preservedStart
+            task.scheduledEndTime = preservedEnd
+        }
+        task.updatedAt = Date()
+    }
+
+    public func matchesStartClock(_ date: Date?, calendar: Calendar) -> Bool {
+        guard let date else { return false }
+        return calendar.component(.hour, from: date) == startHour
+            && calendar.component(.minute, from: date) == startMinute
+    }
+
     public func timeRangeLabel() -> String {
-        let endHour = (startHour + (startMinute + durationMinutes) / 60) % 24
-        let endMinute = (startMinute + durationMinutes) % 60
-        return "\(UserLifeProfile.formatTime(hour: startHour, minute: startMinute)) – \(UserLifeProfile.formatTime(hour: endHour, minute: endMinute))"
+        "\(UserLifeProfile.formatTime(hour: startHour, minute: startMinute)) – \(UserLifeProfile.formatTime(hour: endHour, minute: endMinute))"
     }
 
     /// True if this block overlaps `other` on at least one shared day.

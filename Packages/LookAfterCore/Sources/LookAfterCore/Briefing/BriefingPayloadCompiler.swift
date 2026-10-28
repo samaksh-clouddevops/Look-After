@@ -62,7 +62,7 @@ public enum BriefingPayloadCompiler {
         // gym occurrence must not inflate Monday's remaining/focus tallies.
         let dayScoped = input.tasks.filter { task in
             if task.status.isActive {
-                return task.belongsOnDaySchedule(day: day, calendar: calendar, now: input.now)
+                return task.belongsOnDaySchedule(day: day, allTasks: input.tasks, calendar: calendar, now: input.now)
                     && TaskRecurrenceEngine.matchesRecurrenceSchedule(
                         task,
                         on: day,

@@ -22,6 +22,7 @@ public final class TasksViewModel: ObservableObject {
     @Published public private(set) var taskTimeDisplays: [String: TaskTimeDisplayInfo] = [:]
     @Published public private(set) var loadingTimeDisplayTaskIds: Set<String> = []
     @Published public var isAutoFilling: Bool = false
+    @Published public private(set) var autoFillError: String?
     @Published public var isImporting: Bool = false
     @Published public var importPreview: TaskImportResult?
     @Published public var importError: String?
@@ -364,7 +365,7 @@ public final class TasksViewModel: ObservableObject {
     ) {
         let dayStart = calendar.startOfDay(for: day)
         let scheduled = listPool.filter { task in
-            task.belongsOnDaySchedule(day: dayStart, calendar: calendar, now: now)
+            task.belongsOnDaySchedule(day: dayStart, allTasks: listPool, calendar: calendar, now: now)
         }
         dayScheduleSnapshot = DayScheduleSnapshot(
             day: dayStart,
@@ -536,7 +537,8 @@ public final class TasksViewModel: ObservableObject {
         userId: String,
         force: Bool = false,
         localOnly: Bool = false,
-        deferSnapshot: Bool = false
+        deferSnapshot: Bool = false,
+        now: Date = Date()
     ) async {
         guard !userId.isEmpty else { return }
         if !force,
@@ -549,7 +551,7 @@ public final class TasksViewModel: ObservableObject {
         // timeline/all-tasks lists unless the user happens to reopen Routine Builder.
         await syncRoutineBlockTasks(userId: userId)
         do {
-            try await syncRecurringOccurrences(userId: userId, localOnly: localOnly)
+            try await syncRecurringOccurrences(userId: userId, localOnly: localOnly, now: now)
             await reactivateSupersededMultiDaySlices(userId: userId)
             lastRecurrenceSyncAt = Date()
             if !deferSnapshot {
@@ -609,13 +611,13 @@ public final class TasksViewModel: ObservableObject {
     /// `LifeTask` templates so the declared daily routine actually shows up as visible tasks
     /// in the timeline and all-tasks lists — previously `RoutineBlock`s were planner-only
     /// anchors (`DayStructure.Anchor`) and never materialized into any `LifeTask` row.
-    public func syncRoutineBlockTasks(userId: String) async {
+    public func syncRoutineBlockTasks(userId: String, forceSchedule: Bool = false) async {
         guard !userId.isEmpty else { return }
         let blocks = RoutineBlockStore.load()
         var local = reloadLocalTasks(for: userId)
         let calendar = Calendar.current
 
-        func tag(for block: RoutineBlock) -> String { "\(Self.routineBlockTagPrefix)\(block.id)" }
+        func tag(for block: RoutineBlock) -> String { block.taskTag }
 
         var existingTemplatesByTag: [String: LifeTask] = [:]
         for task in local where TaskRecurrenceEngine.isRecurrenceTemplate(task) {
@@ -641,31 +643,25 @@ public final class TasksViewModel: ObservableObject {
         }
 
         for block in blocks {
-            let weekdays = block.days.recurrenceWeekdayNumbers
-            guard !weekdays.isEmpty else { continue }
+            guard !block.days.recurrenceWeekdayNumbers.isEmpty else { continue }
             let blockTag = tag(for: block)
-            let scheduledTime = calendar.date(
-                bySettingHour: block.startHour, minute: block.startMinute, second: 0, of: Date()
-            ) ?? Date()
 
             if var existing = existingTemplatesByTag[blockTag] {
-                let sameTime = existing.scheduledTime.map {
-                    calendar.component(.hour, from: $0) == block.startHour
-                        && calendar.component(.minute, from: $0) == block.startMinute
-                } ?? false
-                let needsUpdate = existing.title != block.title
-                    || existing.estimatedMinutes != block.durationMinutes
-                    || existing.recurrenceWeekdays != weekdays
-                    || !sameTime
+                var updated = existing
+                block.applySchedule(to: &updated, on: Date(), calendar: calendar, asTemplate: true)
+                updated.userId = userId
+                let needsUpdate = existing.title != updated.title
+                    || existing.estimatedMinutes != updated.estimatedMinutes
+                    || existing.recurrenceWeekdays != updated.recurrenceWeekdays
+                    || !block.matchesStartClock(existing.scheduledTime, calendar: calendar)
+                    || existing.scheduledEndTime == nil
+                    || existing.scheduleAnchorID != updated.scheduleAnchorID
+                    || existing.timeConstraint != updated.timeConstraint
+                    || existing.schedulingMode != updated.schedulingMode
+                    || !existing.tags.contains(blockTag)
+                    || !existing.tags.contains("daily-routine")
                 guard needsUpdate else { continue }
-                existing.title = block.title
-                existing.estimatedMinutes = block.durationMinutes
-                existing.recurrence = .custom
-                existing.recurrenceWeekdays = weekdays
-                existing.scheduledTime = scheduledTime
-                existing.schedulingMode = block.isNonNegotiable ? .fixedTime : .flexible
-                existing.userId = userId
-                existing.updatedAt = Date()
+                existing = updated
                 do {
                     try await taskRepo.update(existing)
                     if let index = local.firstIndex(where: { $0.id == existing.id }) {
@@ -683,14 +679,10 @@ public final class TasksViewModel: ObservableObject {
                     lifeArea: .personal,
                     priority: .medium,
                     estimatedMinutes: block.durationMinutes,
-                    scheduledTime: scheduledTime,
-                    tags: [blockTag, "routine"],
-                    recurrence: .custom,
-                    recurrenceWeekdays: weekdays,
-                    schedulingMode: block.isNonNegotiable ? .fixedTime : .flexible,
                     userId: userId
                 )
-                template.isRecurrenceTemplate = true
+                block.applySchedule(to: &template, on: Date(), calendar: calendar, asTemplate: true)
+                template.userId = userId
                 do {
                     try await taskRepo.create(template)
                     local.append(template)
@@ -709,12 +701,83 @@ public final class TasksViewModel: ObservableObject {
             print("[Tasks] routine-block occurrence sync failed: \(error.localizedDescription)")
 #endif
         }
+        await applyRoutineBlockSchedules(userId: userId, blocks: blocks, forceSchedule: forceSchedule)
         applySnapshot(taskRepo.localSnapshot(for: userId), logSource: "routine-block-sync")
         notifyTaskListDidChange()
     }
 
+    /// Copies each declared block's title, duration, and clock onto today's visible occurrences.
+    /// A one-off drag is kept unless the user just saved the block (`forceSchedule`).
+    private func applyRoutineBlockSchedules(
+        userId: String,
+        blocks: [RoutineBlock],
+        forceSchedule: Bool
+    ) async {
+        guard !blocks.isEmpty else { return }
+        let calendar = Calendar.current
+        var all = reloadLocalTasks(for: userId)
+        var batch: [LifeTask] = []
+
+        for block in blocks {
+            guard let template = all.first(where: {
+                TaskRecurrenceEngine.isRecurrenceTemplate($0) && $0.tags.contains(block.taskTag)
+            }) else { continue }
+
+            for index in all.indices {
+                let task = all[index]
+                guard task.status.isActive else { continue }
+                guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { continue }
+                guard task.parentTaskId == template.id || task.tags.contains(block.taskTag) else { continue }
+                guard let day = task.assignedDay(calendar: calendar),
+                      block.days.includes(day, calendar: calendar) else { continue }
+
+                var updated = task
+                let keepUserClock = !forceSchedule && TaskConstraintAlignment.isUserPlaced(task)
+                block.applySchedule(to: &updated, on: day, calendar: calendar, asTemplate: false)
+                updated.id = task.id
+                updated.parentTaskId = task.parentTaskId ?? template.id
+                updated.status = task.status
+                updated.userId = userId
+                updated.lifeArea = task.lifeArea
+                if keepUserClock {
+                    updated.scheduledTime = task.scheduledTime
+                    updated.scheduledEndTime = task.scheduledEndTime
+                    updated.userPlacedScheduleAt = task.userPlacedScheduleAt
+                } else if forceSchedule {
+                    updated.userPlacedScheduleAt = nil
+                } else {
+                    updated.userPlacedScheduleAt = task.userPlacedScheduleAt
+                }
+
+                let clockChanged = !block.matchesStartClock(task.scheduledTime, calendar: calendar)
+                    && !keepUserClock
+                let changed = task.title != updated.title
+                    || task.estimatedMinutes != updated.estimatedMinutes
+                    || task.scheduleAnchorID != updated.scheduleAnchorID
+                    || task.timeConstraint != updated.timeConstraint
+                    || task.schedulingMode != updated.schedulingMode
+                    || !task.tags.contains(block.taskTag)
+                    || clockChanged
+                    || task.scheduledEndTime != updated.scheduledEndTime
+                guard changed else { continue }
+                updated.updatedAt = Date()
+                all[index] = updated
+                batch.append(updated)
+            }
+        }
+
+        guard !batch.isEmpty else { return }
+        do {
+            try await taskRepo.updateMany(batch)
+        } catch {
+#if DEBUG
+            print("[Tasks] failed to apply routine-block schedule: \(error.localizedDescription)")
+#endif
+        }
+    }
+
     /// Normalize legacy recurring tasks and materialize today's occurrences.
-    private func syncRecurringOccurrences(userId: String, localOnly: Bool = false) async throws {
+    private func syncRecurringOccurrences(userId: String, localOnly: Bool = false, now: Date = Date()) async throws {
         var all = localOnly ? reloadLocalTasks(for: userId) : try await taskRepo.getAll(for: userId)
 
         for task in all where TaskRecurrenceEngine.needsLegacyNormalization(task) {
@@ -761,13 +824,13 @@ public final class TasksViewModel: ObservableObject {
         }
         all = reloadLocalTasks(for: userId)
 
-        let today = Calendar.current.startOfDay(for: Date())
+        let today = Calendar.current.startOfDay(for: now)
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)
         let materializeDays = [today] + (tomorrow.map { [$0] } ?? [])
         try await reactivateSupersededOccurrences(userId: userId, days: materializeDays, in: all)
         all = reloadLocalTasks(for: userId)
 
-        let missing = TaskRecurrenceEngine.missingOccurrences(for: all, on: Date())
+        let missing = TaskRecurrenceEngine.missingOccurrences(for: all, on: now)
             .filter { !$0.isLifeCommitmentTask }
         for var occurrence in missing {
             occurrence.userId = userId
@@ -805,7 +868,7 @@ public final class TasksViewModel: ObservableObject {
         var staleDuplicates = Set<String>()
         for day in materializeDays {
             staleDuplicates.formUnion(
-                TaskSeriesResolver.staleActiveSeriesIDs(in: all, on: day)
+                TaskSeriesResolver.staleActiveSeriesIDs(in: all, on: day, referenceDate: now)
             )
         }
         try await supersedeInvalidScheduledTasks(Array(staleDuplicates), in: all, includingLifeCommitments: true)
@@ -1162,16 +1225,17 @@ public final class TasksViewModel: ObservableObject {
         notifyTaskListDidChange()
     }
 
+    @discardableResult
     private func persistRecurringTask(
         _ task: LifeTask,
         plan: RecurringCreationPlan? = nil,
         decompose: Bool
-    ) async {
+    ) async -> Bool {
         let userId = task.userId
         let resolvedPlan = plan ?? planRecurringCreation(for: task, existingTasks: mergedLocalTasks(for: userId))
 
         if resolvedPlan.usesExistingTemplate {
-            guard let occurrence = resolvedPlan.occurrence else { return }
+            guard let occurrence = resolvedPlan.occurrence else { return true }
             insertRecurringOccurrenceIfNeeded(occurrence)
             do {
                 if reloadLocalTasks(for: userId).contains(where: { $0.id == occurrence.id }) {
@@ -1185,19 +1249,22 @@ public final class TasksViewModel: ObservableObject {
             } catch {
                 removeActive(id: occurrence.id)
                 self.error = error.localizedDescription
+                return false
             }
-            return
+            return true
         }
 
-        guard let template = resolvedPlan.template else { return }
+        guard let template = resolvedPlan.template else { return true }
         if let occurrence = resolvedPlan.occurrence {
             insertRecurringOccurrenceIfNeeded(occurrence)
         }
 
+        var createdTemplate = false
         do {
             let stored = reloadLocalTasks(for: userId)
             if !stored.contains(where: { $0.id == template.id }) {
                 try await taskRepo.create(template)
+                createdTemplate = true
             }
             if let occurrence = resolvedPlan.occurrence {
                 if stored.contains(where: { $0.id == occurrence.id }) {
@@ -1213,8 +1280,13 @@ public final class TasksViewModel: ObservableObject {
             if let occurrence = resolvedPlan.occurrence {
                 removeActive(id: occurrence.id)
             }
+            if createdTemplate {
+                try? await taskRepo.delete(template.id, userId: userId)
+            }
             self.error = error.localizedDescription
+            return false
         }
+        return true
     }
 
     @Published public var createDurationWarning: String?
@@ -1232,7 +1304,10 @@ public final class TasksViewModel: ObservableObject {
     /// Durable create used by planning apply — throws if SQLite/repo write fails.
     public func createTaskAndAwait(_ task: LifeTask) async throws {
         if task.recurrenceRule != .none {
-            createRecurringTask(task)
+            guard await persistRecurringTask(task, decompose: false) else {
+                throw CocoaError(.fileWriteUnknown, userInfo: [NSLocalizedDescriptionKey: error ?? "Couldn't save the repeating task."])
+            }
+            refreshFromLocal(userId: task.userId)
             return
         }
         if MultiDayTaskTags.isMultiDay(task) {
@@ -1583,6 +1658,10 @@ public final class TasksViewModel: ObservableObject {
     /// Timeline projections use stable ids — convert to a real row before persisting edits.
     private func materializeProjectionIfNeeded(_ task: LifeTask) -> LifeTask {
         guard task.id.hasPrefix("proj-") else { return task }
+        let userId = task.userId.isEmpty ? FirebaseManager.shared.resolvedUserId : task.userId
+        if taskRepo.localAllTasks(for: userId).contains(where: { $0.id == task.id }) {
+            return task
+        }
         var materialized = task
         materialized.id = UUID().uuidString
         materialized.updatedAt = Date()
@@ -1663,8 +1742,60 @@ public final class TasksViewModel: ObservableObject {
         updated.updatedAt = Date()
 
         let userId = task.userId.isEmpty ? FirebaseManager.shared.resolvedUserId : task.userId
-        await scheduleMutation.persist(updated, userId: userId, reconcileSchedule: true)
+        guard await scheduleMutation.persist(updated, userId: userId, userPlaced: true, reconcileSchedule: true) else { return nil }
         return updated.scheduledTime
+    }
+
+    /// Moves today's occurrence to `start`'s hour and minute. A repeating template keeps its usual clock.
+    public func rescheduleJustForToday(_ task: LifeTask, to start: Date) async -> Date? {
+        guard task.status.isActive else { return nil }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let scheduled = TodayOnlySchedule.clock(on: today, from: start, calendar: calendar) else {
+            return nil
+        }
+
+        let userId = task.userId.isEmpty ? FirebaseManager.shared.resolvedUserId : task.userId
+        var target = resolveTimelineTask(id: task.id, titleHint: task.title) ?? task
+
+        if target.recurrenceRule != .none,
+           target.parentTaskId == nil,
+           !TaskRecurrenceEngine.isRecurrenceTemplate(target) {
+            let (template, occurrence) = TaskRecurrenceEngine.normalizeLegacyRecurringTask(target)
+            do {
+                try await taskRepo.create(template)
+                recurrenceTemplates.append(template)
+            } catch {
+                self.error = error.localizedDescription
+                return nil
+            }
+            target = occurrence
+        }
+
+        let needsMaterialize = target.id.hasPrefix("proj-")
+            || TaskRecurrenceEngine.isRecurrenceTemplate(target)
+            || !schedulingContext.contains(where: { $0.id == target.id && $0.status.isActive })
+        if needsMaterialize {
+            if TaskRecurrenceEngine.isRecurrenceTemplate(target) {
+                target = TaskRecurrenceEngine.timelineProjectionOccurrence(
+                    from: target,
+                    on: today,
+                    calendar: calendar
+                )
+            }
+            guard !userId.isEmpty else { return nil }
+            do {
+                target = try await materializeTimelineTask(target, userId: userId)
+                refreshFromLocal(userId: userId)
+            } catch {
+                self.error = error.localizedDescription
+                return nil
+            }
+        }
+
+        TodayOnlySchedule.apply(&target, start: scheduled, on: today, calendar: calendar)
+        let saved = await scheduleMutation.persist(target, userId: userId, userPlaced: true)
+        return saved ? scheduled : nil
     }
 
     /// Recurrence fields to show when editing an occurrence — reads from the series template.
@@ -1682,6 +1813,8 @@ public final class TasksViewModel: ObservableObject {
             var template = recurrenceTemplates.first(where: { $0.id == parentId })
                 ?? localTasks.first(where: { $0.id == parentId })
             guard var template else { return }
+            // Project steps also have a parent; their goal is not a recurrence template.
+            guard TaskRecurrenceEngine.isRecurrenceTemplate(template) else { return }
 
             if task.recurrenceRule != .none {
                 template.recurrence = task.recurrence
@@ -1741,10 +1874,16 @@ public final class TasksViewModel: ObservableObject {
     
     /// Use GLM to infer task details from a title.
     public func autoFillDetails(for title: String) async -> TaskAutoFillResult? {
+        autoFillError = nil
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         isAutoFilling = true
         defer { isAutoFilling = false }
-        return try? await autoFiller.fill(title: title.trimmingCharacters(in: .whitespaces))
+        do {
+            return try await autoFiller.fill(title: title.trimmingCharacters(in: .whitespaces))
+        } catch {
+            autoFillError = error.localizedDescription
+            return nil
+        }
     }
     
     /// Parse tasks from an imported file using GLM.
@@ -1753,13 +1892,7 @@ public final class TasksViewModel: ObservableObject {
         importError = nil
         importPreview = nil
         
-        let hasConfiguredKey = GLMService.shared.hasConfiguredAPIKey
-        guard hasConfiguredKey else {
-            importError = TaskImportError.apiKeyMissing.localizedDescription
-            isImporting = false
-            return
-        }
-        
+        // The networking service validates either the licensed proxy or a development key.
         do {
             importPreview = try await taskImporter.importTasks(from: data, fileName: fileName)
         } catch {
@@ -1793,7 +1926,7 @@ public final class TasksViewModel: ObservableObject {
             || task.tags.contains("daily-routine") {
             return deterministic
         }
-        let hasAIKey = GLMService.shared.hasConfiguredAPIKey
+        let hasAIKey = GLMService.shared.isAIAvailable
         guard hasAIKey else { return deterministic }
 
         enum RaceResult {
@@ -2157,6 +2290,7 @@ public final class TasksViewModel: ObservableObject {
         }
 
         var occurrence = task
+        if occurrence.id.hasPrefix("proj-") { occurrence.id = UUID().uuidString }
         occurrence.userId = userId
         occurrence.status = .pending
         try await taskRepo.create(occurrence)
@@ -2219,10 +2353,10 @@ public final class TasksViewModel: ObservableObject {
 
     /// Mark a task as completed and schedule the next recurring occurrence when applicable.
     @discardableResult
-    public func completeTask(_ task: LifeTask) async -> TaskUndoAction? {
+    public func completeTask(_ task: LifeTask, now: Date = Date()) async -> TaskUndoAction? {
         if TaskRecurrenceEngine.isRecurrenceTemplate(task) {
             let calendar = Calendar.current
-            let day = calendar.startOfDay(for: Date())
+            let day = calendar.startOfDay(for: now)
             let occurrence = occurrenceForCompletion(of: task, on: day, in: schedulingContext, calendar: calendar)
             guard occurrence.id != task.id else { return nil }
             let userId = task.userId.isEmpty ? occurrence.userId : task.userId
@@ -2230,7 +2364,7 @@ public final class TasksViewModel: ObservableObject {
             do {
                 let live = try await materializeTimelineTask(occurrence, userId: userId)
                 refreshFromLocal(userId: userId)
-                return await completeTask(live)
+                return await completeTask(live, now: now)
             } catch {
                 self.error = error.localizedDescription
                 return nil
@@ -2242,7 +2376,7 @@ public final class TasksViewModel: ObservableObject {
 
         var updated = task
         updated.status = .completed
-        updated.completedAt = Date()
+        updated.completedAt = now
         ScheduleNormalization.normalizeFields(&updated)
 
         // Optimistic UI — lists update immediately before persistence.

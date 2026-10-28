@@ -52,11 +52,19 @@ public struct DayStructure: Sendable, Equatable {
            let match = anchors.first(where: { $0.id == id }) {
             return match
         }
+        if let tag = task.tags.first(where: { $0.hasPrefix(RoutineBlock.taskTagPrefix) }) {
+            let blockID = String(tag.dropFirst(RoutineBlock.taskTagPrefix.count))
+            if let match = anchors.first(where: { $0.id == "routine-block.\(blockID)" }) {
+                return match
+            }
+        }
         let normalized = normalize(task.title)
-        return anchors.first { anchor in
+        let matches = anchors.filter { anchor in
             let key = normalize(anchor.title)
             return key == normalized || normalized.contains(key) || key.contains(normalized)
         }
+        // A declared routine block owns that title. Seeded meal anchors must not win the match.
+        return matches.first { $0.id.hasPrefix("routine-block.") } ?? matches.first
     }
 
     private func normalize(_ title: String) -> String {
@@ -99,7 +107,7 @@ public enum DayStructureCompiler {
         if !routineBlocks.isEmpty {
             for block in routineBlocks where block.days.includes(day, calendar: calendar) {
                 append(DayStructure.Anchor(
-                    id: "routine-block.\(block.id)",
+                    id: block.anchorID,
                     title: block.title,
                     startHour: block.startHour,
                     startMinute: block.startMinute,

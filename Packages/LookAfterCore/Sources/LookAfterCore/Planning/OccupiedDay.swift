@@ -89,6 +89,20 @@ public struct OccupiedDay: Sendable, Equatable {
         return intervals.filter { $0.taskID != excludingTaskID }
     }
 
+    /// A commitment occupies its own model block; that block is not a competing event.
+    /// Calendar events and other commitments remain blockers.
+    static func ownedProtectedBlockID(for task: LifeTask, model: LifeModel?, on day: Date, calendar: Calendar) -> String? {
+        guard task.isLifeCommitmentTask, let model,
+              let commitment = model.commitments.first(where: {
+                  task.tags.contains(model.commitmentID(for: $0.title))
+                      || task.title.caseInsensitiveCompare($0.title) == .orderedSame
+              }),
+              let label = commitment.preferredBlockLabel,
+              let block = model.block(matching: label),
+              block.days.includes(day, calendar: calendar) else { return nil }
+        return "\(protectedIDPrefix)\(block.id)"
+    }
+
     // MARK: - Calendar → intervals
 
     public static func calendarIntervals(

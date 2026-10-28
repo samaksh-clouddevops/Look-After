@@ -6,9 +6,9 @@ import LookAfterData
 /// Lightweight background pass — reload calendar, meds, and tasks; reschedule local notifications.
 enum BackgroundNotificationRefreshTask {
     /// Legacy ID still registered in Info.plist / BGTaskSchedulerPermittedIdentifiers.
-    static let legacyIdentifier = "com.samaksh.flowos.app.notification-refresh"
+    nonisolated static let legacyIdentifier = "com.samaksh.flowos.app.notification-refresh"
     /// Brand ID — dual-register when Info.plist lists both (Phase 7.3).
-    static let modernIdentifier = "com.lookafter.app.notification-refresh"
+    nonisolated static let modernIdentifier = "com.lookafter.app.notification-refresh"
     /// Primary schedule target remains legacy until dual Info.plist lands.
     static let identifier = legacyIdentifier
     private static var didRegister = false
@@ -17,17 +17,22 @@ enum BackgroundNotificationRefreshTask {
         guard !didRegister else { return }
         didRegister = true
         for id in [legacyIdentifier, modernIdentifier] {
-            BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
-                guard let refreshTask = task as? BGAppRefreshTask else {
-                    task.setTaskCompleted(success: false)
-                    return
-                }
-                handle(refreshTask)
-            }
+            registerHandler(id)
         }
     }
 
-    static func scheduleNextRefresh() {
+    /// Background tasks are delivered off the main actor. The closure must not inherit MainActor.
+    nonisolated private static func registerHandler(_ id: String) {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            handle(refreshTask)
+        }
+    }
+
+    nonisolated static func scheduleNextRefresh() {
         // Prefer modern if submit succeeds (Info.plist must allow it); else legacy.
         let modern = BGAppRefreshTaskRequest(identifier: modernIdentifier)
         modern.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
@@ -40,7 +45,7 @@ enum BackgroundNotificationRefreshTask {
         }
     }
 
-    private static func handle(_ task: BGAppRefreshTask) {
+    nonisolated private static func handle(_ task: BGAppRefreshTask) {
         scheduleNextRefresh()
 
         let completion = BackgroundTaskCompletion(task)
@@ -114,7 +119,7 @@ enum BackgroundNotificationRefreshTask {
 }
 
 /// Ensures `setTaskCompleted` runs exactly once (success path or expiration).
-private final class BackgroundTaskCompletion: @unchecked Sendable {
+nonisolated private final class BackgroundTaskCompletion: @unchecked Sendable {
     private let lock = NSLock()
     private var finished = false
     private let task: BGTask

@@ -44,11 +44,7 @@ public final class SpeechRecognitionManager: ObservableObject {
     
     /// Request microphone and speech recognition permissions.
     public func requestPermissions() async -> Bool {
-        let speechStatus = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
-            }
-        }
+        let speechStatus = await Self.requestSpeechAuthorization()
         
         guard speechStatus == .authorized else {
             permissionDenied = true
@@ -66,6 +62,84 @@ public final class SpeechRecognitionManager: ObservableObject {
         #endif
         
         return true
+    }
+
+    /// Speech authorization is delivered on a system queue. Keep this off the main actor or opening Brain traps.
+    nonisolated private static func requestSpeechAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    /// The audio tap runs on the audio thread, not the main actor.
+    nonisolated private static func installRecognitionTap(
+        on node: AVAudioInputNode,
+        format: AVAudioFormat,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        owner: SpeechRecognitionManager
+    ) {
+        node.removeTap(onBus: 0)
+        node.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+            guard buffer.frameLength > 0 else { return }
+            request.append(buffer)
+            guard let channelData = buffer.floatChannelData?[0] else { return }
+            let frameLength = Int(buffer.frameLength)
+            guard frameLength > 0 else { return }
+            var sum: Float = 0
+            for index in 0..<frameLength {
+                sum += abs(channelData[index])
+            }
+            let average = sum / Float(frameLength)
+            let level = CGFloat(min(average * 8, 1.0))
+            Task { @MainActor in
+                owner.applyAudioLevel(level)
+            }
+        }
+    }
+
+    /// Recognition results arrive off the main actor.
+    nonisolated private static func startRecognitionTask(
+        recognizer: SFSpeechRecognizer,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        owner: SpeechRecognitionManager
+    ) -> SFSpeechRecognitionTask {
+        recognizer.recognitionTask(with: request) { result, error in
+            let text = result?.bestTranscription.formattedString
+            let isFinal = result?.isFinal == true
+            let failed = error != nil
+            Task { @MainActor in
+                owner.handleRecognition(text: text, isFinal: isFinal, failed: failed)
+            }
+        }
+    }
+
+    private func applyAudioLevel(_ level: CGFloat) {
+        let now = Date()
+        guard now.timeIntervalSince(lastLevelPublish) >= levelPublishInterval else { return }
+        lastLevelPublish = now
+        updateAudioLevels(level: level)
+    }
+
+    private func handleRecognition(text: String?, isFinal: Bool, failed: Bool) {
+        if let text {
+            transcript = text
+            noteTranscriptActivity()
+        }
+        if isFinal {
+            if autoCommitEnabled {
+                completeUtterance()
+            } else {
+                stopListening()
+            }
+        } else if failed {
+            if autoCommitEnabled, hasReceivedSpeech {
+                completeUtterance()
+            } else {
+                stopListening()
+            }
+        }
     }
     
     /// Start live speech recognition with real-time transcription.
@@ -117,52 +191,18 @@ public final class SpeechRecognitionManager: ObservableObject {
                 return
             }
 
-            inputNode.removeTap(onBus: 0)
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-                guard buffer.frameLength > 0 else { return }
-                requestForTap.append(buffer)
+            Self.installRecognitionTap(
+                on: inputNode,
+                format: recordingFormat,
+                request: requestForTap,
+                owner: self
+            )
 
-                guard let channelData = buffer.floatChannelData?[0] else { return }
-                let frameLength = Int(buffer.frameLength)
-                guard frameLength > 0 else { return }
-                var sum: Float = 0
-                for i in 0..<frameLength {
-                    sum += abs(channelData[i])
-                }
-                let avg = sum / Float(frameLength)
-                let level = CGFloat(min(avg * 8, 1.0))
-                // Coalesce level UI updates onto the main actor at ~20 Hz.
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    let now = Date()
-                    guard now.timeIntervalSince(self.lastLevelPublish) >= self.levelPublishInterval else { return }
-                    self.lastLevelPublish = now
-                    self.updateAudioLevels(level: level)
-                }
-            }
-
-            recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-                Task { @MainActor in
-                    guard let self else { return }
-                    if let result {
-                        self.transcript = result.bestTranscription.formattedString
-                        self.noteTranscriptActivity()
-                    }
-                    if result?.isFinal == true {
-                        if self.autoCommitEnabled {
-                            self.completeUtterance()
-                        } else {
-                            self.stopListening()
-                        }
-                    } else if error != nil {
-                        if self.autoCommitEnabled, self.hasReceivedSpeech {
-                            self.completeUtterance()
-                        } else {
-                            self.stopListening()
-                        }
-                    }
-                }
-            }
+            recognitionTask = Self.startRecognitionTask(
+                recognizer: speechRecognizer,
+                request: recognitionRequest,
+                owner: self
+            )
             
             audioEngine.prepare()
             try audioEngine.start()

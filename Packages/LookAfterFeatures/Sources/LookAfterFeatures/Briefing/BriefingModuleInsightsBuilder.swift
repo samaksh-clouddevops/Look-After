@@ -129,7 +129,7 @@ enum BriefingModuleInsightsBuilder {
     ) async -> [BriefingModuleInsight] {
         guard existing.count < 2 else { return existing }
 
-        let hasKey = GLMService.shared.hasConfiguredAPIKey
+        let hasKey = GLMService.shared.isAIAvailable
         guard hasKey else {
             return existing + fallbackSuggestions(input: input, excluding: existing)
         }

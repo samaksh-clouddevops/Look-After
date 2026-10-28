@@ -577,7 +577,7 @@ public final class DailyPlannerViewModel: ObservableObject {
                 guard task.status.isActive else { return false }
                 guard !TaskRecurrenceEngine.isRecurrenceTemplate(task) else { return false }
                 guard !MultiDayTaskTags.isRoot(task) else { return false }
-                if task.belongsOnDaySchedule(day: dayStart, calendar: calendar, now: now) {
+                if task.belongsOnDaySchedule(day: dayStart, allTasks: tasks, calendar: calendar, now: now) {
                     return true
                 }
                 guard isToday, task.scheduledDate == nil, task.scheduledTime == nil else { return false }

@@ -1,6 +1,11 @@
 import Foundation
 import LookAfterAI
 
+/// Turn off before a release build. While this is true, a product key is not required.
+public enum LicenseGate: Sendable {
+    nonisolated(unsafe) public static var bypassForTesting = true
+}
+
 /// Persists license status and talks to the Azure auth-proxy redeem/status APIs.
 ///
 /// `UserDefaults` `isLicensed` is a **local cache only** — spoofable offline. Cloud AI must
@@ -24,7 +29,11 @@ public final class LicenseManager: ObservableObject {
     public private(set) var proxyClient: AuthProxyClient?
 
     private init() {
-        self.isLicensed = UserDefaults.standard.bool(forKey: Keys.isLicensed)
+        if LicenseGate.bypassForTesting {
+            self.isLicensed = true
+        } else {
+            self.isLicensed = UserDefaults.standard.bool(forKey: Keys.isLicensed)
+        }
         self.redeemedAt = UserDefaults.standard.string(forKey: Keys.redeemedAt)
     }
 
@@ -35,7 +44,7 @@ public final class LicenseManager: ObservableObject {
     }
 
     public func clearLocalLicense() {
-        isLicensed = false
+        isLicensed = LicenseGate.bypassForTesting
         redeemedAt = nil
         UserDefaults.standard.removeObject(forKey: Keys.isLicensed)
         UserDefaults.standard.removeObject(forKey: Keys.redeemedAt)
@@ -56,6 +65,10 @@ public final class LicenseManager: ObservableObject {
     }
 
     public func refreshStatus() async {
+        if LicenseGate.bypassForTesting {
+            isLicensed = true
+            return
+        }
         guard let proxyClient else { return }
         isBusy = true
         lastError = nil
@@ -69,6 +82,10 @@ public final class LicenseManager: ObservableObject {
     }
 
     private func apply(active: Bool, redeemedAt: String?) {
+        if LicenseGate.bypassForTesting {
+            isLicensed = true
+            return
+        }
         isLicensed = active
         self.redeemedAt = redeemedAt
         UserDefaults.standard.set(active, forKey: Keys.isLicensed)
@@ -82,6 +99,7 @@ public final class LicenseManager: ObservableObject {
 /// Thread-safe bridge so `GLMService` can read license state without hopping to MainActor.
 private struct LicenseStatusBridge: LicenseStatusProviding {
     var isLicensed: Bool {
-        UserDefaults.standard.bool(forKey: "lookafter.license.active")
+        if LicenseGate.bypassForTesting { return true }
+        return UserDefaults.standard.bool(forKey: "lookafter.license.active")
     }
 }

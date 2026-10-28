@@ -1323,6 +1323,38 @@ final class TaskRecurrenceTests: XCTestCase {
     }
 
 
+    func testUndatedFlexibleTaskShowsOnSunday() {
+        let sunday = makeDate(year: 2026, month: 8, day: 2, hour: 11)
+        let task = LifeTask(
+            id: "flex-sunday",
+            title: "Draft the brief",
+            status: .pending,
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        XCTAssertTrue(
+            TaskRecurrenceEngine.isActionableToday(task, in: [task], calendar: calendar, referenceDate: sunday)
+        )
+        XCTAssertTrue(
+            TaskScheduleQuery.activeTasksForToday(
+                from: [task],
+                calendar: calendar,
+                referenceDate: sunday
+            ).contains(where: { $0.id == task.id })
+        )
+        XCTAssertTrue(
+            TaskScheduleQuery.tasksForDay(
+                from: [task],
+                allTasks: [task],
+                day: sunday,
+                calendar: calendar,
+                referenceDate: sunday
+            ).contains(where: { $0.id == task.id })
+        )
+        XCTAssertTrue(task.belongsOnDaySchedule(day: sunday, allTasks: [task], calendar: calendar, now: sunday))
+    }
+
     func testTimeOnlyWeekdayOccurrenceIsNotActionableOnSunday() {
         let sunday = makeDate(year: 2026, month: 8, day: 2, hour: 10)
         let clock = makeDate(year: 2026, month: 8, day: 2, hour: 8, minute: 30)

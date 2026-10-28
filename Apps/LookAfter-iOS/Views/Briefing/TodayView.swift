@@ -46,7 +46,8 @@ struct TodayView: View {
     var onOpenMedication: () -> Void = {}
     var onCompleteTimelineTask: (String) async -> Void = { _ in }
     var onUncompleteTimelineTask: (String) async -> Void = { _ in }
-    var onRescheduleTimelineTask: (String) async -> Void = { _ in }
+    var onRescheduleTimelineTask: (String) async -> Bool = { _ in false }
+    var onRescheduleJustForToday: (String, Date) async -> Bool = { _, _ in false }
     var onRemoveFromTimelineTask: (String) async -> Void = { _ in }
     var onStartTask: (LifeTask) -> Void = { _ in }
     var onEditTask: (LifeTask) -> Void = { _ in }
@@ -61,6 +62,8 @@ struct TodayView: View {
     @State private var planningSheetDetent: PresentationDetent = .medium
     @State private var showDayControls = false
     @State private var showQuickAddTask = false
+    @State private var scheduleActionError: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         timelineSection
@@ -108,13 +111,21 @@ struct TodayView: View {
             }
             #endif
         }
+        .alert("Couldn’t reschedule task", isPresented: Binding(
+            get: { scheduleActionError != nil },
+            set: { if !$0 { scheduleActionError = nil } }
+        )) {
+            Button("OK") { scheduleActionError = nil }
+        } message: {
+            Text(scheduleActionError ?? "Please try again.")
+        }
         .accessibilityIdentifier("screen-today")
         .onChange(of: selectedCalendarDate) { _, _ in
             refreshPreWindowFitIfNeeded()
             refreshProactiveIfNeeded()
         }
         .sheet(isPresented: $showQuickAddTask) {
-            TaskFormSheet(tasksVM: tasksVM, mode: .create, userId: userId)
+            TaskFormSheet(tasksVM: tasksVM, mode: .create, userId: userId, initialDate: selectedCalendarDate)
         }
     }
 
@@ -260,7 +271,11 @@ struct TodayView: View {
                             TodayOverdueTasksCard(
                                 rows: overdueTimelineRows,
                                 onReschedule: { taskId in
-                                    Task { await onRescheduleTimelineTask(taskId) }
+                                    Task {
+                                        if !(await onRescheduleTimelineTask(taskId)) {
+                                            scheduleActionError = "Couldn’t find or save a suitable time. Open the task to choose a day and time."
+                                        }
+                                    }
                                 },
                                 onDismiss: { taskId in
                                     Task { await onRemoveFromTimelineTask(taskId) }
@@ -278,6 +293,7 @@ struct TodayView: View {
                             onCompleteTimelineTask: onCompleteTimelineTask,
                             onUncompleteTimelineTask: onUncompleteTimelineTask,
                             onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onRescheduleJustForToday: onRescheduleJustForToday,
                             onRemoveFromTimelineTask: onRemoveFromTimelineTask,
                             onStartTask: onStartTask,
                             onEditTask: onEditTask,
@@ -302,6 +318,7 @@ struct TodayView: View {
                             onCompleteTimelineTask: onCompleteTimelineTask,
                             onUncompleteTimelineTask: onUncompleteTimelineTask,
                             onRescheduleTimelineTask: onRescheduleTimelineTask,
+                            onRescheduleJustForToday: onRescheduleJustForToday,
                             onRemoveFromTimelineTask: onRemoveFromTimelineTask,
                             onStartTask: onStartTask,
                             onEditTask: onEditTask
@@ -322,33 +339,14 @@ struct TodayView: View {
             .refreshable {
                 await onRefresh()
             }
-            .onAppear {
-                scrollTodayToHero(using: proxy, animated: false)
-                // Second pass after LazyVStack / hero resolve (FLOW-T1).
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    scrollTodayToHero(using: proxy, animated: false)
-                }
-            }
-            .onChange(of: showPlanningAssistant) { _, isOpen in
-                if !isOpen { scrollTodayToHero(using: proxy) }
-            }
-            .onChange(of: selectedCalendarDate) { _, _ in
-                scrollTodayToHero(using: proxy)
-            }
-            .onChange(of: planningVM.nowTaskId) { _, _ in
-                scrollTodayToHero(using: proxy, animated: false)
-            }
-            .onChange(of: planningVM.timelineRows.map { "\($0.id):\($0.isNow):\($0.isLate)" }.joined(separator: "|")) { _, _ in
-                scrollTodayToHero(using: proxy, animated: false)
-            }
             .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
                 guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
                 if raw == AppFeatureTourAnchorID.todayTimeline.rawValue {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                         proxy.scrollTo(AppFeatureTourAnchorID.todayTimeline.rawValue, anchor: .center)
                     }
                 } else if raw == AppFeatureTourAnchorID.todayAssistant.rawValue {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
                         proxy.scrollTo(AppFeatureTourAnchorID.todayAssistant.rawValue, anchor: .top)
                     }
                 }
@@ -357,18 +355,6 @@ struct TodayView: View {
     }
 
     private static let todayHeroScrollID = "today-hero-top"
-
-    private func scrollTodayToHero(using proxy: ScrollViewProxy, animated: Bool = true) {
-        guard isSelectedToday else { return }
-        let scroll = {
-            proxy.scrollTo(Self.todayHeroScrollID, anchor: .top)
-        }
-        if animated {
-            withAnimation(.easeInOut(duration: 0.28), scroll)
-        } else {
-            scroll()
-        }
-    }
 
     private var todayHeader: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
@@ -386,18 +372,31 @@ struct TodayView: View {
                 onSettings: onSettings,
                 onQuickAddTask: { showQuickAddTask = true }
             )
-            if !showDayControls {
-                Text(formattedSelectedDate)
-                    .textStyleCaption()
+            Button {
+                withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
+                    showDayControls.toggle()
+                }
+            } label: {
+                HStack(spacing: DesignSystem.spacingSM) {
+                    Text(formattedSelectedDate)
+                        .font(.subheadline)
+                    Image(systemName: showDayControls ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(DesignSystem.textSecondary)
+                .frame(minHeight: DesignSystem.minTouchTarget, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Choose day, \(formattedSelectedDate)")
+            .accessibilityValue(showDayControls ? "Expanded" : "Collapsed")
+            .accessibilityIdentifier("today-choose-day")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var dayControlsPanel: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Text(formattedSelectedDate)
-                .textStyleCaption()
             LAWeekDateStrip(
                 days: weekDays,
                 selectedDate: $selectedCalendarDate
@@ -492,7 +491,8 @@ struct TodayView: View {
                     maxVisibleRows: 12,
                     showsFullTimelineButton: false,
                     onViewAll: {},
-                    calendarEventsProvider: tasksVM.calendarEventsProvider
+                    calendarEventsProvider: tasksVM.calendarEventsProvider,
+                schedulingTasks: tasksVM.schedulingContext
                 )
             }
         }
@@ -567,16 +567,37 @@ private struct TodayHeaderBar: View {
     var onSettings: () -> Void
     var onQuickAddTask: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        HStack(alignment: .center, spacing: LAChromeMetrics.toolbarGap) {
-            Text(isSelectedToday ? "Today" : isSelectedTomorrow ? "Tomorrow" : formattedSelectedDate)
-                .textStyleScreenTitle()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .layoutPriority(1)
+        ViewThatFits(in: .horizontal) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                HStack(spacing: DesignSystem.spacingSM) {
+                    screenTitle.fixedSize()
+                    Spacer(minLength: 0)
+                    actions
+                }
+            }
+            VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+                screenTitle
+                HStack {
+                    Spacer(minLength: 0)
+                    actions
+                }
+            }
+        }
+    }
 
-            Spacer(minLength: DesignSystem.spacingSM)
+    private var screenTitle: some View {
+        Text(isSelectedToday ? "Today" : isSelectedTomorrow ? "Tomorrow" : "Your day")
+            .font(.largeTitle.weight(.bold))
+            .foregroundStyle(DesignSystem.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityAddTraits(.isHeader)
+    }
 
+    private var actions: some View {
+        HStack(spacing: LAChromeMetrics.toolbarGap) {
             LAToolbarIconButton(
                 systemName: "plus.circle.fill",
                 accessibilityLabel: "Quick add task",
@@ -941,9 +962,9 @@ private struct TodayDoThisNowSection: View {
                 narrative: nil,
                 whyLines: [
                     isLate
-                        ? "This block is overdue — still your timeline NOW until you finish or reschedule it."
-                        : "This is your timeline NOW (clocks, not the AI review).",
-                    "\(minutes)-min start matches this task’s estimate."
+                        ? "This task’s planned time has passed. You can start now or move it in your schedule."
+                        : "This task is next in your schedule for today.",
+                    "Start with \(minutes) minutes. You can decide whether to keep going when the timer ends."
                 ]
             )
         )
@@ -992,7 +1013,8 @@ private struct TodayScheduleSection: View {
     var onPlanTomorrow: () -> Void
     var onCompleteTimelineTask: (String) async -> Void
     var onUncompleteTimelineTask: (String) async -> Void
-    var onRescheduleTimelineTask: (String) async -> Void
+    var onRescheduleTimelineTask: (String) async -> Bool
+    var onRescheduleJustForToday: (String, Date) async -> Bool
     var onRemoveFromTimelineTask: (String) async -> Void
     var onStartTask: (LifeTask) -> Void
     var onEditTask: (LifeTask) -> Void
@@ -1087,19 +1109,21 @@ private struct TodayScheduleSection: View {
                     Task { await editResolvedTask(id: taskId) }
                 },
                 onRescheduleTask: onRescheduleTimelineTask,
+                onRescheduleJustForToday: onRescheduleJustForToday,
                 onRemoveFromTimelineTask: onRemoveFromTimelineTask,
                 onAddSuggestedTask: { sourceId, start in
                     Task { await addSuggestedSlot(sourceId: sourceId, start: start) }
                 },
                 onPersistScheduleChange: { task in
-                    Task { await persistResolvedSchedule(task) }
+                    await persistResolvedSchedule(task)
                 },
                 onScheduleDragCommitted: {
                     dragHintDismissed = true
                 },
                 taskForID: { id in tasksVM.resolveTimelineTask(id: id) },
                 parentScrollDisabled: $timelineScrollDisabled,
-                calendarEventsProvider: tasksVM.calendarEventsProvider
+                calendarEventsProvider: tasksVM.calendarEventsProvider,
+                schedulingTasks: tasksVM.schedulingContext
             )
         }
     }
@@ -1134,25 +1158,11 @@ private struct TodayScheduleSection: View {
         onEditTask(task)
     }
 
-    private func persistResolvedSchedule(_ task: LifeTask) async {
-        var toSave = task
+    private func persistResolvedSchedule(_ task: LifeTask) async -> Bool {
         let userId = task.userId.isEmpty
             ? (tasksVM.tasks.first?.userId ?? "")
             : task.userId
-        guard !userId.isEmpty else { return }
-        if task.id.hasPrefix("proj-")
-            || !tasksVM.tasks.contains(where: { $0.id == task.id }) {
-            do {
-                toSave = try await tasksVM.materializeTimelineTask(task, userId: userId)
-            } catch {
-                return
-            }
-        }
-        await tasksVM.scheduleMutation.persist(
-            toSave,
-            userId: userId,
-            userPlaced: true
-        )
+        return await tasksVM.scheduleMutation.persistTimelineEdit(task, userId: userId)
     }
 
     private func addSuggestedSlot(sourceId: String, start: Date) async {
@@ -1231,40 +1241,33 @@ private struct TodayRecommendedHeroCard: View {
     var onPrimaryAction: () -> Void
 
     var body: some View {
-        ElevatedSurface(padding: DesignSystem.spacingLG, emphasis: .prominent) {
+        ElevatedSurface(padding: DesignSystem.spacingLG, emphasis: .standard) {
             VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
-                Label("DO THIS NOW", systemImage: "star.fill")
-                    .font(.dsMetadata(weight: .semibold))
-                    .foregroundColor(DesignSystem.accentPrimary)
+                Label("One small step", systemImage: "leaf")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(DesignSystem.accentPrimary)
                     .labelStyle(.titleAndIcon)
 
                 Text(content.title)
-                    .font(.dsHeadline(weight: .bold))
-                    .foregroundColor(DesignSystem.textPrimary)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.85)
+                    .font(.title.weight(.semibold))
+                    .foregroundStyle(DesignSystem.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let supporting = content.supportingLine, !supporting.isEmpty {
                     Text(supporting)
-                        .font(.dsCaption())
+                        .font(.subheadline)
                         .foregroundColor(
                             supporting.hasPrefix("Overdue")
                                 ? DesignSystem.late
                                 : DesignSystem.textSecondary
                         )
-                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let durationLabel, !durationLabel.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(.dsCaption())
-                        Text(durationLabel)
-                            .font(.dsMetadata())
-                    }
-                    .foregroundColor(DesignSystem.accentPrimary)
+                    Label(durationLabel, systemImage: "timer")
+                        .font(.subheadline)
+                        .foregroundStyle(DesignSystem.textSecondary)
                 }
 
                 PremiumPrimaryButton(
@@ -1285,17 +1288,18 @@ private struct TodayRecommendedHeroCard: View {
 private struct TodayWhyAffordance: View {
     let content: CalmHeroContent
     @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
             Button(action: {
-                withAnimation(.easeInOut(duration: 0.22)) { isExpanded.toggle() }
+                withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) { isExpanded.toggle() }
             }, label: {
                 HStack(spacing: DesignSystem.spacingSM) {
                     Image(systemName: "questionmark.circle")
                         .font(.system(size: 14, weight: .medium))
-                    Text(isExpanded ? "Hide details" : "Why this?")
-                        .font(.dsMetadata())
+                    Text(isExpanded ? "Hide details" : "Why this step?")
+                        .font(.subheadline)
                     Spacer()
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 11, weight: .semibold))
@@ -1305,6 +1309,7 @@ private struct TodayWhyAffordance: View {
                 .contentShape(Rectangle())
             })
             .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
             if isExpanded, let disclosure = content.disclosure {
                 VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
@@ -1639,38 +1644,73 @@ private struct TodayOverdueTasksCard: View {
     let rows: [ExecutivePlanningTimelineRow]
     var onReschedule: (String) -> Void
     var onDismiss: (String) -> Void
+    @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
-            Label("Past due", systemImage: "clock.badge.exclamationmark")
-                .font(.dsCaption(weight: .semibold))
-                .foregroundColor(DesignSystem.late)
+        VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
+            Button {
+                withAnimation(PremiumMotion.spring(reduceMotion: reduceMotion)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: DesignSystem.spacingSM) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.title3)
+                        .foregroundStyle(DesignSystem.textSecondary)
+                    VStack(alignment: .leading, spacing: DesignSystem.spacingXXS) {
+                        Text("Room to reset")
+                            .font(.headline)
+                            .foregroundStyle(DesignSystem.textPrimary)
+                        Text("\(rows.count) past-due \(rows.count == 1 ? "task" : "tasks") to review")
+                            .font(.subheadline)
+                            .foregroundStyle(DesignSystem.textSecondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DesignSystem.textSecondary)
+                }
+                .frame(minHeight: DesignSystem.minTouchTarget)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint("Review tasks whose scheduled time has passed")
+            .accessibilityIdentifier("today-review-overdue")
 
-            Text("These windows ended over 2 hours ago. Reschedule them or dismiss from today.")
-                .font(.dsCaption())
-                .foregroundColor(DesignSystem.textSecondary)
+            if isExpanded {
+                Text("Plans change. Move these tasks to a better time, or take them off today’s schedule.")
+                    .font(.subheadline)
+                    .foregroundStyle(DesignSystem.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(rows.prefix(4)) { row in
-                VStack(alignment: .leading, spacing: DesignSystem.spacingXS) {
-                    Text(row.title)
-                        .font(.dsBody(weight: .semibold))
-                        .foregroundColor(DesignSystem.textPrimary)
-                    HStack(spacing: DesignSystem.spacingSM) {
-                        Button("Reschedule") {
-                            if let id = row.taskId { onReschedule(id) }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(DesignSystem.accentPrimary)
-                        .controlSize(.small)
-
-                        Button("Dismiss today") {
-                            if let id = row.taskId { onDismiss(id) }
+                ForEach(rows) { row in
+                    Divider()
+                    VStack(alignment: .leading, spacing: DesignSystem.spacingSM) {
+                        Text(row.title)
+                            .font(.headline)
+                            .foregroundStyle(DesignSystem.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        let layout = dynamicTypeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading))
+                            : AnyLayout(HStackLayout(spacing: DesignSystem.spacingSM))
+                        layout {
+                            Button("Reschedule", systemImage: "calendar") {
+                                if let id = row.taskId { onReschedule(id) }
+                            }
+                            .accessibilityLabel("Reschedule \(row.title)")
+                            Button("Not today", systemImage: "arrow.turn.down.right") {
+                                if let id = row.taskId { onDismiss(id) }
+                            }
+                            .accessibilityLabel("Remove \(row.title) from today’s schedule")
                         }
                         .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .controlSize(.large)
+                        .tint(DesignSystem.accentPrimary)
                     }
                 }
-                .padding(.vertical, DesignSystem.spacingXXS)
             }
         }
         .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)

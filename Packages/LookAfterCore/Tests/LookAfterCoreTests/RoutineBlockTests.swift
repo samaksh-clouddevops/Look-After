@@ -91,6 +91,53 @@ final class RoutineBlockTests: XCTestCase {
 
     // MARK: - DayStructureCompiler anchor merge
 
+    func testApplyScheduleWritesClockWithoutDroppingTheOccurrenceParent() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 9, day: 27))!
+        let block = RoutineBlock(
+            id: "gym",
+            title: "Gym",
+            days: .everyDay,
+            startHour: 6,
+            startMinute: 15,
+            durationMinutes: 45,
+            isNonNegotiable: true
+        )
+        var task = LifeTask(id: "occ", title: "Old gym", estimatedMinutes: 30, userId: "user-1")
+        task.parentTaskId = "template"
+        block.applySchedule(to: &task, on: day, calendar: calendar, asTemplate: false)
+
+        XCTAssertEqual(task.title, "Gym")
+        XCTAssertEqual(task.parentTaskId, "template")
+        XCTAssertEqual(task.scheduleAnchorID, block.anchorID)
+        XCTAssertEqual(task.timeConstraint, .anchored)
+        XCTAssertEqual(task.estimatedMinutes, 45)
+        XCTAssertTrue(task.tags.contains(block.taskTag))
+        XCTAssertEqual(calendar.component(.hour, from: task.scheduledTime!), 6)
+        XCTAssertEqual(calendar.component(.minute, from: task.scheduledTime!), 15)
+    }
+
+    func testDeclaredDinnerBeatsSeededDinnerAnchor() {
+        let block = RoutineBlock(
+            id: "dinner-1",
+            title: "Dinner",
+            days: .everyDay,
+            startHour: 20,
+            startMinute: 30,
+            durationMinutes: 40,
+            isNonNegotiable: true
+        )
+        RoutineBlockStore.save([block])
+        let structure = DayStructureCompiler.compile(profile: UserLifeProfile(), model: nil)
+        XCTAssertNotNil(structure.anchors.first { $0.id == "routine.dinner" })
+        let task = LifeTask(title: "Dinner", tags: ["daily-routine"], userId: "user-1")
+        let anchor = structure.anchor(matching: task)
+        XCTAssertEqual(anchor?.id, block.anchorID)
+        XCTAssertEqual(anchor?.startHour, 20)
+        XCTAssertEqual(anchor?.startMinute, 30)
+    }
+
     func testDayStructureCompilerIncludesActiveRoutineBlockAnchor() {
         let block = RoutineBlock(title: "Deep Work", days: .everyDay, startHour: 9, startMinute: 0, durationMinutes: 90, isNonNegotiable: true)
         RoutineBlockStore.save([block])

@@ -42,7 +42,7 @@ struct OnboardingView: View {
     @State private var keptStarterTaskIDs: Set<String> = []
     @State private var lifeProfileMarkdown = ""
 
-    private var aiAvailable: Bool { GLMService.shared.hasConfiguredAPIKey }
+    private var aiAvailable: Bool { GLMService.shared.isAIAvailable }
 
     private let adhdChallenges = ADHDFocusChallenge.allCases
 

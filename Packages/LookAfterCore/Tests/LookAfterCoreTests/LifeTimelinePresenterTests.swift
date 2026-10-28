@@ -90,6 +90,27 @@ final class LifeTimelinePresenterTests: XCTestCase {
         XCTAssertTrue(events.filter { $0.title == "Plan my day" }.isEmpty)
     }
 
+    func testDueBillJoinsTheFinanceSessionAndSpendsDoNot() {
+        let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
+        let rent = BillItem(
+            title: "Rent",
+            amount: 18_000,
+            dueDate: now,
+            category: "Rent",
+            userId: "user-1"
+        )
+        let events = LifeTimelinePresenter.build(
+            tasks: [],
+            completedToday: [],
+            bills: [rent],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+        XCTAssertEqual(events.filter { $0.title.contains("Rent") }.count, 1)
+    }
+
     func testScheduledShoppingTaskStaysOnTimelineWithoutAGroceryList() {
         let now = makeDate(year: 2026, month: 8, day: 2, hour: 10)
         let errand = LifeTask(
@@ -728,6 +749,48 @@ final class LifeTimelinePresenterTests: XCTestCase {
 
         let dinnerEvents = events.filter { $0.title == "Dinner" }
         XCTAssertEqual(dinnerEvents.count, 1)
+    }
+
+    func testDeclaredRoutineBlockWinsTimelineOverSeededDinner() {
+        let now = makeDate(year: 2026, month: 8, day: 5, hour: 17)
+        let day = calendar.startOfDay(for: now)
+        let seeded = LifeTask(
+            id: "seed-dinner",
+            title: "Dinner",
+            estimatedMinutes: 45,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 5, hour: 19),
+            tags: ["daily-routine"],
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        let declared = LifeTask(
+            id: "block-dinner",
+            title: "Dinner",
+            estimatedMinutes: 30,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 5, hour: 20, minute: 30),
+            tags: ["daily-routine", "routine-block:dinner-1"],
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [seeded, declared],
+            completedToday: [],
+            recurrenceTemplates: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+
+        let dinnerEvents = events.filter { $0.title == "Dinner" }
+        XCTAssertEqual(dinnerEvents.count, 1)
+        XCTAssertEqual(dinnerEvents.first?.id, "task-block-dinner")
+        XCTAssertEqual(calendar.component(.hour, from: dinnerEvents[0].date), 20)
+        XCTAssertEqual(calendar.component(.minute, from: dinnerEvents[0].date), 30)
     }
 
     func testDuplicateBreakfastTemplatesCollapseToOneEvent() {

@@ -22,7 +22,7 @@ struct ReschedulePreviewSheet: View {
                         Text(proposal.summary)
                             .font(.dsBody())
                             .foregroundColor(DesignSystem.textSecondary)
-                            .dsPrimaryText(lineLimit: 4)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         if proposal.movedCount > 0 {
                             Text("\(proposal.movedCount) task\(proposal.movedCount == 1 ? "" : "s") moved")
@@ -65,9 +65,10 @@ struct ReschedulePreviewSheet: View {
                         dismiss()
                     }
                     .buttonStyle(.glass)
+                    .disabled(plannerVM.isScheduling)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Apply") {
+                    Button(plannerVM.isScheduling ? "Working…" : "Apply") {
                         Task {
                             await plannerVM.applyRescheduleProposal(
                                 userId: userId,
@@ -86,6 +87,7 @@ struct ReschedulePreviewSheet: View {
                 }
             }
         }
+        .interactiveDismissDisabled(plannerVM.isScheduling)
         .accessibilityIdentifier("screen-reschedule-preview")
         .alert("Couldn't apply changes", isPresented: Binding(
             get: { applyError != nil },
@@ -118,7 +120,7 @@ struct ReschedulePreviewSheet: View {
                     Text(change.taskTitle)
                         .font(.dsBody(weight: .semibold))
                         .foregroundColor(DesignSystem.textPrimary)
-                        .dsPrimaryText(lineLimit: 2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: DesignSystem.spacingSM) {
                         if let previous = change.previousTime, change.wasMoved {
@@ -138,7 +140,7 @@ struct ReschedulePreviewSheet: View {
                     Text(change.reason)
                         .font(.dsCaption())
                         .foregroundColor(DesignSystem.textSecondary)
-                        .dsPrimaryText(lineLimit: 3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .layoutPriority(0)
             }

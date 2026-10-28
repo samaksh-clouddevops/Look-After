@@ -7,13 +7,28 @@ import LookAfterFeatures
 /// as a list of `RoutineBlock`s. These become `DayStructure.Anchor`s that the planner treats as
 /// fixed points around which flexible tasks are scheduled.
 struct RoutineBuilderView: View {
+    private enum BuilderSheet: Identifiable {
+        case add
+        case edit(RoutineBlock)
+        case importCandidate(RoutineBlock)
+
+        var id: String {
+            switch self {
+            case .add:
+                return "add"
+            case .edit(let block):
+                return "edit-\(block.id)"
+            case .importCandidate(let block):
+                return "import-\(block.id)"
+            }
+        }
+    }
+
     @EnvironmentObject private var shell: AppShellState
     @State private var blocks: [RoutineBlock] = RoutineBlockStore.load()
-    @State private var editingBlock: RoutineBlock?
-    @State private var showAddSheet = false
+    @State private var activeSheet: BuilderSheet?
     @State private var importCandidates: [RoutineBlock] = []
     @State private var importMessage: String?
-    @State private var editingCandidate: RoutineBlock?
 
     var body: some View {
         ZStack {
@@ -22,7 +37,7 @@ struct RoutineBuilderView: View {
                 if !importCandidates.isEmpty {
                     Section(content: {
                         ForEach(importCandidates) { candidate in
-                            Button(action: { editingCandidate = candidate }) {
+                            Button(action: { activeSheet = .importCandidate(candidate) }) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(candidate.title)
@@ -37,6 +52,7 @@ struct RoutineBuilderView: View {
                                         .foregroundColor(DesignSystem.textMuted)
                                 }
                             }
+                            .buttonStyle(.plain)
                             .listRowBackground(DesignSystem.contentSurface)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
@@ -79,7 +95,7 @@ struct RoutineBuilderView: View {
                 } else {
                     Section(content: {
                         ForEach(blocks.sorted(by: { $0.startMinutesFromMidnight < $1.startMinutesFromMidnight })) { block in
-                            Button(action: { editingBlock = block }) {
+                            Button(action: { activeSheet = .edit(block) }) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(block.title)
@@ -97,6 +113,7 @@ struct RoutineBuilderView: View {
                                     }
                                 }
                             }
+                            .buttonStyle(.plain)
                             .listRowBackground(DesignSystem.contentSurface)
                         }
                         .onDelete(perform: deleteBlocks)
@@ -104,7 +121,7 @@ struct RoutineBuilderView: View {
                 }
 
                 Section {
-                    Button(action: { showAddSheet = true }) {
+                    Button(action: { activeSheet = .add }) {
                         Label("Add Routine Block", systemImage: "plus.circle.fill")
                     }
                     .listRowBackground(DesignSystem.contentSurface)
@@ -116,36 +133,8 @@ struct RoutineBuilderView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .sheet(isPresented: $showAddSheet) {
-            RoutineBlockEditorSheet(mode: .add) { newBlock in
-                blocks.append(newBlock)
-                RoutineBlockStore.save(blocks)
-                syncRoutineTasks()
-            }
-        }
-        .sheet(item: $editingBlock) { block in
-            RoutineBlockEditorSheet(mode: .edit(block)) { updated in
-                if let index = blocks.firstIndex(where: { $0.id == updated.id }) {
-                    blocks[index] = updated
-                } else {
-                    blocks.append(updated)
-                }
-                RoutineBlockStore.save(blocks)
-                syncRoutineTasks()
-            } onDelete: {
-                blocks.removeAll { $0.id == block.id }
-                RoutineBlockStore.save(blocks)
-                syncRoutineTasks()
-            }
-        }
-        .sheet(item: $editingCandidate) { candidate in
-            RoutineBlockEditorSheet(mode: .edit(candidate)) { updated in
-                if let index = importCandidates.firstIndex(where: { $0.id == updated.id }) {
-                    importCandidates[index] = updated
-                }
-            } onDelete: {
-                importCandidates.removeAll { $0.id == candidate.id }
-            }
+        .sheet(item: $activeSheet) { sheet in
+            routineEditor(for: sheet)
         }
         .accessibilityIdentifier("screen-routine-builder")
         .onAppear(perform: loadImportSuggestionsIfNeeded)
@@ -156,6 +145,7 @@ struct RoutineBuilderView: View {
         let idsToRemove = Set(offsets.map { sorted[$0].id })
         blocks.removeAll { idsToRemove.contains($0.id) }
         RoutineBlockStore.save(blocks)
+        syncRoutineTasks()
     }
 
     /// Offers a one-time, non-destructive import of `fixedScheduleNotes` free text when the
@@ -185,6 +175,43 @@ struct RoutineBuilderView: View {
         syncRoutineTasks()
     }
 
+    @ViewBuilder
+    private func routineEditor(for sheet: BuilderSheet) -> some View {
+        switch sheet {
+        case .add:
+            RoutineBlockEditorSheet(mode: .add) { newBlock in
+                blocks.append(newBlock)
+                RoutineBlockStore.save(blocks)
+                syncRoutineTasks()
+            }
+            .id("add")
+        case .edit(let block):
+            RoutineBlockEditorSheet(mode: .edit(block)) { updated in
+                if let index = blocks.firstIndex(where: { $0.id == updated.id }) {
+                    blocks[index] = updated
+                } else {
+                    blocks.append(updated)
+                }
+                RoutineBlockStore.save(blocks)
+                syncRoutineTasks()
+            } onDelete: {
+                blocks.removeAll { $0.id == block.id }
+                RoutineBlockStore.save(blocks)
+                syncRoutineTasks()
+            }
+            .id(block.id)
+        case .importCandidate(let candidate):
+            RoutineBlockEditorSheet(mode: .edit(candidate)) { updated in
+                if let index = importCandidates.firstIndex(where: { $0.id == updated.id }) {
+                    importCandidates[index] = updated
+                }
+            } onDelete: {
+                importCandidates.removeAll { $0.id == candidate.id }
+            }
+            .id(candidate.id)
+        }
+    }
+
     /// Reconciles declared routine blocks into visible recurring tasks so they show up
     /// in the timeline and all-tasks lists immediately, without waiting for the next
     /// full task reload cycle.
@@ -192,7 +219,7 @@ struct RoutineBuilderView: View {
         let userId = FirebaseManager.shared.resolvedUserId
         guard !userId.isEmpty else { return }
         Task {
-            await shell.tasksVM.syncRoutineBlockTasks(userId: userId)
+            await shell.tasksVM.syncRoutineBlockTasks(userId: userId, forceSchedule: true)
         }
     }
 }

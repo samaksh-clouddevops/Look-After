@@ -218,7 +218,14 @@ public enum LifeTimelinePresenter {
         }
 
         var seenRoutineTitles = Set<String>()
-        for task in nonFinanceTasks {
+        // Declared routine blocks share titles with seeded meals. Paint the block, not the seed.
+        let timelineTasksInOrder = nonFinanceTasks.sorted { lhs, rhs in
+            let leftDeclared = lhs.tags.contains { $0.hasPrefix(RoutineBlock.taskTagPrefix) }
+            let rightDeclared = rhs.tags.contains { $0.hasPrefix(RoutineBlock.taskTagPrefix) }
+            if leftDeclared != rightDeclared { return leftDeclared && !rightDeclared }
+            return false
+        }
+        for task in timelineTasksInOrder {
             guard !OnboardingTaskSeeder.isJunkOnboardingTask(title: task.title, description: task.description) else { continue }
             if let routineTitle = routineCollapseTitle(for: task), seenRoutineTitles.contains(routineTitle) {
                 continue

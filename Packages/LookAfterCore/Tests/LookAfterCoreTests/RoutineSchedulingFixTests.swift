@@ -146,6 +146,46 @@ final class TaskScheduleQueryTests: XCTestCase {
         XCTAssertEqual(plan.occurrenceUpdates.first?.parentTaskId, "tmpl-a")
     }
 
+    func testDedupeKeepsDeclaredRoutineBlockOverSeededDinner() {
+        let day = makeDate(year: 2026, month: 8, day: 5)
+        var seeded = LifeTask(
+            id: "seed-dinner",
+            title: "Dinner",
+            tags: ["daily-routine"],
+            recurrence: .daily,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        seeded.createdAt = makeDate(year: 2026, month: 1, day: 1)
+        var declared = LifeTask(
+            id: "declared-dinner",
+            title: "Dinner",
+            tags: ["daily-routine", "routine-block:dinner-1"],
+            recurrence: .custom,
+            recurrenceWeekdays: [1, 2, 3, 4, 5, 6, 7],
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        declared.createdAt = makeDate(year: 2026, month: 8, day: 1)
+        let occurrence = LifeTask(
+            id: "occ-dinner",
+            title: "Dinner",
+            status: .pending,
+            scheduledDate: day,
+            parentTaskId: seeded.id,
+            userId: "user-1"
+        )
+
+        let plan = TaskRecurrenceEngine.dedupeDuplicateRecurrenceTemplates(
+            in: [seeded, declared, occurrence],
+            calendar: calendar,
+            referenceDate: day
+        )
+
+        XCTAssertEqual(plan.templateIDsToDelete, ["seed-dinner"])
+        XCTAssertEqual(plan.occurrenceUpdates.first?.parentTaskId, "declared-dinner")
+    }
+
     func testStandaloneDinnerSupersededWhenRecurringOccurrenceExists() {
         let day = makeDate(year: 2026, month: 8, day: 5)
         var template = LifeTask(

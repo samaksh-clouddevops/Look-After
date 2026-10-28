@@ -107,7 +107,7 @@ public enum TaskScheduleQuery {
     }
 
     /// Active tasks for today's list — one instance per series, recurrence-aware.
-    /// Unscheduled backlog stays off this list unless it is an overdue one-off carry-forward.
+    /// Onboarding inbox rows stay off this list. An undated flexible one-off belongs here, including Sunday.
     public static func activeTasksForToday(
         from tasks: [LifeTask],
         calendar: Calendar = .current,

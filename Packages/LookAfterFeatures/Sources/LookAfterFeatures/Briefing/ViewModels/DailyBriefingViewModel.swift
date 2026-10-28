@@ -1486,7 +1486,7 @@ public final class DailyBriefingViewModel: ObservableObject {
             return
         }
 
-        let hasKey = GLMService.shared.hasConfiguredAPIKey
+        let hasKey = GLMService.shared.isAIAvailable
 
         // AIRouter: distilled systemActions → immutable system prompt (no raw cascade spam).
         let routerPayload = BriefingRouterPayload(from: finalPayload)

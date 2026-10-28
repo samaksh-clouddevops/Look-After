@@ -8,6 +8,9 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
 
     public enum Collection: String, CaseIterable, Sendable {
         case bills
+        case moneyPlan = "money_plan"
+        case dailyExpenses = "daily_expenses"
+        case spendKindMemory = "spend_kind_memory"
         case shoppingItems = "shopping_items"
         case relationships
         case journalEntries = "journal_entries"
@@ -172,6 +175,8 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
                     guard let data = try? encode(item) else { return nil }
                     return (item.id, data)
                 }
+            case .moneyPlan, .dailyExpenses, .spendKindMemory:
+                rawItems = []
             case .shoppingItems:
                 let items: [ShoppingItem] = persistence.load([ShoppingItem].self, filename: collection.rawValue)
                 rawItems = items.compactMap { item in
@@ -191,8 +196,6 @@ public final class ModuleEntitySQLiteStore: @unchecked Sendable {
                     return (item.id, data)
                 }
             case .hydrationLogs:
-                // No legacy JSON file ever existed for hydration logs — this module
-                // was never persisted before SQLite support was added.
                 rawItems = []
             }
 

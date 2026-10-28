@@ -28,6 +28,11 @@ public final class TimelineConstraintViewModel: ObservableObject {
     @Published public private(set) var dragAnchorY: CGFloat?
     @Published public private(set) var lastMutation: (taskID: String, constraint: TimeConstraint)?
 
+    @Published public private(set) var savingTaskIDs: Set<String> = []
+    @Published public var mutationError: String?
+    @Published public private(set) var savedStart: Date?
+    public var persistTask: ((LifeTask) async -> Bool)?
+
     private var tasksByID: [String: LifeTask] = [:]
     private let telemetry: any InteractionTelemetryServing
     public var onTaskUpdated: ((LifeTask) -> Void)?
@@ -54,11 +59,18 @@ public final class TimelineConstraintViewModel: ObservableObject {
             map[task.id] = task
             constraints[task.id] = task.timeConstraintValue
         }
+        for id in savingTaskIDs {
+            if let pending = tasksByID[id] {
+                map[id] = pending
+                constraints[id] = pending.timeConstraintValue
+            }
+        }
         tasksByID = map
         constraintsByTaskID = constraints
     }
 
     public func upsert(task: LifeTask) {
+        guard !savingTaskIDs.contains(task.id) else { return }
         tasksByID[task.id] = task
         constraintsByTaskID[task.id] = task.timeConstraintValue
     }
@@ -108,6 +120,8 @@ public final class TimelineConstraintViewModel: ObservableObject {
         source: ConstraintChangeSource,
         transform: (TimeConstraint) -> TimeConstraint
     ) {
+        guard !savingTaskIDs.contains(taskID) else { return }
+        let previous = tasksByID[taskID]
         let current = constraint(for: taskID)
         let next = transform(current)
         guard next != current else { return }
@@ -122,7 +136,7 @@ public final class TimelineConstraintViewModel: ObservableObject {
             tasksByID[taskID] = task
             title = task.title
             semanticType = task.semanticProfile?.semanticType.rawValue
-            onTaskUpdated?(task)
+            saveMutation(task, previous: previous, isDrag: false)
         }
 
         telemetry.recordConstraintChange(
@@ -136,10 +150,11 @@ public final class TimelineConstraintViewModel: ObservableObject {
     }
 
     private func commitAbsoluteStart(taskID: String, proposedStart: Date) {
-        guard var task = tasksByID[taskID],
+        guard !savingTaskIDs.contains(taskID), var task = tasksByID[taskID],
               task.timeConstraintValue != .anchored else {
             return
         }
+        let previous = task
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: task.scheduledDate ?? proposedStart)
         let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
@@ -166,6 +181,7 @@ public final class TimelineConstraintViewModel: ObservableObject {
         case .accepted(let date), .snapped(let date):
             start = date
         case .needsAI, .rejected:
+            mutationError = "This time doesn’t fit the task’s schedule or overlaps another commitment. Choose a different time."
             return
         }
         guard task.scheduledTime == nil || abs(task.scheduledTime!.timeIntervalSince(start)) > 30 else {
@@ -180,16 +196,16 @@ public final class TimelineConstraintViewModel: ObservableObject {
         }
         task.updatedAt = Date()
         tasksByID[taskID] = task
-        onTaskUpdated?(task)
-        onScheduleDragCommitted?()
+        saveMutation(task, previous: previous, isDrag: true)
     }
 
     private func commitScheduleOffset(taskID: String, minutes: Int) {
-        guard minutes != 0,
+        guard !savingTaskIDs.contains(taskID), minutes != 0,
               var task = tasksByID[taskID],
               task.timeConstraintValue != .anchored else {
             return
         }
+        let previous = task
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: task.scheduledDate ?? task.scheduledTime ?? Date())
         let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
@@ -218,6 +234,7 @@ public final class TimelineConstraintViewModel: ObservableObject {
         case .accepted(let date), .snapped(let date):
             start = date
         case .needsAI, .rejected:
+            mutationError = "This time doesn’t fit the task’s schedule or overlaps another commitment. Choose a different time."
             return
         }
         task.scheduledTime = start
@@ -228,7 +245,32 @@ public final class TimelineConstraintViewModel: ObservableObject {
         }
         task.updatedAt = Date()
         tasksByID[taskID] = task
-        onTaskUpdated?(task)
-        onScheduleDragCommitted?()
+        saveMutation(task, previous: previous, isDrag: true)
     }
+    private func saveMutation(_ task: LifeTask, previous: LifeTask?, isDrag: Bool) {
+        mutationError = nil
+        guard let persistTask else {
+            onTaskUpdated?(task)
+            if isDrag { onScheduleDragCommitted?() }
+            return
+        }
+        savingTaskIDs.insert(task.id)
+        Task {
+            let saved = await persistTask(task)
+            savingTaskIDs.remove(task.id)
+            if saved {
+                if isDrag {
+                    savedStart = task.scheduledTime
+                    onScheduleDragCommitted?()
+                }
+            } else {
+                if let previous {
+                    tasksByID[task.id] = previous
+                    constraintsByTaskID[task.id] = previous.timeConstraintValue
+                }
+                mutationError = "Couldn’t save this change. The task has been restored. Please try again."
+            }
+        }
+    }
+
 }

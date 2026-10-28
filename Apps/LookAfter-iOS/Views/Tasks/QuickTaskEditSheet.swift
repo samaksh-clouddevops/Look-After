@@ -61,8 +61,9 @@ struct QuickTaskEditSheet: View {
 
                             Spacer(minLength: 0)
 
-                            Stepper("", value: $estimatedMinutes, in: 1...240)
+                            Stepper("Duration", value: $estimatedMinutes, in: 1...1440)
                                 .labelsHidden()
+                                .accessibilityValue("\(estimatedMinutes) minutes")
                         }
                     }
 
@@ -89,8 +90,9 @@ struct QuickTaskEditSheet: View {
 
                     Section {
                         Button("More options…") {
+                            guard let draft = preparedDraft() else { return }
+                            onMoreOptions(draft)
                             dismiss()
-                            onMoreOptions(task)
                         }
                         .foregroundColor(DesignSystem.accentPrimary)
 
@@ -132,20 +134,18 @@ struct QuickTaskEditSheet: View {
             estimatedMinutesText = String(estimatedMinutes)
             return
         }
-        estimatedMinutes = min(value, 240)
+        estimatedMinutes = min(value, 1440)
         estimatedMinutesText = String(estimatedMinutes)
     }
 
-    private func save() {
+    private func preparedDraft() -> LifeTask? {
         KeyboardDismiss.dismiss()
         commitEstimatedMinutesText()
 
         guard schedulingMode != .fixedTime || fixedEndTime > fixedStartTime else {
             saveError = "End time must be after start time."
-            return
+            return nil
         }
-
-        isSaving = true
         saveError = nil
 
         var updated = task
@@ -156,6 +156,12 @@ struct QuickTaskEditSheet: View {
             fixedStartTime: schedulingMode == .fixedTime ? fixedStartTime : nil,
             fixedEndTime: schedulingMode == .fixedTime ? fixedEndTime : nil
         )
+        return updated
+    }
+
+    private func save() {
+        guard let updated = preparedDraft() else { return }
+        isSaving = true
 
         Task {
             let userId = updated.userId.isEmpty ? task.userId : updated.userId

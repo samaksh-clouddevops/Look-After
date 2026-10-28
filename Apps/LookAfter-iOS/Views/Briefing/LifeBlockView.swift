@@ -9,7 +9,7 @@ struct LifeBlockView<Content: View>: View {
     let constraint: TimeConstraint
     let baselineStart: Date?
     let isEnabled: Bool
-    let viewModel: TimelineConstraintViewModel
+    @ObservedObject var viewModel: TimelineConstraintViewModel
     let dragCoordinator: TimelineDragCoordinator
     @Binding var scrollDisabled: Bool
     let content: Content
@@ -75,9 +75,13 @@ struct LifeBlockView<Content: View>: View {
             .accessibilityElement(children: .contain)
             .accessibilityValue(constraint.accessibilityDescription)
             .accessibilityHint(accessibilityHintText)
-            .accessibilityAction(named: "Pick up to reschedule") {
+            .accessibilityAction(named: "Move 15 minutes earlier") {
                 guard constraint.isSchedulerMovable else { return }
-                pickUpForAccessibility()
+                viewModel.handle(.commitVerticalOffset(taskID: taskID, offsetMinutes: -15))
+            }
+            .accessibilityAction(named: "Move 15 minutes later") {
+                guard constraint.isSchedulerMovable else { return }
+                viewModel.handle(.commitVerticalOffset(taskID: taskID, offsetMinutes: 15))
             }
             .accessibilityAction(named: "Anchor Task") {
                 viewModel.handle(.setConstraint(taskID: taskID, .anchored))
@@ -101,14 +105,14 @@ struct LifeBlockView<Content: View>: View {
 
     private var accessibilityHintText: String {
         if constraint.isSchedulerMovable {
-            return "Activate Pick up to reschedule, then drag up or down. New start time announces when you drop."
+            return "Use the actions to move this task 15 minutes earlier or later. You can also press and hold, then drag."
         }
         return "Press and hold for a rubber-band preview. This task is anchored."
     }
 
     @ViewBuilder
     private var blockContent: some View {
-        if isEnabled {
+        if isEnabled && !viewModel.savingTaskIDs.contains(taskID) {
             content.gesture(liftAndDragGesture)
         } else {
             content
@@ -214,7 +218,7 @@ struct LifeBlockView<Content: View>: View {
             thresholdPulse.toggle()
         }
 
-        if isLifted, constraint.isSchedulerMovable {
+        if isLifted, constraint.isSchedulerMovable, abs(dy) > abs(dx), abs(verticalOffset) >= 5 {
             commitLiftedDrag()
         }
 
@@ -239,30 +243,13 @@ struct LifeBlockView<Content: View>: View {
                 verticalOffset: verticalOffset
             )
             viewModel.handle(.commitVerticalDrag(taskID: taskID, proposedStart: proposed))
-            announceScheduleCommit(proposed)
         } else {
             let minutes = TimelineDragTimeMapping.offsetMinutes(from: verticalOffset)
             if minutes != 0 {
                 viewModel.handle(.commitVerticalOffset(taskID: taskID, offsetMinutes: minutes))
-                let formatter = DateFormatter()
-                formatter.dateFormat = "h:mm a"
-                let label = minutes > 0
-                    ? "Moved later by \(minutes.durationString)"
-                    : "Moved earlier by \((-minutes).durationString)"
-                AccessibilityNotification.Announcement(label).post()
+
             }
         }
-    }
-
-    private func announceScheduleCommit(_ proposed: Date) {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        AccessibilityNotification.Announcement("Start time set to \(formatter.string(from: proposed))").post()
-    }
-
-    private func pickUpForAccessibility() {
-        guard !isLifted else { return }
-        beginLiftSession()
     }
 
     private func publishDragPreview() {

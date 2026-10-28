@@ -21,12 +21,27 @@ public enum RoutineScheduleAnchorResolver {
         on day: Date,
         model: LifeModel? = LifeModelStore.load(),
         profile: UserLifeProfile = UserLifeProfileStore.load(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        routineBlocks: [RoutineBlock]? = nil
     ) -> ResolvedAnchor? {
         let dayStart = calendar.startOfDay(for: day)
         let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
         let enriched = TaskEphemeralityDefaults.enrich(task)
         let title = task.title.lowercased()
+        let blocks = routineBlocks ?? RoutineBlockStore.load()
+
+        if let declared = declaredRoutineAnchor(
+            for: task,
+            blocks: blocks,
+            day: dayStart,
+            calendar: calendar
+        ) {
+            return declared
+        }
+        // A tagged routine-block row with no matching block today must not fall through to a seeder clock.
+        if task.tags.contains(where: { $0.hasPrefix(RoutineBlock.taskTagPrefix) }) {
+            return nil
+        }
 
         // Life-model blocks first so gym stays at the user's evening slot, not a seeder default.
         if let commitmentAnchor = commitmentBlockAnchor(
@@ -178,6 +193,34 @@ public enum RoutineScheduleAnchorResolver {
         calendar: Calendar = .current
     ) -> Date? {
         resolve(for: task, on: day, model: model, profile: profile, calendar: calendar)?.start
+    }
+
+    /// User-declared routine builder window. Wins over seeded meal clocks and life-model guesses.
+    private static func declaredRoutineAnchor(
+        for task: LifeTask,
+        blocks: [RoutineBlock],
+        day: Date,
+        calendar: Calendar
+    ) -> ResolvedAnchor? {
+        guard !blocks.isEmpty else { return nil }
+        let active = blocks.filter { $0.days.includes(day, calendar: calendar) }
+        let match: RoutineBlock?
+        if let tag = task.tags.first(where: { $0.hasPrefix(RoutineBlock.taskTagPrefix) }) {
+            let blockID = String(tag.dropFirst(RoutineBlock.taskTagPrefix.count))
+            match = active.first { $0.id == blockID }
+        } else {
+            let title = OnboardingTaskSeeder.normalizedRoutineTitle(task.title)
+            match = active.first { OnboardingTaskSeeder.normalizedRoutineTitle($0.title) == title }
+        }
+        guard let match else { return nil }
+        guard let start = calendar.date(
+            bySettingHour: match.startHour,
+            minute: match.startMinute,
+            second: 0,
+            of: day
+        ) else { return nil }
+        let end = start.addingTimeInterval(TimeInterval(max(match.durationMinutes, TaskDurationPolicy.minimumMinutes) * 60))
+        return ResolvedAnchor(start: start, end: end, treatAsFixed: match.isNonNegotiable)
     }
 
     // MARK: - Life model

@@ -7,7 +7,10 @@ import LookAfterAI
 struct LicenseManagerSwiftTestingTests {
     @Test
     func redeemWithoutProxyThrowsNotConfigured() async {
+        LicenseGate.bypassForTesting = false
+        defer { LicenseGate.bypassForTesting = true }
         let manager = LicenseManager.shared
+        manager.clearLocalLicense()
         manager.configure(proxyClient: nil)
         manager.clearLocalLicense()
         do {
@@ -26,6 +29,8 @@ struct LicenseManagerSwiftTestingTests {
 
     @Test
     func clearLocalLicenseClearsUserDefaultsCache() {
+        LicenseGate.bypassForTesting = false
+        defer { LicenseGate.bypassForTesting = true }
         let manager = LicenseManager.shared
         UserDefaults.standard.set(true, forKey: "lookafter.license.active")
         UserDefaults.standard.set("2026-01-01", forKey: "lookafter.license.redeemedAt")

@@ -5,11 +5,16 @@ import os
 
 /// Nightly / idle BGProcessingTask that runs TelemetrySynthesizer offline.
 enum BehavioralTelemetryBackgroundTask {
-    static let identifier = "com.samaksh.flowos.app.behavioral-telemetry"
+    nonisolated static let identifier = "com.samaksh.flowos.app.behavioral-telemetry"
 
-    private static let logger = Logger(subsystem: "com.lookafter.app", category: "BehavioralTelemetryBG")
+    nonisolated private static let logger = Logger(subsystem: "com.lookafter.app", category: "BehavioralTelemetryBG")
 
     static func register() {
+        registerHandler()
+    }
+
+    /// Background tasks are delivered off the main actor. The closure must not inherit MainActor.
+    nonisolated private static func registerHandler() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
             guard let processing = task as? BGProcessingTask else {
                 task.setTaskCompleted(success: false)
@@ -20,7 +25,7 @@ enum BehavioralTelemetryBackgroundTask {
     }
 
     /// Prefer overnight idle windows (≈ 3:00 AM local if the system allows).
-    static func scheduleNext() {
+    nonisolated static func scheduleNext() {
         let request = BGProcessingTaskRequest(identifier: identifier)
         request.requiresNetworkConnectivity = false
         request.requiresExternalPower = false
@@ -33,7 +38,7 @@ enum BehavioralTelemetryBackgroundTask {
         }
     }
 
-    private static func handle(_ task: BGProcessingTask) {
+    nonisolated private static func handle(_ task: BGProcessingTask) {
         scheduleNext()
 
         let completion = BehavioralBGCompletion(task)
@@ -61,7 +66,7 @@ enum BehavioralTelemetryBackgroundTask {
     }
 
     /// Next local 3:00 AM (or +24h if already past).
-    private static func nextIdleWindowStart(now: Date = Date(), calendar: Calendar = .current) -> Date {
+    nonisolated private static func nextIdleWindowStart(now: Date = Date(), calendar: Calendar = .current) -> Date {
         var comps = calendar.dateComponents([.year, .month, .day], from: now)
         comps.hour = 3
         comps.minute = 0
@@ -74,7 +79,7 @@ enum BehavioralTelemetryBackgroundTask {
     }
 }
 
-private final class BehavioralBGCompletion: @unchecked Sendable {
+nonisolated private final class BehavioralBGCompletion: @unchecked Sendable {
     private let lock = NSLock()
     private var finished = false
     private let task: BGTask

@@ -168,9 +168,9 @@ final class LifeModelValidatorTests: XCTestCase {
             status: .completed,
             scheduledTime: today,
             tags: [LifeModel.commitmentTaskTag, model.commitmentID(for: "Gym")],
-            userId: "user-1",
             createdAt: calendar.date(from: DateComponents(year: 2020, month: 1, day: 1))!,
-            updatedAt: calendar.date(from: DateComponents(year: 2020, month: 1, day: 1))!
+            updatedAt: calendar.date(from: DateComponents(year: 2020, month: 1, day: 1))!,
+            userId: "user-1"
         )
 
         let gaps = LifeGapDetector.detect(

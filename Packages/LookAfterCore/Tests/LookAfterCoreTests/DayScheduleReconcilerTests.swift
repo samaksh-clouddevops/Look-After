@@ -230,6 +230,7 @@ final class DayScheduleReconcilerTests: XCTestCase {
             tasks: [gym],
             on: day,
             model: model,
+            now: makeDate(year: 2026, month: 8, day: 4, hour: 9),
             calendar: calendar
         )
         let synced = result.tasks.first { $0.id == "gym-time-only" }

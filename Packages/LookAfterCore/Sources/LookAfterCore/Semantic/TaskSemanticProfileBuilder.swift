@@ -46,7 +46,7 @@ public enum TaskSemanticProfileBuilder {
         if let exercise = exerciseProfile(task: task, corpus: corpus) {
             return exercise
         }
-        if let communication = communicationProfile(task: task, corpus: corpus) {
+        if let communication = communicationProfile(task: task, corpus: corpus, overdue: overdue) {
             return communication
         }
         if let appointment = appointmentProfile(task: task, corpus: corpus) {
@@ -61,7 +61,7 @@ public enum TaskSemanticProfileBuilder {
         if let integration = integrationProfile(task: task, corpus: corpus) {
             return integration
         }
-        if let byArea = lifeAreaProfile(task: task) {
+        if let byArea = lifeAreaProfile(task: task, overdue: overdue) {
             return byArea
         }
 
@@ -293,7 +293,7 @@ public enum TaskSemanticProfileBuilder {
         )
     }
 
-    private static func communicationProfile(task: LifeTask, corpus: String) -> TaskSemanticProfile? {
+    private static func communicationProfile(task: LifeTask, corpus: String, overdue: Bool) -> TaskSemanticProfile? {
         let commTerms = ["email", "reply", "call", "message", "text", "follow up", "reach out"]
         guard commTerms.contains(where: { corpus.contains($0) }) else { return nil }
 
@@ -385,7 +385,7 @@ public enum TaskSemanticProfileBuilder {
         )
     }
 
-    private static func lifeAreaProfile(task: LifeTask) -> TaskSemanticProfile? {
+    private static func lifeAreaProfile(task: LifeTask, overdue: Bool) -> TaskSemanticProfile? {
         switch task.lifeArea {
         case .finance:
             return TaskSemanticProfile(
@@ -414,7 +414,7 @@ public enum TaskSemanticProfileBuilder {
                 source: .deterministic
             )
         case .shopping:
-            return errandProfile(task: task, corpus: "shopping")
+            return errandProfile(task: task, corpus: "shopping", overdue: overdue)
         default:
             return nil
         }

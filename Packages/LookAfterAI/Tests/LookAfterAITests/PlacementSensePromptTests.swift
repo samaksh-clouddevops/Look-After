@@ -50,7 +50,9 @@ final class PlacementSensePromptTests: XCTestCase {
             timeLabel: "16:00",
             endDate: time(17)
         )
-        let health = HealthSummary(id: "h1", date: day(), totalSleepMinutes: 420, hrvAverage: 55)
+        var health = HealthSummary(id: "h1", date: day())
+        health.totalSleepMinutes = 420
+        health.hrvAverage = 55
         let energy = EnergyReport(energy: .moderate)
 
         let prompt = LookAfterPrompts.placementSensePrompt(

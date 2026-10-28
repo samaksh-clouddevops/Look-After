@@ -15,6 +15,15 @@ public enum TaskConstraintAlignment {
             if task.schedulingModeValue == .fixedTime || task.timeConstraintValue != .anchored {
                 task.applyTimeConstraint(.anchored)
             }
+        } else if task.tags.contains(where: { $0.hasPrefix(RoutineBlock.taskTagPrefix) }) {
+            // Declared routine blocks keep the lock the user set, including meals.
+            if task.schedulingModeValue == .fixedTime {
+                if task.timeConstraintValue != .anchored {
+                    task.applyTimeConstraint(.anchored)
+                }
+            } else if task.timeConstraint != nil {
+                task.schedulingMode = task.timeConstraintValue.asSchedulingMode
+            }
         } else if task.tags.contains("daily-routine"),
                   OnboardingTaskSeeder.isMealRoutineTitle(task.title) {
             // Meals keep fixedTime display preference but shift on conflict.

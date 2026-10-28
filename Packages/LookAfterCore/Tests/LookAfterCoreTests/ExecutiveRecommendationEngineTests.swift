@@ -146,8 +146,8 @@ final class ExecutiveRecommendationEngineTests: XCTestCase {
             priority: .high,
             estimatedMinutes: 15,
             scheduledDate: yesterday,
-            recurrence: .daily,
-            parentTaskId: "template"
+            parentTaskId: "template",
+            recurrence: .daily
         )
         let todayTask = LifeTask(
             id: "today",

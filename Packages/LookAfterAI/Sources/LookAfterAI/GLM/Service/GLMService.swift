@@ -54,6 +54,12 @@ public final class GLMService: @unchecked Sendable {
         authProxyClient != nil && (licenseStatusProvider?.isLicensed == true)
     }
 
+    /// Whether the currently selected networking route has its required credentials.
+    /// This is a capability check, not a guarantee of network reachability.
+    public var isAIAvailable: Bool {
+        isProxyOnlyMode ? usesLicensedProxy : hasConfiguredAPIKey
+    }
+
     /// ADR-008 / `ArchitectureFeatureFlags.proxyOnlyAI` — Release defaults true.
     public var isProxyOnlyMode: Bool {
         ArchitectureFeatureFlags.proxyOnlyAI

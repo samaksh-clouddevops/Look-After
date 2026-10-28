@@ -66,22 +66,26 @@ struct ExecutiveLiveTimelineView: View {
     var onUncompleteTask: ((String) async -> Void)?
     var onStartTask: ((String) -> Void)?
     var onEditTask: ((String) -> Void)?
-    var onRescheduleTask: ((String) async -> Void)?
+    var onRescheduleTask: ((String) async -> Bool)?
+    /// Pick a clock for today. Repeating tasks keep their usual time on other days.
+    var onRescheduleJustForToday: ((String, Date) async -> Bool)?
     var onRemoveFromTimelineTask: ((String) async -> Void)?
     /// Persist a suggested display-only slot onto the real task.
     var onAddSuggestedTask: ((String, Date) -> Void)?
-    var onPersistScheduleChange: ((LifeTask) -> Void)?
+    var onPersistScheduleChange: ((LifeTask) async -> Bool)?
     var onScheduleDragCommitted: (() -> Void)?
     var taskForID: ((String) -> LifeTask?)?
     var parentScrollDisabled: Binding<Bool>?
     /// EventKit occupancy for drag guard (OccupiedDay).
     var calendarEventsProvider: ((Date) -> [BriefingCalendarEvent])? = nil
+    var schedulingTasks: [LifeTask] = []
 
     @State private var completingTaskIds: Set<String> = []
     @State private var uncompletingTaskIds: Set<String> = []
     @State private var reschedulingTaskIds: Set<String> = []
     @State private var removingFromTimelineTaskIds: Set<String> = []
     @State private var expandedRowId: String?
+    @State private var todayOnlyReschedule: TodayOnlyRescheduleRequest?
     @StateObject private var constraintVM = TimelineConstraintViewModel()
     @State private var dragCoordinator = TimelineDragCoordinator()
     @State private var blockScrollDisabled = false
@@ -145,12 +149,29 @@ struct ExecutiveLiveTimelineView: View {
         .onAppear {
             constraintVM.calendarEventsProvider = calendarEventsProvider
             seedConstraintState()
-            constraintVM.onTaskUpdated = { task in
-                onPersistScheduleChange?(task)
-            }
+            constraintVM.persistTask = onPersistScheduleChange
             constraintVM.onScheduleDragCommitted = onScheduleDragCommitted
         }
         .onChange(of: rowConstraintSeed) { _, _ in seedConstraintState() }
+        .alert("Couldn’t change schedule", isPresented: Binding(
+            get: { constraintVM.mutationError != nil },
+            set: { if !$0 { constraintVM.mutationError = nil } }
+        )) {
+            Button("OK") { constraintVM.mutationError = nil }
+        } message: {
+            Text(constraintVM.mutationError ?? "Please try again.")
+        }
+        .onChange(of: constraintVM.savedStart) { _, start in
+            if let start {
+                AccessibilityNotification.Announcement("Task moved to \(start.formatted(date: .omitted, time: .shortened))").post()
+            }
+        }
+        .sheet(item: $todayOnlyReschedule) { request in
+            TodayOnlyRescheduleSheet(title: request.title, initialTime: request.initialTime) { time in
+                let taskId = request.taskId
+                return await onRescheduleJustForToday?(taskId, time) ?? false
+            }
+        }
     }
 
     /// Stable hash of row identity — avoids allocating `[String]` on every `body` for `onChange`.
@@ -159,11 +180,23 @@ struct ExecutiveLiveTimelineView: View {
         for row in displayRows {
             hasher.combine(row.id)
             hasher.combine(row.taskId)
+            hasher.combine(row.sortDate)
+            hasher.combine(row.timeConstraint)
+            hasher.combine(row.estimatedMinutes)
+        }
+        for task in schedulingTasks {
+            hasher.combine(task.id)
+            hasher.combine(task.updatedAt)
+            hasher.combine(task.scheduledDate)
+            hasher.combine(task.scheduledTime)
+            hasher.combine(task.scheduledEndTime)
+            hasher.combine(task.timeConstraintValue)
         }
         return hasher.finalize()
     }
 
     private func seedConstraintState() {
+        constraintVM.seed(tasks: schedulingTasks)
         for row in displayRows {
             guard let taskID = row.taskId else { continue }
             if let task = taskForID?(taskID) {
@@ -345,11 +378,16 @@ struct ExecutiveLiveTimelineView: View {
                             return {
                                 reschedulingTaskIds.insert(taskId)
                                 Task {
-                                    await onRescheduleTask(taskId)
+                                    if !(await onRescheduleTask(taskId)) {
+                                        constraintVM.mutationError = "Couldn’t find or save a suitable time. Open the task to choose a day and time."
+                                    }
                                     reschedulingTaskIds.remove(taskId)
                                 }
                             }
                         } : nil,
+                        onRescheduleJustForToday: row.canRescheduleJustForToday && onRescheduleJustForToday != nil
+                            ? { beginTodayOnlyReschedule(row) }
+                            : nil,
                         onRemoveFromTimeline: row.canRemoveFromTimeline ? row.taskId.flatMap { taskId in
                             guard let onRemoveFromTimelineTask else { return nil }
                             guard !removingFromTimelineTaskIds.contains(taskId) else { return nil }
@@ -385,10 +423,19 @@ struct ExecutiveLiveTimelineView: View {
         .animation(PremiumMotion.spring(reduceMotion: reduceMotion), value: isCompleting)
     }
 
+    private func beginTodayOnlyReschedule(_ row: ExecutivePlanningTimelineRow) {
+        guard let taskId = row.taskId else { return }
+        todayOnlyReschedule = TodayOnlyRescheduleRequest(
+            taskId: taskId,
+            title: row.title,
+            initialTime: row.sortDate
+        )
+    }
+
     @ViewBuilder
     private func timelineTimeRail(for row: ExecutivePlanningTimelineRow) -> some View {
         let isMuted = row.isCompleted || row.isPast
-        VStack(alignment: .trailing, spacing: 2) {
+        let rail = VStack(alignment: .trailing, spacing: 2) {
             if row.isSuggestedSlot {
                 Text(row.timeLabel)
                     .font(.dsCaption())
@@ -428,6 +475,18 @@ struct ExecutiveLiveTimelineView: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.top, 2)
+
+        if row.canRescheduleJustForToday, onRescheduleJustForToday != nil {
+            Button {
+                beginTodayOnlyReschedule(row)
+            } label: {
+                rail
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Reschedule \(row.title) just for today")
+        } else {
+            rail
+        }
     }
 
     @ViewBuilder
@@ -600,6 +659,7 @@ private struct EventTimelineCard: View {
     var onEdit: (() -> Void)?
     var onDoubleTapComplete: (() -> Void)?
     var onReschedule: (() -> Void)?
+    var onRescheduleJustForToday: (() -> Void)?
     var onRemoveFromTimeline: (() -> Void)?
     var onAddSuggested: (() -> Void)?
 
@@ -755,6 +815,24 @@ private struct EventTimelineCard: View {
                         }
                         .buttonStyle(.glass)
                     }
+                    if let onRescheduleJustForToday {
+                        Button(action: onRescheduleJustForToday) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "calendar.badge.clock")
+                                    .font(.dsCaption(weight: .semibold))
+                                Text("Reschedule just for today")
+                                    .font(.dsCaption(weight: .semibold))
+                            }
+                            .foregroundStyle(ExecutiveTimelineVisuals.lime)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DesignSystem.spacingSM)
+                            .background(
+                                Capsule().fill(ExecutiveTimelineVisuals.lime.opacity(0.12))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("timeline-reschedule-today")
+                    }
                     if row.canReschedule, let onReschedule {
                         Button(action: onReschedule) {
                             HStack(spacing: 6) {
@@ -857,8 +935,11 @@ private struct EventTimelineCard: View {
                     : "Double tap to mark this task complete."
             )
         }
+        if onRescheduleJustForToday != nil {
+            parts.append("Use the time to reschedule just for today.")
+        }
         if row.canReschedule {
-            parts.append("Use Pick up to reschedule, then drag up or down. New time announces when you drop.")
+            parts.append("Use the actions to move this task earlier or later, or press and hold to drag.")
         }
         if row.isSuggestedSlot {
             parts.append("Suggested slot. Use Add to day to place it on your schedule.")
@@ -1089,6 +1170,83 @@ private struct ResurrectedSparkleOverlay: View {
                     pulse = true
                 }
             }
+    }
+}
+
+private struct TodayOnlyRescheduleRequest: Identifiable {
+    let taskId: String
+    let title: String
+    let initialTime: Date
+    var id: String { taskId }
+}
+
+private struct TodayOnlyRescheduleSheet: View {
+    let title: String
+    let initialTime: Date
+    let onSave: (Date) async -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var time: Date
+    @State private var isSaving = false
+    @State private var saveError: String?
+
+    init(title: String, initialTime: Date, onSave: @escaping (Date) async -> Bool) {
+        self.title = title
+        self.initialTime = initialTime
+        self.onSave = onSave
+        _time = State(initialValue: initialTime)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text(title)
+                        .font(.dsBody(weight: .semibold))
+                    DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                        .disabled(isSaving)
+                    Text("This time is only for today. A repeating task keeps its usual time on other days.")
+                        .font(.dsCaption())
+                        .foregroundStyle(DesignSystem.textMuted)
+                }
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(DesignSystem.error)
+                            .accessibilityIdentifier("reschedule-save-error")
+                    }
+                }
+            }
+            .navigationTitle("Just for today")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") {
+                        isSaving = true
+                        saveError = nil
+                        Task {
+                            let saved = await onSave(time)
+                            isSaving = false
+                            if saved {
+                                dismiss()
+                            } else {
+                                saveError = "Couldn’t move this task. Your changes haven’t been saved. Try again."
+                            }
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+        .interactiveDismissDisabled(isSaving)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 

@@ -58,17 +58,17 @@ public struct PlanMutationApplier {
         let dayStart = calendar.startOfDay(for: now)
         // Prefer full active list + scheduling context so title/id resolution sees all movable tasks.
         let allTasks = dedupeTasks(tasksVM.tasks + tasksVM.schedulingContext)
-        let taskByID = Dictionary.uniquingFirstValue(allTasks.map { ($0.id, $0) })
-        let taskByTitle = Dictionary.uniquingFirstValue(
-            allTasks.map { ($0.title.lowercased(), $0) }
-        )
-        let allowedTaskIDs = Set(taskByID.keys)
+        let allowedTaskIDs = Set(allTasks.map(\.id))
         var pendingCreates: [PendingCreate] = []
         var schedulingPool = tasksScheduledToday(from: allTasks, dayStart: dayStart)
         let idempotency = ScheduleMutationIdempotencyStore.shared
 
         for mutation in mutations {
-            let fingerprint = ScheduleMutationIdempotencyStore.fingerprint(mutation)
+            // Earlier mutations may have completed, moved, or created a task.
+            let currentTasks = dedupeTasks(tasksVM.tasks + tasksVM.schedulingContext)
+            let taskByID = Dictionary.uniquingFirstValue(currentTasks.map { ($0.id, $0) })
+            let taskByTitle = Dictionary.uniquingFirstValue(currentTasks.map { ($0.title.lowercased(), $0) })
+            let fingerprint = "\(userId)|\(dayStart.timeIntervalSince1970)|\(ScheduleMutationIdempotencyStore.fingerprint(mutation))"
             if idempotency.wasApplied(fingerprint) {
                 result.skippedReasons.append("Skipped duplicate change (already applied this session)")
                 continue
@@ -95,6 +95,10 @@ public struct PlanMutationApplier {
             case .createTask:
                 guard let title = mutation.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
                     result.skippedReasons.append("Create task missing title")
+                    continue
+                }
+                if let existing = TaskDuplicateMatcher.findMatch(for: title, in: pendingCreates.map(\.task)) {
+                    result.reusedTasks.append(.init(requestedTitle: title, existingTitle: existing.title))
                     continue
                 }
                 if isShoppingLike(title) {
@@ -130,7 +134,10 @@ public struct PlanMutationApplier {
                             task.scheduledDate = dayStart
                             task.scheduledEndTime = start.addingTimeInterval(TimeInterval(duration * 60))
                             task.updatedAt = Date()
-                            await tasksVM.scheduleMutation.persist(task, userId: userId, reconcileSchedule: !deferReconcile)
+                            guard await tasksVM.scheduleMutation.persist(task, userId: userId, reconcileSchedule: !deferReconcile) else {
+                                result.skippedReasons.append("Could not save \"\(task.title)\" — please try again")
+                                continue
+                            }
                             idempotency.markApplied(fingerprint)
                             result.appliedCount += 1
                             continue
@@ -266,7 +273,10 @@ public struct PlanMutationApplier {
                 if allowUserPlacedOverride {
                     task.userPlacedScheduleAt = nil
                 }
-                await tasksVM.scheduleMutation.persist(task, userId: userId, reconcileSchedule: !deferReconcile)
+                guard await tasksVM.scheduleMutation.persist(task, userId: userId, reconcileSchedule: !deferReconcile) else {
+                    result.skippedReasons.append("Could not save \"\(task.title)\" — please try again")
+                    continue
+                }
                 schedulingPool.removeAll { $0.id == task.id }
                 schedulingPool.append(task)
                 idempotency.markApplied(fingerprint)
@@ -275,20 +285,20 @@ public struct PlanMutationApplier {
             case .deferTask, .removeFromToday:
                 guard let id = resolvedTaskID(mutation: mutation, taskByID: taskByID, taskByTitle: taskByTitle),
                       var task = taskByID[id] ?? tasksVM.tasks.first(where: { $0.id == id }),
-                      !task.isFixedTimeEvent else {
+                      task.status.isActive, !task.isFixedTimeEvent else {
                     result.skippedReasons.append("Could not defer task")
                     continue
                 }
-                let tomorrow = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
-                task.scheduledDate = tomorrow
-                task.scheduledTime = nil
-                task.scheduledEndTime = nil
+                task = tasksVM.scheduleMutation.deferredTask(task, from: dayStart, calendar: calendar)
                 // Must be awaited: `apply()` proceeds straight into `reconcileTodaySchedule`
                 // below, which authoritatively re-reads persisted state from disk. The
                 // fire-and-forget `updateTask(_:)` (detached, unawaited) previously let that
                 // re-read race ahead of the persist, silently re-including the deferred/removed
                 // task in today's schedule even though `appliedCount` already reported success.
-                await tasksVM.updateTaskAndPersist(task)
+                guard await tasksVM.updateTaskAndPersist(task) else {
+                    result.skippedReasons.append("Could not defer \"\(task.title)\" — please try again")
+                    continue
+                }
                 schedulingPool.removeAll { $0.id == task.id }
                 result.appliedCount += 1
                 if let script = await DeferralRecoveryCoordinator.shared.handleDeferral(task: task) {
@@ -305,7 +315,10 @@ public struct PlanMutationApplier {
                     result.skippedReasons.append("Could not complete task")
                     continue
                 }
-                await tasksVM.completeTask(task)
+                guard task.status.isActive, await tasksVM.completeTask(task, now: now) != nil else {
+                    result.skippedReasons.append("Could not complete \"\(task.title)\" — please try again")
+                    continue
+                }
                 result.appliedCount += 1
 
             case .markMedicationTaken:
@@ -363,12 +376,18 @@ public struct PlanMutationApplier {
                     from: draft,
                     userId: userId,
                     existingTasks: tasksVM.tasks + tasksVM.schedulingContext,
-                    profile: lifeProfile
+                    profile: lifeProfile,
+                    startDate: now
                 )
-                tasksVM.createMultiDayTasks(plan: plan)
-                result.appliedCount += 1
-                result.createdTaskIDs.append(plan.parent.id)
-                result.createdTaskIDs.append(contentsOf: plan.slices.map(\.id))
+                do {
+                    try await tasksVM.createMultiDayTasksAndAwait(plan: plan)
+                    result.appliedCount += 1
+                    result.createdTaskIDs.append(plan.parent.id)
+                    result.createdTaskIDs.append(contentsOf: plan.slices.map(\.id))
+                    idempotency.markApplied(fingerprint)
+                } catch {
+                    result.skippedReasons.append("Could not create \"\(title)\": \(error.localizedDescription)")
+                }
             }
         }
 
@@ -385,7 +404,8 @@ public struct PlanMutationApplier {
                 requests: requests,
                 existingTasks: schedulingPool,
                 windows: windows,
-                on: dayStart
+                on: dayStart,
+                now: now
             )
             let allocationByID = Dictionary.uniquingFirstValue(allocations.map { ($0.id, $0.scheduledTime) })
 
@@ -551,6 +571,7 @@ public struct PlanMutationApplier {
     /// Gym, life commitments, and other locked clocks must not be moved by planning mutations.
     /// User-placed clocks are locked unless the user approved an override (P2).
     private func isScheduleLocked(_ task: LifeTask, allowUserPlacedOverride: Bool) -> Bool {
+        if !task.status.isActive { return true }
         if task.isLifeCommitmentTask || task.isFixedTimeEvent || OnboardingTaskSeeder.isActivityRoutineTitle(task.title) {
             return true
         }

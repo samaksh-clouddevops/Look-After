@@ -15,6 +15,8 @@ public enum UserDataExportService {
         public var inbox: [InboxItem]
         public var healthSummaries: [HealthSummary]
         public var bills: [BillItem]
+        public var moneyPlan: MoneyPlan?
+        public var dailyExpenses: [DailyExpense]
         public var shopping: [ShoppingItem]
         public var relationships: [RelationshipContact]
         public var journal: [JournalEntry]
@@ -40,6 +42,10 @@ public enum UserDataExportService {
         let health = ((try? HealthSummarySQLiteStore.shared.loadAll()) ?? [])
             .filter { $0.userId == userId || $0.userId.isEmpty }
         let bills = ModuleLocalStore.loadBills().filter { $0.userId == userId || $0.userId.isEmpty }
+        let moneyPlan = ModuleLocalStore.loadMoneyPlan().flatMap { plan in
+            (plan.userId == userId || plan.userId.isEmpty) ? plan : nil
+        }
+        let dailyExpenses = ModuleLocalStore.loadDailyExpenses().filter { $0.userId == userId || $0.userId.isEmpty }
         let shopping = ModuleLocalStore.loadShopping().filter { $0.userId == userId || $0.userId.isEmpty }
         let relationships = ModuleLocalStore.loadRelationships().filter { $0.userId == userId || $0.userId.isEmpty }
         let journal = ModuleLocalStore.loadJournal().filter { $0.userId == userId || $0.userId.isEmpty }
@@ -52,6 +58,8 @@ public enum UserDataExportService {
             inbox: inbox,
             healthSummaries: health,
             bills: bills,
+            moneyPlan: moneyPlan,
+            dailyExpenses: dailyExpenses,
             shopping: shopping,
             relationships: relationships,
             journal: journal

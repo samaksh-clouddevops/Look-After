@@ -178,10 +178,14 @@ public enum MultiDayTaskPlanner {
     }
 
     private static func normalizedSlices(from draft: MultiDayPlanDraft, dayCount: Int) -> [MultiDaySliceDraft] {
-        if !draft.slices.isEmpty {
-            return draft.slices
+        let defaults = offlineSlices(title: draft.title, dayCount: dayCount, lifeArea: draft.lifeArea)
+        // AI drafts can repeat a day, omit a day, or invent a negative/out-of-range
+        // index. Keep exactly one usable step per day in the agreed project length.
+        return defaults.map { fallback in
+            draft.slices.first {
+                $0.dayIndex == fallback.dayIndex && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            } ?? fallback
         }
-        return offlineSlices(title: draft.title, dayCount: dayCount, lifeArea: draft.lifeArea)
     }
 
     static func offlineSlices(

@@ -12,6 +12,9 @@ struct ContextualReplanPreviewSheet: View {
 
     @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
+    @State private var applyError: String?
+
+    private var isBusy: Bool { planningVM.isReplanning || planningVM.isApplyingPlan }
 
     private var activeResult: DayReplanResult {
         guard let variants = result.planVariants, !variants.isEmpty,
@@ -40,7 +43,7 @@ struct ContextualReplanPreviewSheet: View {
                         Text(activeResult.summary)
                             .font(.dsBody())
                             .foregroundColor(DesignSystem.textSecondary)
-                            .dsPrimaryText(lineLimit: 6)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         if !deferredChanges.isEmpty {
                             sectionHeader("Deferred")
@@ -66,7 +69,7 @@ struct ContextualReplanPreviewSheet: View {
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
-                        .disabled(planningVM.isReplanning)
+                        .disabled(isBusy)
                     }
                     .padding(DesignSystem.spacingLG)
                 }
@@ -81,11 +84,12 @@ struct ContextualReplanPreviewSheet: View {
                         planningVM.rejectContextualReplan()
                         dismiss()
                     }
+                    .disabled(isBusy)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Apply") {
+                    Button(planningVM.isApplyingPlan ? "Saving…" : "Apply") {
                         Task {
-                            await planningVM.applyContextualReplanResult(
+                            let saved = await planningVM.applyContextualReplanResult(
                                 tasksVM: shell.tasksVM,
                                 modulesVM: shell.modulesVM,
                                 userId: userId,
@@ -96,12 +100,24 @@ struct ContextualReplanPreviewSheet: View {
                                     }
                                 }
                             )
-                            dismiss()
+                            if saved {
+                                dismiss()
+                            } else {
+                                applyError = planningVM.errorMessage ?? "Couldn't save the plan. Please try again."
+                            }
                         }
                     }
-                    .disabled(planningVM.isReplanning)
+                    .disabled(isBusy)
                 }
             }
+        }
+        .interactiveDismissDisabled(isBusy)
+        .alert("Couldn't apply the plan", isPresented: Binding(
+            get: { applyError != nil }, set: { if !$0 { applyError = nil } }
+        )) {
+            Button("OK", role: .cancel) { applyError = nil }
+        } message: {
+            Text(applyError ?? "Please try again.")
         }
         .accessibilityIdentifier("screen-contextual-replan-preview")
         .onAppear {
@@ -153,16 +169,17 @@ struct ContextualReplanPreviewSheet: View {
                     .elevatedSurface(padding: DesignSystem.spacingMD, cornerRadius: DesignSystem.radiusMD)
                 }
                 .buttonStyle(.plain)
+                .disabled(isBusy)
             }
         }
     }
 
     private var deferredChanges: [DayReplanScheduleChange] {
-        activeResult.scheduleChanges.filter(\.deferToTomorrow)
+        activeResult.effectiveChanges(selectedVariantID: planningVM.selectedVariantID).filter(\.deferToTomorrow)
     }
 
     private var rescheduledChanges: [DayReplanScheduleChange] {
-        activeResult.scheduleChanges.filter { !$0.deferToTomorrow && $0.startHour != nil }
+        activeResult.effectiveChanges(selectedVariantID: planningVM.selectedVariantID).filter { !$0.deferToTomorrow && $0.startHour != nil }
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -182,7 +199,7 @@ struct ContextualReplanPreviewSheet: View {
                     Text(taskTitles[change.taskID] ?? "Task")
                         .font(.dsBody(weight: .semibold))
                         .foregroundColor(DesignSystem.textPrimary)
-                        .dsPrimaryText(lineLimit: 2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if change.deferToTomorrow {
                         Text("Moved to tomorrow")
@@ -198,7 +215,7 @@ struct ContextualReplanPreviewSheet: View {
                         Text(change.reason)
                             .font(.dsCaption())
                             .foregroundColor(DesignSystem.textSecondary)
-                            .dsPrimaryText(lineLimit: 3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

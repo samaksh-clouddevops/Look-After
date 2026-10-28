@@ -146,9 +146,10 @@ public extension LifeTask {
     /// Whether this active task belongs on a day's schedule/snapshot.
     /// Dated and time-only tasks stay on their scheduled day; deadline-only
     /// due tasks belong on that due day; overdue one-off carry-forwards land
-    /// on `now`'s day. Unscheduled backlog stays off.
+    /// on `now`'s day. An undated flexible one-off belongs on today, including Sunday.
     func belongsOnDaySchedule(
         day: Date,
+        allTasks: [LifeTask] = [],
         calendar: Calendar = .current,
         now: Date = Date()
     ) -> Bool {
@@ -166,7 +167,13 @@ public extension LifeTask {
         if let scheduledTime {
             return calendar.isDate(scheduledTime, inSameDayAs: dayStart)
         }
-        return false
+        let context = allTasks.isEmpty ? [self] : allTasks
+        return countsOnUndatedFlexibleToday(
+            in: context,
+            day: dayStart,
+            referenceDate: now,
+            calendar: calendar
+        )
     }
 
     /// Whether this task should appear on tomorrow's execution list.
@@ -210,6 +217,31 @@ public extension LifeTask {
         }
         guard isDeadlineOnlyOneOff, let deadline else { return false }
         return calendar.startOfDay(for: deadline) >= dayAfterTomorrow
+    }
+
+    /// Flexible one-off with no day. It belongs on today, including Sunday.
+    /// Onboarding inbox rows and titles that already have a recurrence template stay off today.
+    func countsOnUndatedFlexibleToday(
+        in allTasks: [LifeTask],
+        day: Date,
+        referenceDate: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard calendar.isDate(day, inSameDayAs: referenceDate) else { return false }
+        guard status.isActive, !isRecurrenceTemplateTask else { return false }
+        guard parentTaskId == nil, !MultiDayTaskTags.isMultiDay(self) else { return false }
+        guard recurrenceRule == .none else { return false }
+        guard scheduledDate == nil, scheduledTime == nil, deadline == nil else { return false }
+        guard schedulingModeValue == .flexible else { return false }
+        guard !tags.contains("onboarding") else { return false }
+        let key = OnboardingTaskSeeder.normalizedRoutineTitle(title)
+        guard !key.isEmpty else { return false }
+        let collidesWithTemplate = allTasks.contains { other in
+            other.id != id
+                && TaskRecurrenceEngine.isRecurrenceTemplate(other)
+                && OnboardingTaskSeeder.normalizedRoutineTitle(other.title) == key
+        }
+        return !collidesWithTemplate
     }
 
     /// Active backlog without a scheduled day or deadline.
@@ -361,13 +393,37 @@ public extension Calendar {
     }
 }
 
+/// Places a task on one calendar day without changing a repeating series clock.
+public enum TodayOnlySchedule {
+    public static func clock(on day: Date, from time: Date, calendar: Calendar = .current) -> Date? {
+        calendar.combine(date: day, timeFrom: time)
+    }
+
+    public static func apply(
+        _ task: inout LifeTask,
+        start: Date,
+        on day: Date,
+        calendar: Calendar = .current
+    ) {
+        let duration = max(task.estimatedMinutes, TaskDurationPolicy.minimumMinutes)
+        task.scheduledDate = calendar.startOfDay(for: day)
+        task.scheduledTime = start
+        task.scheduledEndTime = start.addingTimeInterval(TimeInterval(duration * 60))
+        TaskConstraintAlignment.markUserPlaced(&task)
+    }
+}
+
 public enum WeekdaySelection {
     public static let allSymbols: [(weekday: Int, label: String)] = {
-        let calendar = Calendar.current
-        return (1...7).map { weekday in
-            let index = weekday - 1
-            let label = calendar.shortWeekdaySymbols[index]
-            return (weekday, label)
-        }
+        // Monday first so "Mon" is the first repeat choice, not a clipped one-letter Sunday.
+        return [
+            (2, "Mon"),
+            (3, "Tue"),
+            (4, "Wed"),
+            (5, "Thu"),
+            (6, "Fri"),
+            (7, "Sat"),
+            (1, "Sun")
+        ]
     }()
 }

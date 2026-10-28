@@ -2,6 +2,18 @@ import XCTest
 @testable import LookAfterCore
 
 final class TaskConstraintAlignmentTests: XCTestCase {
+    func testNonNegotiableRoutineBlockMealStaysAnchored() {
+        var task = LifeTask(
+            title: "Dinner",
+            tags: ["daily-routine", "routine-block:dinner-1"],
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        task = TaskConstraintAlignment.align(task)
+        XCTAssertEqual(task.timeConstraintValue, .anchored)
+        XCTAssertEqual(task.schedulingModeValue, .fixedTime)
+    }
+
     func testFixedSchedulingModeAlignsToAnchoredForDailyRoutine() {
         var task = LifeTask(
             title: "Office Work",
@@ -53,5 +65,31 @@ final class TaskConstraintAlignmentTests: XCTestCase {
         XCTAssertEqual(task.schedulingModeValue, .flexible)
         XCTAssertNil(task.scheduledTime)
         XCTAssertNil(task.scheduledEndTime)
+    }
+
+    func testTodayOnlyScheduleKeepsAnchoredTaskAndStampsToday() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let usual = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: today)!
+        let moved = calendar.date(bySettingHour: 20, minute: 30, second: 0, of: today)!
+        var task = LifeTask(
+            title: "Gym",
+            estimatedMinutes: 45,
+            scheduledTime: usual,
+            schedulingMode: .fixedTime,
+            timeConstraint: .anchored,
+            userId: "user-1"
+        )
+
+        TodayOnlySchedule.apply(&task, start: moved, on: today, calendar: calendar)
+
+        XCTAssertEqual(task.scheduledTime, moved)
+        XCTAssertEqual(task.scheduledDate, today)
+        XCTAssertEqual(task.timeConstraintValue, .anchored)
+        XCTAssertNotNil(task.userPlacedScheduleAt)
+        XCTAssertEqual(
+            calendar.dateComponents([.hour, .minute], from: task.scheduledEndTime!),
+            DateComponents(hour: 21, minute: 15)
+        )
     }
 }

@@ -10,7 +10,7 @@ struct TaskFocusStretchRefiner {
         context: TaskFocusStretchResolver.Context,
         estimatedMinutes: Int
     ) async -> TaskTimeDisplayInfo? {
-        let hasKey = GLMService.shared.hasConfiguredAPIKey
+        let hasKey = GLMService.shared.isAIAvailable
         guard hasKey else { return nil }
 
         let baseline = TaskFocusStretchResolver.recommendedFocusStretch(for: task, context: context)

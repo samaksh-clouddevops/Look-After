@@ -457,7 +457,7 @@ final class InMemoryTaskStore: TaskStoring {
     }
 
     @MainActor
-    func updateMany(_ tasks updates: [LifeTask]) async throws {
+    func updateMany(_ updates: [LifeTask]) async throws {
         for task in updates {
             try await update(task)
         }

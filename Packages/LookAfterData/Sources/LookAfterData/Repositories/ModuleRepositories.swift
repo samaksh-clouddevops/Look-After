@@ -8,6 +8,34 @@ import LookAfterCore
 enum ModuleLocalStore {
     static let sqlite = ModuleEntitySQLiteStore.shared
 
+    static func loadMoneyPlan() -> MoneyPlan? {
+        (try? sqlite.loadAll(MoneyPlan.self, collection: .moneyPlan))?.first
+    }
+
+    static func saveMoneyPlan(_ plan: MoneyPlan?) {
+        if let plan {
+            try? sqlite.replaceAll([plan], collection: .moneyPlan, id: { $0.id })
+        } else {
+            try? sqlite.replaceAll([MoneyPlan](), collection: .moneyPlan, id: { $0.id })
+        }
+    }
+
+    static func loadDailyExpenses() -> [DailyExpense] {
+        (try? sqlite.loadAll(DailyExpense.self, collection: .dailyExpenses)) ?? []
+    }
+
+    static func saveDailyExpenses(_ items: [DailyExpense]) {
+        try? sqlite.replaceAll(items, collection: .dailyExpenses, id: { $0.id })
+    }
+
+    static func loadSpendKindMemory() -> [SpendKindMemory] {
+        (try? sqlite.loadAll(SpendKindMemory.self, collection: .spendKindMemory)) ?? []
+    }
+
+    static func saveSpendKindMemory(_ items: [SpendKindMemory]) {
+        try? sqlite.replaceAll(items, collection: .spendKindMemory, id: { $0.noteKey })
+    }
+
     static func loadBills() -> [BillItem] {
         (try? sqlite.loadAll(BillItem.self, collection: .bills)) ?? []
     }
@@ -103,6 +131,19 @@ public final class BillRepository: ObservableObject {
         ModuleLocalStore.enqueueUpsert(mutable, collection: collection, id: mutable.id, userId: mutable.userId, merge: false)
     }
 
+    public func save(_ item: BillItem) async throws {
+        var mutable = item
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        var items = ModuleLocalStore.loadBills()
+        if let index = items.firstIndex(where: { $0.id == mutable.id }) {
+            items[index] = mutable
+        } else {
+            items.append(mutable)
+        }
+        ModuleLocalStore.saveBills(items)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: collection, id: mutable.id, userId: mutable.userId, merge: true)
+    }
+
     public func togglePaid(_ item: BillItem) async throws {
         var items = ModuleLocalStore.loadBills()
         guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
@@ -118,6 +159,78 @@ public final class BillRepository: ObservableObject {
         items.removeAll { $0.id == item.id }
         ModuleLocalStore.saveBills(items)
         ModuleLocalStore.enqueueDelete(collection: collection, id: item.id, userId: item.userId)
+    }
+}
+
+// MARK: - Money planner
+
+@MainActor
+public final class MoneyRepository: ObservableObject {
+    private let firebase: FirebaseManager
+    private let planCollection = "moneyPlan"
+    private let expenseCollection = "dailyExpenses"
+
+    public init(firebase: FirebaseManager? = nil) { self.firebase = firebase ?? FirebaseManager.shared }
+
+    public func loadPlan(for userId: String) async throws -> MoneyPlan? {
+        let local = ModuleLocalStore.loadMoneyPlan()
+        guard let ref = firebase.userCollection(planCollection) else { return local }
+        do {
+            let snapshot = try await ref.getDocuments()
+            let remote = try snapshot.documents.compactMap { try firebase.decode(MoneyPlan.self, from: $0) }
+            let merged = remote.first ?? local
+            if let merged { ModuleLocalStore.saveMoneyPlan(merged) }
+            return merged
+        } catch {
+            return local
+        }
+    }
+
+    public func savePlan(_ plan: MoneyPlan) async throws {
+        var mutable = plan
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        if mutable.id.isEmpty { mutable.id = mutable.userId }
+        ModuleLocalStore.saveMoneyPlan(mutable)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: planCollection, id: mutable.id, userId: mutable.userId, merge: true)
+    }
+
+    public func loadExpenses(for userId: String) async throws -> [DailyExpense] {
+        let local = ModuleLocalStore.loadDailyExpenses()
+        guard let ref = firebase.userCollection(expenseCollection) else { return local }
+        do {
+            let snapshot = try await ref.getDocuments()
+            let remote = try snapshot.documents.compactMap { try firebase.decode(DailyExpense.self, from: $0) }
+            let merged = ModuleEntityMerge.merge(local: local, remote: remote, id: \.id)
+            ModuleLocalStore.saveDailyExpenses(merged)
+            return merged
+        } catch {
+            return local
+        }
+    }
+
+    public func saveExpense(_ item: DailyExpense) async throws {
+        var mutable = item
+        mutable.userId = firebase.currentUserId ?? mutable.userId
+        var items = ModuleLocalStore.loadDailyExpenses()
+        items.removeAll { $0.id == mutable.id }
+        items.append(mutable)
+        ModuleLocalStore.saveDailyExpenses(items)
+        ModuleLocalStore.enqueueUpsert(mutable, collection: expenseCollection, id: mutable.id, userId: mutable.userId, merge: true)
+    }
+
+    public func loadSpendKindMemory() -> [SpendKindMemory] {
+        ModuleLocalStore.loadSpendKindMemory()
+    }
+
+    public func saveSpendKindMemory(_ items: [SpendKindMemory]) {
+        ModuleLocalStore.saveSpendKindMemory(items)
+    }
+
+    public func deleteExpense(_ item: DailyExpense) async throws {
+        var items = ModuleLocalStore.loadDailyExpenses()
+        items.removeAll { $0.id == item.id }
+        ModuleLocalStore.saveDailyExpenses(items)
+        ModuleLocalStore.enqueueDelete(collection: expenseCollection, id: item.id, userId: item.userId)
     }
 }
 

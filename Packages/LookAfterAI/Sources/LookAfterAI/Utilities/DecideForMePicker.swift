@@ -21,16 +21,21 @@ public final class DecideForMePicker: @unchecked Sendable {
 
     public func pick(
         snapshot: CognitiveSnapshot,
-        tasks: [LifeTask]
+        tasks: [LifeTask],
+        referenceDate: Date = Date()
     ) async -> DecideForMeResult? {
+        guard !Task.isCancelled else { return nil }
+        let actionable = tasks.filter {
+            $0.status.isActive && $0.isActionableToday(allTasks: tasks, referenceDate: referenceDate)
+        }
         let openWindow = max(15, Int((1.0 - snapshot.energyScore) * 30) + 45)
         let energyPercent = Int(snapshot.energyScore * 100)
         let feasible = DaySupervisorContinuity.feasibleTasks(
-            from: tasks,
+            from: actionable,
             openWindowMinutes: openWindow,
             energyPercent: energyPercent
         )
-        let candidates = feasible.isEmpty ? tasks.filter(\.status.isActive) : feasible
+        let candidates = feasible.isEmpty ? actionable : feasible
         guard !candidates.isEmpty else { return nil }
 
         let prompt = LookAfterPrompts.decideForMePrompt(snapshot: snapshot, tasks: candidates)
@@ -40,10 +45,12 @@ public final class DecideForMePicker: @unchecked Sendable {
                 systemPrompt: LookAfterPrompts.structuredOutputSystem,
                 tier: .economy
             )
+            guard !Task.isCancelled else { return nil }
             if let parsed = parseResponse(raw, candidates: candidates) {
                 return parsed
             }
         } catch {
+            guard !Task.isCancelled else { return nil }
             print("[DecideForMe] AI unavailable: \(error.localizedDescription)")
         }
         return deterministicFallback(snapshot: snapshot, candidates: candidates)
@@ -56,16 +63,23 @@ public final class DecideForMePicker: @unchecked Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard let start = clean.firstIndex(of: "{"), let end = clean.lastIndex(of: "}"),
               let data = String(clean[start...end]).data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let title = json["selectedTaskTitle"] as? String else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
-        let reason = (json["reason"] as? String) ?? "This feels like the most approachable next step right now."
-        guard let task = candidates.first(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame })
-            ?? candidates.first(where: { $0.title.localizedCaseInsensitiveContains(title) || title.localizedCaseInsensitiveContains($0.title) })
-            ?? candidates.first else {
+        let task: LifeTask
+        if let id = json["selectedTaskID"] as? String {
+            guard let match = candidates.first(where: { $0.id == id }) else { return nil }
+            task = match
+        } else if let title = json["selectedTaskTitle"] as? String {
+            let matches = candidates.filter { $0.title.caseInsensitiveCompare(title) == .orderedSame }
+            guard matches.count == 1, let match = matches.first else { return nil }
+            task = match
+        } else {
             return nil
         }
+        let explanation = (json["reason"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let reason = explanation.flatMap { $0.isEmpty ? nil : $0 }
+            ?? "This feels like the most approachable next step right now."
         return DecideForMeResult(task: task, reason: reason)
     }
 
@@ -79,7 +93,8 @@ public final class DecideForMePicker: @unchecked Sendable {
         } else {
             sorted = candidates.sorted {
                 if $0.priority != $1.priority { return $0.priority > $1.priority }
-                return $0.estimatedMinutes <= $1.estimatedMinutes
+                if $0.estimatedMinutes != $1.estimatedMinutes { return $0.estimatedMinutes < $1.estimatedMinutes }
+                return $0.id < $1.id
             }
         }
         let task = sorted[0]

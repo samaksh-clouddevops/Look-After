@@ -92,10 +92,11 @@ public enum TaskSeriesResolver {
     public static func staleActiveSeriesIDs(
         in allTasks: [LifeTask],
         on day: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
     ) -> [String] {
         let dayStart = calendar.startOfDay(for: day)
-        var ids = Set(duplicateGroupNonKeeperIDs(in: allTasks, on: dayStart, calendar: calendar))
+        var ids = Set(duplicateGroupNonKeeperIDs(in: allTasks, on: dayStart, calendar: calendar, referenceDate: referenceDate))
 
         let fulfilledSeries = TaskRecurrenceEngine.fulfilledSeriesKeys(
             on: dayStart,
@@ -124,7 +125,8 @@ public enum TaskSeriesResolver {
     public static func duplicateGroupNonKeeperIDs(
         in allTasks: [LifeTask],
         on day: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        referenceDate: Date = Date()
     ) -> [String] {
         let dayStart = calendar.startOfDay(for: day)
         let activeTasks = allTasks.filter { task in
@@ -137,7 +139,11 @@ public enum TaskSeriesResolver {
             }
         )
         let active = activeTasks.filter { task in
-            belongsInDuplicateGroup(
+            // Preparing tomorrow must not retire today's active occurrence.
+            if dayStart > calendar.startOfDay(for: referenceDate) {
+                return isScheduled(on: dayStart, task: task, calendar: calendar)
+            }
+            return belongsInDuplicateGroup(
                 on: dayStart,
                 task: task,
                 sameDaySeries: sameDaySeries,
@@ -215,8 +221,16 @@ public enum TaskSeriesResolver {
         guard task.status.isActive else { return false }
         guard task.scheduledDate != nil || task.scheduledTime != nil else {
             // Deadline-only one-offs belong on their due day, and overdue ones carry onto today.
-            // Unscheduled backlog stays in the list, not the timeline.
+            // A flexible one-off with no day still belongs on today, including Sunday.
             if task.isDeadlineOnlyDue(on: dayStart, calendar: calendar) {
+                return true
+            }
+            if task.countsOnUndatedFlexibleToday(
+                in: allTasks,
+                day: dayStart,
+                referenceDate: referenceDate,
+                calendar: calendar
+            ) {
                 return true
             }
             return task.isOverdueOneOffCarryForward(calendar: calendar, referenceDate: referenceDate)

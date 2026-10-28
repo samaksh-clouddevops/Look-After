@@ -87,7 +87,9 @@ enum MorningDayBriefingBuilder {
             calendar: calendar
         )
 
-        let activeToday = tasks.filter { $0.status.isActive && isRelevantToday($0, now: now, calendar: calendar) }
+        let activeToday = tasks.filter { task in
+            task.status.isActive && isRelevantToday(task, in: tasks, now: now, calendar: calendar)
+        }
         let overdue = tasks.filter(\.isOverdue)
         let plannedMinutes = activeToday.reduce(0) { partial, task in
             partial + max(task.estimatedMinutes, 0)
@@ -317,9 +319,15 @@ enum MorningDayBriefingBuilder {
         }
     }
 
-    private static func isRelevantToday(_ task: LifeTask, now: Date, calendar: Calendar) -> Bool {
+    private static func isRelevantToday(
+        _ task: LifeTask,
+        in tasks: [LifeTask],
+        now: Date,
+        calendar: Calendar
+    ) -> Bool {
         task.belongsOnDaySchedule(
             day: calendar.startOfDay(for: now),
+            allTasks: tasks,
             calendar: calendar,
             now: now
         )

@@ -52,7 +52,12 @@ public struct CoreLocationEnvironmentSignalProvider: LocationEnvironmentSignalPr
 
         func currentLocation() async -> CLLocation? {
             let status = manager.authorizationStatus
-            guard status == .authorizedWhenInUse || status == .authorizedAlways else {
+            #if os(macOS)
+            let authorized = status == .authorizedAlways
+            #else
+            let authorized = status == .authorizedWhenInUse || status == .authorizedAlways
+            #endif
+            guard authorized else {
                 if status == .notDetermined {
                     manager.requestWhenInUseAuthorization()
                 }

@@ -9,7 +9,12 @@ public enum PlanVariantBuilder {
         deferCandidates: [LifeTask],
         context: DayReplanContext? = nil
     ) -> [PlanVariant] {
-        let flexible = tasks.filter { $0.status.isActive && !$0.isFixedTimeEvent && !$0.isLifeCommitmentTask }
+        let flexible = tasks.filter { task in
+            guard task.status.isActive, task.isSchedulerMovable, !task.isLifeCommitmentTask,
+                  !task.isRecurrenceTemplateTask, !MultiDayTaskTags.isRoot(task) else { return false }
+            guard let context else { return true }
+            return task.isActionableToday(allTasks: tasks, referenceDate: context.planningContext.now)
+        }
         let deferrable = deferCandidates.isEmpty
             ? Array(flexible.sorted { $0.priority < $1.priority }.prefix(3))
             : deferCandidates
@@ -52,7 +57,7 @@ public enum PlanVariantBuilder {
 
         // Variant C: Reschedule flexible — try to fit remaining work
         if let ctx = context {
-            let rescheduled = localRescheduleChanges(context: ctx, tasks: flexible.prefix(4).map { $0 })
+            let rescheduled = localRescheduleChanges(context: ctx, tasks: flexible)
             if !rescheduled.isEmpty {
                 variants.append(PlanVariant(
                     id: "reshuffle",
@@ -104,28 +109,6 @@ public enum PlanVariantBuilder {
     }
 
     private static func localRescheduleChanges(context: DayReplanContext, tasks: [LifeTask]) -> [DayReplanScheduleChange] {
-        let calendar = Calendar.current
-        let now = context.planningContext.now
-        let day = calendar.startOfDay(for: now)
-        let workHours = PlanningSchedulePolicy.WorkHours.from(profile: context.planningContext.lifeProfile)
-        var slot = PlanningSchedulePolicy.nextAvailableSlot(now: now, calendar: calendar, workHours: workHours) ?? (workHours.startHour, 0)
-        var slotDate = calendar.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: day) ?? now
-        var changes: [DayReplanScheduleChange] = []
-
-        for task in tasks {
-            while slotDate < now {
-                slot = (min(slot.hour + 1, workHours.endHour), slot.minute)
-                slotDate = calendar.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: day) ?? slotDate.addingTimeInterval(3600)
-            }
-            changes.append(DayReplanScheduleChange(
-                taskID: task.id,
-                startHour: slot.hour,
-                startMinute: slot.minute,
-                reason: "Fits in open slot"
-            ))
-            slot = (min(slot.hour + 1, workHours.endHour), slot.minute)
-            slotDate = calendar.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: day) ?? slotDate.addingTimeInterval(3600)
-        }
-        return changes
+        LocalDayReplanScheduler.changes(context: context, tasks: tasks)
     }
 }
