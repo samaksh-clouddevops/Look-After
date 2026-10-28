@@ -161,6 +161,7 @@
 		62B237450D29FD5248C9995C /* LicenseSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B292B6F80E8F62F1678D8DC6 /* LicenseSettingsView.swift */; };
 		63D5195797E0AE76494220C1 /* GLMConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88438CFAA3E67775D6F57AFC /* GLMConfigurationTests.swift */; };
 		64494155EF3AD9DC8BB8CBC0 /* FlowDirectorIntegrationLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1C8D3A92B66E986AADBBDE /* FlowDirectorIntegrationLog.swift */; };
+		644FAEBD177BB468334A2B15 /* TodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F4F6BAA1A3ED45BC6207FD /* TodayWidget.swift */; };
 		6473D3DAA72562A337B8DDB5 /* AICoachView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4168E05403CB01B3F84EDD5F /* AICoachView.swift */; };
 		64B581F87498B76653544133 /* IdentityServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED688D1F9152151072BF273C /* IdentityServiceTests.swift */; };
 		67AD4D5DC77013D23C45C6D8 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 8BE4C60DC8CD8752853EEEFC /* GoogleService-Info.plist */; };
@@ -630,6 +631,7 @@
 		86EEC4EFC815D929A46E10C5 /* GLMKeyManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLMKeyManagerTests.swift; sourceTree = "<group>"; };
 		88438CFAA3E67775D6F57AFC /* GLMConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLMConfigurationTests.swift; sourceTree = "<group>"; };
 		88CA6C32CB80FB97BDFF96CF /* ScreenSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshotTests.swift; sourceTree = "<group>"; };
+		88FDE414B307DED36E079484 /* RecommendationWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationWidget.swift; sourceTree = "<group>"; };
 		8A03E05285E53216A73B0EB9 /* ExperienceRootLifecycleModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperienceRootLifecycleModifier.swift; sourceTree = "<group>"; };
 		8A087A60F0B77ED7A0FB2EC0 /* LookAfterControlWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookAfterControlWidgets.swift; sourceTree = "<group>"; };
 		8A57E89DF1DDAC85653FCDF8 /* BackgroundAnalyticsScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAnalyticsScheduler.swift; sourceTree = "<group>"; };
@@ -1334,6 +1336,16 @@
 				741FECD3E771F92512DB7427 /* SettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		8B522D62D8D77790A3AEE208 /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				83AE3F71F941BD5F1738A05C /* FocusHealthCaptureWidgets.swift */,
+				88FDE414B307DED36E079484 /* RecommendationWidget.swift */,
+				D7F4F6BAA1A3ED45BC6207FD /* TodayWidget.swift */,
+			);
+			path = Widgets;
 			sourceTree = "<group>";
 		};
 		9F35D7D504C297AEC7D1F0BC /* Config */ = {
@@ -2134,6 +2146,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				ACB0E2D96CCF1601AD81F5F4 /* FlowActivityAttributes.swift in Sources */,
+				4FFC12B9747ACA2B36EB6A36 /* FocusHealthCaptureWidgets.swift in Sources */,
 				9633E8CD742589B89CABE320 /* FocusLiveActivity.swift in Sources */,
 				467DC3E314E3B252F0BFDBF8 /* LookAfterControlWidgets.swift in Sources */,
 				80A93A7CD140E94FB499A694 /* LookAfterWidgetBundle.swift in Sources */,
@@ -2509,6 +2522,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/LookAfterWidget/LookAfterWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = Apps/LookAfterWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
@@ -2651,7 +2665,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "Config/LookAfter-iOS.entitlements";
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "Apps/LookAfter-iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
@@ -2780,6 +2794,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/LookAfterWidget/LookAfterWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = Apps/LookAfterWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";
@@ -2833,7 +2848,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "Config/LookAfter-iOS.entitlements";
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "Apps/LookAfter-iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Look After";

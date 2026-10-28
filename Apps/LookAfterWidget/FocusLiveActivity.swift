@@ -1,6 +1,7 @@
 ﻿import ActivityKit
 import WidgetKit
 import SwiftUI
+import AppIntents
 import LookAfterCore
 #if canImport(AppIntents)
 import AppIntents
@@ -237,6 +238,7 @@ struct FocusLiveActivity: Widget {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .activityBackgroundTint(LiveActivityStyle.background)
+        .widgetURL(LookAfterDeepLink.focus)
     }
 
     /// Rewrites legacy `381m` / `381m until Dinner` labels that predate `durationString`.

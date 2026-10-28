@@ -13,6 +13,7 @@ Architecture and contributor guides for the LifeOS monorepo.
 | [architecture/mobile-infrastructure-roadmap.md](architecture/mobile-infrastructure-roadmap.md) | Persistence, sync, and state upgrade plan |
 | [architecture/macOS-shared-views.md](architecture/macOS-shared-views.md) | Why macOS compiles iOS views |
 | [architecture/adr/](architecture/adr/) | Architecture decision records |
+| [architecture/WIDGET_SYSTEM_V2.md](architecture/WIDGET_SYSTEM_V2.md) | Widget System V2 — Executive Brain ecosystem |
 | [ATTENTION_OS_SPEC.md](ATTENTION_OS_SPEC.md) | Attention OS product spec |
 | [design/ios26-chrome.md](design/ios26-chrome.md) | Liquid Glass chrome vs opaque content (V5) |
 | [future-work.md](future-work.md) | Deferred improvements |

@@ -1,4 +1,4 @@
-import WidgetKit
+﻿import WidgetKit
 import SwiftUI
 import LookAfterCore
 #if canImport(AppIntents)
@@ -464,9 +464,12 @@ struct TasksWidget: Widget {
 @main
 struct LookAfterWidgetBundle: WidgetBundle {
     var body: some Widget {
-        NowWidget()
-        EnergyWidget()
-        TasksWidget()
+        RecommendationWidget()
+        TodayWidget()
+        FocusWidget()
+        HealthWidget()
+        CaptureWidget()
+        MedicationWidget()
         FocusLiveActivity()
         NowPinLiveActivity()
         LookAfterCaptureControl()
