@@ -614,6 +614,9 @@ public struct LookAfterRootCanvas: View {
                 onUncompleteTimelineTask: { taskId in
                     await uncompleteTimelineTask(taskId: taskId)
                 },
+                onUncompleteTimelineTask: { taskId in
+                    Task { await uncompleteTimelineTask(taskId: taskId) }
+                },
                 onRescheduleTimelineTask: { taskId in
                     await rescheduleTimelineTask(taskId: taskId)
                 },

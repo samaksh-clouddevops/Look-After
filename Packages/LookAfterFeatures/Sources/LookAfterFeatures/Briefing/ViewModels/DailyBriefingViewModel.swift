@@ -260,6 +260,10 @@ public final class DailyBriefingViewModel: ObservableObject {
                 resolved = summary
                 break
             }
+            if resolved == nil {
+                resolved = try? await healthRepo.getLatest(for: "")
+            }
+            raw = resolved
         }
         if resolved == nil {
             resolved = try? await healthRepo.getLatest(for: "")
@@ -596,7 +600,9 @@ public final class DailyBriefingViewModel: ObservableObject {
             sleepQuality: sleepQuality,
             energyPercent: energyPercent,
             energyLevel: (snapshot?.energy ?? energy.energyLevel).rawValue,
-            recoveryLabel: UserFacingCopy.recoveryLabel(percent: recoveryPercent),
+            recoveryLabel: hasOvernight
+                ? UserFacingCopy.recoveryLabel(percent: recoveryPercent)
+                : "No data",
             recoveryPercent: recoveryPercent,
             focusWindow: focusWindow,
             isHealthConnected: healthKitAvailable && hasImportedHealth,

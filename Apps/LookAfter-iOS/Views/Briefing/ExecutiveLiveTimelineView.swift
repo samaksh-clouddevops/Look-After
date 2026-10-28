@@ -684,6 +684,11 @@ private struct TimelineDotView: View {
                     .fill(ExecutiveTimelineVisuals.lime.opacity(0.55))
                     .frame(width: ExecutiveTimelineVisuals.dotCompleted, height: ExecutiveTimelineVisuals.dotCompleted)
 
+            case .passed:
+                Circle()
+                    .fill(ExecutiveTimelineVisuals.lime.opacity(0.55))
+                    .frame(width: ExecutiveTimelineVisuals.dotCompleted, height: ExecutiveTimelineVisuals.dotCompleted)
+
             case .current:
                 Circle()
                     .fill(accent.opacity(0.25))

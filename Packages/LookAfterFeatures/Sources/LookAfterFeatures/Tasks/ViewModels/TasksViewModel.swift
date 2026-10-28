@@ -776,6 +776,9 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    private static let recurrenceSyncMinimumInterval: TimeInterval = 45
+    private var lastRecurrenceSyncAt: Date?
+
     /// Normalize legacy recurring tasks and materialize today's occurrences.
     private func syncRecurringOccurrences(userId: String, localOnly: Bool = false, now: Date = Date()) async throws {
         var all = localOnly ? reloadLocalTasks(for: userId) : try await taskRepo.getAll(for: userId)
@@ -1762,6 +1765,31 @@ public final class TasksViewModel: ObservableObject {
                 try await taskRepo.update(task)
             } catch {
                 self.error = error.localizedDescription
+            }
+        }
+    }
+
+    /// Persists EventKit identifiers returned from calendar sync.
+    public func applyCalendarEventIdentifiers(_ updates: [LifeTask]) async {
+        guard !updates.isEmpty else { return }
+        for update in updates {
+            if let index = tasks.firstIndex(where: { $0.id == update.id }) {
+                guard tasks[index].calendarEventIdentifier != update.calendarEventIdentifier else { continue }
+                tasks[index].calendarEventIdentifier = update.calendarEventIdentifier
+                do {
+                    try await taskRepo.update(tasks[index])
+                } catch {
+                    self.error = error.localizedDescription
+                }
+                continue
+            }
+            if let index = completedToday.firstIndex(where: { $0.id == update.id }) {
+                completedToday[index].calendarEventIdentifier = update.calendarEventIdentifier
+                do {
+                    try await taskRepo.update(completedToday[index])
+                } catch {
+                    self.error = error.localizedDescription
+                }
             }
         }
     }

@@ -106,6 +106,19 @@ public enum TaskScheduleQuery {
         return group.filter { $0.id != keeper.id }.map(\.id)
     }
 
+    /// Non-keeper ids when multiple occurrence rows share template + scheduled day.
+    public static func redundantOccurrenceIDs(
+        in group: [LifeTask],
+        on day: Date,
+        calendar: Calendar = .current
+    ) -> [String] {
+        guard group.count > 1 else { return [] }
+        guard let keeper = preferredKeeper(in: group, on: day, calendar: calendar) else {
+            return group.dropFirst().map(\.id)
+        }
+        return group.filter { $0.id != keeper.id }.map(\.id)
+    }
+
     /// Active tasks for today's list — one instance per series, recurrence-aware.
     /// Onboarding inbox rows stay off this list. An undated flexible one-off belongs here, including Sunday.
     public static func activeTasksForToday(

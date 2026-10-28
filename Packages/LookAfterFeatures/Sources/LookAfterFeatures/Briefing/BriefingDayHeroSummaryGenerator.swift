@@ -235,6 +235,30 @@ enum BriefingDayHeroSummaryGenerator {
         input.sleep.isAvailable ? "" : "No sleep data from last night. "
     }
 
+    private static func ongoingTimelineEvent(in events: [LifeTimelineEvent], now: Date) -> LifeTimelineEvent? {
+        events
+            .filter { !$0.isCompleted && $0.id.hasPrefix("task-") }
+            .sorted { $0.date < $1.date }
+            .last { event in
+                guard event.date <= now else { return false }
+                let durationMinutes = max(event.estimatedMinutes ?? 30, 1)
+                let blockEnd = event.date.addingTimeInterval(TimeInterval(durationMinutes * 60))
+                return now <= blockEnd.addingTimeInterval(30 * 60)
+            }
+    }
+
+    private static func formatWorkMinutes(_ minutes: Int) -> String {
+        if minutes < 60 { return "\(max(1, minutes)) min" }
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if remainder == 0 { return "\(hours)h" }
+        return "\(hours)h \(remainder)m"
+    }
+
+    private static func missingSleepPrefix(_ input: Input) -> String {
+        input.sleep.isAvailable ? "" : "No sleep data from last night — "
+    }
+
     private static func capacityPhrase(_ input: Input) -> String {
         switch input.executiveCapacity.band {
         case .peakFocus:

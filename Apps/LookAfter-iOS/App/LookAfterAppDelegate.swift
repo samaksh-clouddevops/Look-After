@@ -30,6 +30,7 @@ final class LookAfterAppDelegate: NSObject, UIApplicationDelegate, UNUserNotific
             AppleCredentialMonitor.startIfNeeded()
             NotificationCoordinator.shared.configureOnLaunch()
             await NotificationPermissionService.shared.refreshStatus()
+            AppleSpeechVoiceBootstrap.startIfNeeded()
             if PushCapabilities.hasRemotePushEntitlement {
                 FirebaseMessagingService.shared.configureIfAvailable()
             }
