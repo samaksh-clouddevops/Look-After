@@ -97,6 +97,10 @@ public struct LifeTimelineEvent: Identifiable, Sendable, Equatable {
         timeConstraint ?? (isFixed ? .anchored : .flexible)
     }
 
+    public var resolvedTimeConstraint: TimeConstraint {
+        timeConstraint ?? (isFixed ? .anchored : .flexible)
+    }
+
     public init(
         id: String,
         kind: LifeTimelineEventKind,

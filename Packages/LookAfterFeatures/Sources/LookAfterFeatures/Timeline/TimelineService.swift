@@ -207,6 +207,38 @@ public enum TimelineRowProjector {
             }
     }
 
+    private static func resortRows(_ rows: [ExecutivePlanningTimelineRow], now: Date = Date()) -> [ExecutivePlanningTimelineRow] {
+        var sorted = rows.sorted { lhs, rhs in
+            let lhsFlex = lhs.timeLabel == "Flexible"
+            let rhsFlex = rhs.timeLabel == "Flexible"
+            if lhsFlex != rhsFlex { return !lhsFlex }
+            if lhsFlex {
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+            return lhs.sortDate < rhs.sortDate
+        }
+
+        var currentIndex: Int?
+        for (index, row) in sorted.enumerated() {
+            guard !row.isCompleted, row.timeLabel != "Flexible" else { continue }
+            let minutes = row.estimatedMinutes ?? 30
+            let end = row.sortDate.addingTimeInterval(TimeInterval(minutes * 60))
+            if row.sortDate <= now, now <= end {
+                currentIndex = index
+                break
+            }
+        }
+        if currentIndex == nil {
+            currentIndex = sorted.firstIndex {
+                !$0.isCompleted && $0.timeLabel != "Flexible" && $0.sortDate > now
+            }
+        }
+        for index in sorted.indices {
+            sorted[index].isNow = currentIndex == index && !sorted[index].isCompleted
+        }
+        return sorted
+    }
+
     // MARK: - Private
 
     private static func row(

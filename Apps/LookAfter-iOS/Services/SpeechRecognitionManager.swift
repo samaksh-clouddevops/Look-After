@@ -242,6 +242,8 @@ public final class SpeechRecognitionManager: ObservableObject {
 
         VoiceSessionKeepAlive.end("speech-recognition")
 
+        VoiceSessionKeepAlive.end("speech-recognition")
+
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif

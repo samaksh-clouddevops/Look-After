@@ -97,6 +97,13 @@ struct BrainDashboardView: View {
                 resumeListeningIfNeeded()
             }
         }
+        .onChange(of: orbState) { _, state in
+            if state == .thinking {
+                VoiceSessionKeepAlive.begin("brain-voice-thinking")
+            } else {
+                VoiceSessionKeepAlive.end("brain-voice-thinking")
+            }
+        }
         .onChange(of: brain.isThinking) { _, thinking in
             // Only mirror Brain thinking during an active voice turn — never lock the orb
             // because Briefing / Day Audit / other screens kicked off a chat.

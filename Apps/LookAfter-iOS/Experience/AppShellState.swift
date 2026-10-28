@@ -572,6 +572,50 @@ final class AppShellState: ObservableObject {
             rebuildTimeline: rebuildTimeline,
             immediateTimelineRebuild: immediateTimelineRebuild
         )
+        syncExecutionEnvironment()
+    }
+
+    func refreshPinNow() {
+        guard WidgetSyncService.shared.isNowPinned else { return }
+        rebuildTimelineFromTasks()
+        Task {
+            await WidgetSyncService.shared.refreshPinNow(
+                brainVM: brainVM,
+                taskStore: taskStore,
+                healthStore: healthStore,
+                scheduleTasks: tasksVM.tasks + tasksVM.completedToday,
+                timelineEvents: timelineService.snapshot.today
+            )
+        }
+    }
+
+    /// Starts schedule-driven Focus Filters + Live Activities.
+    func startExecutionEnvironment() {
+        let coordinator = ExecutionEnvironmentCoordinator.shared
+        coordinator.onPinRefreshNeeded = { [weak self] in
+            self?.refreshPinNow()
+        }
+        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
+        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.start()
+    }
+
+    func syncExecutionEnvironment() {
+        let coordinator = ExecutionEnvironmentCoordinator.shared
+        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
+        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.refresh()
+    }
+
+    func prepareExecutionEnvironmentForBackground() {
+        let coordinator = ExecutionEnvironmentCoordinator.shared
+        coordinator.setManualFocusActive(adhdVM.isFocusSessionActive)
+        coordinator.updateTasks(tasksVM.tasks + tasksVM.completedToday)
+        coordinator.prepareForBackground()
+    }
+
+    func stopExecutionEnvironment() {
+        ExecutionEnvironmentCoordinator.shared.stop()
     }
 
     private func syncWidgetDataOnly(force: Bool = false) {
