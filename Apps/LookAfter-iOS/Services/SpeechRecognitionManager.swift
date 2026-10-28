@@ -308,4 +308,39 @@ public final class SpeechRecognitionManager: ObservableObject {
         stopListening(resetTranscript: false)
         onUtteranceComplete?(message)
     }
+
+    private func noteTranscriptActivity() {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        hasReceivedSpeech = true
+        lastTranscriptChange = Date()
+    }
+
+    private func startSilenceMonitoring() {
+        silenceTimer?.invalidate()
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.checkSilenceTimeout()
+            }
+        }
+    }
+
+    private func checkSilenceTimeout() {
+        guard isListening, autoCommitEnabled, hasReceivedSpeech, !utteranceCommitted else { return }
+        let elapsed = Date().timeIntervalSince(lastTranscriptChange)
+        if elapsed >= autoCommitSilenceDuration {
+            completeUtterance()
+        }
+    }
+
+    private func completeUtterance() {
+        guard isListening, !utteranceCommitted else { return }
+        utteranceCommitted = true
+        silenceTimer?.invalidate()
+        silenceTimer = nil
+
+        let message = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        stopListening(resetTranscript: false)
+        onUtteranceComplete?(message)
+    }
 }

@@ -111,6 +111,19 @@ struct ExecutiveLiveTimelineView: View {
         return $blockScrollDisabled
     }
 
+    private var effectiveScrollDisabled: Binding<Bool> {
+        if let parentScrollDisabled {
+            return Binding(
+                get: { blockScrollDisabled || parentScrollDisabled.wrappedValue },
+                set: { newValue in
+                    blockScrollDisabled = newValue
+                    parentScrollDisabled.wrappedValue = newValue
+                }
+            )
+        }
+        return $blockScrollDisabled
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.spacingMD) {
             header
@@ -515,6 +528,60 @@ struct ExecutiveLiveTimelineView: View {
     }
 
     @ViewBuilder
+    private func timelineTimeRail(for row: ExecutivePlanningTimelineRow) -> some View {
+        let isMuted = row.isCompleted || row.isPast
+        VStack(alignment: .trailing, spacing: 2) {
+            if row.isSuggestedSlot {
+                Text(row.timeLabel)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(DesignSystem.textMuted)
+            } else if !row.timeLabel.isEmpty {
+                Text(row.timeLabel)
+                    .font(.system(size: 11, weight: row.isUnslottedFlexible ? .medium : .semibold, design: .rounded))
+                    .foregroundStyle(
+                        isMuted
+                            ? DesignSystem.textMuted
+                            : (row.isUnslottedFlexible ? DesignSystem.textMuted : DesignSystem.textSecondary)
+                    )
+            } else {
+                Text("—")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(DesignSystem.textMuted)
+            }
+
+            if !row.endTimeLabel.isEmpty {
+                Text(row.endTimeLabel)
+                    .font(.system(size: 9, weight: .regular, design: .rounded))
+                    .foregroundStyle(DesignSystem.textMuted)
+            }
+
+            timelineConstraintMicroBadge(for: row)
+        }
+        .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func timelineConstraintMicroBadge(for row: ExecutivePlanningTimelineRow) -> some View {
+        if row.isSuggestedSlot {
+            Text("Suggested")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(DesignSystem.textMuted)
+        } else if row.timeConstraint == .flexible, !row.isFixedEvent {
+            Text("Flexible")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(DesignSystem.textMuted)
+        } else if row.timeConstraint == .fluid {
+            Text("Fluid")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(DesignSystem.textMuted.opacity(0.85))
+        } else if row.timeConstraint == .anchored || row.isFixedEvent {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(DesignSystem.textMuted)
+        }
+    }
+
+    @ViewBuilder
     private func interactiveBlock<Content: View>(
         for row: ExecutivePlanningTimelineRow,
         @ViewBuilder content: () -> Content
@@ -870,6 +937,54 @@ private struct EventTimelineCard: View {
                                 }
                                 Text("Remove from timeline")
                                     .font(.dsCaption(weight: .semibold))
+                            }
+                            .foregroundColor(DesignSystem.warning)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DesignSystem.spacingSM)
+                            .background(
+                                Capsule().fill(DesignSystem.warning.opacity(0.12))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRemoving)
+                    }
+                    if row.canReschedule, let onReschedule {
+                        Button(action: onReschedule) {
+                            HStack(spacing: 6) {
+                                if isRescheduling {
+                                    ProgressView()
+                                        .scaleEffect(0.75)
+                                        .tint(ExecutiveTimelineVisuals.lime)
+                                } else {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                Text(row.isPast ? "Reschedule to next open slot" : "Reschedule")
+                                    .font(.system(size: 12, weight: .semibold, design: .default))
+                            }
+                            .foregroundColor(ExecutiveTimelineVisuals.lime)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DesignSystem.spacingSM)
+                            .background(
+                                Capsule().fill(ExecutiveTimelineVisuals.lime.opacity(0.12))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRescheduling)
+                    }
+                    if row.canRemoveFromTimeline, let onRemoveFromTimeline {
+                        Button(action: onRemoveFromTimeline) {
+                            HStack(spacing: 6) {
+                                if isRemoving {
+                                    ProgressView()
+                                        .scaleEffect(0.75)
+                                        .tint(DesignSystem.warning)
+                                } else {
+                                    Image(systemName: "calendar.badge.minus")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                Text("Remove from timeline")
+                                    .font(.system(size: 12, weight: .semibold, design: .default))
                             }
                             .foregroundColor(DesignSystem.warning)
                             .frame(maxWidth: .infinity)

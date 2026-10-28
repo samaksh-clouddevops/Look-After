@@ -572,12 +572,11 @@ final class AppShellState: ObservableObject {
             rebuildTimeline: rebuildTimeline,
             immediateTimelineRebuild: immediateTimelineRebuild
         )
-        syncExecutionEnvironment()
     }
 
     func refreshPinNow() {
         guard WidgetSyncService.shared.isNowPinned else { return }
-        rebuildTimelineFromTasks()
+        rebuildTimelineFromTasks(immediate: true)
         Task {
             await WidgetSyncService.shared.refreshPinNow(
                 brainVM: brainVM,

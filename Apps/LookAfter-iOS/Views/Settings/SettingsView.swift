@@ -486,6 +486,22 @@ struct SettingsView: View {
                         }
                         .listRowBackground(DesignSystem.contentSurface)
                     }
+                    .onChange(of: gmailIntegrationEnabled) { _, enabled in
+                        GmailIntegrationSettings.isEnabled = enabled
+                    }
+                    .listRowBackground(DesignSystem.backgroundSecondary)
+
+                    NavigationLink(destination: {
+                        LicenseSettingsView()
+                    }, label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("License", systemImage: "checkmark.seal.fill")
+                            Text(LicenseManager.shared.isLicensed ? "Licensed AI via secure proxy" : "Enter product key to unlock AI")
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.textSecondary)
+                        }
+                    })
+                    .listRowBackground(DesignSystem.backgroundSecondary)
 
                     NavigationLink(destination: {
                         GLMUsageSettingsView()

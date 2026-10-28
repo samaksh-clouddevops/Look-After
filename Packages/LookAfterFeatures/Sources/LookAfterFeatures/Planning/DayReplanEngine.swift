@@ -246,6 +246,73 @@ public final class DayReplanEngine {
         return rules
     }
 
+    private func systemPrompt(for trigger: DayReplanTrigger) -> String {
+        var rules = """
+        You are the Executive Brain replanning the REST of today from the current moment.
+        Never use internal labels (Deep Work Block, Focus Block, Planning Block, Session 1).
+        Communicate in human actions. Simulate multiple schedules mentally, pick lowest executive cost.
+        Defer work to tomorrow when meetings or energy make it unrealistic — explain why in summary.
+        Never invent medication times. Return ONLY valid JSON — no markdown fences.
+        \(PlanningPromptContextBuilder.duplicateReuseRulesBlock())
+        """
+        switch trigger {
+        case .postWake:
+            rules += """
+
+            POST-WAKE RULES:
+            - Address EVERY missed task explicitly in scheduleChanges (deferToTomorrow or reschedule).
+            - Prefer defer over stacking fake catch-up — guilt-free recovery.
+            - Salvage only high-value missed items if they still fit before sleep boundary.
+            """
+        case .goingOut:
+            rules += """
+
+            GOING-OUT RULES:
+            - Treat the AWAY WINDOW as hard busy time — never schedule movable work inside it.
+            - Compress high-priority work before departure; defer overflow to after return or tomorrow.
+            - Protect fixed commitments outside the away window when possible.
+            """
+        case .freedSlot:
+            rules += """
+
+            FREED-SLOT RULES:
+            - User removed a task from today — only fill the FREED SLOT window with movable work.
+            - Never move anchored/fixed commitments.
+            - Do not reschedule tasks already placed outside the freed slot unless deferring to tomorrow.
+            - Prefer one best-fit task; only pack multiple if combined duration fits inside the slot.
+            """
+        case .calendarChange:
+            rules += """
+
+            CALENDAR-CHANGE RULES:
+            - A new or moved meeting was added — reshuffle movable tasks around it.
+            - Never move anchored/fixed commitments or the new meeting itself.
+            - Prefer minimal changes; explain each move in summary.
+            - Defer overflow to tomorrow when the afternoon no longer fits.
+            """
+        case .badDay, .recoveryDay:
+            rules += """
+
+            BAD-DAY / RECOVERY RULES:
+            - User is having a rough day — prioritize minimum viable plan.
+            - Defer non-essential flexible work to tomorrow guilt-free.
+            - Protect fixed commitments and one high-value task if possible.
+            - Offer rest blocks; never stack catch-up.
+            """
+        case .travelDisruption:
+            rules += """
+
+            TRAVEL-DISRUPTION RULES:
+            - Travel or flight change detected — protect departure buffer.
+            - Defer tasks that conflict with travel window.
+            - Compress pre-travel essentials only.
+            """
+        case .generic:
+            break
+        }
+        return rules
+    }
+
     private func buildPrompt(context: DayReplanContext) -> String {
         let pc = context.planningContext
         let profile = pc.lifeProfile

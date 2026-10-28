@@ -105,6 +105,12 @@ struct DailyBriefingView: View {
                 .refreshable {
                     await reload()
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if showsScrollHint {
+                        scrollHintOverlay
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .tourScrollToAnchor)) { note in
                     guard let raw = note.userInfo?[TourScrollUserInfoKey.anchorID] as? String else { return }
                     let scrollAnchor = note.userInfo?[TourScrollUserInfoKey.scrollAnchor] as? String ?? "center"

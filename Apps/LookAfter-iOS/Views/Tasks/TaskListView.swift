@@ -8,7 +8,7 @@ import LookAfterFeatures
 struct TaskListView: View {
     
     @ObservedObject var tasksVM: TasksViewModel
-    @ObservedObject var adhdVM: ADHDViewModel
+    let adhdVM: ADHDViewModel
     var brainVM: BrainViewModel?
     let userId: String
     let initialFilter: TaskFilter

@@ -623,6 +623,9 @@ public struct LookAfterRootCanvas: View {
                 onRemoveFromTimelineTask: { taskId in
                     await removeFromTimelineAndReplanSlot(taskId: taskId)
                 },
+                onRemoveFromTimelineTask: { taskId in
+                    Task { await removeFromTimelineAndReplanSlot(taskId: taskId) }
+                },
                 onStartTask: { task in startBrainHeroTask(task, instant: true) },
                 onEditTask: { task in
                     openTaskList(editing: task)

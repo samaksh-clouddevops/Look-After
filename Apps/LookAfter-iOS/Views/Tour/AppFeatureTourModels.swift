@@ -116,6 +116,16 @@ struct AppFeatureTourStep: Identifiable, Equatable {
             allowsTargetInteraction: true
         ),
         AppFeatureTourStep(
+            id: "review",
+            title: "Weekly Review",
+            message: "Your weekly debrief — tasks finished, time reclaimed, and patterns without digging through logs.",
+            icon: "chart.bar.fill",
+            tab: .review,
+            anchor: .reviewHero,
+            preferredSides: [.below, .floating, .center],
+            allowsTargetInteraction: false
+        ),
+        AppFeatureTourStep(
             id: "capture",
             title: "Capture",
             message: "The Capture tab in the bottom bar — dump a thought, task, or note by voice or text, no sorting required.",

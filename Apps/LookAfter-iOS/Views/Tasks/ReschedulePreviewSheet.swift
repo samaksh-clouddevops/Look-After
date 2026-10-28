@@ -9,6 +9,7 @@ struct ReschedulePreviewSheet: View {
     let userId: String
     var tasksViewModel: TasksViewModel? = nil
 
+    @EnvironmentObject private var shell: AppShellState
     @Environment(\.dismiss) private var dismiss
     @State private var applyError: String?
 
@@ -96,6 +97,15 @@ struct ReschedulePreviewSheet: View {
             Button("OK", role: .cancel) { applyError = nil }
         } message: {
             Text(applyError ?? "Please try again.")
+        }
+    }
+
+    private var planSourceLabel: String {
+        switch proposal.source {
+        case .ai(let model):
+            return "Planned with \(model)"
+        case .local:
+            return "Local planner (no AI)"
         }
     }
 

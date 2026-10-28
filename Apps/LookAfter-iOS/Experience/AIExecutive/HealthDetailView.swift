@@ -213,4 +213,40 @@ struct HealthDetailView: View {
             UIApplication.shared.open(url)
         }
     }
+
+    private func hasVisibleMetrics(_ summary: HealthSummary) -> Bool {
+        (summary.totalSleepMinutes ?? 0) > 0
+            || (summary.stepCount ?? 0) > 0
+            || summary.hrvAverage != nil
+            || summary.restingHeartRate != nil
+    }
+
+    private var resolvedUserId: String {
+        if !userId.isEmpty { return userId }
+        return FirebaseManager.shared.resolvedUserId
+    }
+
+    private func handlePrimaryAction(_ action: HealthStatusAction) {
+        HealthStatusActionHandler.perform(
+            action,
+            onConnect: { /* sheet opened from connected context */ },
+            onSync: syncNow,
+            onOpenSettings: { dismiss() }
+        )
+    }
+
+    private func syncNow() {
+        let id = resolvedUserId
+        guard !id.isEmpty else { return }
+        Task {
+            await healthSync.syncHealthData(userId: id)
+            healthSync.refreshConnectionStatus(userId: id, healthSummary: shell.brainVM.healthSummary)
+        }
+    }
+
+    private func openHealthApp() {
+        if let url = HealthAppLinks.healthAppURL {
+            UIApplication.shared.open(url)
+        }
+    }
 }

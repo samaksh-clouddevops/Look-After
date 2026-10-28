@@ -209,10 +209,15 @@ public enum TimelineRowProjector {
 
     private static func resortRows(_ rows: [ExecutivePlanningTimelineRow], now: Date = Date()) -> [ExecutivePlanningTimelineRow] {
         var sorted = rows.sorted { lhs, rhs in
-            let lhsFlex = lhs.timeLabel == "Flexible"
-            let rhsFlex = rhs.timeLabel == "Flexible"
-            if lhsFlex != rhsFlex { return !lhsFlex }
-            if lhsFlex {
+            let lhsUnslotted = isUnslottedFlexibleRow(lhs)
+            let rhsUnslotted = isUnslottedFlexibleRow(rhs)
+            if lhsUnslotted != rhsUnslotted {
+                // Defer to chronological keys — slotted rows keep sortDate, unslotted use gap anchor below.
+            }
+            let lhsKey = lhsUnslotted ? gapSortDate(for: lhs, rows: rows, now: now) : lhs.sortDate
+            let rhsKey = rhsUnslotted ? gapSortDate(for: rhs, rows: rows, now: now) : rhs.sortDate
+            if lhsKey != rhsKey { return lhsKey < rhsKey }
+            if lhsUnslotted, rhsUnslotted {
                 return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
             }
             return lhs.sortDate < rhs.sortDate
@@ -220,7 +225,7 @@ public enum TimelineRowProjector {
 
         var currentIndex: Int?
         for (index, row) in sorted.enumerated() {
-            guard !row.isCompleted, row.timeLabel != "Flexible" else { continue }
+            guard !row.isCompleted, !isUnslottedFlexibleRow(row) else { continue }
             let minutes = row.estimatedMinutes ?? 30
             let end = row.sortDate.addingTimeInterval(TimeInterval(minutes * 60))
             if row.sortDate <= now, now <= end {
@@ -228,15 +233,55 @@ public enum TimelineRowProjector {
                 break
             }
         }
+        if currentIndex == nil,
+           hasSchedulingGap(in: sorted, now: now),
+           let gapIndex = sorted.firstIndex(where: { !$0.isCompleted && isUnslottedFlexibleRow($0) }) {
+            currentIndex = gapIndex
+        }
         if currentIndex == nil {
             currentIndex = sorted.firstIndex {
-                !$0.isCompleted && $0.timeLabel != "Flexible" && $0.sortDate > now
+                !$0.isCompleted && !isUnslottedFlexibleRow($0) && $0.sortDate > now
             }
         }
         for index in sorted.indices {
             sorted[index].isNow = currentIndex == index && !sorted[index].isCompleted
         }
         return sorted
+    }
+
+    private static func isUnslottedFlexibleRow(_ row: ExecutivePlanningTimelineRow) -> Bool {
+        row.isUnslottedFlexible
+    }
+
+    private static func gapSortDate(
+        for row: ExecutivePlanningTimelineRow,
+        rows: [ExecutivePlanningTimelineRow],
+        now: Date
+    ) -> Date {
+        let slotted = rows.filter { !isUnslottedFlexibleRow($0) && !$0.isCompleted }
+        let nextStart = slotted.filter { $0.sortDate > now }.map(\.sortDate).min()
+        if let nextStart {
+            let lastEnd = slotted
+                .filter { $0.sortDate.addingTimeInterval(TimeInterval(($0.estimatedMinutes ?? 30) * 60)) <= now }
+                .map { $0.sortDate.addingTimeInterval(TimeInterval(($0.estimatedMinutes ?? 30) * 60)) }
+                .max()
+            if let lastEnd { return min(max(now, lastEnd), nextStart) }
+            return min(now, nextStart)
+        }
+        return now
+    }
+
+    private static func hasSchedulingGap(in rows: [ExecutivePlanningTimelineRow], now: Date) -> Bool {
+        let slotted = rows.filter { !$0.isCompleted && !isUnslottedFlexibleRow($0) }
+        let inWindow = slotted.contains { row in
+            let end = row.sortDate.addingTimeInterval(TimeInterval((row.estimatedMinutes ?? 30) * 60))
+            return row.sortDate <= now && now <= end
+        }
+        if inWindow { return false }
+        return slotted.contains { $0.sortDate > now }
+            || slotted.contains {
+                $0.sortDate.addingTimeInterval(TimeInterval(($0.estimatedMinutes ?? 30) * 60)) <= now
+            }
     }
 
     // MARK: - Private

@@ -1162,6 +1162,152 @@ final class LifeTimelinePresenterTests: XCTestCase {
         return ([template1, template2], [occurrence1, occurrence2])
     }
 
+    func testTimelineSignatureStableAcrossShuffledTaskInput() {
+        let now = makeDate(year: 2026, month: 8, day: 6, hour: 10, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        let gym = LifeTask(
+            id: "gym",
+            title: "Gym",
+            estimatedMinutes: 60,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 18, minute: 30),
+            schedulingMode: .fixedTime,
+            userId: "user-1"
+        )
+        let email = LifeTask(
+            id: "email",
+            title: "Email",
+            estimatedMinutes: 30,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 11, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        let review = LifeTask(
+            id: "review",
+            title: "Review notes",
+            estimatedMinutes: 30,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 15, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+
+        func signature(from tasks: [LifeTask]) -> String {
+            LifeTimelinePresenter.build(
+                tasks: tasks,
+                completedToday: [],
+                bills: [],
+                shoppingItems: [],
+                contacts: [],
+                now: now,
+                calendar: calendar
+            )
+            .map { "\($0.id)|\(Int($0.date.timeIntervalSince1970))" }
+            .joined(separator: ";")
+        }
+
+        let forward = signature(from: [gym, email, review])
+        let reverse = signature(from: [review, email, gym])
+        XCTAssertEqual(forward, reverse)
+    }
+
+    func testSlottedFlexibleTasksSortByPriorityThenTitle() {
+        let now = makeDate(year: 2026, month: 8, day: 6, hour: 10, minute: 0)
+        let day = calendar.startOfDay(for: now)
+        var high = LifeTask(
+            id: "high",
+            title: "Zulu task",
+            priority: .high,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 15, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        high.timeConstraint = .flexible
+        var low = LifeTask(
+            id: "low",
+            title: "Alpha task",
+            priority: .low,
+            scheduledDate: day,
+            scheduledTime: makeDate(year: 2026, month: 8, day: 6, hour: 16, minute: 0),
+            schedulingMode: .flexible,
+            userId: "user-1"
+        )
+        low.timeConstraint = .flexible
+
+        let events = LifeTimelinePresenter.build(
+            tasks: [low, high],
+            completedToday: [],
+            bills: [],
+            shoppingItems: [],
+            contacts: [],
+            now: now,
+            calendar: calendar
+        )
+        let slotted = events.filter { $0.title == "Zulu task" || $0.title == "Alpha task" }
+        XCTAssertEqual(slotted.count, 2)
+        XCTAssertEqual(slotted[0].title, "Zulu task")
+        XCTAssertEqual(slotted[1].title, "Alpha task")
+    }
+
+    private func duplicateTemplatePair(
+        title: String,
+        day: Date,
+        hour: Int,
+        minute: Int,
+        durationMinutes: Int,
+        lifeArea: LifeArea = .health
+    ) -> (templates: [LifeTask], occurrences: [LifeTask]) {
+        let anchor = makeDate(year: 2026, month: 1, day: 1, hour: hour, minute: minute)
+        var template1 = LifeTask(
+            id: "\(title)-template-a",
+            title: title,
+            lifeArea: lifeArea,
+            estimatedMinutes: durationMinutes,
+            scheduledTime: anchor,
+            tags: ["daily-routine"],
+            recurrence: .daily,
+            schedulingMode: .fixedTime,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template1.createdAt = makeDate(year: 2026, month: 1, day: 1)
+        var template2 = LifeTask(
+            id: "\(title)-template-b",
+            title: title,
+            lifeArea: lifeArea,
+            estimatedMinutes: durationMinutes,
+            scheduledTime: anchor,
+            tags: ["daily-routine"],
+            recurrence: .daily,
+            schedulingMode: .fixedTime,
+            userId: "user-1",
+            isRecurrenceTemplate: true
+        )
+        template2.createdAt = makeDate(year: 2026, month: 2, day: 1)
+
+        var occurrence1 = TaskRecurrenceEngine.makeOccurrence(
+            from: template1,
+            template: template1,
+            scheduledDate: day,
+            calendar: calendar
+        )
+        occurrence1.id = "\(title)-occ-a"
+        occurrence1.parentTaskId = template1.id
+
+        var occurrence2 = TaskRecurrenceEngine.makeOccurrence(
+            from: template2,
+            template: template2,
+            scheduledDate: day,
+            calendar: calendar
+        )
+        occurrence2.id = "\(title)-occ-b"
+        occurrence2.parentTaskId = template2.id
+
+        return ([template1, template2], [occurrence1, occurrence2])
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }

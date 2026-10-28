@@ -1042,6 +1042,51 @@ public final class TasksViewModel: ObservableObject {
         }
     }
 
+    /// Snap date-only routine occurrences to profile / life-model anchor windows.
+    private func assignRoutineAnchorTimes(
+        userId: String,
+        days: [Date],
+        model: LifeModel?
+    ) async throws {
+        let calendar = Calendar.current
+        var all = reloadLocalTasks(for: userId)
+
+        for day in days {
+            let dayStart = calendar.startOfDay(for: day)
+            for index in all.indices {
+                guard all[index].status.isActive else { continue }
+                guard let scheduledDate = all[index].scheduledDate,
+                      calendar.isDate(scheduledDate, inSameDayAs: dayStart) else { continue }
+                guard !TaskScheduleInterval.hasConcreteTimelineSlot(
+                    for: all[index],
+                    on: dayStart,
+                    calendar: calendar
+                ) else { continue }
+                guard let anchor = RoutineScheduleAnchorResolver.resolve(
+                    for: all[index],
+                    on: dayStart,
+                    model: model,
+                    calendar: calendar
+                ) else { continue }
+
+                var task = all[index]
+                task.scheduledTime = anchor.start
+                task.scheduledEndTime = anchor.end
+                ScheduleNormalization.normalizeFields(&task, calendar: calendar)
+                task = TaskConstraintAlignment.align(task)
+                guard task.scheduledTime != all[index].scheduledTime
+                    || task.scheduledEndTime != all[index].scheduledEndTime else { continue }
+
+                task.updatedAt = Date()
+                try await taskRepo.update(task)
+                all[index] = task
+#if DEBUG
+                print("[Tasks] assigned routine anchor id=\(task.id.prefix(8)) title=\"\(task.title)\"")
+#endif
+            }
+        }
+    }
+
     /// Marks invalid recurrence rows as superseded instead of deleting user data.
     private func supersedeInvalidScheduledTasks(
         _ ids: [String],
@@ -1065,6 +1110,22 @@ public final class TasksViewModel: ObservableObject {
         if !batch.isEmpty {
             try await taskRepo.updateMany(batch)
         }
+    }
+
+    /// After completing one instance, drop other active rows for the same series today.
+    private func supersedeDuplicatesAfterCompletion(_ completed: LifeTask, userId: String) async throws {
+        guard !userId.isEmpty else { return }
+        var all = reloadLocalTasks(for: userId)
+        if !all.contains(where: { $0.id == completed.id }) {
+            all.append(completed)
+        }
+        let duplicateIDs = TaskSeriesResolver.staleActiveSeriesIDs(in: all, calendar: .current)
+        guard !duplicateIDs.isEmpty else { return }
+        try await supersedeInvalidScheduledTasks(
+            duplicateIDs,
+            in: all,
+            includingLifeCommitments: true
+        )
     }
 
     /// After completing one instance, drop other active rows for the same series today.

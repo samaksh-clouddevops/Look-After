@@ -122,7 +122,6 @@ public final class GLMService: @unchecked Sendable {
 
         let config = configurationStore.load()
         var lastError: Error?
-
         for attemptTier in config.fallbackTiers(startingAt: tier) {
             do {
                 let response = try await chatCompletion(
@@ -134,12 +133,20 @@ public final class GLMService: @unchecked Sendable {
                 guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     continue
                 }
-                return response.content
+                let result = try await proxy.chat(
+                    message: message,
+                    systemPrompt: systemPrompt,
+                    history: historyPayload,
+                    model: config.model(for: attemptTier),
+                    maxTokens: maxTokens
+                )
+                let text = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                return result.content
             } catch {
                 lastError = error
             }
         }
-
         throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 
@@ -154,7 +161,7 @@ public final class GLMService: @unchecked Sendable {
             return try await debugCompleteHandler(prompt, tier)
         }
 #endif
-        let system = systemPrompt ?? LookAfterPrompts.structuredOutputSystem
+        let proxy = try requireLicensedProxy()
         let config = configurationStore.load()
 
         if isProxyOnlyMode {
@@ -171,24 +178,20 @@ public final class GLMService: @unchecked Sendable {
         }
 
         var lastError: Error?
-
         for attemptTier in config.fallbackTiers(startingAt: tier) {
             do {
-                let response = try await chatCompletion(
-                    messages: buildMessages(message: prompt, systemPrompt: system, history: []),
-                    temperature: 0.3,
-                    maxTokens: 8192,
-                    tier: attemptTier
+                let result = try await proxy.complete(
+                    prompt: prompt,
+                    systemPrompt: system,
+                    model: config.model(for: attemptTier)
                 )
-                guard !response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    continue
-                }
-                return response.content
+                let text = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                return result.content
             } catch {
                 lastError = error
             }
         }
-
         throw lastError ?? GLMServiceError.parseError("Empty model response")
     }
 

@@ -233,6 +233,8 @@ struct FocusLiveActivity: Widget {
             if context.state.showsStrictCountdown, !context.state.isOnBreak {
                 focusControlButtons
             }
+
+            focusControlButtons
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -285,6 +287,28 @@ struct FocusLiveActivity: Widget {
             }
             .buttonStyle(.borderedProminent)
             .tint(LiveActivityStyle.accent)
+        }
+    }
+
+    @ViewBuilder
+    private var focusControlButtons: some View {
+        if #available(iOS 17.0, *) {
+            HStack(spacing: 12) {
+                Button(intent: WidgetPauseFocusIntent()) {
+                    Label("Rest", systemImage: "pause.circle.fill")
+                        .font(.dsCaption(weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(LiveActivityStyle.textSecondary)
+
+                Button(intent: WidgetCompleteFocusIntent()) {
+                    Label("Done", systemImage: "checkmark.circle.fill")
+                        .font(.dsCaption(weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(LiveActivityStyle.accent)
+            }
+            .padding(.top, 4)
         }
     }
 }

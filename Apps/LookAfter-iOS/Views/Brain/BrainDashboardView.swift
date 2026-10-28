@@ -201,6 +201,16 @@ struct BrainDashboardView: View {
         }
     }
 
+    private var siriHint: some View {
+        Text(isConversationActive
+             ? "Speak naturally — I'll listen and reply. Tap the orb to end."
+             : "I'll check in shortly — or tap the orb to start now.")
+            .textStyleCaption(color: DesignSystem.textMuted)
+            .multilineTextAlignment(.center)
+            .padding(.top, DesignSystem.spacingXS)
+            .accessibilityHint("Voice input via the orb or Siri shortcut")
+    }
+
     private var decideForMeChip: some View {
         Button(action: onDecideForMe) {
             HStack(spacing: DesignSystem.spacingSM) {

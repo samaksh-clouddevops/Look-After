@@ -537,6 +537,36 @@ public final class ExecutivePlanningViewModel: ObservableObject {
         )
     }
 
+    /// Resolves a replan time — slot-scoped replans keep the AI hour/minute on the slot day;
+    /// generic replans use validated future scheduling within work hours.
+    private func resolveReplanScheduleTime(
+        hour: Int,
+        minute: Int,
+        freedSlot: DayReplanAwayWindow?,
+        workHours: PlanningSchedulePolicy.WorkHours,
+        calendar: Calendar
+    ) -> Date? {
+        guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+
+        if let slot = freedSlot {
+            let day = calendar.startOfDay(for: slot.start)
+            guard let time = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) else {
+                return nil
+            }
+            let now = Date()
+            let effectiveStart = calendar.isDate(day, inSameDayAs: now) ? max(slot.start, now) : slot.start
+            guard time >= effectiveStart else { return nil }
+            return time
+        }
+
+        return PlanningSchedulePolicy.validatedSchedule(
+            hour: hour,
+            minute: minute,
+            calendar: calendar,
+            workHours: workHours
+        )
+    }
+
     private func appendApplyNotices(
         to reply: String,
         applyResult: PlanMutationApplier.ApplyResult

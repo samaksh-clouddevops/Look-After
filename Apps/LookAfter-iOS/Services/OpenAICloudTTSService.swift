@@ -27,6 +27,7 @@ enum OpenAICloudTTSService {
         }
     }
 
+    @MainActor
     static func synthesizeMP3(text: String) async throws -> Data {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw TTSError.emptyInput }

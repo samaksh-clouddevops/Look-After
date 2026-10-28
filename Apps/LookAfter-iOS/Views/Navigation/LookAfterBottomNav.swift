@@ -124,6 +124,7 @@ struct LookAfterBottomNav: View {
         HStack(spacing: 0) {
             tabButton(.briefing)
             tabButton(.today)
+            tabButton(.review)
             captureButton
             tabButton(.brain)
             tabButton(.you)
