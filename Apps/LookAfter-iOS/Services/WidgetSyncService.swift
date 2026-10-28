@@ -287,6 +287,20 @@ final class WidgetSyncService {
             energyScore: energyScore
         )
 
+        let energyScore = Int((surface?.energyScore ?? cognitive?.energyScore ?? 0.5) * 100)
+        let energyLevel = cognitive?.energy.rawValue ?? EnergyLevel.moderate.rawValue
+        let minutes = surface?.prediction?.suggestedDurationMinutes ?? topTask?.estimatedMinutes
+
+        let executive = WidgetRecommendation(
+            taskID: topTask?.id,
+            title: presentation.hero?.title ?? topTask?.title ?? WidgetRecommendation.clear.title,
+            whyLine: whyLine,
+            nextStepLine: presentation.hero?.supportingLine,
+            estimatedMinutes: minutes,
+            energyLabel: energyLevel,
+            energyScore: energyScore
+        )
+
         let widgetTasks = brainVM.topTasks.prefix(3).map { task in
             WidgetTaskItem(
                 id: task.id,
